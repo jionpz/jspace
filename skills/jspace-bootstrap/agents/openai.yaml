@@ -1,0 +1,4 @@
+interface:
+  display_name: "jspace bootstrap"
+  short_description: "Configure JSpace for first use"
+  default_prompt: "Use $jspace-bootstrap to configure this fresh JSpace workbench end to end."

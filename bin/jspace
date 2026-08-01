@@ -1,0 +1,319 @@
+#!/usr/bin/env python3
+"""JSpace CLI - initialize and validate local workbench directories."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import sys
+from datetime import date
+from pathlib import Path
+
+DEV_ROOT = Path(__file__).resolve().parent.parent
+TEMPLATE_DIR = DEV_ROOT / "templates" / "workbench"
+SKILL_SOURCE = DEV_ROOT / "skills" / "jspace-bootstrap"
+VERSION = "1.0.0"
+MARKER_FILE = ".jspace.json"
+REGISTRY_FILE = "hub.json"
+PLACEHOLDER = "__DEV_ROOT__"
+
+
+def fail(message: str) -> None:
+    print(f"jspace: error: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="jspace",
+        description="JSpace - create and validate local workbenches.",
+    )
+    parser.add_argument("--version", action="version", version=f"jspace {VERSION}")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    init_parser = subparsers.add_parser(
+        "init",
+        help="initialize a new JSpace workbench in a target directory",
+    )
+    init_parser.add_argument(
+        "target",
+        nargs="?",
+        default=".",
+        help="target directory (default: current directory)",
+    )
+    init_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="allow initialization into a non-empty directory",
+    )
+    init_parser.set_defaults(handler=cmd_init)
+
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="validate an existing JSpace workbench registry",
+    )
+    doctor_parser.add_argument(
+        "--dir",
+        default=".",
+        help="workbench root directory (default: current directory)",
+    )
+    doctor_parser.set_defaults(handler=cmd_doctor)
+
+    return parser
+
+
+def cmd_init(args: argparse.Namespace) -> None:
+    target = Path(args.target).expanduser().resolve()
+    if target.exists() and not target.is_dir():
+        fail(f"target is not a directory: {target}")
+    if target.exists() and any(target.iterdir()) and not args.force:
+        fail(
+            f"target directory is not empty: {target} "
+            "(use --force to initialize anyway)"
+        )
+    if (target / MARKER_FILE).exists() and not args.force:
+        fail(f"target is already a JSpace workbench: {target}")
+
+    target.mkdir(parents=True, exist_ok=True)
+    if not TEMPLATE_DIR.is_dir():
+        fail(f"workbench template directory missing: {TEMPLATE_DIR}")
+    if not SKILL_SOURCE.is_dir():
+        fail(f"bootstrap skill directory missing: {SKILL_SOURCE}")
+
+    shutil.copytree(TEMPLATE_DIR, target, dirs_exist_ok=True)
+    shutil.copytree(
+        SKILL_SOURCE,
+        target / "skills" / "jspace-bootstrap",
+        dirs_exist_ok=True,
+    )
+    _materialize_placeholders(target)
+
+    marker = {
+        "product": "JSpace",
+        "template_version": VERSION,
+        "created_at": date.today().isoformat(),
+        "source": str(DEV_ROOT),
+    }
+    marker_path = target / MARKER_FILE
+    marker_path.write_text(
+        json.dumps(marker, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    print(f"Initialized JSpace workbench at {target}")
+    print(f"Validate: {DEV_ROOT / 'bin' / 'jspace'} doctor --dir {target}")
+    print("Next: read AGENTS.md, then follow skills/jspace-bootstrap/SKILL.md")
+
+
+def _materialize_placeholders(root: Path) -> None:
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if PLACEHOLDER not in text:
+            continue
+        path.write_text(text.replace(PLACEHOLDER, str(DEV_ROOT)), encoding="utf-8")
+
+
+def _check(condition: bool, message: str, errors: list[str]) -> None:
+    if not condition:
+        errors.append(message)
+
+
+def validate_hub(data: object, root: Path, warnings: list[str]) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(data, dict):
+        return ["hub.json root must be an object"]
+
+    version = data.get("version")
+    _check(version == "3", "hub.json version must be \"3\"", errors)
+
+    domains = data.get("domains")
+    resources = data.get("resources")
+    _check(isinstance(domains, list), "hub.json domains must be an array", errors)
+    _check(isinstance(resources, list), "hub.json resources must be an array", errors)
+    if not isinstance(domains, list) or not isinstance(resources, list):
+        return errors
+
+    domain_ids: list[str] = []
+    seen_ids: set[str] = set()
+    for index, item in enumerate(domains):
+        prefix = f"domains[{index}]"
+        _check(isinstance(item, dict), f"{prefix} must be an object", errors)
+        if not isinstance(item, dict):
+            continue
+        domain_id = item.get("id")
+        domain_path = item.get("path")
+        _check(
+            isinstance(domain_id, str) and domain_id,
+            f"{prefix}.id must be a non-empty string",
+            errors,
+        )
+        _check(
+            isinstance(domain_path, str) and domain_path,
+            f"{prefix}.path must be a non-empty string",
+            errors,
+        )
+        if isinstance(domain_id, str) and domain_id:
+            _check(domain_id not in seen_ids, f"duplicate id: {domain_id}", errors)
+            seen_ids.add(domain_id)
+            domain_ids.append(domain_id)
+        if isinstance(domain_path, str) and domain_path:
+            domain_dir = (root / domain_path).resolve()
+            _check(
+                (domain_dir / "README.md").is_file(),
+                f"missing domain context: {domain_path}/README.md",
+                errors,
+            )
+            _check(
+                (domain_dir / "domain.json").is_file(),
+                f"missing domain metadata: {domain_path}/domain.json",
+                errors,
+            )
+            metadata_path = domain_dir / "domain.json"
+            if metadata_path.is_file():
+                try:
+                    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+                    if isinstance(metadata, dict):
+                        _check(
+                            metadata.get("id") == domain_id,
+                            f"{prefix}.id must match {domain_path}/domain.json id",
+                            errors,
+                        )
+                        purpose = metadata.get("purpose")
+                        _check(
+                            isinstance(purpose, str) and purpose,
+                            f"{prefix}/domain.json purpose must be non-empty",
+                            errors,
+                        )
+                except json.JSONDecodeError:
+                    errors.append(f"{domain_path}/domain.json is not valid JSON")
+
+    for index, item in enumerate(resources):
+        prefix = f"resources[{index}]"
+        _check(isinstance(item, dict), f"{prefix} must be an object", errors)
+        if not isinstance(item, dict):
+            continue
+        resource_id = item.get("id")
+        resource_domain = item.get("domain")
+        entrypoints = item.get("entrypoints")
+        _check(
+            isinstance(resource_id, str) and resource_id,
+            f"{prefix}.id must be a non-empty string",
+            errors,
+        )
+        if isinstance(resource_id, str) and resource_id:
+            _check(resource_id not in seen_ids, f"duplicate id: {resource_id}", errors)
+            seen_ids.add(resource_id)
+        _check(
+            isinstance(resource_domain, str) and resource_domain in domain_ids,
+            f"{prefix}.domain must reference a registered domain",
+            errors,
+        )
+        _check(
+            isinstance(entrypoints, list) and len(entrypoints) > 0,
+            f"{prefix}.entrypoints must be a non-empty array",
+            errors,
+        )
+        if not isinstance(entrypoints, list):
+            continue
+
+        path_entrypoints = 0
+        primary_paths = 0
+        for entry_index, entry in enumerate(entrypoints):
+            entry_prefix = f"{prefix}.entrypoints[{entry_index}]"
+            _check(isinstance(entry, dict), f"{entry_prefix} must be an object", errors)
+            if not isinstance(entry, dict):
+                continue
+            kind = entry.get("kind")
+            value = entry.get("value")
+            _check(
+                kind in ("path", "url"),
+                f"{entry_prefix}.kind must be path or url",
+                errors,
+            )
+            _check(
+                isinstance(value, str) and value,
+                f"{entry_prefix}.value must be a non-empty string",
+                errors,
+            )
+            if kind == "path":
+                path_entrypoints += 1
+                _check(
+                    isinstance(value, str) and Path(value).is_absolute(),
+                    f"{entry_prefix}.value must be an absolute path",
+                    errors,
+                )
+                if entry.get("primary") is True:
+                    primary_paths += 1
+            if "primary" in entry and kind != "path":
+                _check(
+                    False,
+                    f"{entry_prefix}.primary is only valid on path entrypoints",
+                    errors,
+                )
+            if entry.get("primary") not in (None, True, False):
+                _check(False, f"{entry_prefix}.primary must be boolean", errors)
+
+        if path_entrypoints > 0:
+            _check(
+                primary_paths == 1,
+                f"{prefix} must have exactly one primary path entrypoint",
+                errors,
+            )
+            for entry in entrypoints:
+                if (
+                    isinstance(entry, dict)
+                    and entry.get("kind") == "path"
+                    and entry.get("primary") is True
+                    and isinstance(entry.get("value"), str)
+                ):
+                    if not Path(entry["value"]).exists():
+                        warnings.append(
+                            f"{prefix} primary path missing: {entry['value']}"
+                        )
+
+    return errors
+
+
+def cmd_doctor(args: argparse.Namespace) -> None:
+    root = Path(args.dir).expanduser().resolve()
+    warnings: list[str] = []
+    if not (root / MARKER_FILE).is_file():
+        warnings.append(f"not an initialized JSpace workbench (missing {MARKER_FILE})")
+
+    registry_path = root / REGISTRY_FILE
+    if not registry_path.is_file():
+        fail(f"registry not found: {registry_path}")
+    try:
+        data = json.loads(registry_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        fail(f"{REGISTRY_FILE} is not valid JSON: {exc}")
+
+    errors = validate_hub(data, root, warnings)
+    for warning in warnings:
+        print(f"jspace: warning: {warning}")
+    for error in errors:
+        print(f"jspace: error: {error}", file=sys.stderr)
+
+    if errors:
+        print(
+            f"jspace: doctor failed: {len(errors)} error(s), "
+            f"{len(warnings)} warning(s)",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    print(
+        f"jspace: doctor ok: {len(errors)} error(s), {len(warnings)} warning(s)"
+    )
+
+
+def main() -> None:
+    parser = build_parser()
+    args = parser.parse_args()
+    args.handler(args)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,103 @@
+{
+  "version": "3",
+  "domains": [
+    {
+      "id": "jspace-dev",
+      "path": "workspace/jspace-dev",
+      "tags": [
+        "jspace",
+        "cli",
+        "registry",
+        "trellis"
+      ]
+    },
+    {
+      "id": "agent-infra",
+      "path": "workspace/agent-infra",
+      "tags": [
+        "ai",
+        "config",
+        "provider",
+        "proxy"
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "id": "jspace",
+      "type": "project",
+      "domain": "jspace-dev",
+      "tags": [
+        "jspace",
+        "cli",
+        "registry",
+        "trellis"
+      ],
+      "entrypoints": [
+        {
+          "id": "repo",
+          "kind": "path",
+          "value": "__DEV_ROOT__",
+          "primary": true
+        }
+      ],
+      "notes": "JSpace 开发仓库 - 生成并校验工作台（bin/jspace init / doctor）；第一核心为 gbrain 统一记忆底座。开发经 Trellis 工作流，本工作台由它初始化。"
+    },
+    {
+      "id": "cc-switch",
+      "type": "project",
+      "domain": "agent-infra",
+      "tags": [
+        "ai",
+        "config",
+        "provider",
+        "proxy"
+      ],
+      "entrypoints": [
+        {
+          "id": "repo",
+          "kind": "path",
+          "value": "/Users/jionpz/.cc-switch",
+          "primary": true
+        },
+        {
+          "id": "local-proxy",
+          "kind": "url",
+          "value": "http://127.0.0.1:2006"
+        }
+      ],
+      "notes": "AI 客户端、provider、skills 与本地代理配置入口；完整 provider/proxy 清单见 workspace/agent-infra/README.md。"
+    },
+    {
+      "id": "gbrain",
+      "type": "service",
+      "domain": "agent-infra",
+      "tags": [
+        "ai",
+        "memory",
+        "knowledge",
+        "mcp",
+        "ollama"
+      ],
+      "entrypoints": [
+        {
+          "id": "config-dir",
+          "kind": "path",
+          "value": "/Users/jionpz/.gbrain",
+          "primary": true
+        },
+        {
+          "id": "cli-install",
+          "kind": "path",
+          "value": "/Users/jionpz/.bun/install/global/node_modules/gbrain"
+        },
+        {
+          "id": "repo",
+          "kind": "url",
+          "value": "https://github.com/garrytan/gbrain"
+        }
+      ],
+      "notes": "AI 记忆层（Garry Tan 开源 gbrain）：PGLite 本地 brain + 知识图谱 + 本地 embedding（Ollama bge-m3）。第一核心架构：Pi/Claude Code/Codex/Cursor 四选一经 MCP/CLI 接入，会话开始检索式注入、工作结束写回；hermes 可选接入。接线方式见 skills/jspace-bootstrap/references/harnesses.md。"
+    }
+  ]
+}
