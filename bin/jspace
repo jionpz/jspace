@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""JSpace CLI - initialize and validate local workbench directories."""
+"""JSpace CLI - initialize, validate, and manage local workbenches."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 from datetime import date
@@ -17,6 +18,8 @@ VERSION = "1.0.0"
 MARKER_FILE = ".jspace.json"
 REGISTRY_FILE = "hub.json"
 PLACEHOLDER = "__DEV_ROOT__"
+ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+DEFAULT_DOMAIN_PURPOSE = "本域由 jspace domain add 创建，尚未填充用途；请按需补充管理方式/工作流。"
 
 
 def fail(message: str) -> None:
@@ -59,6 +62,81 @@ def build_parser() -> argparse.ArgumentParser:
         help="workbench root directory (default: current directory)",
     )
     doctor_parser.set_defaults(handler=cmd_doctor)
+
+    domain_parser = subparsers.add_parser(
+        "domain",
+        help="manage workbench domains",
+    )
+    domain_sub = domain_parser.add_subparsers(dest="domain_command", required=True)
+
+    domain_list_parser = domain_sub.add_parser("list", help="list domains")
+    domain_list_parser.add_argument("--json", action="store_true", help="output JSON")
+    domain_list_parser.set_defaults(handler=cmd_domain_list)
+
+    domain_add_parser = domain_sub.add_parser("add", help="add a domain")
+    domain_add_parser.add_argument(
+        "id",
+        help="domain id (lowercase letters, digits, and hyphens)",
+    )
+    domain_add_parser.add_argument(
+        "--path",
+        help="relative path inside the workbench (default: workspace/<id>)",
+    )
+    domain_add_parser.add_argument(
+        "--tag",
+        action="append",
+        default=[],
+        help="domain tag (repeatable)",
+    )
+    domain_add_parser.add_argument("--purpose", help="domain purpose")
+    domain_add_parser.set_defaults(handler=cmd_domain_add)
+
+    domain_remove_parser = domain_sub.add_parser("remove", help="remove a domain")
+    domain_remove_parser.add_argument("id", help="domain id")
+    domain_remove_parser.add_argument(
+        "--purge",
+        action="store_true",
+        help="also delete the domain directory",
+    )
+    domain_remove_parser.set_defaults(handler=cmd_domain_remove)
+
+    resource_parser = subparsers.add_parser(
+        "resource",
+        help="manage workbench resources",
+    )
+    resource_sub = resource_parser.add_subparsers(
+        dest="resource_command",
+        required=True,
+    )
+
+    resource_list_parser = resource_sub.add_parser("list", help="list resources")
+    resource_list_parser.add_argument("--json", action="store_true", help="output JSON")
+    resource_list_parser.set_defaults(handler=cmd_resource_list)
+
+    resource_add_parser = resource_sub.add_parser("add", help="add a resource")
+    resource_add_parser.add_argument(
+        "id",
+        help="resource id (lowercase letters, digits, and hyphens)",
+    )
+    resource_add_parser.add_argument("--domain", required=True, help="owning domain id")
+    entry_group = resource_add_parser.add_mutually_exclusive_group(required=True)
+    entry_group.add_argument("--path", help="absolute path entrypoint")
+    entry_group.add_argument("--url", help="url entrypoint")
+    resource_add_parser.add_argument(
+        "--tag",
+        action="append",
+        default=[],
+        help="resource tag (repeatable)",
+    )
+    resource_add_parser.add_argument("--notes", help="resource notes")
+    resource_add_parser.set_defaults(handler=cmd_resource_add)
+
+    resource_remove_parser = resource_sub.add_parser(
+        "remove",
+        help="remove a resource",
+    )
+    resource_remove_parser.add_argument("id", help="resource id")
+    resource_remove_parser.set_defaults(handler=cmd_resource_remove)
 
     return parser
 
@@ -116,6 +194,118 @@ def _materialize_placeholders(root: Path) -> None:
         path.write_text(text.replace(PLACEHOLDER, str(DEV_ROOT)), encoding="utf-8")
 
 
+def _workbench_root() -> Path:
+    return Path.cwd().resolve()
+
+
+def _is_within(child: Path, parent: Path) -> bool:
+    try:
+        child.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def _load_registry(root: Path) -> dict:
+    registry_path = root / REGISTRY_FILE
+    if not registry_path.is_file():
+        fail(f"registry not found: {registry_path}")
+    try:
+        data = json.loads(registry_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        fail(f"{REGISTRY_FILE} is not valid JSON: {exc}")
+    if not isinstance(data, dict):
+        fail(f"{REGISTRY_FILE} root must be an object")
+    return data
+
+
+def _save_registry(root: Path, data: dict) -> None:
+    registry_path = root / REGISTRY_FILE
+    registry_path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _clean_tags(tags: list[str] | None) -> list[str]:
+    cleaned: list[str] = []
+    for tag in tags or []:
+        tag = tag.strip()
+        if tag and tag not in cleaned:
+            cleaned.append(tag)
+    return cleaned
+
+
+def _find_index(records: list, record_id: str) -> int | None:
+    for index, record in enumerate(records):
+        if isinstance(record, dict) and record.get("id") == record_id:
+            return index
+    return None
+
+
+def _reject_errors(errors: list[str]) -> None:
+    if not errors:
+        return
+    for error in errors:
+        print(f"jspace: error: {error}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def _write_domain_skeleton(
+    domain_dir: Path, domain_id: str, purpose: str, tags: list[str]
+) -> tuple[list[Path], Path]:
+    created: list[Path] = []
+    nearest_existing = domain_dir
+    while not nearest_existing.exists() and nearest_existing != nearest_existing.parent:
+        nearest_existing = nearest_existing.parent
+    domain_dir.mkdir(parents=True, exist_ok=True)
+
+    readme = domain_dir / "README.md"
+    if not readme.exists():
+        readme.write_text(
+            f"# {domain_id} domain\n\n"
+            "本域由 jspace domain add 创建，尚未填充内容；"
+            "请按需补充管理方式/工作流。\n",
+            encoding="utf-8",
+        )
+        created.append(readme)
+
+    metadata = domain_dir / "domain.json"
+    if not metadata.exists():
+        metadata.write_text(
+            json.dumps(
+                {
+                    "id": domain_id,
+                    "purpose": purpose,
+                    "summary": purpose,
+                    "tags": tags,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        created.append(metadata)
+
+    return created, nearest_existing
+
+
+def _rollback_domain_skeleton(
+    domain_dir: Path, nearest_existing: Path, created: list[Path]
+) -> None:
+    for path in created:
+        if path.exists():
+            path.unlink()
+    current = domain_dir
+    while current != nearest_existing:
+        try:
+            current.rmdir()
+        except OSError:
+            break
+        current = current.parent
+
+
 def _check(condition: bool, message: str, errors: list[str]) -> None:
     if not condition:
         errors.append(message)
@@ -156,11 +346,26 @@ def validate_hub(data: object, root: Path, warnings: list[str]) -> list[str]:
             errors,
         )
         if isinstance(domain_id, str) and domain_id:
+            _check(
+                bool(ID_PATTERN.match(domain_id)),
+                f"{prefix}.id must match [a-z0-9][a-z0-9-]*",
+                errors,
+            )
             _check(domain_id not in seen_ids, f"duplicate id: {domain_id}", errors)
             seen_ids.add(domain_id)
             domain_ids.append(domain_id)
         if isinstance(domain_path, str) and domain_path:
+            _check(
+                not Path(domain_path).is_absolute(),
+                f"{prefix}.path must be a relative path",
+                errors,
+            )
             domain_dir = (root / domain_path).resolve()
+            _check(
+                _is_within(domain_dir, root) and domain_dir != root,
+                f"{prefix}.path must resolve inside the workbench root",
+                errors,
+            )
             _check(
                 (domain_dir / "README.md").is_file(),
                 f"missing domain context: {domain_path}/README.md",
@@ -204,6 +409,11 @@ def validate_hub(data: object, root: Path, warnings: list[str]) -> list[str]:
             errors,
         )
         if isinstance(resource_id, str) and resource_id:
+            _check(
+                bool(ID_PATTERN.match(resource_id)),
+                f"{prefix}.id must match [a-z0-9][a-z0-9-]*",
+                errors,
+            )
             _check(resource_id not in seen_ids, f"duplicate id: {resource_id}", errors)
             seen_ids.add(resource_id)
         _check(
@@ -307,6 +517,174 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     print(
         f"jspace: doctor ok: {len(errors)} error(s), {len(warnings)} warning(s)"
     )
+
+
+def cmd_domain_list(args: argparse.Namespace) -> None:
+    data = _load_registry(_workbench_root())
+    domains_raw = data.get("domains")
+    domains = (
+        [d for d in domains_raw if isinstance(d, dict)]
+        if isinstance(domains_raw, list)
+        else []
+    )
+    if args.json:
+        payload = [
+            {
+                "id": d.get("id", ""),
+                "path": d.get("path", ""),
+                "tags": d.get("tags", []),
+            }
+            for d in domains
+        ]
+        print(json.dumps({"domains": payload}, indent=2, ensure_ascii=False))
+        return
+    for d in domains:
+        print(f"{d.get('id', '')}  {d.get('path', '')}")
+
+
+def cmd_domain_add(args: argparse.Namespace) -> None:
+    root = _workbench_root()
+    domain_id = args.id
+    path = args.path or f"workspace/{domain_id}"
+    tags = _clean_tags(args.tag)
+    purpose = (args.purpose or "").strip() or DEFAULT_DOMAIN_PURPOSE
+
+    if Path(path).is_absolute():
+        fail("--path must be a relative path inside the workbench")
+    domain_dir = (root / path).resolve()
+    if not _is_within(domain_dir, root) or domain_dir == root:
+        fail(f"--path must resolve inside the workbench root: {path}")
+    if domain_dir.exists() and not domain_dir.is_dir():
+        fail(f"domain path is not a directory: {path}")
+
+    data = _load_registry(root)
+    if not isinstance(data.get("domains"), list):
+        fail("hub.json domains must be an array")
+
+    created, nearest_existing = _write_domain_skeleton(
+        domain_dir, domain_id, purpose, tags
+    )
+    data["domains"].append({"id": domain_id, "path": path, "tags": tags})
+    errors = validate_hub(data, root, [])
+    if errors:
+        _rollback_domain_skeleton(domain_dir, nearest_existing, created)
+        _reject_errors(errors)
+
+    _save_registry(root, data)
+    print(f"jspace: ok: added domain: {domain_id} ({path})")
+
+
+def cmd_domain_remove(args: argparse.Namespace) -> None:
+    root = _workbench_root()
+    data = _load_registry(root)
+    domains = data.get("domains")
+    if not isinstance(domains, list):
+        fail("hub.json domains must be an array")
+    index = _find_index(domains, args.id)
+    if index is None:
+        fail(f"no such domain: {args.id}")
+
+    resources = data.get("resources")
+    references = [
+        r.get("id", "?")
+        for r in (resources if isinstance(resources, list) else [])
+        if isinstance(r, dict) and r.get("domain") == args.id
+    ]
+    if references:
+        fail(
+            f"domain {args.id} is referenced by resources: "
+            f"{', '.join(references)} (remove them first)"
+        )
+
+    domain_path = domains[index].get("path", "")
+    del data["domains"][index]
+    _reject_errors(validate_hub(data, root, []))
+
+    if args.purge:
+        if not isinstance(domain_path, str) or not domain_path:
+            fail(f"domain {args.id} has no usable path to purge")
+        domain_dir = (root / domain_path).resolve()
+        if not _is_within(domain_dir, root) or domain_dir == root:
+            fail(f"refusing to purge directory outside workbench root: {domain_path}")
+        if domain_dir.exists():
+            shutil.rmtree(domain_dir)
+
+    _save_registry(root, data)
+    message = f"removed domain: {args.id}"
+    if not args.purge and domain_path:
+        message += f" (kept directory {domain_path})"
+    print(f"jspace: ok: {message}")
+
+
+def cmd_resource_list(args: argparse.Namespace) -> None:
+    data = _load_registry(_workbench_root())
+    resources_raw = data.get("resources")
+    resources = (
+        [r for r in resources_raw if isinstance(r, dict)]
+        if isinstance(resources_raw, list)
+        else []
+    )
+    if args.json:
+        payload = [
+            {
+                "id": r.get("id", ""),
+                "type": r.get("type", ""),
+                "domain": r.get("domain", ""),
+                "tags": r.get("tags", []),
+                "entrypoints": r.get("entrypoints", []),
+            }
+            for r in resources
+        ]
+        print(json.dumps({"resources": payload}, indent=2, ensure_ascii=False))
+        return
+    for r in resources:
+        entrypoints = ", ".join(
+            e.get("value", "")
+            for e in r.get("entrypoints", [])
+            if isinstance(e, dict)
+        )
+        print(f"{r.get('id', '')}  {r.get('domain', '')}  {entrypoints}")
+
+
+def cmd_resource_add(args: argparse.Namespace) -> None:
+    root = _workbench_root()
+    data = _load_registry(root)
+    if not isinstance(data.get("resources"), list):
+        fail("hub.json resources must be an array")
+
+    if args.path is not None:
+        entrypoint = {"id": "path", "kind": "path", "value": args.path, "primary": True}
+    else:
+        entrypoint = {"id": "url", "kind": "url", "value": args.url}
+
+    record = {
+        "id": args.id,
+        "type": "project",
+        "domain": args.domain,
+        "tags": _clean_tags(args.tag),
+        "entrypoints": [entrypoint],
+        "notes": args.notes or "",
+    }
+    data["resources"].append(record)
+    _reject_errors(validate_hub(data, root, []))
+    _save_registry(root, data)
+    print(f"jspace: ok: added resource: {args.id}")
+
+
+def cmd_resource_remove(args: argparse.Namespace) -> None:
+    root = _workbench_root()
+    data = _load_registry(root)
+    resources = data.get("resources")
+    if not isinstance(resources, list):
+        fail("hub.json resources must be an array")
+    index = _find_index(resources, args.id)
+    if index is None:
+        fail(f"no such resource: {args.id}")
+
+    del resources[index]
+    _reject_errors(validate_hub(data, root, []))
+    _save_registry(root, data)
+    print(f"jspace: ok: removed resource: {args.id}")
 
 
 def main() -> None:
