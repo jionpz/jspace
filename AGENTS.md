@@ -12,12 +12,26 @@
 
 本仓库根目录**不维护** `hub.json` / `workspace/` 日常注册表；这些只存在于 `templates/workbench/`，由 `jspace init` 实例化。模板中用占位符 `__DEV_ROOT__` 记录本仓库绝对路径，初始化时由 CLI 替换。
 
+## Product Vision
+
+完整愿景见根目录 **`GOAL.md`**（North Star，最高对齐物；冲突时以它为准）。摘要：JSpace 是**可移植的本地 AI 工作底座：路由 + 记忆 + 资产 + 定时**——在任意机器上安装 `jspace` CLI 初始化工作台，任何 AI harness（Pi / Claude Code / Codex / Cursor）从同一入口路由进正确的域、读写同一份持久记忆（gbrain）；工作产生的重资产（pdf/ppt/excel/md）被自动整理进独立的文件管理中心（Obsidian 可作为视图打开）；定时任务经系统调度 + harness 无头执行自动运行。对比基线是 hermes / OpenClaw 等常驻运行时方案：用静态组合覆盖其主要能力，而不引入常驻运行时与全家桶。
+
+- 本仓库是**开发/发行目录**；产品形态是 CLI，目标机上的工作台才是日常入口。
+- 能力分工：静态规则层（AGENTS.md + hub.json + 域）负责路由，gbrain 负责记忆（事实 + 资产指针），文件管理中心负责重资产本体（人类可读），惯用 harness 负责执行，系统调度负责定时。**记忆存指针、资产存本体**。不封装 gbrain、不自研执行器、不自研文件同步。
+- **非目标（显式不做）**：常驻运行时、事件驱动/入站多端网关（如消息触发代理）、自主代理、重资产全量二进制 embedding。系统调度覆盖"定时"，不承诺覆盖"事件"。
+- **多机与分发采用分层同步**：git 同步规则与域内容；资产层走网盘/Obsidian Sync；registry 资源绝对路径属"本机真理"，按机器各自维护（doctor 对缺失路径仅告警即为此设计）。模板去个人化与路径占位符机制是分发（R7）的前置任务。
+- 风险备忘：gbrain 为外部开源项目，选择不封装；数据本地（PGLite），上游停滞时数据仍可迁移。
+- 成熟靠真实使用迭代涌现，不预先设计；当前迭代任务只是演进路径上的一步（里程碑 M0-M5 见 GOAL.md）。
+- 所有迭代决策（范围、拆任务、暂缓项）都应向 `GOAL.md` 对齐；决策留痕见任务 PRD 的 Key Decisions。
+
 ## Modes
 
 | Mode | Trigger | Scope |
 | --- | --- | --- |
 | Development | 默认；用户说 "开发模式" | 修改 CLI、模板、技能和本仓库文档 |
 | Workbench | 在生成的工作台目录 | 见该目录 `AGENTS.md` |
+
+**模式边界（开发 vs 工作）**：本仓库 AGENTS.md 属开发侧，包含 Product Vision、开发模式、Trellis 工作流等；这些内容**不会**随 `jspace init` 复制进生成的工作台。工作台模板（`templates/workbench/AGENTS.md`）只含工作模式的规则（域路由、资源治理、首次配置指引）。会话级工作流（harness 记忆注入/写回）由首次配置 skill 指导的 harness 接线提供，不属于任何 AGENTS.md 的内容，也不随 init 生成。
 
 ## Language
 
@@ -31,8 +45,10 @@
    - `python3 -m py_compile bin/jspace`
    - `bin/jspace init /tmp/jspace-smoke`
    - `bin/jspace doctor --dir /tmp/jspace-smoke`
+   - 在 `/tmp/jspace-smoke` 内演练 registry 命令（`domain`/`resource` 的 list/add/remove）
 4. `hub.json` schema 见 `templates/workbench/hub.json` 和 `skills/jspace-bootstrap/references/registry.md`：资源主路径必须是绝对路径，且恰好一个 `primary: true`。
 5. 命名统一：项目、CLI、技能、domain 使用 `jspace`；不再出现 `myhub`、`hub-dev`、`hub doctor`。
+6. 首次开发、未上线：**无兼容性负担**——schema/CLI/模板可直接演进，不做迁移/弃用通道；版本化承诺推迟到分发（R7）。
 
 ## Confirmation Rules
 

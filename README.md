@@ -14,6 +14,7 @@
 
 ## 目录结构
 
+- `GOAL.md` - 最终目标（North Star），所有迭代的对齐物
 - `bin/jspace` - CLI（`init` / `doctor`）
 - `templates/workbench/` - 工作台模板
 - `skills/jspace-bootstrap/` - 复制进工作台的首次配置技能
