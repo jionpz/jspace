@@ -113,7 +113,7 @@ First approved workbench skill: `jspace-bootstrap` (`skills/jspace-bootstrap/`),
 | Knowledge | Destination |
 | --- | --- |
 | Daily operating rule for all agents | Root `AGENTS.md` |
-| Current task planning | `.trellis/tasks/<task>/` |
+| Persistent facts and asset pointers | gbrain（bootstrap 后接线；见 `skills/jspace-bootstrap/references/gbrain.md`） |
 | Domain entry point/resource/workflow | `workspace/<domain>/README.md` or `domain.json` |
 | Domain-specific AI boundary | `workspace/<domain>/AGENTS.md` |
 | Repeatable domain procedure | `workspace/<domain>/runbook.md` |
@@ -148,7 +148,7 @@ Ask before:
 - Creating a domain when confidence is medium or low.
 - Replacing existing resource notes/tags.
 - Removing a domain or resource from `hub.json`.
-- Editing registry or docs outside the active Trellis task scope.
+- Editing registry or docs in ways not covered by the rules in this `AGENTS.md`.
 
 Can proceed with explanation:
 
@@ -180,4 +180,4 @@ gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbr
 - Registered resource primary paths should exist unless the task is explicitly about missing paths.
 - `workspace/<domain>/domain.json` ids must match both the folder name and `hub.json`.
 - `__DEV_ROOT__/bin/jspace doctor --dir .` must pass after registry changes.
-- Do not add task-management concepts that duplicate Trellis.
+- Do not introduce task-management concepts; this workbench has no task manager.
