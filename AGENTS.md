@@ -2,11 +2,11 @@
 
 ## Core Positioning
 
-`JSpace` 是用户本地工作控制平面的**开发仓库**（前身 `myhub`）。它不再承担日常工作的 domain 路由：真实工作台由本仓库的 CLI 生成到其他目录，日常工作和 AI 会话从生成的工作台开始。
+`JSpace` 是用户本地工作控制平面的**开发仓库**。它不再承担日常工作的 domain 路由：真实工作台由本仓库的 CLI 生成到其他目录，日常工作和 AI 会话从生成的工作台开始。
 
 本仓库只维护以下内容：
 
-- `bin/jspace`：Python 标准库 CLI，提供 `init`（生成工作台）和 `doctor`（校验工作台）。
+- `cli/`：JSpace CLI（TypeScript/bun 源码，`bun run cli/main.ts` 运行；`bun run build` 产出 `bin/jspace` 编译二进制），提供 `init`（生成工作台）和 `doctor`（校验工作台）。
 - `templates/workbench/`：工作台模板，包含 `hub.json`、工作台 `AGENTS.md`、初始 domains。
 - `skills/jspace-bootstrap/`：生成时复制进工作台的首次配置技能（gbrain + harness 接线）。
 - `skills/asset-ingest/`：生成时复制进工作台的资料转知识资产技能（归位 + gbrain reference + 中文语义召回）。
@@ -43,12 +43,12 @@
 1. 非平凡改动先走 Trellis 工作流；用户明确要求不建任务时直接实施。
 2. 模板和技能是生成物来源：改 `templates/workbench/` 和 `skills/jspace-bootstrap/`，不要通过修改已生成的工作台来反推模板。
 3. CLI 每次改动后验证：
-   - `python3 -m py_compile bin/jspace`
-   - `bin/jspace init /tmp/jspace-smoke`
-   - `bin/jspace doctor --dir /tmp/jspace-smoke`
+   - `bunx tsc --noEmit`
+   - `bun run cli/main.ts init /tmp/jspace-smoke`
+   - `bun run cli/main.ts doctor --dir /tmp/jspace-smoke`
    - 在 `/tmp/jspace-smoke` 内演练 registry 命令（`domain`/`resource` 的 list/add/remove）
 4. `hub.json` schema 见 `templates/workbench/hub.json` 和 `skills/jspace-bootstrap/references/registry.md`：资源主路径必须是绝对路径，且恰好一个 `primary: true`。
-5. 命名统一：项目、CLI、技能、domain 使用 `jspace`；不再出现 `myhub`、`hub-dev`、`hub doctor`。
+5. 命名统一：项目、CLI、技能、模板、文档、domain 统一使用 `jspace`。
 6. 首次开发、未上线：**无兼容性负担**——schema/CLI/模板可直接演进，不做迁移/弃用通道；版本化承诺推迟到分发（R7）。
 
 ## Confirmation Rules
@@ -61,10 +61,10 @@ Ask before:
 
 ## Quality Checks
 
-- `bin/jspace` 可执行，`python3 -m py_compile` 通过。
+- TS CLI 可执行（`bun run cli/main.ts --version`），`bunx tsc --noEmit` 通过。
 - 模板渲染后 `jspace doctor` 通过（缺少的外部资源路径按 warning 处理）。
 - 本仓库根目录没有残留 `hub.json` / `workspace/` 日常注册表。
-- 全文无陈旧 `myhub`、`hub-dev`、`hub doctor` 引用。
+- 命名检查：项目、CLI、技能、模板、文档、domain 统一使用 `jspace`。
 
 <!-- TRELLIS:START -->
 # Trellis Instructions
