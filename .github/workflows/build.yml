@@ -1,0 +1,73 @@
+# Build JSpace CLI binaries on 3 OS × 2 arch, smoke-test each, and publish
+# platform artifacts to a GitHub Release on tag pushes (v*).
+# Runner labels per actions/runner-images (verified 2026-08-02):
+#   macOS arm64 = macos-14 (default), x64 = macos-15-intel
+#   Windows x64 = windows-latest, arm64 = windows-11-arm
+#   Linux x64 = ubuntu-latest, arm64 = ubuntu-24.04-arm
+name: build
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: jspace-${{ matrix.arch }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,     arch: x64,   target: bun-linux-x64,    artifact: jspace-linux-x64 }
+          - { os: ubuntu-24.04-arm,  arch: arm64, target: bun-linux-arm64,   artifact: jspace-linux-arm64 }
+          - { os: macos-14,          arch: arm64, target: bun-darwin-arm64,  artifact: jspace-macos-arm64 }
+          - { os: macos-15-intel,    arch: x64,   target: bun-darwin-x64,    artifact: jspace-macos-x64 }
+          - { os: windows-latest,    arch: x64,   target: bun-windows-x64,   artifact: jspace-windows-x64.exe }
+          - { os: windows-11-arm,    arch: arm64, target: bun-windows-arm64, artifact: jspace-windows-arm64.exe }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install deps
+        run: bun install --frozen-lockfile
+
+      - name: Regenerate embedded assets
+        run: bun run scripts/gen-assets.ts
+
+      - name: Compile standalone binary
+        run: bun build --compile cli/main.ts --minify --target=${{ matrix.target }} --outfile ${{ matrix.artifact }}
+
+      - name: Smoke test (compiled binary)
+        shell: bash
+        run: |
+          ./${{ matrix.artifact }} --version
+          ./${{ matrix.artifact }} init --force /tmp/jspace-smoke
+          ./${{ matrix.artifact }} doctor --dir /tmp/jspace-smoke
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
