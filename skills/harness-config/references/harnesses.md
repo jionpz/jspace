@@ -2,8 +2,21 @@
 
 > 面向 **4 个 AI harness**:Pi / Claude Code / Codex / Cursor。单一事实源 = **用户根目录** `~/.agents/agents.md`(治理文档,内容分层与安全红线见 `governance.md`)。
 > 本文所有配置规则均以 **官方当前文档查证为准**(核查日期 2026-08-02,官方来源见各节末尾);与既有假设不一致处以官方文档为准并注明差异。
-> 符号:`<gbrain>` = gbrain 二进制路径,按 `$GBRAIN_BIN` → `command -v gbrain` → `~/.bun/bin/gbrain` 解析;**MCP command 建议用绝对路径**(非登录 shell 可能找不到 PATH)。
+> 符号:`<gbrain>` = gbrain 二进制路径,按 `$GBRAIN_BIN` → `command -v gbrain`(Windows `where gbrain`) → `~/.bun/bin/gbrain` 解析(Windows:`%USERPROFILE%\.bun\bin\gbrain.exe`);**MCP command 建议用绝对路径**(非登录 shell 可能找不到 PATH;Windows 下必须全路径)。
 > 接线目标由 `scripts/detect.sh` 检测决定(installed 接线 / not_found 跳过)。会话级配置(gbrain MCP、session 注入)只核对报告,不修改既有配置。
+
+## 跨平台(Windows)路径速查
+
+| 项 | macOS / Linux | Windows |
+|---|---|---|
+| gbrain 解析 | `$GBRAIN_BIN` → `which gbrain` → `~/.bun/bin/gbrain` | `$GBRAIN_BIN` → `where gbrain` → `%USERPROFILE%\.bun\bin\gbrain.exe` |
+| Claude Code 用户 MCP | `~/.claude.json` | `%USERPROFILE%\.claude.json` |
+| Claude Code 用户 settings | `~/.claude/settings.json` | `%USERPROFILE%\.claude\settings.json` |
+| Codex 用户配置 | `~/.codex/config.toml` | `%USERPROFILE%\.codex\config.toml` |
+| Cursor 用户 MCP | `~/.cursor/mcp.json` | `%USERPROFILE%\.cursor\mcp.json` |
+| Cursor 项目 MCP | `.cursor/mcp.json` | `.cursor\mcp.json` |
+
+> **Windows 事实**:Claude Code / Codex CLI / Cursor 均原生支持 Windows。Windows 默认 shell 是 PowerShell(无 bash 时)。stdio MCP 的 `command` 必须指向真实可执行文件全路径(如 `%USERPROFILE%\.bun\bin\gbrain.exe`),不要用裸命令名(stdio 拉起不走 PATH 解析裸名);`.cmd`/`.bat` shim 不能直接当 stdio command。symlink 在 Windows 需管理员/开发者模式。bun 官方安装:PowerShell `irm bun.sh/install.ps1 | iex`(按治理红线核验来源后采用)。
 
 ## 速查表
 
@@ -108,6 +121,7 @@
   { "mcpServers": { "gbrain": { "type": "stdio", "command": "<gbrain>", "args": ["serve"] } } }
   ```
   命令等价:`claude mcp add-json gbrain '{"type":"stdio","command":"<gbrain>","args":["serve"]}' --scope user`
+- **Windows**:用户级配置路径为 `%USERPROFILE%\.claude.json`;`command` 填 `%USERPROFILE%\.bun\bin\gbrain.exe` 全路径(Claude Code 原生支持 Windows,默认 shell 为 PowerShell)。
 - **信任提示**:stdio MCP server 以你的本地权限运行;只添加信任的 server(gbrain 在本机)。
 - 核对:报告 `wired(MCP 或 CLI 可用) / missing`;不修改既有配置。
 
@@ -175,6 +189,7 @@
   args = ["serve"]
   ```
 - CLI 等价:`codex mcp add gbrain -- <gbrain> serve`。
+- **Windows**:用户配置路径为 `%USERPROFILE%\.codex\config.toml`;`command` 填 `gbrain.exe` 全路径(Codex CLI 有官方 Windows 安装器;SessionStart hooks 同款配置)。
 - **信任与权限**:stdio MCP server 以你的本地权限运行;Codex 支持 `default_tools_approval_mode` / per-tool `approval_mode` 控制工具批准,可按需收紧。
 - 核对:报告 `wired(MCP 或 CLI 可用) / missing`;不修改既有配置。
 
@@ -232,6 +247,7 @@
   { "mcpServers": { "gbrain": { "type": "stdio", "command": "<gbrain>", "args": ["serve"] } } }
   ```
 - 支持 `${env:NAME}`、`${userHome}`、`${workspaceFolder}` 插值;Chat 中 MCP 工具默认需批准。
+- **Windows**:用户级配置路径为 `%USERPROFILE%\.cursor\mcp.json`;`command` 填 `gbrain.exe` 全路径(Cursor 原生支持 Windows)。
 - **信任提示**:stdio MCP server 以你的本地权限运行;只添加信任的 server。
 - 核对:报告 `wired(MCP 或 CLI 可用) / missing`;不修改既有配置。
 

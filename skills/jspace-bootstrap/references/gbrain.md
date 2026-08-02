@@ -2,7 +2,7 @@
 
 ## Binary resolution
 
-`$GBRAIN_BIN` -> `which gbrain` -> `~/.bun/bin/gbrain`.
+`$GBRAIN_BIN` -> `which gbrain`(Windows `where gbrain`) -> `~/.bun/bin/gbrain`(Windows `%USERPROFILE%\.bun\bin\gbrain.exe`).
 
 ## CLI surface
 

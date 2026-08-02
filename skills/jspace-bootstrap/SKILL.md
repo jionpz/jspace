@@ -34,7 +34,7 @@ Verify after installs: `python3 --version && bun --version`.
 
 ## Phase 1 - Install gbrain (first core)
 
-1. Resolve the binary: `$GBRAIN_BIN` -> `which gbrain` -> `~/.bun/bin/gbrain`.
+1. Resolve the binary: `$GBRAIN_BIN` -> `which gbrain`(Windows `where gbrain`) -> `~/.bun/bin/gbrain`(Windows `%USERPROFILE%\.bun\bin\gbrain.exe`).
 2. If missing: `bun install -g gbrain`, then `gbrain upgrade`.
 3. If `~/.gbrain` is absent: `gbrain init` (defaults to PGLite, no server).
 4. `gbrain doctor --json` - check brain, resolver, embeddings; fix what it reports.
