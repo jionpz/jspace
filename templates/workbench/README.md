@@ -16,7 +16,7 @@
 
 1. 先读 `AGENTS.md`。
 2. 首次使用按 `skills/jspace-bootstrap/SKILL.md` 配置 gbrain 与所选 AI harness。
-3. 用 JSpace CLI 校验本目录（`jspace` 为编译二进制，需在 PATH 上；源码检出仍可用 `__DEV_ROOT__/bin/jspace`）：
+3. 用 JSpace CLI 校验本目录（`jspace` 为编译二进制，需在 PATH 上；源码检出在 `__DEV_ROOT__` 用 `bun run cli/main.ts`）：
 
 ```bash
 jspace doctor --dir .

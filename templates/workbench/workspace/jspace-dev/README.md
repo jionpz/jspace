@@ -17,4 +17,4 @@ When the user says "开发模式", read the JSpace dev repo `AGENTS.md` and edit
 ## Entry Points
 
 - Repository: `__DEV_ROOT__`
-- CLI: `__DEV_ROOT__/bin/jspace`
+- CLI: `jspace`(编译二进制;源码检出:`bun run cli/main.ts`)

@@ -57,7 +57,7 @@ Frontmatter schema and offline policy: `skills/jspace-bootstrap/references/gbrai
 
 ## Phase 2 - Registry health
 
-The workbench has no standalone CLI inside itself; validation lives in the JSpace CLI: `jspace doctor --dir .`(`jspace` 为编译二进制,需在 PATH 上;源码检出可用 `__DEV_ROOT__/bin/jspace`)。`hub.json` must stay valid JSON; repair drift only with explanation. Never invent domains/resources.
+The workbench has no standalone CLI inside itself; validation lives in the JSpace CLI: `jspace doctor --dir .`(`jspace` 为编译二进制,需在 PATH 上;源码检出:在 `__DEV_ROOT__` 用 `bun run cli/main.ts`)。`hub.json` must stay valid JSON; repair drift only with explanation. Never invent domains/resources.
 
 1. `jq . hub.json` parses(Windows 无 jq → `python -m json.tool hub.json` 或 PowerShell `Get-Content hub.json | ConvertFrom-Json`)。
 2. Every `domains[]` folder exists and contains `README.md` + `domain.json`; the `domain.json` id matches both the folder name and `hub.json`.
@@ -89,7 +89,7 @@ AI provider/model/proxy config is owned by cc-switch (`/Users/jionpz/.cc-switch`
 ## Phase 4 - Final smoke and sign-off
 
 ```bash
-# 校验(编译二进制在 PATH 时用 jspace;源码检出用 __DEV_ROOT__/bin/jspace)
+# 校验(编译二进制在 PATH 时用 jspace;源码检出:在 __DEV_ROOT__ 用 bun run cli/main.ts)
 jspace doctor --dir .
 # hub.json 合法 JSON(POSIX: jq;Windows: python -m json.tool 或 ConvertFrom-Json)
 jq . hub.json

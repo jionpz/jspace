@@ -89,7 +89,7 @@ Read the registry and domain files directly with standard tools:
 - `hub.json`: domain/resource discovery index.
 - `workspace/<domain>/README.md` and `workspace/<domain>/domain.json`: domain entry and detail.
 
-Validation uses the JSpace CLI: `jspace doctor --dir .` (`jspace` is the compiled binary on PATH; a source checkout may use `__DEV_ROOT__/bin/jspace`). `hub.json` is a map, not a file reader. It points to context files and must not duplicate full README/AGENTS/runbook content. For lookup, use `jq . hub.json`, `find workspace -maxdepth 2 -type f`, and `rg` queries.
+Validation uses the JSpace CLI: `jspace doctor --dir .` (`jspace` is the compiled binary on PATH; a source checkout runs `bun run cli/main.ts` from `__DEV_ROOT__`). `hub.json` is a map, not a file reader. It points to context files and must not duplicate full README/AGENTS/runbook content. For lookup, use `jq . hub.json`, `find workspace -maxdepth 2 -type f`, and `rg` queries.
 
 ## Skill Governance
 
