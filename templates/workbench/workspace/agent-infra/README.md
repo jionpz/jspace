@@ -63,3 +63,14 @@
 当用户说“弄一下 agent”或“管理 AI”时，读取本 domain 的 `README.md` 和 `domain.json`，再通过 `/Users/jionpz/.cc-switch` 管理 provider、model、proxy、client configuration 和 skills。
 
 管理完 AI 配置后，用户会说“好了”或“去工作了”，此时确认下一步要进入哪个 domain。
+
+## 本域进行中的项目
+
+| 项目 | 资产目录 | 状态 |
+|---|---|---|
+| <项目id> | `filehub/projects/<项目>/` | 进行中 |
+
+> 跟踪新项目三步(资产协议,见工作台 README「资产管理」):
+> ① 资产层建 `filehub/projects/<项目>/index.md`(dashboard);
+> ② 本表挂一行;
+> ③ 记忆层建实体(gbrain,记录项目事实与指针)。

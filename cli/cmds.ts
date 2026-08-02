@@ -30,6 +30,19 @@ import {
 export const DEFAULT_DOMAIN_PURPOSE =
   "本域由 jspace domain add 创建，尚未填充用途；请按需补充管理方式/工作流。";
 
+const DOMAIN_PROJECTS_SECTION = `
+## 本域进行中的项目
+
+| 项目 | 资产目录 | 状态 |
+|---|---|---|
+| <项目id> | filehub/projects/<项目>/ | 进行中 |
+
+> 跟踪新项目三步(资产协议,见工作台 README「资产管理」):
+> ① 资产层建 filehub/projects/<项目>/index.md(dashboard);
+> ② 本表挂一行;
+> ③ 记忆层建实体(gbrain,记录项目事实与指针)。
+`;
+
 /** Python dict.get(key, default): default only when the key is absent (not null). */
 function orD(v: unknown, d: unknown): unknown {
   return v === undefined ? d : v;
@@ -162,7 +175,7 @@ function writeDomainSkeleton(
   if (!existsSync(readme)) {
     writeFileSync(
       readme,
-      `# ${domainId} domain\n\n本域由 jspace domain add 创建，尚未填充内容；请按需补充管理方式/工作流。\n`,
+      `# ${domainId} domain\n\n本域由 jspace domain add 创建，尚未填充内容；请按需补充管理方式/工作流。\n${DOMAIN_PROJECTS_SECTION}`,
       "utf-8",
     );
     created.push(readme);
