@@ -2,7 +2,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { fail } from "./errors.ts";
-import { resolvePath } from "./paths.ts";
+import { isFile, resolvePath } from "./paths.ts";
 
 export const REGISTRY_FILE = "hub.json";
 export const ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
@@ -19,7 +19,7 @@ export function isWithin(child: string, parent: string): boolean {
 
 export function loadRegistry(root: string): Record<string, unknown> {
   const p = join(root, REGISTRY_FILE);
-  if (!existsSync(p)) fail(`registry not found: ${p}`);
+  if (!isFile(p)) fail(`registry not found: ${p}`);
   let data: unknown;
   try {
     data = JSON.parse(readFileSync(p, "utf-8"));
@@ -115,15 +115,15 @@ export function validateHub(
         `${prefix}.path must resolve inside the workbench root`,
       );
       check(
-        existsSync(join(domainDir, "README.md")),
+        isFile(join(domainDir, "README.md")),
         `missing domain context: ${domainPath}/README.md`,
       );
       check(
-        existsSync(join(domainDir, "domain.json")),
+        isFile(join(domainDir, "domain.json")),
         `missing domain metadata: ${domainPath}/domain.json`,
       );
       const metadataPath = join(domainDir, "domain.json");
-      if (existsSync(metadataPath)) {
+      if (isFile(metadataPath)) {
         try {
           const metadata: unknown = JSON.parse(readFileSync(metadataPath, "utf-8"));
           if (isObj(metadata)) {

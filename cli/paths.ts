@@ -1,7 +1,7 @@
 // cli/paths.ts — path.resolve() with Python pathlib.resolve() semantics
 // (resolves symlinks, handles non-existent paths by realpath-ing the deepest
 // existing ancestor then rejoining the tail).
-import { existsSync, realpathSync } from "node:fs";
+import { realpathSync, statSync, existsSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 
 export function resolvePath(p: string): string {
@@ -23,5 +23,14 @@ export function resolvePath(p: string): string {
       base = resolve(cur);
     }
     return resolve(base, ...tail);
+  }
+}
+
+/** Mirrors pathlib Path.is_file(): false for directories/missing paths. */
+export function isFile(p: string): boolean {
+  try {
+    return statSync(p).isFile();
+  } catch {
+    return false;
   }
 }

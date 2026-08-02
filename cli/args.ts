@@ -174,6 +174,14 @@ function isHelpFlag(tok: string): boolean {
   return tok === "-h" || tok === "--help";
 }
 
+/** Last value for single-value options (argparse store action: last wins). */
+function lastVal(flags: Map<string, (string | true)[]>, name: string): string | undefined {
+  const list = flags.get(name);
+  if (!list || list.length === 0) return undefined;
+  const v = list[list.length - 1];
+  return typeof v === "string" ? v : undefined;
+}
+
 // ---- option-value collector: consumes argv into {flags, positionals, help} ----
 interface Collected {
   flags: Map<string, (string | true)[]>;
@@ -206,6 +214,12 @@ function collect(
           val = inlineVal;
         } else {
           if (i + 1 >= argv.length) err(usage, prog, `argument ${name}: expected one argument`);
+          const nxt = argv[i + 1];
+          // argparse: a token starting with '-' (except a bare '-') is never
+          // consumed as a value — reject it as "expected one argument".
+          if (nxt.startsWith("-") && nxt !== "-") {
+            err(usage, prog, `argument ${name}: expected one argument`);
+          }
           val = argv[++i];
         }
         list.push(val);
@@ -286,7 +300,7 @@ function parseDoctor(argv: string[]): Invocation {
   return {
     action: "run",
     run: (v) => cmdDoctor(v.dir as string),
-    values: { dir: c.flags.get("--dir")?.[0] ?? "." },
+    values: { dir: lastVal(c.flags, "--dir") ?? "." },
   };
 }
 
@@ -322,9 +336,9 @@ function parseDomain(argv: string[]): Invocation {
         run: (v) => cmdDomainAdd(v.id as string, v.path as string | undefined, v.tags as string[], v.purpose as string | undefined),
         values: {
           id: c.positionals[0],
-          path: c.flags.get("--path")?.[0] as string | undefined,
+          path: lastVal(c.flags, "--path"),
           tags: c.flags.get("--tag") as string[] | undefined,
-          purpose: c.flags.get("--purpose")?.[0] as string | undefined,
+          purpose: lastVal(c.flags, "--purpose"),
         },
       };
     }
@@ -372,7 +386,7 @@ function parseResource(argv: string[]): Invocation {
         { name: "--notes", takesValue: true },
       ]);
       if (c.help) return help(RESOURCE_ADD_HELP);
-      const domainV = c.flags.get("--domain")?.[0] as string | undefined;
+      const domainV = lastVal(c.flags, "--domain");
       // missing required, in argparse order: positional id, then option --domain
       const missing: string[] = [];
       if (c.positionals.length === 0) missing.push("id");
@@ -380,8 +394,8 @@ function parseResource(argv: string[]): Invocation {
       if (missing.length) err(u, P_RESOURCE_ADD, `the following arguments are required: ${missing.join(", ")}`);
       if (c.positionals.length > 1) extraPositional(u, c.positionals.slice(1));
 
-      const pathV = c.flags.get("--path")?.[0] as string | undefined;
-      const urlV = c.flags.get("--url")?.[0] as string | undefined;
+      const pathV = lastVal(c.flags, "--path");
+      const urlV = lastVal(c.flags, "--url");
       if (pathV !== undefined && urlV !== undefined) {
         // argparse reports the mutually-exclusive offender as the one seen later in argv
         const pathIdx = rest.findIndex((t) => t === "--path" || t === "--path=");
@@ -410,11 +424,11 @@ function parseResource(argv: string[]): Invocation {
         values: {
           id: c.positionals[0],
           domain: domainV,
-          type: c.flags.get("--type")?.[0] as string | undefined,
+          type: lastVal(c.flags, "--type"),
           path: pathV,
           url: urlV,
           tags: c.flags.get("--tag") as string[] | undefined,
-          notes: c.flags.get("--notes")?.[0] as string | undefined,
+          notes: lastVal(c.flags, "--notes"),
         },
       };
     }

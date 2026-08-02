@@ -12,7 +12,7 @@ import {
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fail, rejectErrors } from "./errors.ts";
 import { expandTilde } from "./embed.ts";
-import { resolvePath } from "./paths.ts";
+import { isFile, resolvePath } from "./paths.ts";
 import { MARKER_FILE } from "./init.ts";
 import {
   cleanTags,
@@ -28,16 +28,21 @@ import {
 export const DEFAULT_DOMAIN_PURPOSE =
   "本域由 jspace domain add 创建，尚未填充用途；请按需补充管理方式/工作流。";
 
+/** Python dict.get(key, default): default only when the key is absent (not null). */
+function orD(v: unknown, d: unknown): unknown {
+  return v === undefined ? d : v;
+}
+
 // ---- doctor ----
 export function cmdDoctor(dir: string): void {
   const root = resolvePath(expandTilde(dir));
   const warnings: string[] = [];
-  if (!existsSync(join(root, MARKER_FILE))) {
+  if (!isFile(join(root, MARKER_FILE))) {
     warnings.push("not an initialized JSpace workbench (missing .jspace.json)");
   }
 
   const registryPath = join(root, REGISTRY_FILE);
-  if (!existsSync(registryPath)) fail(`registry not found: ${registryPath}`);
+  if (!isFile(registryPath)) fail(`registry not found: ${registryPath}`);
   let data: unknown;
   try {
     data = JSON.parse(readFileSync(registryPath, "utf-8"));
@@ -69,9 +74,9 @@ export function cmdDomainList(json: boolean): void {
   );
   if (json) {
     const payload = domains.map((d) => ({
-      id: d.id ?? "",
-      path: d.path ?? "",
-      tags: d.tags ?? [],
+      id: orD(d.id, ""),
+      path: orD(d.path, ""),
+      tags: orD(d.tags, []),
     }));
     console.log(JSON.stringify({ domains: payload }, null, 2));
     return;
@@ -233,11 +238,11 @@ export function cmdResourceList(json: boolean): void {
   );
   if (json) {
     const payload = resources.map((r) => ({
-      id: r.id ?? "",
-      type: r.type ?? "",
-      domain: r.domain ?? "",
-      tags: r.tags ?? [],
-      entrypoints: r.entrypoints ?? [],
+      id: orD(r.id, ""),
+      type: orD(r.type, ""),
+      domain: orD(r.domain, ""),
+      tags: orD(r.tags, []),
+      entrypoints: orD(r.entrypoints, []),
     }));
     console.log(JSON.stringify({ resources: payload }, null, 2));
     return;

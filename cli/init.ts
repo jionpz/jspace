@@ -8,6 +8,12 @@ import { resolvePath } from "./paths.ts";
 export const MARKER_FILE = ".jspace.json";
 export const VERSION = "1.0.0";
 
+/** Local calendar date YYYY-MM-DD (Python date.today().isoformat(); toISOString is UTC). */
+function localDate(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export function cmdInit(targetArg: string | undefined, force: boolean): void {
   const target = resolvePath(expandTilde(targetArg ?? "."));
   if (existsSync(target) && !statSync(target).isDirectory()) {
@@ -28,7 +34,7 @@ export function cmdInit(targetArg: string | undefined, force: boolean): void {
   const marker = {
     product: "JSpace",
     template_version: VERSION,
-    created_at: new Date().toISOString().slice(0, 10),
+    created_at: localDate(),
     source: devRoot(),
   };
   writeFileSync(join(target, MARKER_FILE), JSON.stringify(marker, null, 2) + "\n", "utf-8");
