@@ -1,19 +1,20 @@
 # Harness wiring reference
 
 > 完整推荐配置、全局治理文档(`~/.agents/agents.md`)接线与逐 harness 差异见 **`harness-config` skill**;本文件保留 bootstrap 首次 wiring 视角。
+> `<gbrain>` = gbrain 二进制绝对路径,按 `$GBRAIN_BIN` → `command -v gbrain` → `~/.bun/bin/gbrain` 解析。
 
 Four session harnesses are supported: Pi, Claude Code, Codex, Cursor. The user picks which one to use; wire that one. hermes is optional (mention, don't promote). All harnesses read/write the same gbrain store over MCP/CLI.
 
 ## Pi
 
-- MCP or CLI: at minimum ensure the `gbrain` CLI works; wire MCP `gbrain serve` if Pi supports stdio MCP.
+- MCP or CLI: at minimum ensure the `gbrain` CLI works. Note: Pi core has **no native MCP** — for stdio MCP use the `pi-mcp-adapter` extension, or rely on the `gbrain` CLI directly (see `harness-config` skill).
 
 ## Claude Code
 
 - MCP in `~/.claude.json` -> `mcpServers.gbrain`:
 
 ```json
-{ "command": "/Users/jionpz/.bun/bin/gbrain", "args": ["serve"], "type": "stdio" }
+{ "command": "<gbrain>", "args": ["serve"], "type": "stdio" }
 ```
 
 ## Codex
@@ -22,7 +23,7 @@ Four session harnesses are supported: Pi, Claude Code, Codex, Cursor. The user p
 
 ```toml
 [mcp_servers.gbrain]
-command = "/Users/jionpz/.bun/bin/gbrain"
+command = "<gbrain>"
 args = ["serve"]
 ```
 
@@ -37,7 +38,7 @@ args = ["serve"]
 {
   "mcpServers": {
     "gbrain": {
-      "command": "/Users/jionpz/.bun/bin/gbrain",
+      "command": "<gbrain>",
       "args": ["serve"]
     }
   }
