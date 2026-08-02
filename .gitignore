@@ -48,3 +48,12 @@ temp/
 # Python
 __pycache__/
 *.pyc
+
+# Bun / Node
+node_modules/
+*.bun-build
+
+# Compiled JSpace binaries (built via `bun build --compile`; not committed)
+bin/jspace
+bin/jspace-*.exe
+bin/jspace-*

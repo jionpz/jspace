@@ -1,0 +1,21 @@
+{
+  "name": "jspace",
+  "version": "1.0.0",
+  "description": "JSpace CLI - create and validate local workbenches (bun+TypeScript port of bin/jspace)",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "jspace": "./cli/main.ts"
+  },
+  "scripts": {
+    "dev": "bun run cli/main.ts",
+    "gen-assets": "bun run scripts/gen-assets.ts",
+    "build": "bun run scripts/gen-assets.ts && bun build --compile ./cli/main.ts --minify --outfile bin/jspace",
+    "build:win": "bun run scripts/gen-assets.ts && bun build --compile ./cli/main.ts --minify --target=bun-windows-x64 --outfile bin/jspace-windows-x64.exe",
+    "build:linux": "bun run scripts/gen-assets.ts && bun build --compile ./cli/main.ts --minify --target=bun-linux-x64 --outfile bin/jspace-linux-x64"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.14",
+    "typescript": "^7.0.2"
+  }
+}

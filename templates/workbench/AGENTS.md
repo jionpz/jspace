@@ -89,7 +89,7 @@ Read the registry and domain files directly with standard tools:
 - `hub.json`: domain/resource discovery index.
 - `workspace/<domain>/README.md` and `workspace/<domain>/domain.json`: domain entry and detail.
 
-Validation uses the JSpace dev CLI: `__DEV_ROOT__/bin/jspace doctor --dir .`. `hub.json` is a map, not a file reader. It points to context files and must not duplicate full README/AGENTS/runbook content. For lookup, use `jq . hub.json`, `find workspace -maxdepth 2 -type f`, and `rg` queries.
+Validation uses the JSpace CLI: `jspace doctor --dir .` (`jspace` is the compiled binary on PATH; a source checkout may use `__DEV_ROOT__/bin/jspace`). `hub.json` is a map, not a file reader. It points to context files and must not duplicate full README/AGENTS/runbook content. For lookup, use `jq . hub.json`, `find workspace -maxdepth 2 -type f`, and `rg` queries.
 
 ## Skill Governance
 
@@ -140,7 +140,7 @@ When the user says "开发模式":
 1. This workbench is generated output. Do not edit template sources here.
 2. Go to the JSpace development repository `__DEV_ROOT__`.
 3. Read its `AGENTS.md` and use its Trellis workflow for non-trivial changes.
-4. After template/CLI changes, re-run `__DEV_ROOT__/bin/jspace init --force .` or reinitialize a fresh workbench, then run `__DEV_ROOT__/bin/jspace doctor --dir .`.
+4. After template/CLI changes, re-run `jspace init --force .` or reinitialize a fresh workbench, then run `jspace doctor --dir .`.
 
 ## Confirmation Rules
 
@@ -182,5 +182,5 @@ gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbr
 - Registered domain folders should exist and include `README.md` and `domain.json`.
 - Registered resource primary paths should exist unless the task is explicitly about missing paths.
 - `workspace/<domain>/domain.json` ids must match both the folder name and `hub.json`.
-- `__DEV_ROOT__/bin/jspace doctor --dir .` must pass after registry changes.
+- `jspace doctor --dir .` must pass after registry changes.
 - Do not introduce task-management concepts; this workbench has no task manager.

@@ -1,6 +1,6 @@
 # JSpace Workbench
 
-本目录由 JSpace 开发仓库的 `bin/jspace init` 生成，是日常工作的控制平面；它不是 JSpace 开发仓库。
+本目录由 JSpace CLI (`jspace init`) 生成，是日常工作的控制平面；它不是 JSpace 开发仓库。
 
 ## 结构
 
@@ -16,10 +16,10 @@
 
 1. 先读 `AGENTS.md`。
 2. 首次使用按 `skills/jspace-bootstrap/SKILL.md` 配置 gbrain 与所选 AI harness。
-3. 用 JSpace 开发仓库的 CLI 校验本目录：
+3. 用 JSpace CLI 校验本目录（`jspace` 为编译二进制，需在 PATH 上；源码检出仍可用 `__DEV_ROOT__/bin/jspace`）：
 
 ```bash
-__DEV_ROOT__/bin/jspace doctor --dir .
+jspace doctor --dir .
 ```
 
 ## 与开发仓库的关系
