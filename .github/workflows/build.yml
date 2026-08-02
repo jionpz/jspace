@@ -1,4 +1,4 @@
-# Build JSpace CLI binaries on 3 OS × 2 arch, smoke-test each, and publish
+# Build JSpace CLI binaries on 3 OS x 2 arch, smoke-test each, and publish
 # platform artifacts to a GitHub Release on tag pushes (v*).
 # Runner labels per actions/runner-images (verified 2026-08-02):
 #   macOS arm64 = macos-14 (default), x64 = macos-15-intel
@@ -8,13 +8,14 @@ name: build
 
 on:
   push:
-    tags: ["v*"]
+    tags:
+      - "v*"
   workflow_dispatch:
 
 jobs:
   build:
-    name: jspace-${{ matrix.arch }} (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: "jspace-${{ matrix.arch }} (${{ matrix.os }})"
+    runs-on: "${{ matrix.os }}"
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +40,7 @@ jobs:
         run: bun run scripts/gen-assets.ts
 
       - name: Compile standalone binary
-        run: bun build --compile cli/main.ts --minify --target=${{ matrix.target }} --outfile ${{ matrix.artifact }}
+        run: "bun build --compile cli/main.ts --minify --target=${{ matrix.target }} --outfile ${{ matrix.artifact }}"
 
       - name: Smoke test (compiled binary)
         shell: bash
@@ -51,8 +52,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
+          name: "${{ matrix.artifact }}"
+          path: "${{ matrix.artifact }}"
           if-no-files-found: error
 
   release:
