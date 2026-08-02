@@ -2,7 +2,7 @@
 // Produces the same --help text, `jspace: error:` / `jspace <cmd>: error:`
 // messages and exit code 2.
 import { cmdInit } from "./init.ts";
-import { cmdDoctor, cmdDomainList, cmdDomainAdd, cmdDomainRemove, cmdResourceList, cmdResourceAdd, cmdResourceRemove } from "./cmds.ts";
+import { cmdDoctor, cmdDomainList, cmdDomainAdd, cmdDomainRemove, cmdResourceList, cmdResourceAdd, cmdResourceRemove, cmdFilehubInit, cmdInboxStatus } from "./cmds.ts";
 
 export const VERSION = "1.0.0";
 
@@ -16,9 +16,11 @@ export class ArgError extends Error {
   }
 }
 
-const TOP_CHOICES = ["init", "doctor", "domain", "resource"];
+const TOP_CHOICES = ["init", "doctor", "domain", "resource", "filehub", "inbox"];
 const DOMAIN_CHOICES = ["list", "add", "remove"];
 const RESOURCE_CHOICES = ["list", "add", "remove"];
+const FILEHUB_CHOICES = ["init"];
+const INBOX_CHOICES = ["status"];
 
 const TOP = "jspace";
 const P_INIT = "jspace init";
@@ -31,18 +33,24 @@ const P_RESOURCE = "jspace resource";
 const P_RESOURCE_LIST = "jspace resource list";
 const P_RESOURCE_ADD = "jspace resource add";
 const P_RESOURCE_REMOVE = "jspace resource remove";
+const P_FILEHUB = "jspace filehub";
+const P_FILEHUB_INIT = "jspace filehub init";
+const P_INBOX = "jspace inbox";
+const P_INBOX_STATUS = "jspace inbox status";
 
-const TOP_HELP = `usage: jspace [-h] [--version] {init,doctor,domain,resource} ...
+const TOP_HELP = `usage: jspace [-h] [--version] {init,doctor,domain,resource,filehub,inbox} ...
 
 JSpace - create and validate local workbenches.
 
 positional arguments:
-  {init,doctor,domain,resource}
+  {init,doctor,domain,resource,filehub,inbox}
     init                initialize a new JSpace workbench in a target
                         directory
     doctor              validate an existing JSpace workbench registry
     domain              manage workbench domains
     resource            manage workbench resources
+    filehub             manage the file management center (asset layer)
+    inbox               inspect files waiting in the inbox
 
 options:
   -h, --help            show this help message and exit
@@ -141,6 +149,41 @@ positional arguments:
 
 options:
   -h, --help  show this help message and exit`;
+
+const FILEHUB_HELP = `usage: jspace filehub [-h] {init} ...
+
+positional arguments:
+  {init}
+    init             create a file management center skeleton (asset layer)
+
+options:
+  -h, --help  show this help message and exit`;
+
+const FILEHUB_INIT_HELP = `usage: jspace filehub init [-h] [--register] [--domain DOMAIN] root
+
+positional arguments:
+  root             filehub root directory (absolute or relative path)
+
+options:
+  -h, --help       show this help message and exit
+  --register       also register the filehub in the current workbench
+                   (hub.json) as type=filehub
+  --domain DOMAIN  owning domain id (default: files; created if missing)`;
+
+const INBOX_HELP = `usage: jspace inbox [-h] {status} ...
+
+positional arguments:
+  {status}
+    status           list files waiting in the inbox (read-only)
+
+options:
+  -h, --help  show this help message and exit`;
+
+const INBOX_STATUS_HELP = `usage: jspace inbox status [-h] [--json]
+
+options:
+  -h, --help  show this help message and exit
+  --json      output JSON`;
 
 export interface Invocation {
   action: "help" | "version" | "run";
@@ -264,6 +307,8 @@ export function parseArgs(argv: string[]): Invocation {
     case "doctor": return parseDoctor(rest);
     case "domain": return parseDomain(rest);
     case "resource": return parseResource(rest);
+    case "filehub": return parseFilehub(rest);
+    case "inbox": return parseInbox(rest);
   }
   throw new Error("unreachable");
 }
@@ -442,4 +487,48 @@ function parseResource(argv: string[]): Invocation {
     }
   }
   throw new Error("unreachable");
+}
+
+function parseFilehub(argv: string[]): Invocation {
+  const usage = usageBlock(FILEHUB_HELP);
+  if (argv.length === 0) err(usage, P_FILEHUB, "the following arguments are required: filehub_command");
+  if (isHelpFlag(argv[0])) return help(FILEHUB_HELP);
+  const sub = argv[0];
+  if (!FILEHUB_CHOICES.includes(sub)) {
+    err(usage, P_FILEHUB, `argument filehub_command: invalid choice: '${sub}' (choose from '${FILEHUB_CHOICES.join("', '")}')`);
+  }
+  const rest = argv.slice(1);
+  const u = usageBlock(FILEHUB_INIT_HELP);
+  const c = collect(rest, u, P_FILEHUB_INIT, [
+    { name: "--register", takesValue: false },
+    { name: "--domain", takesValue: true },
+  ]);
+  if (c.help) return help(FILEHUB_INIT_HELP);
+  if (c.positionals.length === 0) err(u, P_FILEHUB_INIT, "the following arguments are required: root");
+  if (c.positionals.length > 1) extraPositional(u, c.positionals.slice(1));
+  return {
+    action: "run",
+    run: (v) => cmdFilehubInit(v.root as string, !!v.register, v.domain as string | undefined),
+    values: {
+      root: c.positionals[0],
+      register: !!c.flags.get("--register")?.length,
+      domain: lastVal(c.flags, "--domain"),
+    },
+  };
+}
+
+function parseInbox(argv: string[]): Invocation {
+  const usage = usageBlock(INBOX_HELP);
+  if (argv.length === 0) err(usage, P_INBOX, "the following arguments are required: inbox_command");
+  if (isHelpFlag(argv[0])) return help(INBOX_HELP);
+  const sub = argv[0];
+  if (!INBOX_CHOICES.includes(sub)) {
+    err(usage, P_INBOX, `argument inbox_command: invalid choice: '${sub}' (choose from '${INBOX_CHOICES.join("', '")}')`);
+  }
+  const rest = argv.slice(1);
+  const u = usageBlock(INBOX_STATUS_HELP);
+  const c = collect(rest, u, P_INBOX_STATUS, [{ name: "--json", takesValue: false }]);
+  if (c.help) return help(INBOX_STATUS_HELP);
+  if (c.positionals.length > 0) extraPositional(u, c.positionals);
+  return { action: "run", run: (v) => cmdInboxStatus(!!v.json), values: { json: !!c.flags.get("--json")?.length } };
 }

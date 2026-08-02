@@ -38,7 +38,11 @@ filehub/
 - **位置**:工作台同级、不进 git 的 `../<workbench>-inbox/`,或用户指定目录。
 - **不得**在工作台 git 目录内建 `_inbox/`(工作台是 git 同步的控制平面,重资产不入 git)。
 - 首次使用自动创建,并提示"待文件中心注册为 type=filehub 后正式归位"。
-- `filehub/_inbox/`(M2 后)与降级暂存区是同一职责的两处实现,迁移逻辑在 M2 落定时定义。
+- `filehub/_inbox/`(M2 后)与降级暂存区是同一职责的两处实现。
+- **迁移(M2 起)**:注册 filehub(`jspace filehub init <根> --register` 或 `resource add --type filehub`)后,把暂存区文件并入正式 `_inbox/`:
+  1. 人工把暂存区文件移动到 `<filehub>/_inbox/`(或用户指定目录);
+  2. 再走 asset-ingest 归位(会话内「整理一下 inbox」)。
+  - 不自动批量迁移(存量收编增量策略);M2 之后新资料一律先落 `filehub/_inbox/`。
 
 ## 查重
 

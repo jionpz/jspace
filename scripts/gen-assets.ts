@@ -5,7 +5,7 @@ import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 
 const repoRoot = resolve(import.meta.dir, "..");
-const SOURCES = ["templates/workbench", "skills/jspace-bootstrap", "skills/asset-ingest"];
+const SOURCES = ["templates/workbench", "templates/filehub", "skills/jspace-bootstrap", "skills/asset-ingest"];
 
 function walk(dir: string, base: string, out: Map<string, string>): void {
   for (const name of readdirSync(dir)) {

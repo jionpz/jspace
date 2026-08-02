@@ -76,6 +76,8 @@ export function materializeTree(target: string, devRootStr: string): void {
       rel = key.slice("templates/workbench/".length);
     } else if (key.startsWith("skills/")) {
       rel = key; // keep skills/<name>/...
+    } else if (key.startsWith("templates/filehub/")) {
+      continue; // filehub skeleton is materialized on demand by `filehub init`
     } else {
       throw new Error(`unexpected asset key: ${key}`);
     }
@@ -83,4 +85,14 @@ export function materializeTree(target: string, devRootStr: string): void {
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, content.replaceAll(PLACEHOLDER, devRootStr), "utf-8");
   }
+}
+
+/** The embedded filehub root README (templates/filehub/README.md). */
+export function filehubReadme(devRootStr: string): string {
+  const key = "templates/filehub/README.md";
+  const content = ASSETS[key];
+  if (content === undefined) {
+    fail(`filehub template missing in embedded bundle: ${key} (run bun run scripts/gen-assets.ts)`);
+  }
+  return content.replaceAll(PLACEHOLDER, devRootStr);
 }

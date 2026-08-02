@@ -1,7 +1,8 @@
-// cli/cmds.ts — doctor + domain/resource commands (mirror Python cmd_*).
+// cli/cmds.ts — doctor + domain/resource/filehub commands (mirror Python cmd_*).
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
   rmdirSync,
@@ -9,14 +10,15 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fail, rejectErrors } from "./errors.ts";
-import { expandTilde } from "./embed.ts";
+import { devRoot, expandTilde, filehubReadme } from "./embed.ts";
 import { isFile, resolvePath } from "./paths.ts";
 import { MARKER_FILE } from "./init.ts";
 import {
   cleanTags,
   findIndex,
+  ID_PATTERN,
   isWithin,
   loadRegistry,
   REGISTRY_FILE,
@@ -34,6 +36,20 @@ function orD(v: unknown, d: unknown): unknown {
 }
 
 // ---- doctor ----
+/** Recursive file count for the filehub _inbox "unfiled" count.
+ *  Skips dotfiles (.DS_Store / the future .processing marker) so macOS noise
+ *  doesn't inflate the number. */
+function countFiles(dir: string): number {
+  let n = 0;
+  for (const name of readdirSync(dir)) {
+    if (name.startsWith(".")) continue;
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) n += countFiles(p);
+    else n += 1;
+  }
+  return n;
+}
+
 export function cmdDoctor(dir: string): void {
   const root = resolvePath(expandTilde(dir));
   const warnings: string[] = [];
@@ -51,6 +67,43 @@ export function cmdDoctor(dir: string): void {
   }
 
   const errors = validateHub(data, root, warnings);
+
+  // filehub asset-layer checks (warnings only, never blocking).
+  const hub = data as Record<string, unknown>;
+  const filehubs = (Array.isArray(hub.resources) ? hub.resources : []).filter(
+    (r): r is Record<string, unknown> =>
+      !!r && typeof r === "object" && !Array.isArray(r) && r.type === "filehub",
+  );
+  if (filehubs.length === 0) {
+    warnings.push(
+      "no filehub resource registered (type=filehub); asset-ingest falls back to the degraded staging area",
+    );
+  } else {
+    for (const fh of filehubs) {
+      const ep = (Array.isArray(fh.entrypoints) ? fh.entrypoints : []).find(
+        (e): e is Record<string, unknown> =>
+          !!e && typeof e === "object" && e.kind === "path" && e.primary === true,
+      );
+      const fhRoot = typeof ep?.value === "string" ? ep.value : undefined;
+      if (!fhRoot) {
+        warnings.push(`${fh.id}: no primary path entrypoint`);
+        continue;
+      }
+      if (!existsSync(fhRoot)) continue; // validateHub already warns on a missing primary path
+      const inboxDir = join(fhRoot, "_inbox");
+      if (!existsSync(inboxDir) || !statSync(inboxDir).isDirectory()) {
+        warnings.push(`${fh.id}: _inbox missing: ${inboxDir}`);
+      } else {
+        const unfiled = countFiles(inboxDir);
+        if (unfiled > 0) {
+          warnings.push(
+            `${fh.id}: _inbox has ${unfiled} unfiled file(s); run asset-ingest ("整理一下 inbox")`,
+          );
+        }
+      }
+    }
+  }
+
   for (const w of warnings) console.log(`jspace: warning: ${w}`);
   for (const e of errors) console.error(`jspace: error: ${e}`);
   if (errors.length) {
@@ -302,4 +355,174 @@ export function cmdResourceRemove(id: string): void {
   rejectErrors(validateHub(data, root, []));
   saveRegistry(root, data);
   console.log(`jspace: ok: removed resource: ${id}`);
+}
+
+// ---- filehub init ----
+/** Register the filehub root as a type=filehub resource in the workbench at cwd. */
+function registerFilehub(root: string, domainOpt: string | undefined): void {
+  const wb = workbenchRoot();
+  if (!isFile(join(wb, REGISTRY_FILE))) {
+    fail(
+      `not a JSpace workbench: hub.json not found in ${wb} (run filehub init --register from a workbench dir, or register later with: jspace resource add filehub --type filehub --domain <domain> --path ${root})`,
+    );
+  }
+  const data = loadRegistry(wb);
+  if (!Array.isArray(data.resources)) fail("hub.json resources must be an array");
+  if (!Array.isArray(data.domains)) fail("hub.json domains must be an array");
+
+  // Single-root convention: refuse a second filehub registration.
+  const existing = data.resources.find(
+    (r): r is Record<string, unknown> =>
+      !!r && typeof r === "object" && !Array.isArray(r) && r.type === "filehub",
+  );
+  if (existing) {
+    fail(
+      `filehub already registered: ${typeof existing.id === "string" ? existing.id : "?"} (remove it first with jspace resource remove, or reuse)`,
+    );
+  }
+
+  const domain = (domainOpt ?? "files").trim() || "files";
+  if (!ID_PATTERN.test(domain)) fail(`invalid domain id: ${domain}`);
+  const domainIndex = findIndex(data.domains, domain);
+  if (domainIndex === null) {
+    const domainDir = resolve(resolve(wb, "workspace", domain));
+    if (!isWithin(domainDir, wb) || domainDir === wb) {
+      fail(`domain path must resolve inside the workbench root: workspace/${domain}`);
+    }
+    const { created, nearestExisting } = writeDomainSkeleton(
+      domainDir,
+      domain,
+      DEFAULT_DOMAIN_PURPOSE,
+      [],
+    );
+    (data.domains as unknown[]).push({ id: domain, path: `workspace/${domain}`, tags: [] });
+    const errors = validateHub(data, wb, []);
+    if (errors.length) {
+      rollbackDomainSkeleton(domainDir, nearestExisting, created);
+      rejectErrors(errors);
+    }
+    console.log(`jspace: ok: created domain: ${domain}`);
+  }
+
+  (data.resources as unknown[]).push({
+    id: "filehub",
+    type: "filehub",
+    domain,
+    tags: cleanTags(["assets"]),
+    entrypoints: [{ id: "path", kind: "path", value: root, primary: true }],
+    notes: "文件管理中心(资产层本体);归位/整理见 skills/asset-ingest",
+  });
+  rejectErrors(validateHub(data, wb, []));
+  saveRegistry(wb, data);
+  console.log(`jspace: ok: registered filehub resource (type=filehub, primary=${root})`);
+}
+
+export function cmdFilehubInit(
+  rootArg: string,
+  register: boolean,
+  domainOpt: string | undefined,
+): void {
+  const root = resolvePath(expandTilde(rootArg));
+  if (existsSync(root) && !statSync(root).isDirectory()) {
+    fail(`not a directory: ${root}`);
+  }
+
+  const readme = join(root, "README.md");
+  const obsidianVault =
+    existsSync(join(root, ".obsidian")) && statSync(join(root, ".obsidian")).isDirectory();
+
+  // Always ensure the skeleton dirs (mkdir is idempotent; never touches user
+  // files). Write the README only when missing, so a re-run is a no-op.
+  mkdirSync(root, { recursive: true });
+  for (const d of ["_inbox", "projects", "areas", "archive"]) {
+    mkdirSync(join(root, d), { recursive: true });
+  }
+  if (!isFile(readme)) {
+    writeFileSync(readme, filehubReadme(devRoot()), "utf-8");
+    console.log(`jspace: ok: initialized filehub at ${root}`);
+  } else {
+    console.log(
+      `jspace: ok: filehub already initialized at ${root} (skeleton kept, nothing overwritten)`,
+    );
+  }
+  console.log(
+    obsidianVault
+      ? "jspace: info: existing Obsidian vault detected; structure is vault-compatible (no .obsidian written)"
+      : "jspace: info: not an Obsidian vault yet; open this folder as a vault in Obsidian any time (structure is vault-compatible)",
+  );
+
+  if (register) {
+    registerFilehub(root, domainOpt);
+  } else {
+    console.log(
+      `jspace: hint: register later from a workbench dir with: jspace resource add filehub --type filehub --domain <domain> --path ${root} (or re-run with --register)`,
+    );
+  }
+}
+
+// ---- inbox status ----
+/** Locate the inbox: filehub root/_inbox if registered, else the degraded
+ *  staging dir (<workbench>-inbox/) next to the workbench. Mirrors the
+ *  asset-ingest skill's front-matter lookup. Returns null when neither exists. */
+function locateInbox(root: string): string | null {
+  const hub = loadRegistry(root) as Record<string, unknown>;
+  const filehub = (Array.isArray(hub.resources) ? hub.resources : []).find(
+    (r): r is Record<string, unknown> =>
+      !!r && typeof r === "object" && !Array.isArray(r) && r.type === "filehub",
+  );
+  if (filehub) {
+    const ep = (Array.isArray(filehub.entrypoints) ? filehub.entrypoints : []).find(
+      (e): e is Record<string, unknown> =>
+        !!e && typeof e === "object" && e.kind === "path" && e.primary === true,
+    );
+    const fhRoot = typeof ep?.value === "string" ? ep.value : undefined;
+    if (fhRoot) return join(fhRoot, "_inbox");
+  }
+  const staging = join(dirname(root), `${basename(root)}-inbox`);
+  return staging;
+}
+
+/** Read-only inbox listing (no semantic judgment). */
+export function cmdInboxStatus(json: boolean): void {
+  const root = workbenchRoot();
+  const inbox = locateInbox(root);
+  if (!inbox || !existsSync(inbox)) {
+    if (json) {
+      console.log(JSON.stringify({ inbox: null, count: 0, files: [] }, null, 2));
+      return;
+    }
+    console.log(
+      "jspace: ok: no inbox to process (filehub not registered and no degraded staging dir)",
+    );
+    return;
+  }
+
+  const files = readdirSync(inbox)
+    .filter((n) => !n.startsWith("."))
+    .map((n) => {
+      const p = join(inbox, n);
+      const st = statSync(p);
+      return {
+        name: n,
+        size: st.size,
+        mtime: st.mtime.toISOString(),
+        dir: st.isDirectory(),
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (json) {
+    console.log(JSON.stringify({ inbox, count: files.length, files }, null, 2));
+    return;
+  }
+  if (files.length === 0) {
+    console.log("jspace: ok: inbox is empty (nothing to do)");
+    return;
+  }
+  console.log(`jspace: inbox (${inbox}): ${files.length} file(s)`);
+  for (const f of files) {
+    console.log(
+      `  ${f.name}${f.dir ? "/" : ""}  ${f.size} B  ${f.mtime.slice(0, 10)}`,
+    );
+  }
 }
