@@ -2,7 +2,7 @@
 
 ## 文件中心定位
 
-- 文件中心 = `hub.json` 中 `type: filehub` 的 resource;取 `primary: true` 的 path entrypoint 作为根(`filehub/`)。
+- 文件中心 = `.jspace/hub.json` 中 `type: filehub` 的 resource;取 `primary: true` 的 path entrypoint 作为根(`filehub/`)。
 - 未注册该约定 type/id → 走降级暂存区(见下)。
 - 该约定直接服务 M2(M2 按此注册文件中心)。
 

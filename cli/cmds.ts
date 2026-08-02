@@ -67,7 +67,7 @@ export function cmdDoctor(dir: string): void {
   const root = resolvePath(expandTilde(dir));
   const warnings: string[] = [];
   if (!isFile(join(root, MARKER_FILE))) {
-    warnings.push("not an initialized JSpace workbench (missing .jspace.json)");
+    warnings.push("not an initialized JSpace workbench (missing .jspace/marker.json)");
   }
 
   const registryPath = join(root, REGISTRY_FILE);
@@ -376,7 +376,7 @@ function registerFilehub(root: string, domainOpt: string | undefined): void {
   const wb = workbenchRoot();
   if (!isFile(join(wb, REGISTRY_FILE))) {
     fail(
-      `not a JSpace workbench: hub.json not found in ${wb} (run filehub init --register from a workbench dir, or register later with: jspace resource add filehub --type filehub --domain <domain> --path ${root})`,
+      `not a JSpace workbench: registry not found at ${join(wb, REGISTRY_FILE)} (run filehub init --register from a workbench dir, or register later with: jspace resource add filehub --type filehub --domain <domain> --path ${root})`,
     );
   }
   const data = loadRegistry(wb);

@@ -14,7 +14,7 @@ triggers:
 
 ## 前置
 
-- **文件中心**:读 `hub.json` 中 `type: filehub` 的 resource,取其 `primary: true` 的 path entrypoint 作为根(`filehub/`)。
+- **文件中心**:读 `.jspace/hub.json` 中 `type: filehub` 的 resource,取其 `primary: true` 的 path entrypoint 作为根(`filehub/`)。
   - 未注册 → 用**降级暂存区**:工作台同级、不进 git 的 `../<workbench>-inbox/`(或用户指定目录),并提示"待文件中心注册为 type=filehub 后正式归位"。
 - **gbrain**:经 CLI 或 MCP 操作;brain 被 `gbrain serve` 持锁时按其提示处理,不绕过锁。
 - 归档纪律:按**主要内容物**归档、不按格式(源自 gbrain `_brain-filing-rules.md`;本 skill 细则见 `references/filing.md`)。
@@ -54,7 +54,7 @@ triggers:
 一次性处理 `_inbox/` 存量。与单文件共用同一套纪律(步骤 1-5),外层加「两遍式 + 幂等 + 汇总 + 日志」。触发:「整理一下 inbox」「批量整理」。无头/定时(cron)用同一模式,只跑第一遍。细则见 `references/batch.md`。
 
 ### 0. 定位 inbox
-- 读 `hub.json` 中 `type: filehub` resource 的 `primary: true` path → `<根>/_inbox/`。
+- 读 `.jspace/hub.json` 中 `type: filehub` resource 的 `primary: true` path → `<根>/_inbox/`。
 - 未注册 → 降级暂存区(工作台外 `../<workbench>-inbox/`)。可用 `jspace inbox status` 预检。
 - 空 inbox → 报告"无事可做",结束。
 

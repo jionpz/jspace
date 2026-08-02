@@ -167,7 +167,7 @@ positional arguments:
 options:
   -h, --help       show this help message and exit
   --register       also register the filehub in the current workbench
-                   (hub.json) as type=filehub
+                   (.jspace/hub.json) as type=filehub
   --domain DOMAIN  owning domain id (default: files; created if missing)`;
 
 const INBOX_HELP = `usage: jspace inbox [-h] {status} ...

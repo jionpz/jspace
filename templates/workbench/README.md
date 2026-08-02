@@ -4,13 +4,15 @@
 
 ## 结构
 
-- `hub.json` - domain/resource 注册表
+- `.jspace/hub.json` - domain/resource 注册表(机器维护,平时无需手改)
+- `.jspace/marker.json` - 初始化标记(机器维护)
+- `.jspace/logs/` - 执行日志(cron / 无头批量;git 忽略)
 - `AGENTS.md` - 工作模式操作规则
 - `workspace/jspace-dev/` - 指向 JSpace 开发仓库的 domain
 - `workspace/agent-infra/` - AI 资源管理 domain
 - `skills/jspace-bootstrap/` - 首次配置技能
 - `skills/asset-ingest/` - 资料转知识资产技能
-- `.jspace.json` - 初始化标记
+- `.gitignore` - 忽略 `.jspace/logs/`
 
 ## 使用
 

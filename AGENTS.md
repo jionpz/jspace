@@ -7,7 +7,7 @@
 本仓库只维护以下内容：
 
 - `cli/`：JSpace CLI（TypeScript/bun 源码，`bun run cli/main.ts` 运行；`bun run build` 产出 `bin/jspace` 编译二进制），提供 `init`（生成工作台）和 `doctor`（校验工作台）。
-- `templates/workbench/`：工作台模板，包含 `hub.json`、工作台 `AGENTS.md`、初始 domains。
+- `templates/workbench/`：工作台模板，包含 `.jspace/hub.json`、工作台 `AGENTS.md`、初始 domains。
 - `skills/jspace-bootstrap/`：生成时复制进工作台的首次配置技能（gbrain + harness 接线）。
 - `skills/asset-ingest/`：生成时复制进工作台的资料转知识资产技能（归位 + gbrain reference + 中文语义召回）。
 
@@ -47,9 +47,10 @@
    - `bun run cli/main.ts init /tmp/jspace-smoke`
    - `bun run cli/main.ts doctor --dir /tmp/jspace-smoke`
    - 在 `/tmp/jspace-smoke` 内演练 registry 命令（`domain`/`resource` 的 list/add/remove）
-4. `hub.json` schema 见 `templates/workbench/hub.json` 和 `skills/jspace-bootstrap/references/registry.md`：资源主路径必须是绝对路径，且恰好一个 `primary: true`。
+4. `hub.json` schema 见 `templates/workbench/.jspace/hub.json` 和 `skills/jspace-bootstrap/references/registry.md`：资源主路径必须是绝对路径，且恰好一个 `primary: true`。
 5. 命名统一：项目、CLI、技能、模板、文档、domain 统一使用 `jspace`。
 6. 首次开发、未上线：**无兼容性负担**——schema/CLI/模板可直接演进，不做迁移/弃用通道；版本化承诺推迟到分发（R7）。
+7. 真实工作台升级约定（未分发、本地自用）：每次模板/CLI 更新后，如需让真实工作台（如 `~/jworkspace`）拿到最新状态，**清空后重 init**——`rm -rf <workbench>` 再 `jspace init <workbench>`（或清掉旧残留 `hub.json`/`.jspace.json` 后 `init --force`）。不原地叠加；`init` 遇旧布局残留会 fail 提示清除。
 
 ## Confirmation Rules
 

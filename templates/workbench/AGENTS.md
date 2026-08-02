@@ -26,10 +26,10 @@ Before changing files for non-trivial work, classify the request internally:
 
 | Request type | Default action |
 | --- | --- |
-| Existing domain work | Read `workspace/<domain>/README.md` and `domain.json`; look up the domain/resource in `hub.json`. |
-| Existing resource work | Look up the resource in `hub.json`; enter the owning domain before operating. |
+| Existing domain work | Read `workspace/<domain>/README.md` and `domain.json`; look up the domain/resource in `.jspace/hub.json`. |
+| Existing resource work | Look up the resource in `.jspace/hub.json`; enter the owning domain before operating. |
 | Candidate new domain | Create/propose a minimal domain only if it meets the domain rules below. |
-| Candidate new resource | Add/update a `hub.json` resource only when it is a reusable entrypoint worth future lookup. |
+| Candidate new resource | Add/update a `.jspace/hub.json` resource only when it is a reusable entrypoint worth future lookup. |
 | Candidate new skill | Propose a skill only if it meets the skill rules below; ask before creating. |
 | One-off operation | Do the work without adding durable structure. |
 | JSpace development | Go to the development repository `__DEV_ROOT__`; use its Trellis workflow before editing. |
@@ -63,7 +63,7 @@ workspace/<domain>/
 
 Add `workspace/<domain>/AGENTS.md` or `runbook.md` only when repeated procedure or safety boundaries require it.
 
-When creating a domain, also add a minimal domain index record to `hub.json`. Keep detailed domain content in `workspace/<domain>/domain.json` and markdown files, not in `hub.json`.
+When creating a domain, also add a minimal domain index record to `.jspace/hub.json`. Keep detailed domain content in `workspace/<domain>/domain.json` and markdown files, not in `.jspace/hub.json`.
 
 ## Resource Governance
 
@@ -84,12 +84,14 @@ Do not put executable operation commands such as start/stop/deploy in resources.
 
 ## Registry Access
 
+**注册表 = `.jspace/hub.json`。下文 `hub.json` 概念指代均指此文件。**
+
 Read the registry and domain files directly with standard tools:
 
-- `hub.json`: domain/resource discovery index.
+- `.jspace/hub.json`: domain/resource discovery index.
 - `workspace/<domain>/README.md` and `workspace/<domain>/domain.json`: domain entry and detail.
 
-Validation uses the JSpace CLI: `jspace doctor --dir .` (`jspace` is the compiled binary on PATH; a source checkout runs `bun run cli/main.ts` from `__DEV_ROOT__`). `hub.json` is a map, not a file reader. It points to context files and must not duplicate full README/AGENTS/runbook content. For lookup, use `jq . hub.json`, `find workspace -maxdepth 2 -type f`, and `rg` queries.
+Validation uses the JSpace CLI: `jspace doctor --dir .` (`jspace` is the compiled binary on PATH; a source checkout runs `bun run cli/main.ts` from `__DEV_ROOT__`). The registry is a map, not a file reader. It points to context files and must not duplicate full README/AGENTS/runbook content. For lookup, use `jq .jspace/hub.json`, `find workspace -maxdepth 2 -type f`, and `rg` queries.
 
 ## Skill Governance
 
@@ -120,7 +122,7 @@ Approved workbench skills (copied in by `jspace init`):
 | Domain-specific AI boundary | `workspace/<domain>/AGENTS.md` |
 | Repeatable domain procedure | `workspace/<domain>/runbook.md` |
 | Reusable AI capability | `skills/<jspace-skill>/` after confirmation |
-| Domain/resource discovery index | `hub.json` |
+| Domain/resource discovery index | `.jspace/hub.json` |
 
 Only write durable records when they will help future sessions. Root `AGENTS.md` should contain long-lived operating rules, not temporary preferences or one-off task notes.
 
@@ -149,14 +151,14 @@ Ask before:
 - Creating a project-local skill.
 - Creating a domain when confidence is medium or low.
 - Replacing existing resource notes/tags.
-- Removing a domain or resource from `hub.json`.
+- Removing a domain or resource from `.jspace/hub.json`.
 - Editing registry or docs in ways not covered by the rules in this `AGENTS.md`.
 
 Can proceed with explanation:
 
 - High-confidence minimal domain creation.
 - Updating durable domain/resource notes when the user clearly provided reusable facts.
-- Repairing registry/domain-file drift when `hub.json` and `workspace/<domain>/` disagree.
+- Repairing registry/domain-file drift when `.jspace/hub.json` and `workspace/<domain>/` disagree.
 
 ## End-of-Work Capture
 
@@ -178,9 +180,9 @@ gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbr
 
 ## Quality Checks
 
-- `hub.json` must remain valid JSON.
+- `.jspace/hub.json` must remain valid JSON.
 - Registered domain folders should exist and include `README.md` and `domain.json`.
 - Registered resource primary paths should exist unless the task is explicitly about missing paths.
-- `workspace/<domain>/domain.json` ids must match both the folder name and `hub.json`.
+- `workspace/<domain>/domain.json` ids must match both the folder name and `.jspace/hub.json`.
 - `jspace doctor --dir .` must pass after registry changes.
 - Do not introduce task-management concepts; this workbench has no task manager.

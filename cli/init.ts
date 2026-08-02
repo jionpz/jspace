@@ -5,7 +5,8 @@ import { fail } from "./errors.ts";
 import { devRoot, expandTilde, isCompiled, materializeTree } from "./embed.ts";
 import { resolvePath } from "./paths.ts";
 
-export const MARKER_FILE = ".jspace.json";
+export const MARKER_FILE = ".jspace/marker.json";
+export const CONFIG_DIR = ".jspace";
 export const VERSION = "1.0.0";
 
 /** Local calendar date YYYY-MM-DD (Python date.today().isoformat(); toISOString is UTC). */
@@ -25,11 +26,24 @@ export function cmdInit(targetArg: string | undefined, force: boolean): void {
   if (existsSync(join(target, MARKER_FILE)) && !force) {
     fail(`target is already a JSpace workbench: ${target}`);
   }
+  // Legacy-layout residue guard: refuse to silently produce a double registry
+  // (root hub.json/.jspace.json leftover next to the new .jspace/ layout).
+  const legacyRoot = [join(target, "hub.json"), join(target, ".jspace.json")].some((p) =>
+    existsSync(p),
+  );
+  if (legacyRoot && !existsSync(join(target, CONFIG_DIR, "marker.json"))) {
+    fail(
+      `legacy layout files present at ${target} (root hub.json/.jspace.json); remove them and re-run init`,
+    );
+  }
 
   mkdirSync(target, { recursive: true });
   // Template + skills are embedded in the binary (assets.generated.ts); the
   // standalone CLI is self-contained and needs no on-disk template checkout.
   materializeTree(target, devRoot());
+  // .jspace/logs/ is a preallocated slot for execution logs (cron / headless);
+  // gen-assets only materializes files, so an empty dir must be created here.
+  mkdirSync(join(target, CONFIG_DIR, "logs"), { recursive: true });
 
   const marker = {
     product: "JSpace",

@@ -4,7 +4,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { fail } from "./errors.ts";
 import { isFile, resolvePath } from "./paths.ts";
 
-export const REGISTRY_FILE = "hub.json";
+export const REGISTRY_FILE = ".jspace/hub.json";
 export const ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
 export function workbenchRoot(): string {

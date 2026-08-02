@@ -4,7 +4,7 @@
 
 ## 定位 inbox(共享)
 
-- 正式:读 `hub.json` 中 `type: filehub` resource 的 `primary: true` path → `<根>/_inbox/`。
+- 正式:读 `.jspace/hub.json` 中 `type: filehub` resource 的 `primary: true` path → `<根>/_inbox/`。
 - 降级:未注册 → 工作台外 `../<workbench>-inbox/`(或用户指定),提示"待注册 filehub 后正式归位"。
 - 预检:`jspace inbox status [--json]` 列出文件/计数;空 inbox → 无事可做。
 
@@ -51,7 +51,7 @@
 ## 无头模式(cron / `claude -p`)
 
 - 只跑第一遍(确定性),不提问、不等待;模糊项留清单。
-- 写执行日志到 `<filehub>/.jspace-logs/inbox-batch.md`(追加):时间、输入计数、成功/跳过/失败、逐文件结果(路径 → 目标)。未注册 filehub 时:写工作台 `logs/inbox-batch.md`。
+- 写执行日志到 `<filehub>/.jspace-logs/inbox-batch.md`(追加):时间、输入计数、成功/跳过/失败、逐文件结果(路径 → 目标)。未注册 filehub 时:写工作台 `.jspace/logs/inbox-batch.md`(工作台侧日志槽位)。
 - 失败可见性:日志落固定路径,供下次会话检查;不做静默吞错。
 
 ## 边界

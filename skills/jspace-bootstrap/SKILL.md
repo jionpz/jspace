@@ -52,10 +52,10 @@ Frontmatter schema and offline policy: `skills/jspace-bootstrap/references/gbrai
 
 ## Phase 2 - Registry health
 
-The workbench has no standalone CLI inside itself; validation lives in the JSpace CLI: `jspace doctor --dir .`(`jspace` 为编译二进制,需在 PATH 上;源码检出:在 `__DEV_ROOT__` 用 `bun run cli/main.ts`)。`hub.json` must stay valid JSON; repair drift only with explanation. Never invent domains/resources.
+The workbench has no standalone CLI inside itself; validation lives in the JSpace CLI: `jspace doctor --dir .`(`jspace` 为编译二进制,需在 PATH 上;源码检出:在 `__DEV_ROOT__` 用 `bun run cli/main.ts`)。`.jspace/hub.json` must stay valid JSON; repair drift only with explanation. Never invent domains/resources.
 
-1. `jq . hub.json` parses(Windows 无 jq → PowerShell `Get-Content hub.json | ConvertFrom-Json`)。
-2. Every `domains[]` folder exists and contains `README.md` + `domain.json`; the `domain.json` id matches both the folder name and `hub.json`.
+1. `jq .jspace/hub.json` parses(Windows 无 jq → PowerShell `Get-Content .jspace/hub.json | ConvertFrom-Json`)。
+2. Every `domains[]` folder exists and contains `README.md` + `domain.json`; the `domain.json` id matches both the folder name and `.jspace/hub.json`.
 3. Every resource with path entrypoints has exactly one primary path entrypoint; missing external paths are warnings, not blocking errors.
 4. Domain/resource ids are globally unique; every resource `domain` references a registered domain.
 
@@ -97,8 +97,8 @@ AI provider/model/proxy config is owned by cc-switch (`/Users/jionpz/.cc-switch`
 ```bash
 # 校验(编译二进制在 PATH 时用 jspace;源码检出:在 __DEV_ROOT__ 用 bun run cli/main.ts)
 jspace doctor --dir .
-# hub.json 合法 JSON(POSIX: jq;Windows: ConvertFrom-Json)
-jq . hub.json
+# .jspace/hub.json 合法 JSON(POSIX: jq;Windows: ConvertFrom-Json)
+jq .jspace/hub.json
 # 列出工作区文件(POSIX: find|sort;Windows: Get-ChildItem)
 find workspace -maxdepth 2 -type f | sort
 gbrain doctor --fast
