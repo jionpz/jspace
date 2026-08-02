@@ -119,6 +119,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="resource id (lowercase letters, digits, and hyphens)",
     )
     resource_add_parser.add_argument("--domain", required=True, help="owning domain id")
+    resource_add_parser.add_argument(
+        "--type",
+        default="project",
+        help="resource type (default: project)",
+    )
     entry_group = resource_add_parser.add_mutually_exclusive_group(required=True)
     entry_group.add_argument("--path", help="absolute path entrypoint")
     entry_group.add_argument("--url", help="url entrypoint")
@@ -600,6 +605,8 @@ def cmd_domain_remove(args: argparse.Namespace) -> None:
     del data["domains"][index]
     _reject_errors(validate_hub(data, root, []))
 
+    _save_registry(root, data)
+
     if args.purge:
         if not isinstance(domain_path, str) or not domain_path:
             fail(f"domain {args.id} has no usable path to purge")
@@ -609,7 +616,6 @@ def cmd_domain_remove(args: argparse.Namespace) -> None:
         if domain_dir.exists():
             shutil.rmtree(domain_dir)
 
-    _save_registry(root, data)
     message = f"removed domain: {args.id}"
     if not args.purge and domain_path:
         message += f" (kept directory {domain_path})"
@@ -657,14 +663,16 @@ def cmd_resource_add(args: argparse.Namespace) -> None:
     else:
         entrypoint = {"id": "url", "kind": "url", "value": args.url}
 
+    resource_type = (args.type or "project").strip() or "project"
     record = {
         "id": args.id,
-        "type": "project",
+        "type": resource_type,
         "domain": args.domain,
         "tags": _clean_tags(args.tag),
         "entrypoints": [entrypoint],
-        "notes": args.notes or "",
     }
+    if args.notes:
+        record["notes"] = args.notes
     data["resources"].append(record)
     _reject_errors(validate_hub(data, root, []))
     _save_registry(root, data)
