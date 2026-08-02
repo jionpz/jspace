@@ -106,7 +106,9 @@ Propose a skill when at least two signals apply:
 
 Do not create a skill for one-off notes, simple domain metadata, coding conventions that belong in `AGENTS.md`, large content dumps, or rules that fit clearly in `AGENTS.md` / a domain README.
 
-First approved workbench skill: `jspace-bootstrap` (`skills/jspace-bootstrap/`), copied in by `jspace init`. It is the first-time setup path: verify the registry, bootstrap the gbrain memory base, and wire harnesses. Use it when the user asks to initialize or configure this workbench.
+Approved workbench skills (copied in by `jspace init`):
+- `jspace-bootstrap` - first-time setup: verify the registry, bootstrap the gbrain memory base, and wire harnesses. Use it when the user asks to initialize or configure this workbench.
+- `asset-ingest` - ingest work material (books, pdf/ppt/txt, excel, reports) into the file hub and gbrain as searchable knowledge assets. Use it when the user asks to file a document, tidy the inbox, or turn a resource into knowledge.
 
 ## Durable Knowledge Routing
 
@@ -172,6 +174,7 @@ If nothing durable was learned, do not mention the check. If something should be
 gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbrain` for skill routing; keep the format intact.
 
 - **jspace-bootstrap**: initialize jspace | setup jspace | configure jspace | first-use jspace | workbench broken | registry broken | gbrain missing | wire gbrain | fresh environment
+- **asset-ingest**: 资料入库 | 整理 inbox | 归位资料 | 把这份资料入库
 
 ## Quality Checks
 

@@ -1,6 +1,16 @@
 ---
 name: jspace-bootstrap
 description: "Configure a fresh JSpace workbench after at least one AI harness (Pi, Claude Code, Codex, or Cursor) is already installed - the user picks which one to use: auto-installs python3, installs the gbrain unified memory base (PGLite + knowledge graph + local embedding), verifies the domain/resource registry, and wires the chosen harness via MCP/CLI with session-start retrieval injection and work-end write-back. hermes is optional (mentioned for awareness, not proactively promoted). Use when the user asks to initialize/set up/configure a JSpace workbench for the first time, when the registry looks broken, when gbrain is missing or unwired, or when starting a fresh environment."
+triggers:
+  - "initialize jspace"
+  - "setup jspace"
+  - "configure jspace"
+  - "first-use jspace"
+  - "workbench broken"
+  - "registry broken"
+  - "gbrain missing"
+  - "wire gbrain"
+  - "fresh environment"
 ---
 
 # jspace-bootstrap
@@ -28,8 +38,8 @@ Verify after installs: `python3 --version && bun --version`.
 2. If missing: `bun install -g gbrain`, then `gbrain upgrade`.
 3. If `~/.gbrain` is absent: `gbrain init` (defaults to PGLite, no server).
 4. `gbrain doctor --json` - check brain, resolver, embeddings; fix what it reports.
-5. Embeddings are optional and offline-safe. Recommended online option (free): SiliconFlow bge-m3 (see `skills/jspace-bootstrap/references/gbrain.md`); offline fallback: local Ollama bge-m3. If no embedding is reachable, writes must still succeed (write with `embed_skip: true`; never fail because embedding is down).
-6. Recommended AI config (optional, ask the user; never force): offer the SiliconFlow embedding + chat-parity-with-harness scheme from `skills/jspace-bootstrap/references/gbrain.md` (Recommended AI configuration). Needs a SiliconFlow API key; chat parity additionally needs the cc-switch local proxy running. Skip entirely if the user declines or has no key.
+5. Embeddings are a **default-required config** — Chinese recall depends on semantic search (tsvector does not tokenize CJK). Recommended online option (free): SiliconFlow bge-m3 (see `skills/jspace-bootstrap/references/gbrain.md`); offline fallback: local Ollama bge-m3. If no embedding is reachable, bootstrap must still succeed: writes use `embed_skip: true` (never fail a write because embedding is down), and retrieval degrades to keyword search with a clear notice (ingest-side policy: `skills/asset-ingest/references/gbrain-write.md`).
+6. Recommended AI config (ask the user; never force): offer the SiliconFlow embedding + chat-parity-with-harness scheme from `skills/jspace-bootstrap/references/gbrain.md` (Recommended AI configuration). Needs a SiliconFlow API key; chat parity additionally needs the cc-switch local proxy running. Skip entirely if the user declines or has no key.
 7. Smoke test, then clean up (no probe pages left behind):
 
 ```bash
@@ -80,3 +90,5 @@ gbrain doctor --fast
 ```
 
 Report: configured / already-OK / missing-deferred items (e.g., Ollama offline, chosen harness not fully wired). Explain any registry or domain-file repairs.
+
+> **Note — skill updates and existing workbenches.** New workbench skills added to the dev repo (e.g. `asset-ingest`) are only copied into workbenches by `jspace init`; an **existing live workbench does not get them retrofitted**. To pick them up: re-run `__DEV_ROOT__/bin/jspace init --force .` (clobbers local skill edits) or copy the skill manually. If a freshly generated workbench lacks a skill you expected, first check whether you are inside an old workbench.

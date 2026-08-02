@@ -14,6 +14,7 @@ from pathlib import Path
 DEV_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = DEV_ROOT / "templates" / "workbench"
 SKILL_SOURCE = DEV_ROOT / "skills" / "jspace-bootstrap"
+ASSET_INGEST_SOURCE = DEV_ROOT / "skills" / "asset-ingest"
 VERSION = "1.0.0"
 MARKER_FILE = ".jspace.json"
 REGISTRY_FILE = "hub.json"
@@ -161,15 +162,20 @@ def cmd_init(args: argparse.Namespace) -> None:
     target.mkdir(parents=True, exist_ok=True)
     if not TEMPLATE_DIR.is_dir():
         fail(f"workbench template directory missing: {TEMPLATE_DIR}")
-    if not SKILL_SOURCE.is_dir():
-        fail(f"bootstrap skill directory missing: {SKILL_SOURCE}")
+
+    workbench_skills = [SKILL_SOURCE, ASSET_INGEST_SOURCE]
+    for source in workbench_skills:
+        if not source.is_dir():
+            fail(f"skill directory missing: {source}")
 
     shutil.copytree(TEMPLATE_DIR, target, dirs_exist_ok=True)
-    shutil.copytree(
-        SKILL_SOURCE,
-        target / "skills" / "jspace-bootstrap",
-        dirs_exist_ok=True,
-    )
+    for source in workbench_skills:
+        try:
+            shutil.copytree(
+                source, target / "skills" / source.name, dirs_exist_ok=True
+            )
+        except shutil.Error as exc:
+            fail(f"failed copying skill {source.name}: {exc}")
     _materialize_placeholders(target)
 
     marker = {

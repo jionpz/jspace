@@ -9,6 +9,7 @@
 - `workspace/jspace-dev/` - 指向 JSpace 开发仓库的 domain
 - `workspace/agent-infra/` - AI 资源管理 domain
 - `skills/jspace-bootstrap/` - 首次配置技能
+- `skills/asset-ingest/` - 资料转知识资产技能
 - `.jspace.json` - 初始化标记
 
 ## 使用
