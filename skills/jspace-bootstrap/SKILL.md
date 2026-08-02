@@ -21,22 +21,26 @@ Bootstrap a fresh JSpace workbench end to end. Run phases in order; never skip a
 
 **Assumption: at least one AI harness (Pi, Claude Code, Codex, or Cursor) is already installed and functional.** This skill configures what comes after that: the registry, gbrain memory, and harness wiring. It does not install harnesses.
 
-Auto-install missing tooling; do not stop to ask:
+Auto-install missing tooling; do not stop to ask (分平台命令):
 
 1. `python3` - if missing, install the latest stable 3.x:
    - macOS: `brew install python`
    - Debian/Ubuntu: `sudo apt-get install -y python3`
    - Fedora: `sudo dnf install -y python3`
-2. `bun` - if missing (needed to install/upgrade gbrain): `curl -fsSL https://bun.sh/install | bash`
-3. `git` - if missing, install via the platform package manager.
+   - Windows: `winget install Python.Python.3.12`(或 python.org 官方安装器;安装后命令是 `python`/`py`,不一定是 `python3`)
+2. `bun` - if missing (needed to install/upgrade gbrain):
+   - macOS / Linux: `curl -fsSL https://bun.sh/install | bash`
+   - Windows: `powershell -c "irm bun.sh/install.ps1 | iex"`
+   - ⚠️ 治理红线:两者均为 bun 官方安装脚本,属 `curl | bash` 一类;**执行前先核验来源与内容**(bun.sh 官方),不盲跑未审查脚本。
+3. `git` - if missing, install via the platform package manager(Windows: `winget install Git.Git`)。
 
-Verify after installs: `python3 --version && bun --version`.
+Verify after installs: `python3 --version && bun --version`(Windows 上可用 `python --version` 或 `py --version`)。
 
 ## Phase 1 - Install gbrain (first core)
 
 1. Resolve the binary: `$GBRAIN_BIN` -> `which gbrain`(Windows `where gbrain`) -> `~/.bun/bin/gbrain`(Windows `%USERPROFILE%\.bun\bin\gbrain.exe`).
 2. If missing: `bun install -g gbrain`, then `gbrain upgrade`.
-3. If `~/.gbrain` is absent: `gbrain init` (defaults to PGLite, no server).
+3. If `~/.gbrain`(Windows `%USERPROFILE%\.gbrain`) is absent: `gbrain init` (defaults to PGLite, no server).
 4. `gbrain doctor --json` - check brain, resolver, embeddings; fix what it reports.
 5. Embeddings are a **default-required config** — Chinese recall depends on semantic search (tsvector does not tokenize CJK). Recommended online option (free): SiliconFlow bge-m3 (see `skills/jspace-bootstrap/references/gbrain.md`); offline fallback: local Ollama bge-m3. If no embedding is reachable, bootstrap must still succeed: writes use `embed_skip: true` (never fail a write because embedding is down), and retrieval degrades to keyword search with a clear notice (ingest-side policy: `skills/asset-ingest/references/gbrain-write.md`).
 6. Recommended AI config (ask the user; never force): offer the SiliconFlow embedding + chat-parity-with-harness scheme from `skills/jspace-bootstrap/references/gbrain.md` (Recommended AI configuration). Needs a SiliconFlow API key; chat parity additionally needs the cc-switch local proxy running. Skip entirely if the user declines or has no key.
@@ -53,9 +57,9 @@ Frontmatter schema and offline policy: `skills/jspace-bootstrap/references/gbrai
 
 ## Phase 2 - Registry health
 
-The workbench has no standalone CLI inside itself; validation lives in the JSpace dev repo: `__DEV_ROOT__/bin/jspace doctor --dir .`. `hub.json` must stay valid JSON; repair drift only with explanation. Never invent domains/resources.
+The workbench has no standalone CLI inside itself; validation lives in the JSpace CLI: `jspace doctor --dir .`(`jspace` 为编译二进制,需在 PATH 上;源码检出可用 `__DEV_ROOT__/bin/jspace`)。`hub.json` must stay valid JSON; repair drift only with explanation. Never invent domains/resources.
 
-1. `jq . hub.json` parses.
+1. `jq . hub.json` parses(Windows 无 jq → `python -m json.tool hub.json` 或 PowerShell `Get-Content hub.json | ConvertFrom-Json`)。
 2. Every `domains[]` folder exists and contains `README.md` + `domain.json`; the `domain.json` id matches both the folder name and `hub.json`.
 3. Every resource with path entrypoints has exactly one primary path entrypoint; missing external paths are warnings, not blocking errors.
 4. Domain/resource ids are globally unique; every resource `domain` references a registered domain.
@@ -76,6 +80,8 @@ Four session harnesses are supported: **Pi, Claude Code, Codex, Cursor**. Ask th
 
 hermes is optional: hint that it exists for autonomous/cron/multi-endpoint use, but do not promote or install it unless the user asks.
 
+> Windows 注意:上表为 macOS/Linux 路径;Windows 下各 harness 的 config 路径与 stdio MCP command 全路径写法见 `skills/jspace-bootstrap/references/harnesses.md` 的"跨平台路径速查"表。
+
 Verify the chosen wiring and confirm the session-start retrieval-injection and work-end write-back flows (see `skills/jspace-bootstrap/references/harnesses.md`).
 
 AI provider/model/proxy config is owned by cc-switch (`/Users/jionpz/.cc-switch`, resource `cc-switch`): read `workspace/agent-infra/README.md` before touching it.
@@ -83,12 +89,17 @@ AI provider/model/proxy config is owned by cc-switch (`/Users/jionpz/.cc-switch`
 ## Phase 4 - Final smoke and sign-off
 
 ```bash
-__DEV_ROOT__/bin/jspace doctor --dir .
+# 校验(编译二进制在 PATH 时用 jspace;源码检出用 __DEV_ROOT__/bin/jspace)
+jspace doctor --dir .
+# hub.json 合法 JSON(POSIX: jq;Windows: python -m json.tool 或 ConvertFrom-Json)
 jq . hub.json
+# 列出工作区文件(POSIX: find|sort;Windows: Get-ChildItem)
 find workspace -maxdepth 2 -type f | sort
 gbrain doctor --fast
 ```
 
+Windows 等价(如适用):`python -m json.tool hub.json`、`Get-ChildItem -Path workspace -Recurse -Depth 1 -File | Sort-Object FullName`。
+
 Report: configured / already-OK / missing-deferred items (e.g., Ollama offline, chosen harness not fully wired). Explain any registry or domain-file repairs.
 
-> **Note — skill updates and existing workbenches.** New workbench skills added to the dev repo (e.g. `asset-ingest`) are only copied into workbenches by `jspace init`; an **existing live workbench does not get them retrofitted**. To pick them up: re-run `__DEV_ROOT__/bin/jspace init --force .` (clobbers local skill edits) or copy the skill manually. If a freshly generated workbench lacks a skill you expected, first check whether you are inside an old workbench.
+> **Note — skill updates and existing workbenches.** New workbench skills added to the dev repo (e.g. `asset-ingest`) are only copied into workbenches by `jspace init`; an **existing live workbench does not get them retrofitted**. To pick them up: re-run `jspace init --force .` (clobbers local skill edits) or copy the skill manually. If a freshly generated workbench lacks a skill you expected, first check whether you are inside an old workbench.
