@@ -1,5 +1,7 @@
 # Harness wiring reference
 
+> 完整推荐配置、全局治理文档(`~/.agents/agents.md`)接线与逐 harness 差异见 **`harness-config` skill**;本文件保留 bootstrap 首次 wiring 视角。
+
 Four session harnesses are supported: Pi, Claude Code, Codex, Cursor. The user picks which one to use; wire that one. hermes is optional (mention, don't promote). All harnesses read/write the same gbrain store over MCP/CLI.
 
 ## Pi
