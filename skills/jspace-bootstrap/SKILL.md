@@ -1,6 +1,6 @@
 ---
 name: jspace-bootstrap
-description: "Configure a fresh JSpace workbench after at least one AI harness (Pi, Claude Code, Codex, or Cursor) is already installed - the user picks which one to use: auto-installs python3, installs the gbrain unified memory base (PGLite + knowledge graph + local embedding), verifies the domain/resource registry, and wires the chosen harness via MCP/CLI with session-start retrieval injection and work-end write-back. hermes is optional (mentioned for awareness, not proactively promoted). Use when the user asks to initialize/set up/configure a JSpace workbench for the first time, when the registry looks broken, when gbrain is missing or unwired, or when starting a fresh environment."
+description: "Configure a fresh JSpace workbench after at least one AI harness (Pi, Claude Code, Codex, or Cursor) is already installed - the user picks which one to use: installs the gbrain unified memory base (PGLite + knowledge graph + local embedding), verifies the domain/resource registry, and wires the chosen harness via MCP/CLI with session-start retrieval injection and work-end write-back. hermes is optional (mentioned for awareness, not proactively promoted). Use when the user asks to initialize/set up/configure a JSpace workbench for the first time, when the registry looks broken, when gbrain is missing or unwired, or when starting a fresh environment."
 triggers:
   - "initialize jspace"
   - "setup jspace"
@@ -23,18 +23,13 @@ Bootstrap a fresh JSpace workbench end to end. Run phases in order; never skip a
 
 Auto-install missing tooling; do not stop to ask (分平台命令):
 
-1. `python3` - if missing, install the latest stable 3.x:
-   - macOS: `brew install python`
-   - Debian/Ubuntu: `sudo apt-get install -y python3`
-   - Fedora: `sudo dnf install -y python3`
-   - Windows: `winget install Python.Python.3.12`(或 python.org 官方安装器;安装后命令是 `python`/`py`,不一定是 `python3`)
-2. `bun` - if missing (needed to install/upgrade gbrain):
+1. `bun` - if missing (needed to install/upgrade gbrain):
    - macOS / Linux: `curl -fsSL https://bun.sh/install | bash`
    - Windows: `powershell -c "irm bun.sh/install.ps1 | iex"`
    - ⚠️ 治理红线:两者均为 bun 官方安装脚本,属 `curl | bash` 一类;**执行前先核验来源与内容**(bun.sh 官方),不盲跑未审查脚本。
-3. `git` - if missing, install via the platform package manager(Windows: `winget install Git.Git`)。
+2. `git` - if missing, install via the platform package manager(Windows: `winget install Git.Git`)。
 
-Verify after installs: `python3 --version && bun --version`(Windows 上可用 `python --version` 或 `py --version`)。
+Verify after installs: `bun --version`。
 
 ## Phase 1 - Install gbrain (first core)
 
@@ -59,7 +54,7 @@ Frontmatter schema and offline policy: `skills/jspace-bootstrap/references/gbrai
 
 The workbench has no standalone CLI inside itself; validation lives in the JSpace CLI: `jspace doctor --dir .`(`jspace` 为编译二进制,需在 PATH 上;源码检出:在 `__DEV_ROOT__` 用 `bun run cli/main.ts`)。`hub.json` must stay valid JSON; repair drift only with explanation. Never invent domains/resources.
 
-1. `jq . hub.json` parses(Windows 无 jq → `python -m json.tool hub.json` 或 PowerShell `Get-Content hub.json | ConvertFrom-Json`)。
+1. `jq . hub.json` parses(Windows 无 jq → PowerShell `Get-Content hub.json | ConvertFrom-Json`)。
 2. Every `domains[]` folder exists and contains `README.md` + `domain.json`; the `domain.json` id matches both the folder name and `hub.json`.
 3. Every resource with path entrypoints has exactly one primary path entrypoint; missing external paths are warnings, not blocking errors.
 4. Domain/resource ids are globally unique; every resource `domain` references a registered domain.
@@ -91,14 +86,14 @@ AI provider/model/proxy config is owned by cc-switch (`/Users/jionpz/.cc-switch`
 ```bash
 # 校验(编译二进制在 PATH 时用 jspace;源码检出:在 __DEV_ROOT__ 用 bun run cli/main.ts)
 jspace doctor --dir .
-# hub.json 合法 JSON(POSIX: jq;Windows: python -m json.tool 或 ConvertFrom-Json)
+# hub.json 合法 JSON(POSIX: jq;Windows: ConvertFrom-Json)
 jq . hub.json
 # 列出工作区文件(POSIX: find|sort;Windows: Get-ChildItem)
 find workspace -maxdepth 2 -type f | sort
 gbrain doctor --fast
 ```
 
-Windows 等价(如适用):`python -m json.tool hub.json`、`Get-ChildItem -Path workspace -Recurse -Depth 1 -File | Sort-Object FullName`。
+Windows 等价(如适用):`Get-ChildItem -Path workspace -Recurse -Depth 1 -File | Sort-Object FullName`。
 
 Report: configured / already-OK / missing-deferred items (e.g., Ollama offline, chosen harness not fully wired). Explain any registry or domain-file repairs.
 

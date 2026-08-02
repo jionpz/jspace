@@ -2,7 +2,7 @@
 
 ## Core Positioning
 
-本目录由 JSpace 开发仓库的 `bin/jspace init` 生成，是用户本地工作控制平面。大多数非项目特定的计算机工作从这里开始：domain 路由、agent 基础设施管理、资源查找和上下文进入。
+本目录由 JSpace CLI (`jspace init`) 生成，是用户本地工作控制平面。大多数非项目特定的计算机工作从这里开始：domain 路由、agent 基础设施管理、资源查找和上下文进入。
 
 **First core - gbrain unified memory base.** 第一核心是共享记忆层（`gbrain`，注册于 `agent-infra`）。最普适的组合是 JSpace 工作台 + gbrain：支持 Pi、Claude Code、Codex、Cursor 四个会话 harness，用户选择其一；每个 harness 通过 MCP/CLI 读写同一个本地记忆库（PGLite + 知识图谱 + 本地 embedding），会话开始检索式注入，工作结束写回持久事实。hermes（自主/cron/多端）可选：提及即可，不主动推广。本工作台不包装 gbrain 命令，gbrain CLI/MCP 就是接口。
 

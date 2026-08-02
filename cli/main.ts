@@ -1,4 +1,4 @@
-// cli/main.ts — entry point. Mirrors Python bin/jspace main() + argparse top level.
+// cli/main.ts — entry point + top-level dispatch.
 import { ArgError, VERSION, parseArgs } from "./args.ts";
 import { CliError } from "./errors.ts";
 

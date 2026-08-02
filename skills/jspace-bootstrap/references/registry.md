@@ -23,7 +23,7 @@ jspace doctor --dir .      # 编译二进制在 PATH;源码检出:在 __DEV_ROOT
 
 Missing external resource paths are warnings, not blocking errors. Beyond `jspace doctor`, any future registry tooling must be described as future behavior until implemented.
 
-Manual fallback(POSIX;Windows 用 `python -m json.tool` / PowerShell `ConvertFrom-Json` 替代 `jq`):
+Manual fallback(POSIX;Windows 用 PowerShell `ConvertFrom-Json` 替代 `jq`):
 
 ```bash
 jq . hub.json >/dev/null

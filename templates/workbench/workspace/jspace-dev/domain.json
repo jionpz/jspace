@@ -1,7 +1,7 @@
 {
   "id": "jspace-dev",
   "purpose": "Maintain the JSpace development repository and its workbench CLI/templates.",
-  "summary": "Owns bin/jspace, templates/workbench/, and skills/jspace-bootstrap/ in the JSpace dev repo.",
+  "summary": "Owns cli/ (JSpace CLI), templates/workbench/, and skills/jspace-bootstrap/ in the JSpace dev repo.",
   "tags": [
     "jspace",
     "cli",

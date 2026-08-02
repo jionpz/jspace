@@ -6,7 +6,7 @@ Maintain JSpace, the development repository that ships the workbench CLI and tem
 
 ## Scope
 
-- CLI in `bin/jspace`
+- CLI in `cli/` (TypeScript/bun;`bin/jspace` 为 `bun run build` 编译产物)
 - Workbench templates under `templates/workbench/`
 - Bootstrap skill under `skills/jspace-bootstrap/`
 

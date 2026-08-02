@@ -41,7 +41,7 @@
           "primary": true
         }
       ],
-      "notes": "JSpace 开发仓库 - 生成并校验工作台（bin/jspace init / doctor）；第一核心为 gbrain 统一记忆底座。开发经 Trellis 工作流，本工作台由它初始化。"
+      "notes": "JSpace 开发仓库 - 生成并校验工作台（jspace init / doctor）；第一核心为 gbrain 统一记忆底座。开发经 Trellis 工作流，本工作台由它初始化。"
     },
     {
       "id": "cc-switch",
