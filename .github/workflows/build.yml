@@ -20,12 +20,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest,     arch: x64,   target: bun-linux-x64,    artifact: jspace-linux-x64 }
-          - { os: ubuntu-24.04-arm,  arch: arm64, target: bun-linux-arm64,   artifact: jspace-linux-arm64 }
-          - { os: macos-14,          arch: arm64, target: bun-darwin-arm64,  artifact: jspace-macos-arm64 }
-          - { os: macos-15-intel,    arch: x64,   target: bun-darwin-x64,    artifact: jspace-macos-x64 }
-          - { os: windows-latest,    arch: x64,   target: bun-windows-x64,   artifact: jspace-windows-x64.exe }
-          - { os: windows-11-arm,    arch: arm64, target: bun-windows-arm64, artifact: jspace-windows-arm64.exe }
+          # x64 uses -baseline targets: bun's default x64 build requires AVX and
+          # crashes on older CPUs; baseline is compatible (arm64 needs no baseline).
+          - { os: ubuntu-latest,     arch: x64,   target: bun-linux-x64-baseline,    artifact: jspace-linux-x64 }
+          - { os: ubuntu-24.04-arm,  arch: arm64, target: bun-linux-arm64,           artifact: jspace-linux-arm64 }
+          - { os: macos-14,          arch: arm64, target: bun-darwin-arm64,          artifact: jspace-macos-arm64 }
+          - { os: macos-15-intel,    arch: x64,   target: bun-darwin-x64-baseline,   artifact: jspace-macos-x64 }
+          - { os: windows-latest,    arch: x64,   target: bun-windows-x64-baseline,  artifact: jspace-windows-x64.exe }
+          - { os: windows-11-arm,    arch: arm64, target: bun-windows-arm64,         artifact: jspace-windows-arm64.exe }
     steps:
       - uses: actions/checkout@v4
 
