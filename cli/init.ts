@@ -7,7 +7,7 @@ import { resolvePath } from "./paths.ts";
 
 export const MARKER_FILE = ".jspace/marker.json";
 export const CONFIG_DIR = ".jspace";
-export const VERSION = "1.0.0";
+import { VERSION } from "./version.generated.ts";
 
 /** Local calendar date YYYY-MM-DD (Python date.today().isoformat(); toISOString is UTC). */
 function localDate(): string {

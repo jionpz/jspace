@@ -4,8 +4,9 @@
 import { cmdInit } from "./init.ts";
 import { cmdDoctor, cmdDomainList, cmdDomainAdd, cmdDomainRemove, cmdResourceList, cmdResourceAdd, cmdResourceRemove, cmdFilehubInit, cmdInboxStatus } from "./cmds.ts";
 import { cmdCronAdd, cmdCronList, cmdCronRemove, cmdCronInstall, cmdCronUninstall, cmdCronRun, cmdCronStatus } from "./cron.ts";
+import { cmdUpdate } from "./update.ts";
 
-export const VERSION = "1.0.0";
+export { VERSION } from "./version.generated.ts";
 
 export class ArgError extends Error {
   usage: string;
@@ -17,7 +18,7 @@ export class ArgError extends Error {
   }
 }
 
-const TOP_CHOICES = ["init", "doctor", "domain", "resource", "filehub", "inbox", "cron"];
+const TOP_CHOICES = ["init", "doctor", "domain", "resource", "filehub", "inbox", "cron", "update"];
 const DOMAIN_CHOICES = ["list", "add", "remove"];
 const RESOURCE_CHOICES = ["list", "add", "remove"];
 const FILEHUB_CHOICES = ["init"];
@@ -47,13 +48,14 @@ const P_CRON_INSTALL = "jspace cron install";
 const P_CRON_UNINSTALL = "jspace cron uninstall";
 const P_CRON_RUN = "jspace cron run";
 const P_CRON_STATUS = "jspace cron status";
+const P_UPDATE = "jspace update";
 
-const TOP_HELP = `usage: jspace [-h] [--version] {init,doctor,domain,resource,filehub,inbox,cron} ...
+const TOP_HELP = `usage: jspace [-h] [--version] {init,doctor,domain,resource,filehub,inbox,cron,update} ...
 
 JSpace - create and validate local workbenches.
 
 positional arguments:
-  {init,doctor,domain,resource,filehub,inbox,cron}
+  {init,doctor,domain,resource,filehub,inbox,cron,update}
     init                initialize a new JSpace workbench in a target
                         directory
     doctor              validate an existing JSpace workbench registry
@@ -62,6 +64,7 @@ positional arguments:
     filehub             manage the file management center (asset layer)
     inbox               inspect files waiting in the inbox
     cron                manage scheduled tasks (declarative + launchd)
+    update              self-update the jspace CLI from GitHub Releases
 
 options:
   -h, --help            show this help message and exit
@@ -269,6 +272,19 @@ positional arguments:
 options:
   -h, --help  show this help message and exit`;
 
+const UPDATE_HELP = `usage: jspace update [-h] [--check] [--version VERSION]
+
+Self-update the jspace CLI from GitHub Releases (explicit command only; no
+background checks). Downloads the matching platform binary, verifies its
+SHA-256 against the release checksums, and replaces the current binary.
+
+options:
+  -h, --help           show this help message and exit
+  --check              report current vs latest, do not update
+  --version VERSION    install a specific version (e.g. v1.0.1; rollback)
+                       (env: JSPACE_VERSION)
+                       (env: JSPACE_BASE_URL overrides the download base)`;
+
 export interface Invocation {
   action: "help" | "version" | "run";
   text?: string;
@@ -366,6 +382,24 @@ function extraPositional(usage: string, extras: string[]): never {
   return unrecognized(`unrecognized arguments: ${extras.join(" ")}`);
 }
 
+function parseUpdate(argv: string[]): Invocation {
+  const u = usageBlock(UPDATE_HELP);
+  const c = collect(argv, u, P_UPDATE, [
+    { name: "--check", takesValue: false },
+    { name: "--version", takesValue: true },
+  ]);
+  if (c.help) return help(UPDATE_HELP);
+  if (c.positionals.length > 0) extraPositional(u, c.positionals);
+  return {
+    action: "run",
+    run: (v) => cmdUpdate(v.check as boolean, v.version as string | undefined),
+    values: {
+      check: !!c.flags.get("--check")?.length,
+      version: lastVal(c.flags, "--version") ?? undefined,
+    },
+  };
+}
+
 export function parseArgs(argv: string[]): Invocation {
   if (argv.length === 0) {
     err(usageBlock(TOP_HELP), TOP, "the following arguments are required: command");
@@ -394,6 +428,7 @@ export function parseArgs(argv: string[]): Invocation {
     case "filehub": return parseFilehub(rest);
     case "inbox": return parseInbox(rest);
     case "cron": return parseCron(rest);
+    case "update": return parseUpdate(rest);
   }
   throw new Error("unreachable");
 }

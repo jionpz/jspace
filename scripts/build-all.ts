@@ -6,6 +6,16 @@ import { resolve } from "node:path";
 
 const repoRoot = resolve(import.meta.dir, "..");
 
+// Ensure version.generated.ts is fresh (binary must report the current tag).
+const gen = spawnSync(process.execPath, ["run", "scripts/gen-version.ts"], {
+  cwd: repoRoot,
+  stdio: ["ignore", "inherit", "inherit"],
+});
+if (gen.status !== 0) {
+  console.error("FAIL gen-version (cannot determine build version)");
+  process.exit(1);
+}
+
 // [bun target, output file relative to repo root]
 const MATRIX: Array<[string, string]> = [
   ["bun-linux-x64-baseline", "bin/jspace-linux-x64"],
