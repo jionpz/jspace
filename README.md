@@ -11,6 +11,51 @@
 
 ## 快速开始
 
+### 一键安装（推荐，macOS / Linux / Windows）
+
+macOS / Linux（两段式，避免 `curl|bash` 静默吞下载失败）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jionpz/jspace/main/install/install.sh -o /tmp/jspace-install.sh \
+  && bash /tmp/jspace-install.sh
+```
+
+Windows（PowerShell，两段式落盘执行）：
+
+```powershell
+irm https://raw.githubusercontent.com/jionpz/jspace/main/install/install.ps1 -OutFile $env:TEMP\jspace-install.ps1
+powershell -ExecutionPolicy Bypass -File $env:TEMP\jspace-install.ps1
+```
+
+安装流程：识别平台与架构 → 从 GitHub Releases 下载匹配的编译二进制（SHA-256 校验）→ 装到 `~/.local/bin`（macOS/Linux，`$XDG_BIN_HOME` 可覆盖）或 `%LOCALAPPDATA%\jspace\bin`（Windows）→ 目录不在 PATH 时自动写入 shell rc（标记块，随卸载回滚）。
+
+验证：
+
+```bash
+jspace --version
+jspace init ~/jworkspace      # 生成真实工作台
+jspace doctor --dir ~/jworkspace
+```
+
+> - 安装/卸载对 PATH 的改动需**新开终端**（或 source rc）后生效；非交互 shell（cron/IDE）需显式 `export PATH="$HOME/.local/bin:$PATH"`。
+> - Windows 首次运行未签名 exe 若弹 SmartScreen：选「更多信息 → 仍要运行」。
+> - 校验不通过（下载损坏/被篡改）会明确报错并退出非 0，不静默安装。
+
+卸载：
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/jionpz/jspace/main/install/install.sh -o /tmp/jspace-install.sh \
+  && bash /tmp/jspace-install.sh --uninstall
+```
+```powershell
+# Windows（落盘执行；新终端下重新下载脚本即可）
+irm https://raw.githubusercontent.com/jionpz/jspace/main/install/install.ps1 -OutFile $env:TEMP\jspace-install.ps1
+powershell -ExecutionPolicy Bypass -File $env:TEMP\jspace-install.ps1 -Uninstall
+```
+
+### 开发模式（源码运行）
+
 ```bash
 # 在另一个目录初始化真实工作台（源码运行；或先 `bun run build` 后用编译产物）
 bun run cli/main.ts init ~/jworkspace

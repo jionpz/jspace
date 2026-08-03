@@ -62,9 +62,10 @@ jobs:
           ./${{ matrix.artifact }} init --force /tmp/jspace-smoke
           ./${{ matrix.artifact }} doctor --dir /tmp/jspace-smoke
 
-      # Cron smoke — placeholder. Enable after the CI billing lock is lifted.
-      # Per-platform assertions are in docs/PLATFORMS.md (doctor assertion table).
-      - name: Cron smoke (placeholder, disabled until CI unblocked)
+      # Cron smoke — placeholder. Disabled because a full cron install/status
+      # cycle needs the platform scheduler and is covered by the manual matrix
+      # in docs/PLATFORMS.md (doctor assertion table).
+      - name: Cron smoke (placeholder, disabled)
         if: false
         shell: bash
         run: |
@@ -95,7 +96,61 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      # Generate checksums for the install scripts to verify against. Run
+      # inside artifacts/ so line filenames are bare asset names (no prefix),
+      # and before upload so checksums.txt is not hashed into itself.
+      - name: Generate checksums.txt
+        run: |
+          cd artifacts
+          sha256sum * > checksums.txt
+          echo "--- checksums.txt ---"
+          cat checksums.txt
+
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
+
+  # True one-click-install smoke on each OS: run the real install script
+  # against the just-published release, assert --version, re-install for
+  # idempotency, then uninstall and assert the binary is gone.
+  verify-install:
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: "${{ matrix.os }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,    asset: jspace-linux-x64,        bin: jspace }
+          - { os: macos-14,         asset: jspace-macos-arm64,      bin: jspace }
+          - { os: windows-latest,   asset: jspace-windows-x64.exe,  bin: jspace.exe }
+    env:
+      # Pin the version being verified (avoid releases/latest eventual-consistency
+      # on the very first release); install script defaults to latest otherwise.
+      JSPACE_VERSION: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install / idempotent / uninstall (POSIX)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          bash install/install.sh --no-rc
+          export PATH="$HOME/.local/bin:$PATH"
+          jspace --version
+          bash install/install.sh --no-rc        # idempotent: must not fail
+          bash install/install.sh --uninstall
+          ! [ -e "$HOME/.local/bin/${{ matrix.bin }}" ] && echo "binary removed"
+
+      - name: Install / idempotent / uninstall (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./install/install.ps1
+          $env:Path = "$env:LOCALAPPDATA\jspace\bin;" + $env:Path
+          jspace --version
+          ./install/install.ps1                   # idempotent: must not fail
+          ./install/install.ps1 -Uninstall
+          if (Test-Path "$env:LOCALAPPDATA\jspace\bin\${{ matrix.bin }}") { throw "binary not removed" }
+
