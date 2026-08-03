@@ -2,7 +2,7 @@
 import { ArgError, VERSION, parseArgs } from "./args.ts";
 import { CliError } from "./errors.ts";
 
-function main(): void {
+async function main(): Promise<void> {
   try {
     const argv = process.argv.slice(2);
     const invocation = parseArgs(argv);
@@ -14,7 +14,7 @@ function main(): void {
         console.log(invocation.text);
         return;
       case "run":
-        invocation.run!(invocation.values!);
+        await invocation.run!(invocation.values!);
         return;
     }
   } catch (e) {
@@ -33,4 +33,7 @@ function main(): void {
   }
 }
 
-main();
+main().catch((e) => {
+  console.error(e instanceof Error ? (e.stack ?? e.message) : e);
+  process.exitCode = 1;
+});

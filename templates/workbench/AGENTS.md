@@ -171,6 +171,10 @@ Before finishing a work session, quietly check whether anything should be preser
 
 If nothing durable was learned, do not mention the check. If something should be preserved, briefly explain what, where, why, and whether confirmation is needed.
 
+## Scheduled Tasks (cron)
+
+Cron definitions live in `.jspace/cron.json` (declarative: schedule + harness + prompt) and install into macOS launchd via `jspace cron install` (one LaunchAgent per cron). **At session start, check `jspace cron status` and `.jspace/logs/cron-failed.md`; report any failures to the user.** Cron definitions are treated as code (git-synced) — review changes before applying. `weekly-report` / `memory-consolidate` ship disabled pending M4 (memory precision) and output contracts.
+
 ## Brain operations
 
 gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbrain` for skill routing; keep the format intact.

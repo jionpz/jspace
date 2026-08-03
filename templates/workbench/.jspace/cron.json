@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "crons": [
+    {
+      "id": "inbox-tidy",
+      "schedule": "0 21 * * *",
+      "harness": "claude",
+      "prompt": "整理一下 inbox(无头模式:只处理确定性文件,模糊项留清单不提问)。在工作台根目录,按 AGENTS.md 路由;优先用 asset-ingest 批量模式。",
+      "enabled": true
+    },
+    {
+      "id": "weekly-report",
+      "schedule": "0 21 * * 0",
+      "harness": "claude",
+      "prompt": "生成本周项目周报 md 存进 filehub,并把摘要写 gbrain。",
+      "enabled": false
+    },
+    {
+      "id": "memory-consolidate",
+      "schedule": "0 22 * * 0",
+      "harness": "claude",
+      "prompt": "归纳近一周 gbrain 事实,写记忆巩固页。",
+      "enabled": false
+    }
+  ]
+}

@@ -15,6 +15,7 @@ import { fail, rejectErrors } from "./errors.ts";
 import { devRoot, expandTilde, filehubReadme } from "./embed.ts";
 import { isFile, resolvePath } from "./paths.ts";
 import { MARKER_FILE } from "./init.ts";
+import { loadCrons, parseSchedule, installedPlists } from "./cron.ts";
 import {
   cleanTags,
   findIndex,
@@ -114,6 +115,36 @@ export function cmdDoctor(dir: string): void {
           );
         }
       }
+    }
+  }
+
+  // cron configuration checks (read-only; warnings only).
+  const crons = loadCrons(root).crons;
+  for (const c of crons) {
+    try {
+      parseSchedule(c.schedule);
+    } catch {
+      warnings.push(`cron ${c.id}: invalid schedule "${c.schedule}"`);
+    }
+  }
+  const installedIds = new Set(installedPlists().map((n) => n.replace(/^com\.jspace\.cron\./, "").replace(/\.plist$/, "")));
+  if (installedIds.size > 0) {
+    for (const c of crons) {
+      if (c.enabled && !installedIds.has(c.id)) {
+        warnings.push(`cron ${c.id} enabled but not installed (run jspace cron install)`);
+      }
+    }
+    for (const id of installedIds) {
+      if (!crons.some((c) => c.id === id)) {
+        warnings.push(`stale launchd agent com.jspace.cron.${id} (cron removed; run jspace cron uninstall)`);
+      }
+    }
+  }
+  const failedPath = join(root, ".jspace", "logs", "cron-failed.md");
+  if (isFile(failedPath)) {
+    const failed = readFileSync(failedPath, "utf-8").split("\n").filter((l) => l.startsWith("- ")).length;
+    if (failed > 0) {
+      warnings.push(`${failed} failed cron run(s) recorded in .jspace/logs/cron-failed.md (check with jspace cron status)`);
     }
   }
 
