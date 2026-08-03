@@ -19,6 +19,7 @@ import { inboxStatus } from "../../application/registry/inbox.ts";
 import { expandTilde, filehubReadme, isCompiled, devRoot, materializeTree } from "../embed.ts";
 import { resolvePath } from "../paths.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
+import { fail } from "../../application/errors.ts";
 import { readFileSync } from "node:fs";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
 import { ASSETS } from "../assets.generated.ts";
@@ -271,8 +272,10 @@ const cronUninstallSpec: CommandSpec = {
 const cronRunSpec: CommandSpec = {
   name: "run",
   summary: "run a cron headlessly now",
-  positionals: [{ name: "id", required: true, help: "cron id" }],
+  positionals: [{ name: "id", help: "cron id (alternative to --id)" }],
   options: [
+    { name: "--id", dest: "id", takesValue: true, help: "cron id (canonical scheduler form)" },
+    { name: "--force", dest: "force", takesValue: false, help: "run even if the cron already succeeded today" },
     { name: "--dry-run", dest: "dryRun", takesValue: false, help: "print the command that would run, without executing" },
     {
       name: "--timeout",
@@ -284,7 +287,8 @@ const cronRunSpec: CommandSpec = {
     { name: "--dir", takesValue: true, metavar: "DIR", help: "workbench root (default: current directory; schedulers pass this explicitly)" },
   ],
   handler: async (_ctx, args) => {
-    await cmdCronRun(s(args.id), b(args.dryRun), Number(s(args.timeout) || "1800"), args.dir === undefined ? undefined : s(args.dir));
+    if (s(args.id) === "") fail("the following arguments are required: id");
+    await cmdCronRun(s(args.id), b(args.dryRun), Number(s(args.timeout) || "1800"), args.dir === undefined ? undefined : s(args.dir), b(args.force));
     return { lines: [] };
   },
 };

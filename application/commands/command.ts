@@ -383,7 +383,19 @@ function buildArgs(
     if (collected.positionals.length > pos.length) {
       throw new ArgError(unrecUsage, unrecProg, `unrecognized arguments: ${collected.positionals.slice(pos.length).join(" ")}`);
     }
-    for (let i = 0; i < pos.length; i++) args[pos[i].name] = collected.positionals[i];
+    for (let i = 0; i < pos.length; i++) {
+      const p = pos[i];
+      const positionalValue = collected.positionals[i];
+      // a positional whose name collides with an option dest (e.g. cron run <id>
+      // vs --id) must not silently win; both provided -> ambiguous. When the
+      // positional is absent, leave the option-provided value intact.
+      if (positionalValue !== undefined) {
+        if (args[p.name] !== undefined && args[p.name] !== false) {
+          err(usage, prog, `argument ${p.name}: ambiguous (provided as both --${p.name} and positional)`);
+        }
+        args[p.name] = positionalValue;
+      }
+    }
   } else {
     for (let i = 0; i < restIdx; i++) args[pos[i].name] = collected.positionals[i];
     args[pos[restIdx].name] = collected.positionals.slice(restIdx);

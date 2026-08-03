@@ -539,7 +539,7 @@ function appendFailed(root: string, id: string, reason: string, logPath: string)
   }
 }
 
-export async function cmdCronRun(id: string, dryRun: boolean, timeoutSec: number, dirArg?: string): Promise<void> {
+export async function cmdCronRun(id: string, dryRun: boolean, timeoutSec: number, dirArg?: string, force = false): Promise<void> {
   const root = dirArg ? resolvePath(expandTilde(dirArg)) : workbenchRoot();
   const data = loadCrons(root);
   const cron = data.crons.find((c) => c.id === id);
@@ -555,8 +555,9 @@ export async function cmdCronRun(id: string, dryRun: boolean, timeoutSec: number
     return;
   }
 
-  // Same-day success skip (launchd catch-up + manual rerun both covered).
-  if (todaySuccess(root, id)) {
+  // Same-day success skip (launchd catch-up + manual rerun both covered);
+  // --force bypasses it.
+  if (!force && todaySuccess(root, id)) {
     console.log(`jspace: ok: cron ${id} already succeeded today, skipping`);
     return;
   }
