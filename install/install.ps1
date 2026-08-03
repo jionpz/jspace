@@ -101,7 +101,9 @@ Write-Host ("  - 目标产物  {0}" -f $asset)
 
 $baseUrl = if ($env:JSPACE_BASE_URL) { $env:JSPACE_BASE_URL } else { 'https://github.com/jionpz/jspace/releases' }
 $ver     = if ($env:JSPACE_VERSION)   { $env:JSPACE_VERSION }   else { 'latest' }
-$dl = "$baseUrl/download/$ver"
+# GitHub 的 /download/<tag> 会把 latest 当字面 tag（返回 404）；
+# latest 必须走 /latest/download 重定向写法，具体 tag 才走 /download/<tag>
+$dl = if ($ver -eq 'latest') { "$baseUrl/latest/download" } else { "$baseUrl/download/$ver" }
 
 $tmp = Join-Path $env:TEMP ("jspace-install-" + [System.Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tmp | Out-Null

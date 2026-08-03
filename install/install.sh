@@ -163,7 +163,13 @@ printf '  - 目标产物  %s\n' "$ASSET"
 # --- 下载（两段式到临时目录） ---
 BASE_URL="${JSPACE_BASE_URL:-https://github.com/jionpz/jspace/releases}"
 VER="${JSPACE_VERSION:-latest}"
-DL="$BASE_URL/download/$VER"
+# GitHub 的 /releases/download/<tag> 会把 latest 当字面 tag（返回 404）；
+# latest 必须走 /releases/latest/download 重定向写法，具体 tag 才走 /download/<tag>
+if [ "$VER" = latest ]; then
+    DL="$BASE_URL/latest/download"
+else
+    DL="$BASE_URL/download/$VER"
+fi
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
 dl "$DL/$ASSET" "$TMP/jspace"         || err "下载失败: $DL/$ASSET（请检查网络与版本 ${VER}）"

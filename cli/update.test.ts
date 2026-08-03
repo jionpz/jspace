@@ -8,6 +8,7 @@ import {
   assetFor,
   sha256Of,
   expectedHash,
+  resolveTargetVersion,
 } from "./update.ts";
 
 test("compareVersions compares numeric X.Y.Z", () => {
@@ -48,6 +49,21 @@ test("expectedHash matches the asset column (with * prefix and case)", () => {
   expect(expectedHash(checksums, "jspace-linux-x64")).toBe("aaaa");
   expect(expectedHash(checksums, "jspace-macos-arm64")).toBe("bbbb"); // lowercased
   expect(expectedHash(checksums, "jspace-windows-x64.exe")).toBeNull();
+});
+
+test("resolveTargetVersion passes a concrete tag through without resolving", async () => {
+  let called = false;
+  const t = await resolveTargetVersion("v1.0.2", async () => {
+    called = true;
+    return "v9.9.9";
+  });
+  expect(t).toBe("v1.0.2");
+  expect(called).toBe(false);
+});
+
+test("resolveTargetVersion resolves latest (and default) via the tag source", async () => {
+  expect(await resolveTargetVersion("latest", async () => "v1.0.3")).toBe("v1.0.3");
+  expect(await resolveTargetVersion(undefined, async () => "v1.0.2")).toBe("v1.0.2");
 });
 
 test("sha256Of produces a 64-hex digest", () => {

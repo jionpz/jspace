@@ -135,9 +135,23 @@ jobs:
     env:
       # Pin the version being verified (avoid releases/latest eventual-consistency
       # on the very first release); install script defaults to latest otherwise.
+      # `latest` in the scripts now maps to the /releases/latest/download redirect;
+      # the pin keeps this smoke test deterministic regardless of that alias's timing.
       JSPACE_VERSION: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Forbid /download/latest (regression guard)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          # GitHub 的 /releases/download/<tag> 会把 latest 当字面 tag（404）；
+          # 正确的 latest 下载写法是 /releases/latest/download/<asset>。
+          if grep -Rn "download/latest" install/ cli/update.ts; then
+            echo "::error::禁止把 latest 拼进 /download/<tag>（会被 GitHub 当字面 tag 返回 404）"
+            exit 1
+          fi
+          echo "OK: 未发现 download/latest 字面拼接"
 
       - name: Install / idempotent / uninstall (POSIX)
         if: runner.os != 'Windows'

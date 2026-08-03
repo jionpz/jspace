@@ -90,6 +90,15 @@ async function latestTag(): Promise<string> {
   return j.tag_name;
 }
 
+/** 把请求的版本解析成具体 tag。`latest` 是 GitHub 别名，不能直接拼进
+ *  /download/<tag>（会被当字面 tag 返回 404），必须先解析成真实 tag。 */
+export async function resolveTargetVersion(
+  requested: string | undefined,
+  resolveLatest: () => Promise<string>,
+): Promise<string> {
+  return requested && requested !== "latest" ? requested : await resolveLatest();
+}
+
 /** Resolve symlinks so we replace the real binary (symlinked installs point elsewhere). */
 function realExe(exe: string): string {
   try {
@@ -151,7 +160,7 @@ export async function cmdUpdate(check: boolean, targetVersion?: string): Promise
   }
   const asset = assetFor(process.platform, process.arch);
   const base = process.env.JSPACE_BASE_URL || DEFAULT_BASE;
-  const target = targetVersion || process.env.JSPACE_VERSION || (await latestTag());
+  const target = await resolveTargetVersion(targetVersion || process.env.JSPACE_VERSION, latestTag);
   const upToDate = compareVersions(current, target) >= 0;
   const show = (v: string): string => v.replace(/^v/, "");
 
