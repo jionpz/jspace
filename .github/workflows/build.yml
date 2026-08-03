@@ -33,8 +33,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          # Pin bun so cross-compile runtimes match the lockfile (baseline runtime
-          # download on Windows x64 runners is flaky; retry below compensates).
+          # Pin bun so cross-compile runtimes match the lockfile.
           bun-version: 1.3.14
 
       - name: Install deps
@@ -46,6 +45,9 @@ jobs:
       - name: Compile standalone binary
         shell: bash
         run: |
+          # windows-x64 uses non-baseline target: the bun-windows-x64-baseline
+          # runtime download is consistently blocked on GitHub Windows runners.
+          # AVX-less (baseline) windows binary is built locally via `bun run build:all`.
           for i in 1 2 3; do
             bun build --compile cli/main.ts --minify --target=${{ matrix.target }} --outfile ${{ matrix.artifact }} && break
             echo "compile attempt $i failed; clearing bun runtime cache and retrying..."
