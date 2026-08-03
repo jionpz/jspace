@@ -5,7 +5,7 @@
 import { basename, dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { fail } from "./errors.ts";
+import { fail } from "../application/errors.ts";
 import { ASSETS } from "./assets.generated.ts";
 
 export const PLACEHOLDER = "__DEV_ROOT__";

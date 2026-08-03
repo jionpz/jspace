@@ -1,7 +1,7 @@
 // application/registry/domain.ts — domain use cases (moved from cli/cmds.ts).
 import { existsSync, mkdirSync, rmSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { fail, rejectErrors } from "../../cli/errors.ts";
+import { fail, rejectErrors } from "../errors.ts";
 import type { CmdResult } from "../commands/command.ts";
 import { isId } from "../../core/contracts/ids.ts";
 import { normalizePortablePath } from "../../core/contracts/paths.ts";

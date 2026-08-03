@@ -4,7 +4,7 @@
 // layer stays free of cli/env coupling.
 import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { fail } from "../../cli/errors.ts";
+import { fail } from "../errors.ts";
 import type { CmdResult } from "../commands/command.ts";
 import { MARKER_FILE } from "../../core/contracts/files.ts";
 import {
@@ -13,7 +13,6 @@ import {
 } from "../../adapters/fs/workbench-state.ts";
 import type { LocalStateV1 } from "../../core/contracts/local.ts";
 import type { WorkbenchMarkerV1 } from "../../core/contracts/workbench.ts";
-import { VERSION } from "../../cli/version.generated.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import { writeActualMaterializedJournal } from "./journal.ts";
@@ -77,7 +76,7 @@ export function initWorkbench(
     schema_version: 1,
     product: "JSpace",
     workbench_id: crypto.randomUUID(),
-    template_version: VERSION,
+    template_version: deps.manifest.bundle_version,
     created_at: localDate(),
   };
   writeMarkerAtomic(target, marker);

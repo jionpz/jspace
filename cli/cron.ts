@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, unl
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { fail, rejectErrors } from "./errors.ts";
+import { fail, rejectErrors } from "../application/errors.ts";
 import { devRoot, expandTilde, isCompiled } from "./embed.ts";
 import { isFile, resolvePath } from "./paths.ts";
 import { CONFIG_DIR } from "../core/contracts/files.ts";

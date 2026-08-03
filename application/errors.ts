@@ -1,4 +1,4 @@
-// cli/errors.ts — shared error/exit contract (mirrors Python fail()/_reject_errors).
+// application/errors.ts — shared error/exit contract (mirrors Python fail()/_reject_errors).
 export class CliError extends Error {
   exitCode: number;
   printed: boolean;
