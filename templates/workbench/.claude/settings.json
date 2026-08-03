@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jspace cron check 2>/dev/null || echo '[jspace] cron check unavailable (jspace not installed or not on PATH)'",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
