@@ -8,8 +8,7 @@
 - `.jspace/marker.json` - 初始化标记(机器维护)
 - `.jspace/logs/` - 执行日志(cron / 无头批量;git 忽略)
 - `AGENTS.md` - 工作模式操作规则
-- `workspace/jspace-dev/` - 指向 JSpace 开发仓库的 domain
-- `workspace/agent-infra/` - AI 资源管理 domain
+- `workspace/` - 域目录（初始不预建；按 AGENTS.md 的 Domain Governance 从真实使用涌现，首个域创建时生成）
 - `skills/jspace-bootstrap/` - 首次配置技能
 - `skills/asset-ingest/` - 资料转知识资产技能
 - `.gitignore` - 忽略 `.jspace/logs/`
@@ -18,7 +17,7 @@
 
 1. 先读 `AGENTS.md`。
 2. 首次使用按 `skills/jspace-bootstrap/SKILL.md` 配置 gbrain 与所选 AI harness。
-3. 用 JSpace CLI 校验本目录（`jspace` 为编译二进制，需在 PATH 上；源码检出在 `__DEV_ROOT__` 用 `bun run cli/main.ts`）：
+3. 用 JSpace CLI 校验本目录（`jspace` 为编译二进制，需在 PATH 上；源码检出则运行 `bun run cli/main.ts`）：
 
 ```bash
 jspace doctor --dir .
@@ -26,8 +25,7 @@ jspace doctor --dir .
 
 ## 与开发仓库的关系
 
-- 开发仓库：`__DEV_ROOT__`
-- 开发模式：去开发仓库修改 CLI、模板或技能，再重新初始化或同步本目录。
+本工作台是生成物，不是 JSpace 开发仓库。默认不注册 dev-repo 链接；如需维护 JSpace 的 CLI/模板/技能，到开发仓库按其 `AGENTS.md` 流程操作，并可用 `jspace domain add` / `jspace resource add` 手动登记链接。
 
 ## 资产管理(跟踪新项目)
 

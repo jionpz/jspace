@@ -2,19 +2,16 @@
 
 ## Core Positioning
 
-本目录由 JSpace CLI (`jspace init`) 生成，是用户本地工作控制平面。大多数非项目特定的计算机工作从这里开始：domain 路由、agent 基础设施管理、资源查找和上下文进入。
+本目录由 JSpace CLI (`jspace init`) 生成，是用户本地工作控制平面。大多数非项目特定的计算机工作从这里开始：domain 路由、资源查找和上下文进入。
 
-**First core - gbrain unified memory base.** 第一核心是共享记忆层（`gbrain`，注册于 `agent-infra`）。最普适的组合是 JSpace 工作台 + gbrain：支持 Pi、Claude Code、Codex、Cursor 四个会话 harness，用户选择其一；每个 harness 通过 MCP/CLI 读写同一个本地记忆库（PGLite + 知识图谱 + 本地 embedding），会话开始检索式注入，工作结束写回持久事实。hermes（自主/cron/多端）可选：提及即可，不主动推广。本工作台不包装 gbrain 命令，gbrain CLI/MCP 就是接口。
-
-JSpace 开发仓库（资源 `jspace`）位于 `__DEV_ROOT__`，只负责维护 CLI、模板和技能；本工作台不直接编辑模板，开发需求回到开发仓库处理。
+**First core - gbrain unified memory base.** 第一核心是共享记忆层（`gbrain`）。最普适的组合是 JSpace 工作台 + gbrain：支持 Pi、Claude Code、Codex、Cursor 四个会话 harness，用户选择其一；每个 harness 通过 MCP/CLI 读写同一个本地记忆库（PGLite + 知识图谱 + 本地 embedding），会话开始检索式注入，工作结束写回持久事实。hermes（自主/cron/多端）可选：提及即可，不主动推广。本工作台不包装 gbrain 命令，gbrain CLI/MCP 就是接口。
 
 ## Modes
 
 | Mode | Trigger | Scope |
 | --- | --- | --- |
 | Work mode | Default | 路由工作到 domain、检查资源、进入上下文。 |
-| Development mode | User says "开发模式" | 前往 JSpace 开发仓库 `__DEV_ROOT__` 维护 CLI、模板和技能。 |
-| Agent-infra domain | User says "弄一下 agent" or "管理 AI" | 读 `workspace/agent-infra/README.md`；通过 `cc-switch` 管理 AI 资源。 |
+| Development mode | User says "开发模式" | 前往 JSpace 开发仓库（如已注册）维护 CLI、模板和技能。 |
 
 ## Language
 
@@ -32,13 +29,13 @@ Before changing files for non-trivial work, classify the request internally:
 | Candidate new resource | Add/update a `.jspace/hub.json` resource only when it is a reusable entrypoint worth future lookup. |
 | Candidate new skill | Propose a skill only if it meets the skill rules below; ask before creating. |
 | One-off operation | Do the work without adding durable structure. |
-| JSpace development | Go to the development repository `__DEV_ROOT__`; use its Trellis workflow before editing. |
+| JSpace development | Go to the JSpace development repository (if registered); use its workflow before editing. |
 
 Classification is implicit by default. Mention it only when updating durable records, creating/proposing a domain or skill, the fit is uncertain, or the user asks why a file/domain is involved.
 
 ## Domain Governance
 
-A domain is a first-class operational work area under `workspace/<domain>/`. Current registered domains are indexed in `hub.json`. Initial domains are `jspace-dev` and `agent-infra`; future domains such as `docker` or `notes` should emerge from real use, not from up-front taxonomy design.
+A domain is a first-class operational work area under `workspace/<domain>/`. Current registered domains are indexed in `hub.json`. **初始无域**——域从真实使用涌现（复现、有资源、有边界等信号满足时按本规则创建），不做前置分类设计。
 
 Create or propose a domain when at least two signals apply:
 
@@ -91,7 +88,7 @@ Read the registry and domain files directly with standard tools:
 - `.jspace/hub.json`: domain/resource discovery index.
 - `workspace/<domain>/README.md` and `workspace/<domain>/domain.json`: domain entry and detail.
 
-Validation uses the JSpace CLI: `jspace doctor --dir .` (`jspace` is the compiled binary on PATH; a source checkout runs `bun run cli/main.ts` from `__DEV_ROOT__`). The registry is a map, not a file reader. It points to context files and must not duplicate full README/AGENTS/runbook content. For lookup, use `jq .jspace/hub.json`, `find workspace -maxdepth 2 -type f`, and `rg` queries.
+Validation uses the JSpace CLI: `jspace doctor --dir .` (`jspace` is the compiled binary on PATH; a source checkout runs `bun run cli/main.ts`). The registry is a map, not a file reader. It points to context files and must not duplicate full README/AGENTS/runbook content. For lookup, use `jq .jspace/hub.json`, `find workspace -maxdepth 2 -type f`, and `rg` queries.
 
 ## Skill Governance
 
@@ -126,23 +123,13 @@ Approved workbench skills (copied in by `jspace init`):
 
 Only write durable records when they will help future sessions. Root `AGENTS.md` should contain long-lived operating rules, not temporary preferences or one-off task notes.
 
-## Agent-infra Workflow
-
-For "弄一下 agent" or "管理 AI":
-
-1. Read `workspace/agent-infra/README.md` and `workspace/agent-infra/domain.json`.
-2. Treat `/Users/jionpz/.cc-switch` as the managed AI-resource project registered as the `cc-switch` resource in `hub.json`.
-3. Operate through the `cc-switch` context for providers, models, proxy, client configuration, and skills.
-4. When the user says "好了" or "去工作了", confirm the next domain if it is not clear.
-
 ## Development Mode
 
-When the user says "开发模式":
+When the user says "开发模式" and wants to maintain the JSpace CLI/templates/skills:
 
 1. This workbench is generated output. Do not edit template sources here.
-2. Go to the JSpace development repository `__DEV_ROOT__`.
-3. Read its `AGENTS.md` and use its Trellis workflow for non-trivial changes.
-4. After template/CLI changes, re-run `jspace init --force .` or reinitialize a fresh workbench, then run `jspace doctor --dir .`.
+2. Go to the JSpace development repository the user maintains (register it first via `jspace domain add` / `jspace resource add` if not already registered); read its `AGENTS.md` and follow its own workflow for non-trivial changes.
+3. After template/CLI changes, re-run `jspace init --force .` or reinitialize a fresh workbench, then run `jspace doctor --dir .`.
 
 ## Confirmation Rules
 

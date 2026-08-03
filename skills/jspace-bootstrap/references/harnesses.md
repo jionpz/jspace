@@ -65,6 +65,6 @@ args = ["serve"]
 - Optional harness for autonomous/cron/multi-endpoint work. Mention that it exists; do not proactively wire or install it.
 - If already configured: MCP in `~/.hermes/config.yaml`; MCP stderr logs at `~/.hermes/logs/mcp-stderr.log`.
 
-## cc-switch (provider/model/proxy)
+## Provider / proxy management (optional)
 
-- Owned by `/Users/jionpz/.cc-switch` (resource `cc-switch`). Read `workspace/agent-infra/README.md` and `domain.json` before changing providers/models/proxy/clients. Local proxy: `http://127.0.0.1:2006`.
+AI provider/model/proxy management is user-environment specific and outside this workbench's defaults. If the user has a local management tool or a local proxy gateway, register it as a resource in `.jspace/hub.json` and manage it from an appropriate domain. No specific tool or endpoint is assumed.

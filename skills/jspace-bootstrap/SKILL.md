@@ -38,7 +38,7 @@ Verify after installs: `bun --version`。
 3. If `~/.gbrain`(Windows `%USERPROFILE%\.gbrain`) is absent: `gbrain init` (defaults to PGLite, no server).
 4. `gbrain doctor --json` - check brain, resolver, embeddings; fix what it reports.
 5. Embeddings are a **default-required config** — Chinese recall depends on semantic search (tsvector does not tokenize CJK). **默认(零外部账号):本地 Ollama bge-m3**(offline,见 `skills/jspace-bootstrap/references/gbrain.md`);可选提升:SiliconFlow bge-m3(在线,需 API key)。If no embedding is reachable, bootstrap must still succeed: writes use `embed_skip: true` (never fail a write because embedding is down), and retrieval degrades to keyword search with a clear notice (ingest-side policy: `skills/asset-ingest/references/gbrain-write.md`).
-6. Recommended AI config (ask the user; never force): **默认本地 Ollama bge-m3**;可选提升 = SiliconFlow embedding + chat-parity-with-harness scheme from `skills/jspace-bootstrap/references/gbrain.md` (Recommended AI configuration). Needs a SiliconFlow API key; chat parity additionally needs the cc-switch local proxy running. Skip entirely if the user declines or has no key.
+6. Recommended AI config (ask the user; never force): **默认本地 Ollama bge-m3**;可选提升 = SiliconFlow embedding + chat-parity-with-harness scheme from `skills/jspace-bootstrap/references/gbrain.md` (Recommended AI configuration). Needs a SiliconFlow API key; chat parity additionally needs a local proxy running (user-environment specific). Skip entirely if the user declines or has no key.
 7. Smoke test, then clean up (no probe pages left behind):
 
 ```bash
@@ -52,7 +52,7 @@ Frontmatter schema and offline policy: `skills/jspace-bootstrap/references/gbrai
 
 ## Phase 2 - Registry health
 
-The workbench has no standalone CLI inside itself; validation lives in the JSpace CLI: `jspace doctor --dir .`(`jspace` 为编译二进制,需在 PATH 上;源码检出:在 `__DEV_ROOT__` 用 `bun run cli/main.ts`)。`.jspace/hub.json` must stay valid JSON; repair drift only with explanation. Never invent domains/resources.
+The workbench has no standalone CLI inside itself; validation lives in the JSpace CLI: `jspace doctor --dir .`(`jspace` 为编译二进制,需在 PATH 上;源码检出则 `bun run cli/main.ts`)。`.jspace/hub.json` must stay valid JSON; repair drift only with explanation. Never invent domains/resources.
 
 1. `jq .jspace/hub.json` parses(Windows 无 jq → PowerShell `Get-Content .jspace/hub.json | ConvertFrom-Json`)。
 2. Every `domains[]` folder exists and contains `README.md` + `domain.json`; the `domain.json` id matches both the folder name and `.jspace/hub.json`.
@@ -67,7 +67,7 @@ The asset layer is a separate folder (`filehub`) for heavy files (pdf/ppt/excel/
 
 1. **Ask the user (offer options, one decision)**: ① Obsidian 文件夹(默认第一选择:已有的 vault 或新目录)② 本地普通目录 ③ 网盘同步目录 ④ 暂不配置。
 2. **If Obsidian**: recognize an existing vault (`test -d <root>/.obsidian`) or a new folder that can be opened as a vault; explain the Obsidian compatibility conventions are already in the filehub root `README.md` (Obsidian Sync option, wikilink, frontmatter discipline) — no plugin / private format, no `.obsidian` written by us.
-3. **Register**: `jspace filehub init <root> --register`(`jspace` 为编译二进制,需在 PATH 上;源码检出:在 `__DEV_ROOT__` 用 `bun run cli/main.ts`)。Creates the skeleton and registers `type: filehub` (auto-creates the `files` domain).
+3. **Register**: `jspace filehub init <root> --register`(`jspace` 为编译二进制,需在 PATH 上;源码检出则 `bun run cli/main.ts`)。Creates the skeleton and registers `type: filehub` (auto-creates the `files` domain).
 4. **Skip for now**: explicitly tell the user that asset-ingest falls back to the degraded staging area (`../<workbench>-inbox/`) until a filehub is registered — they can register later with the command above.
 
 > **首配验收(端到端)**:not "everything configured" — put one real file into `<root>/_inbox/` and run `整理一下 inbox` once, confirming 入库→gbrain 页→中文召回 round trip. This is the acceptance for first-use.
@@ -90,12 +90,12 @@ hermes is optional: hint that it exists for autonomous/cron/multi-endpoint use, 
 
 Verify the chosen wiring and confirm the session-start retrieval-injection and work-end write-back flows (see `skills/jspace-bootstrap/references/harnesses.md`).
 
-AI provider/model/proxy config is owned by cc-switch (`/Users/jionpz/.cc-switch`, resource `cc-switch`): read `workspace/agent-infra/README.md` before touching it.
+AI provider/model/proxy config is user-environment specific and outside this workbench's defaults; if the user has a management tool or local proxy, manage it via a registered resource in `.jspace/hub.json`.
 
 ## Phase 5 - Final smoke and sign-off
 
 ```bash
-# 校验(编译二进制在 PATH 时用 jspace;源码检出:在 __DEV_ROOT__ 用 bun run cli/main.ts)
+# 校验(编译二进制在 PATH 时用 jspace;源码检出则 bun run cli/main.ts)
 jspace doctor --dir .
 # .jspace/hub.json 合法 JSON(POSIX: jq;Windows: ConvertFrom-Json)
 jq .jspace/hub.json

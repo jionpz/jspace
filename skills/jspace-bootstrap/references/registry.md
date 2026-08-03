@@ -18,7 +18,7 @@
 The workbench ships no registry CLI inside itself; run the JSpace CLI:
 
 ```bash
-jspace doctor --dir .      # 编译二进制在 PATH;源码检出:在 __DEV_ROOT__ 用 bun run cli/main.ts
+jspace doctor --dir .      # 编译二进制在 PATH;源码检出则 bun run cli/main.ts
 ```
 
 Missing external resource paths are warnings, not blocking errors. Beyond `jspace doctor`, any future registry tooling must be described as future behavior until implemented.

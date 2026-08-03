@@ -101,9 +101,9 @@ Requires a SiliconFlow API key (https://cloud.siliconflow.cn). gbrain has no Sil
 
 Verify: `gbrain models doctor` -> `embedding_config` and `embedding_reachability` must be `ok`.
 
-### Option C - Chat model parity with the local harness (via cc-switch proxy)
+### Option C - Chat model parity with the local harness (via a local proxy)
 
-Requires the user's harness model to be served by the cc-switch local proxy (`http://127.0.0.1:2006`; resource `cc-switch`, see `workspace/agent-infra/README.md`). Example: Codex configured with `deepseek-v4-flash`.
+If the user's harness model is served by a local proxy, point gbrain's chat model at that proxy. Example below routes `deepseek-v4-flash` through a local proxy.
 
 File layer first:
 
@@ -113,7 +113,7 @@ File layer first:
   "chat_model": "litellm:deepseek-v4-flash",
   "expansion_model": "litellm:deepseek-v4-flash",
   "provider_base_urls": {
-    "litellm": "http://127.0.0.1:2006/v1"
+    "litellm": "http://127.0.0.1:<proxy-port>/v1"
   }
 }
 ```
