@@ -249,7 +249,7 @@ const CRON_UNINSTALL_HELP = `usage: jspace cron uninstall [-h]
 options:
   -h, --help  show this help message and exit`;
 
-const CRON_RUN_HELP = `usage: jspace cron run [-h] [--dry-run] [--timeout SECONDS] id
+const CRON_RUN_HELP = `usage: jspace cron run [-h] [--dry-run] [--timeout SECONDS] [--dir DIR] id
 
 positional arguments:
   id               cron id
@@ -257,7 +257,9 @@ positional arguments:
 options:
   -h, --help       show this help message and exit
   --dry-run        print the command that would run, without executing
-  --timeout SECONDS  per-run timeout (default: 1800)`;
+  --timeout SECONDS  per-run timeout (default: 1800)
+  --dir DIR        workbench root (default: current directory; schedulers
+                   pass this explicitly)`;
 
 const CRON_STATUS_HELP = `usage: jspace cron status [-h] [id]
 
@@ -688,13 +690,14 @@ function parseCron(argv: string[]): Invocation {
       const c = collect(rest, u, P_CRON_RUN, [
         { name: "--dry-run", takesValue: false },
         { name: "--timeout", takesValue: true },
+        { name: "--dir", takesValue: true },
       ]);
       if (c.help) return help(CRON_RUN_HELP);
       if (c.positionals.length === 0) err(u, P_CRON_RUN, "the following arguments are required: id");
       if (c.positionals.length > 1) extraPositional(u, c.positionals.slice(1));
       const timeout = Number(lastVal(c.flags, "--timeout") ?? "1800");
       if (!Number.isFinite(timeout) || timeout <= 0) err(u, P_CRON_RUN, "argument --timeout: invalid number");
-      return { action: "run", run: (v) => cmdCronRun(v.id as string, !!v.dryRun, timeout), values: { id: c.positionals[0], dryRun: !!c.flags.get("--dry-run")?.length } };
+      return { action: "run", run: (v) => cmdCronRun(v.id as string, !!v.dryRun, timeout, v.dir as string | undefined), values: { id: c.positionals[0], dryRun: !!c.flags.get("--dry-run")?.length, dir: lastVal(c.flags, "--dir") } };
     }
     case "status": {
       const u = usageBlock(CRON_STATUS_HELP);

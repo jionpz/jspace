@@ -15,7 +15,7 @@ import { fail, rejectErrors } from "./errors.ts";
 import { devRoot, expandTilde, filehubReadme } from "./embed.ts";
 import { isFile, resolvePath } from "./paths.ts";
 import { MARKER_FILE } from "./init.ts";
-import { loadCrons, parseSchedule, installedPlists } from "./cron.ts";
+import { loadCrons, parseSchedule, installedCronIds, linuxCronHealth } from "./cron.ts";
 import {
   cleanTags,
   findIndex,
@@ -127,8 +127,13 @@ export function cmdDoctor(dir: string): void {
       warnings.push(`cron ${c.id}: invalid schedule "${c.schedule}"`);
     }
   }
-  const installedIds = new Set(installedPlists().map((n) => n.replace(/^com\.jspace\.cron\./, "").replace(/\.plist$/, "")));
-  if (installedIds.size > 0) {
+  if (process.platform === "linux") {
+    const health = linuxCronHealth();
+    if (!health.crontab) warnings.push("crontab command not found on this system; jspace cron cannot install tasks");
+    if (!health.service) warnings.push("cron daemon not running; scheduled tasks won't fire until it starts");
+  }
+  const installedIds = new Set(installedCronIds(root));
+  if (crons.length > 0) {
     for (const c of crons) {
       if (c.enabled && !installedIds.has(c.id)) {
         warnings.push(`cron ${c.id} enabled but not installed (run jspace cron install)`);
@@ -136,7 +141,7 @@ export function cmdDoctor(dir: string): void {
     }
     for (const id of installedIds) {
       if (!crons.some((c) => c.id === id)) {
-        warnings.push(`stale launchd agent com.jspace.cron.${id} (cron removed; run jspace cron uninstall)`);
+        warnings.push(`stale scheduled task com.jspace.cron.${id} (cron removed; run jspace cron uninstall)`);
       }
     }
   }

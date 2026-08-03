@@ -51,6 +51,20 @@ jobs:
           ./${{ matrix.artifact }} init --force /tmp/jspace-smoke
           ./${{ matrix.artifact }} doctor --dir /tmp/jspace-smoke
 
+      # Cron smoke — placeholder. Enable after the CI billing lock is lifted.
+      # Per-platform assertions are in docs/PLATFORMS.md (doctor assertion table).
+      - name: Cron smoke (placeholder, disabled until CI unblocked)
+        if: false
+        shell: bash
+        run: |
+          cd /tmp/jspace-smoke
+          ../${{ matrix.artifact }} cron add smoke-test --schedule "0 21 * * *" --harness claude --prompt "smoke"
+          ../${{ matrix.artifact }} cron run smoke-test --dry-run
+          ../${{ matrix.artifact }} cron install
+          ../${{ matrix.artifact }} cron status smoke-test
+          ../${{ matrix.artifact }} cron uninstall
+          ../${{ matrix.artifact }} doctor --dir /tmp/jspace-smoke
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
