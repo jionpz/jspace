@@ -52,7 +52,7 @@
 ## 记忆协议（精准召回从哪来）
 
 - 会话开始：按域/项目检索注入；会话结束：把持久事实带归属（domain/project 标签、统一的实体 slug）写回。
-- 资产入脑只入三样：**这是什么、关键事实、指针（路径）**；原文件永远留在资产层。
+- 资产入脑只入三样：**这是什么、关键事实、指针**；原文件永远留在资产层。指针 = `Pointer`（绝对路径，本机真理）+ `rel_path`（相对 filehub 根，机器无关，M5 起）；换机按「目标机 filehub 根 + rel_path」重解析。
 - 精准 = 一致的实体命名 + 归属标签 + 写回纪律。三者由工作台规则与 bootstrap skill 保障，不靠人自觉。
 
 ## 定时自动化（cron）
@@ -64,8 +64,8 @@
 
 - 控制平面：git。
 - 资产层：网盘 / Obsidian Sync（重文件不进 git）。
-- 记忆层：假设 gbrain 以文本页为规范源（DB/embedding 为派生、每机可重建）——该假设在 bootstrap 时验证；不成立则退路是"单机为主、按机重建记忆"。
-- registry 里的绝对路径是"本机真理"，按机器各自维护；分发（R7）前先做模板去个人化。
+- 记忆层：gbrain 以文本页为规范源（DB/embedding 为派生、每机可重建）——**该假设已于 M5 本机模拟双机验证成立**（见 M5 与开放问题 #1 关闭结论）；退路"单机为主、按机重建记忆"暂不需要。
+- registry 里的绝对路径是"本机真理"，按机器各自维护；资产指针经 `rel_path` 承载机器无关部分（M5 落地）；模板去个人化已在分发前完成。
 
 ## 非目标
 
@@ -79,17 +79,17 @@
 - **M0 ✅** 工作台可生成、可校验（`init` / `doctor`）。
 - **M1 ✅** 注册表可维护（R3 domain/resource 增删查 + R8 模板修正）——M2 的地基：文件管理中心经 `jspace resource add` / `filehub init --register` 注册。
 - **M2 ✅** 资产层最小协议：`filehub init` 骨架 + `type: filehub` 注册 + inbox 批量整理 skill（两遍式 / 人工调整 / cron 可驱动）+ 域↔项目挂接规则 + bootstrap 文件中心引导。先定协议，历史才会整齐。
-  - 待真实环境验证：① 示例资料「入库→gbrain 页→中文召回」端到端（live gbrain）——**已于 M4 验证通过**（2026-08-03，见 M4）；② 双机重建冒烟（见开放问题 #1，重排至 M5）。
+  - 待真实环境验证：① 示例资料「入库→gbrain 页→中文召回」端到端（live gbrain）——**已于 M4 验证通过**（2026-08-03，见 M4）；② 双机重建冒烟——**已于 M5 本机模拟验证通过**（2026-08-03，见 M5）。
 - **M3 ✅** cron MVP（R4）：`.jspace/cron.json` 声明式定义 + `jspace cron install` + `cron run` 无头执行（argv 安全 + 权限白名单 + flock 互斥）+ 失败可见性（cron-failed + doctor 摘要 + status）。**跨平台调度后端**：macOS launchd / Linux crontab / Windows schtasks（一 cron 一任务，`--dir` 显式传 root，win 进程树杀）。首批任务：inbox-tidy（旗舰，驱动 M2 无头批量，每日 21:00）。纯函数单测 + 验证矩阵见 `docs/PLATFORMS.md`。
   - 待真实环境验证：`jspace cron run inbox-tidy` 端到端跑通后再依赖；Linux/Windows 真机验证待 CI 解锁。
 - **M4 ✅** 记忆精度打磨：校准召回 + 端到端验收（"问一句，找到那个文件里的那个数"；不重设 M2 已锁 slug 骨架）。示例环境验收通过（2026-08-03：2 份示例资料经 asset-ingest 入库→gbrain reference 页→四条中文语义查询含语义变体/负对照/×3 重跑/search·query 双路径全 top-1 + 指针定位「12800 / 示例值」）。weekly-report / memory-consolidate 契约解锁（模板 `enabled: true`，契约内联 prompt；gbrain.md 新增 dated memory record 周快照纪律）。可复跑验收协议见 `docs/MEMORY-ACCEPTANCE.md`。
   - 待真实使用验证：机器端 `jspace cron install` 与首次 `cron run`（install 前 rehearsal gate）；语料增长后按 `docs/MEMORY-ACCEPTANCE.md` 复跑协议。
-- **M5** 分发（R7）：模板去个人化、打包安装、多机演练。
+- **M5 ✅** 分发（R7）：模板去个人化、打包安装已提前落地（v1.0.1/一键安装/update/CI 6 平台全绿）。本机模拟双机演练通过（2026-08-03）：A `gbrain export` → B 独立 brain `import`+embedding 重建 → B 侧四条中文查询 top-1 与 A 一致 → **指针换机解析成立**（`rel_path` 相对 filehub 根，换机按「目标机根 + rel_path」重解析）→「问一句」闭环引用机器 B 路径。记忆层可移植假设验证成立；**开放问题 #1 关闭**（结论基于本机模拟，真实第二机待实际使用）。指针纪律落 `rel_path`（asset-ingest 写页 + memory-recall 换机解析 + MEMORY-ACCEPTANCE 扩展节）。
 - 顺序理由：cron 的第一批任务操作资产层，故 M2 在 M3 前；里程碑随真实使用可重排，重排时更新本文件。
 
 ## 开放问题
 
-1. **gbrain 多机**："同一份记忆"依赖文本规范源假设；**验证已排入 M2、待真实环境执行**（双机重建冒烟：文本页↔PGLite 回灌含图谱边/backlink、embedding 离线重建、指针换机可解析；结论决定指针是否改机器无关表示）。不成立的退路见"同步与可移植"。
+1. **gbrain 多机**："同一份记忆"依赖文本规范源假设——**已于 M5 关闭（2026-08-03，本机模拟双机）**：A export → B import 重建 + embedding 重建 + 中文召回 top-1 与 A 一致 + 指针换机解析成立（`rel_path` 相对 filehub 根）。结论：假设成立、双字段指针采用；**真实第二机演练待实际使用**（本机模拟效力有限：同机/同 OS/同 embedding 可达；新机 setup 教训=init 即配 embedding）。图谱边/backlink 保留未验证（本语料无互链，边以正文 wikilink 承载）。
 2. **文件管理中心选址与存量迁移**：根目录放哪（本地盘 / 网盘目录）；既有资料一次性搬还是增量收编（建议增量：新东西一律走 inbox，旧的按项目按需收编）。
 3. **无头执行的运维**：账号/配额、失败通知（cron 任务挂了如何被发现——最低方案：执行日志落文件中心 + 下次会话检查）。
 4. **office 文件解析深度**：excel/ppt 先"摘要 + 指针"，按真实召回需求再加深（如逐表抽取）。

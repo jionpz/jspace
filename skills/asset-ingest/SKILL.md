@@ -33,8 +33,9 @@ triggers:
 
 ### 3. 入脑
 - 写 gbrain reference 页(slug `assets/<项目|领域>/<语义名>`,与文件语义名绑定):
-  - frontmatter:`type: reference` / `source: <harness>` / `project: <id>` / `tags`
+  - frontmatter:`type: reference` / `source: <harness>` / `project: <id>` / `tags` / `rel_path`
   - 正文:`Summary` + `Key Facts` + `Pointer`(文件**绝对路径**)
+- **rel_path 计算(M5)**:`rel_path` = Pointer 减去 filehub 根前缀(根 = `hub.json` 的 `type: filehub` resource primary path);换机时按「新机根 + rel_path」重解析。
 - **embedding**:正常写(不带 embed_skip);若**写失败并报 embedding 错误** → 以 `embed_skip: true` 重写(写入必须成功),随后检索降级并提示。
 
 ### 4. 登记

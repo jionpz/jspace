@@ -51,6 +51,22 @@
 - **embedding 可达性**:在 SiliconFlow 与 OpenRouter 两个在线 bge-m3 provider 下分别验收,`embedding_reachability: ok`,均通过。
 - **后续跑**:每次重跑需重查 embedding 可达性并留痕,约束同「操作约束」。
 
+## 换机解析扩展(M5)
+
+验证「换一台机器,记忆重建索引后指针仍可解析」。**原四用例与断言不变**;本扩展新增换机侧断言。
+
+**前置**:reference 页含 `rel_path` frontmatter(相对 filehub 根的全相对路径,由 asset-ingest 写页产出);目标机 `hub.json` 有 `type: filehub` resource 且 primary path 可解析。
+
+**用例**:从源机 `<workspace>/<filehub>` 导出记忆(`gbrain export`)→ 在目标机(独立工作台 / 独立 filehub / 独立 brain)导入重建(`import` + `embed --all`)→ 指针换机解析 + 召回对照:
+
+1. **rel_path 解析**:读目标机 `hub.json` 的 filehub primary path(根)→ 根 + `rel_path` → 目标机 Pointer → `test -f "<Pointer>"` 成立。
+2. **召回对照**:目标机四条规范查询(Q1/Q1'/Q2/Q2')top-1 与源机一致,负对照不串台。
+3. **问一句闭环**:目标机按 memory-recall skill 召回,答案引用**目标机**文件路径。
+
+**通过标准**:rel_path 解析成功 + `test -f` 成立;四条查询 top-1 与源机一致;问一句引用目标机路径。**原四用例断言(逐字串/重跑/负对照/指针四连)不变**。
+
+**记录**:目标机查询原始输出 + rel_path 值 + 源机对照分数;失败 → 按校准循环诊断(rel_path 缺失 / 根读不到 / 资产未同步)。
+
 ## 扩展性
 
 - 基线验收后,每次语料增长(新增领域/项目)追加 1 条区分性查询(表面词尽量不与目标页重叠)并整体重跑,top-1 命中率回退即触发校准。

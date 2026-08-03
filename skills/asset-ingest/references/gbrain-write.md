@@ -8,6 +8,7 @@ type: reference
 source: <harness>            # codex | claude | hermes | pi | manual(出处,不占用资产真实来源)
 project: <project|area id>
 tags: [t1, t2]
+rel_path: <相对 filehub 根的路径>   # M5 起:机器无关指针标识(见下)
 ---
 # <语义名>
 
@@ -25,6 +26,13 @@ tags: [t1, t2]
 ## Pointer
 <原文件绝对路径>
 ```
+
+## rel_path(机器无关指针,M5)
+
+- **定义**:从 filehub 根到文件的**全相对路径**(如 `projects/<项目>/<YYYY-MM-DD>-<语义名>.txt`),不含根前缀。
+- **计算**:`rel_path` = Pointer 减去 filehub 根绝对路径前缀。根 = `hub.json` 中 `type: filehub` resource 的 `primary: true` path entrypoint。
+- **换机解析**:新机读其 `hub.json` 的 filehub primary path(根)→ 根 + `rel_path` = 新机 Pointer。`Pointer`(绝对路径)保留为本机真理,日常打开用;`rel_path` 是可移植部分。
+- **存量页**:M5 演练起补 rel_path(演练给 2 个存量 reference 页补写);此后新写页一律带。
 
 ## slug 派生
 
