@@ -29,7 +29,7 @@ jobs:
           - { os: windows-latest,    arch: x64,   target: bun-windows-x64,           artifact: jspace-windows-x64.exe }
           - { os: windows-11-arm,    arch: arm64, target: bun-windows-arm64,         artifact: jspace-windows-arm64.exe }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -85,7 +85,7 @@ jobs:
           ../${{ matrix.artifact }} doctor --dir /tmp/jspace-smoke
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: "${{ matrix.artifact }}"
           path: "${{ matrix.artifact }}"
@@ -98,7 +98,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: artifacts
           merge-multiple: true
@@ -139,7 +139,7 @@ jobs:
       # the pin keeps this smoke test deterministic regardless of that alias's timing.
       JSPACE_VERSION: ${{ github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Forbid /download/latest (regression guard)
         if: matrix.os == 'ubuntu-latest'
