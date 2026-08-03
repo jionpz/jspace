@@ -19,8 +19,14 @@ import { decodeHub } from "../core/contracts/hub.ts";
 import { decodeLocal } from "../core/contracts/local.ts";
 import { decodeMarker } from "../core/contracts/workbench.ts";
 import { inspectWorkbench, type InspectEnv } from "../core/registry/inspect.ts";
-import { devRoot } from "./embed.ts";
-import { cmdInit } from "./init.ts";
+import { devRoot, expandTilde, isCompiled, materializeTree } from "./embed.ts";
+import { initWorkbench } from "../application/workspace/init.ts";
+import { resolvePath } from "./paths.ts";
+
+const initDeps = { resolvePath, expandTilde, isCompiled, devRoot, materialize: materializeTree };
+function init(root: string, force = false): void {
+  initWorkbench(root, force, initDeps);
+}
 
 function isFile(p: string): boolean {
   try {
@@ -32,7 +38,7 @@ function isFile(p: string): boolean {
 
 test("init creates portable marker v1 and machine-local v1", () => {
   const root = mkdtempSync(join(tmpdir(), "jspace-init-"));
-  cmdInit(root, false);
+  init(root);
 
   const markerPath = join(root, ".jspace", "marker.json");
   const localPath = join(root, ".jspace", "local.json");

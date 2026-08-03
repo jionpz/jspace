@@ -7,7 +7,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { fail, rejectErrors } from "./errors.ts";
 import { devRoot, expandTilde, isCompiled } from "./embed.ts";
 import { isFile, resolvePath } from "./paths.ts";
-import { CONFIG_DIR } from "./init.ts";
+import { CONFIG_DIR } from "../core/contracts/files.ts";
 import { findIndex, ID_PATTERN, readWorkbenchState, workbenchRoot } from "./registry.ts";
 import { primaryPathForResourceType, resolveEffectiveRegistry } from "../core/registry/effective.ts";
 

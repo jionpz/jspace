@@ -34,6 +34,7 @@ async function main(): Promise<void> {
           cwd: process.cwd(),
         };
         const result = await outcome.spec.handler!(ctx, outcome.args);
+        for (const e of result.errors ?? []) console.error(`jspace: error: ${e}`);
         for (const w of result.warnings ?? []) console.error(`jspace: warning: ${w}`);
         for (const line of render(ctx, result)) console.log(line);
         if (result.exitCode !== undefined) process.exitCode = result.exitCode;

@@ -1,0 +1,51 @@
+// application/workspace/state.ts — typed workbench state access for use cases.
+// Moved out of the cli compatibility facade (cli/registry.ts). Use cases consume
+// core contracts + adapters here; the cli facade is deleted after migration.
+import { join } from "node:path";
+import { fail, rejectErrors } from "../../cli/errors.ts";
+import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
+import { REGISTRY_FILE } from "../../core/contracts/files.ts";
+import { decodeHub, type HubV4 } from "../../core/contracts/hub.ts";
+import type { LocalStateV1 } from "../../core/contracts/local.ts";
+
+/** Load the workbench hub as typed state; fails on missing or invalid registry. */
+export function loadHub(root: string): HubV4 {
+  const reads = readWorkbenchState(root);
+  switch (reads.hub.status) {
+    case "missing":
+      fail(`registry not found: ${join(root, REGISTRY_FILE)}`);
+      break;
+    case "invalid":
+      rejectErrors(reads.hub.issues.map((i) => `${i.message} (${i.code})`));
+      break;
+    case "ok":
+      return reads.hub.value;
+  }
+  throw new Error("unreachable");
+}
+
+/** Load machine-local state, or null when absent (fresh clone). Invalid is blocking. */
+export function loadLocal(root: string): LocalStateV1 | null {
+  const reads = readWorkbenchState(root);
+  switch (reads.local.status) {
+    case "missing":
+      return null;
+    case "invalid":
+      rejectErrors(reads.local.issues.map((i) => `${i.message} (${i.code})`));
+      break;
+    case "ok":
+      return reads.local.value;
+  }
+  throw new Error("unreachable");
+}
+
+/** Assert an in-memory typed hub still decodes before a hub-only write. */
+export function assertHubValid(hub: HubV4): void {
+  const check = decodeHub(hub);
+  if (!check.ok) rejectErrors(check.issues.map((i) => i.message));
+}
+
+/** Fresh machine-local state for a workbench that has none yet (e.g. a clone). */
+export function freshLocal(): LocalStateV1 {
+  return { version: 1, installation_id: crypto.randomUUID(), bindings: {} };
+}

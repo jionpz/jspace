@@ -75,9 +75,10 @@ export interface CmdContext {
 
 export interface CmdResult {
   exitCode?: number; // default 0; doctor/cron-check use 1 for unhealthy
-  lines: string[]; // human output lines
+  lines: string[]; // stdout lines (human or --json data)
+  errors?: string[]; // stderr "jspace: error: ..." lines (no prefix needed)
+  warnings?: string[]; // stderr "jspace: warning: ..." lines (no prefix needed)
   data?: unknown; // structured payload for --json
-  warnings?: string[];
 }
 
 export type ParseOutcome =

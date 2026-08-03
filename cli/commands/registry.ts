@@ -1,23 +1,22 @@
 // cli/commands/registry.ts — top-level CommandSpec tree.
 //
-// Single source for the whole command surface. The engine derives help,
-// choices, argument validation and dispatch from these specs; handlers are
-// still delegated to the legacy cmd* implementations during the migration
-// (Child B M2). Use-case migration (application/) replaces the delegates later;
-// cron use cases land in Child C.
+// Single source for the whole command surface. Handlers bind CommandSpec args
+// to application use cases (business logic moved out of cli/); cron still
+// delegates to the legacy cmdCron* implementations until Child C, and update
+// keeps its network/binary logic in cli/update.ts.
 import type { CommandSpec } from "../../application/commands/command.ts";
-import { cmdInit } from "../init.ts";
+import { initWorkbench } from "../../application/workspace/init.ts";
+import { doctorWorkbench } from "../../application/workspace/doctor.ts";
+import { domainAdd, domainList, domainRemove } from "../../application/registry/domain.ts";
 import {
-  cmdDoctor,
-  cmdDomainAdd,
-  cmdDomainList,
-  cmdDomainRemove,
-  cmdFilehubInit,
-  cmdInboxStatus,
-  cmdResourceAdd,
-  cmdResourceList,
-  cmdResourceRemove,
-} from "../cmds.ts";
+  resourceAdd,
+  resourceList,
+  resourceRemove,
+} from "../../application/registry/resource.ts";
+import { filehubInit } from "../../application/registry/filehub.ts";
+import { inboxStatus } from "../../application/registry/inbox.ts";
+import { expandTilde, filehubReadme, isCompiled, devRoot, materializeTree } from "../embed.ts";
+import { resolvePath } from "../paths.ts";
 import {
   cmdCronAdd,
   cmdCronFailures,
@@ -27,6 +26,10 @@ import {
   cmdCronRun,
   cmdCronStatus,
   cmdCronUninstall,
+  installedCronIds,
+  linuxCronHealth,
+  loadCrons,
+  parseSchedule,
 } from "../cron.ts";
 import { cmdUpdate } from "../update.ts";
 
@@ -38,30 +41,34 @@ const initSpec: CommandSpec = {
   summary: "initialize a new JSpace workbench in a target directory",
   positionals: [{ name: "target", help: "target directory (default: current directory)" }],
   options: [{ name: "--force", takesValue: false, help: "allow initialization into a non-empty directory" }],
-  handler: (_ctx, args) => {
-    cmdInit(args.target === undefined ? undefined : s(args.target), b(args.force));
-    return { lines: [] };
-  },
+  handler: (_ctx, args) =>
+    initWorkbench(args.target === undefined ? undefined : s(args.target), b(args.force), {
+      resolvePath,
+      expandTilde,
+      isCompiled,
+      devRoot,
+      materialize: materializeTree,
+    }),
 };
 
 const doctorSpec: CommandSpec = {
   name: "doctor",
   summary: "validate an existing JSpace workbench registry",
   features: { dir: true },
-  handler: (_ctx, args) => {
-    cmdDoctor(s(args.dir) || ".");
-    return { lines: [] };
-  },
+  handler: (ctx) =>
+    doctorWorkbench(ctx.root, {
+      loadCrons,
+      parseSchedule,
+      installedCronIds,
+      linuxCronHealth,
+    }),
 };
 
 const domainListSpec: CommandSpec = {
   name: "list",
   summary: "list domains",
   features: { json: true },
-  handler: (_ctx, args) => {
-    cmdDomainList(b(args.json));
-    return { lines: [] };
-  },
+  handler: (ctx, args) => domainList(ctx.root, b(args.json)),
 };
 
 const domainAddSpec: CommandSpec = {
@@ -73,10 +80,14 @@ const domainAddSpec: CommandSpec = {
     { name: "--tag", takesValue: true, repeatable: true, help: "domain tag (repeatable)" },
     { name: "--purpose", takesValue: true, help: "domain purpose" },
   ],
-  handler: (_ctx, args) => {
-    cmdDomainAdd(s(args.id), args.path === undefined ? undefined : s(args.path), (args.tags as string[] | undefined), args.purpose === undefined ? undefined : s(args.purpose));
-    return { lines: [] };
-  },
+  handler: (ctx, args) =>
+    domainAdd(
+      ctx.root,
+      s(args.id),
+      args.path === undefined ? undefined : s(args.path),
+      args.tags as string[] | undefined,
+      args.purpose === undefined ? undefined : s(args.purpose),
+    ),
 };
 
 const domainRemoveSpec: CommandSpec = {
@@ -84,10 +95,7 @@ const domainRemoveSpec: CommandSpec = {
   summary: "remove a domain",
   positionals: [{ name: "id", required: true, help: "domain id" }],
   options: [{ name: "--purge", takesValue: false, help: "also delete the domain directory" }],
-  handler: (_ctx, args) => {
-    cmdDomainRemove(s(args.id), b(args.purge));
-    return { lines: [] };
-  },
+  handler: (ctx, args) => domainRemove(ctx.root, s(args.id), b(args.purge)),
 };
 
 const domainSpec: CommandSpec = {
@@ -101,10 +109,7 @@ const resourceListSpec: CommandSpec = {
   name: "list",
   summary: "list resources",
   features: { json: true },
-  handler: (_ctx, args) => {
-    cmdResourceList(b(args.json));
-    return { lines: [] };
-  },
+  handler: (ctx, args) => resourceList(ctx.root, b(args.json)),
 };
 
 const resourceAddSpec: CommandSpec = {
@@ -127,8 +132,9 @@ const resourceAddSpec: CommandSpec = {
       message: "one of the arguments --path --url is required",
     },
   ],
-  handler: (_ctx, args) => {
-    cmdResourceAdd(
+  handler: (ctx, args) =>
+    resourceAdd(
+      ctx.root,
       s(args.id),
       s(args.domain),
       args.type === undefined ? undefined : s(args.type),
@@ -136,19 +142,14 @@ const resourceAddSpec: CommandSpec = {
       args.url === undefined ? undefined : s(args.url),
       args.tags as string[] | undefined,
       args.notes === undefined ? undefined : s(args.notes),
-    );
-    return { lines: [] };
-  },
+    ),
 };
 
 const resourceRemoveSpec: CommandSpec = {
   name: "remove",
   summary: "remove a resource",
   positionals: [{ name: "id", required: true, help: "resource id" }],
-  handler: (_ctx, args) => {
-    cmdResourceRemove(s(args.id));
-    return { lines: [] };
-  },
+  handler: (ctx, args) => resourceRemove(ctx.root, s(args.id)),
 };
 
 const resourceSpec: CommandSpec = {
@@ -166,10 +167,14 @@ const filehubInitSpec: CommandSpec = {
     { name: "--register", takesValue: false, help: "also register the filehub in the current workbench (.jspace/hub.json) as type=filehub" },
     { name: "--domain", takesValue: true, help: "owning domain id (default: files; created if missing)" },
   ],
-  handler: (_ctx, args) => {
-    cmdFilehubInit(s(args.root), b(args.register), args.domain === undefined ? undefined : s(args.domain));
-    return { lines: [] };
-  },
+  handler: (ctx, args) =>
+    filehubInit(s(args.root), b(args.register), args.domain === undefined ? undefined : s(args.domain), {
+      resolvePath,
+      expandTilde,
+      filehubReadme,
+      devRoot,
+      wbRoot: ctx.root,
+    }),
 };
 
 const filehubSpec: CommandSpec = {
@@ -183,10 +188,7 @@ const inboxStatusSpec: CommandSpec = {
   name: "status",
   summary: "list files waiting in the inbox (read-only)",
   features: { json: true },
-  handler: (_ctx, args) => {
-    cmdInboxStatus(b(args.json));
-    return { lines: [] };
-  },
+  handler: (ctx, args) => inboxStatus(ctx.root, b(args.json)),
 };
 
 const inboxSpec: CommandSpec = {
