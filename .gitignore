@@ -25,6 +25,7 @@ Thumbs.db
 .cache/
 .eslintcache
 .workbuddy/
+.mindfs/
 
 # Harness / platform config (Trellis-managed, regenerable)
 .pi/
