@@ -100,6 +100,7 @@ export function domainAdd(
   pathOpt: string | undefined,
   tagsRaw: string[] | undefined,
   purposeOpt: string | undefined,
+  dryRun: boolean,
 ): CmdResult {
   if (!isId(domainId)) {
     fail(`invalid domain id: ${domainId} (lowercase letters, digits, and hyphens)`);
@@ -122,6 +123,9 @@ export function domainAdd(
 
   const hub = loadHub(root);
   if (hub.domains.some((d) => d.id === domainId)) fail(`duplicate domain id: ${domainId}`);
+  if (dryRun) {
+    return { lines: [`jspace: ok: would add domain: ${domainId} (${domainPath})`] };
+  }
 
   const { created, nearestExisting } = writeDomainSkeleton(domainDir, domainId, purpose, tags);
   hub.domains.push({ id: domainId, path: domainPath, ...(tags.length ? { tags } : {}) });
@@ -134,7 +138,7 @@ export function domainAdd(
   return { lines: [`jspace: ok: added domain: ${domainId} (${domainPath})`] };
 }
 
-export function domainRemove(root: string, id: string, purge: boolean): CmdResult {
+export function domainRemove(root: string, id: string, purge: boolean, dryRun: boolean): CmdResult {
   const hub = loadHub(root);
   const index = findIndex(hub.domains, id);
   if (index === null) fail(`no such domain: ${id}`);
@@ -148,6 +152,12 @@ export function domainRemove(root: string, id: string, purge: boolean): CmdResul
 
   const domain = hub.domains[index];
   const domainPath = domain.path;
+  if (dryRun) {
+    let message = `would remove domain: ${id}`;
+    if (!purge && domainPath) message += ` (kept directory ${domainPath})`;
+    return { lines: [`jspace: ok: ${message}`] };
+  }
+
   hub.domains.splice(index, 1);
   assertHubValid(hub);
   writeHubAtomic(root, hub);

@@ -186,3 +186,18 @@ test("aliases resolve like the primary name", async () => {
   const out = parse(["hi", "x"], aliasRoot);
   expect(out.kind).toBe("run");
 });
+
+test("--dry-run feature resolves to args.dryRun (dest mapping)", async () => {
+  const applySpec: CommandSpec = {
+    name: "apply",
+    summary: "apply a change",
+    features: { dryRun: true, dir: true },
+    handler: (_ctx, args) => ({ lines: [args.dryRun ? "dry" : "live"], data: { dryRun: args.dryRun } }),
+  };
+  const root2: CommandSpec = { name: "", summary: "", children: [applySpec] };
+  const out = parse(["apply", "--dry-run", "--dir", "/wb"], root2);
+  expect(out.kind).toBe("run");
+  const r = out as { args: Record<string, unknown>; dir: string | undefined };
+  expect(r.args.dryRun).toBe(true);
+  expect(r.dir).toBe("/wb");
+});

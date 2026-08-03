@@ -23,8 +23,15 @@ export interface FilehubDeps {
   wbRoot: string;
 }
 
-/** Register the filehub root as a type=filehub resource in the given workbench. */
-function registerFilehub(wbRoot: string, root: string, domainOpt: string | undefined, lines: string[]): void {
+/** Register the filehub root as a type=filehub resource in the given workbench.
+ *  Validation runs first so --dry-run can report an accurate plan. */
+function registerFilehub(
+  wbRoot: string,
+  root: string,
+  domainOpt: string | undefined,
+  lines: string[],
+  dryRun: boolean,
+): void {
   const hub = loadHub(wbRoot);
   if (hub.resources.some((r) => r.type === "filehub")) {
     const existing = hub.resources.find((r) => r.type === "filehub")!;
@@ -36,15 +43,32 @@ function registerFilehub(wbRoot: string, root: string, domainOpt: string | undef
   const domain = (domainOpt ?? "files").trim() || "files";
   if (!isId(domain)) fail(`invalid domain id: ${domain}`);
   const domainPath = `workspace/${domain}`;
-  let created: string[] = [];
-  let nearestExisting = join(wbRoot, "workspace");
-  if (!hub.domains.some((d) => d.id === domain)) {
-    const domainDir = resolve(resolve(wbRoot, domainPath));
+  const domainExists = hub.domains.some((d) => d.id === domain);
+  let domainDir: string | null = null;
+  if (!domainExists) {
+    domainDir = resolve(resolve(wbRoot, domainPath));
     if (!isWithin(domainDir, wbRoot) || domainDir === wbRoot) {
       fail(`domain path must resolve inside the workbench root: ${domainPath}`);
     }
+  }
+
+  const bindingKey = "filehub-path";
+  const local = loadLocal(wbRoot) ?? freshLocal();
+  if (local.bindings[bindingKey] !== undefined) {
+    fail(`binding already exists: ${bindingKey} (remove the orphan binding first)`);
+  }
+
+  if (dryRun) {
+    if (!domainExists) lines.push(`jspace: ok: would create domain: ${domain}`);
+    lines.push(`jspace: ok: would register filehub resource (type=filehub, primary=${root})`);
+    return;
+  }
+
+  let created: string[] = [];
+  let nearestExisting = join(wbRoot, "workspace");
+  if (!domainExists) {
     ({ created, nearestExisting } = writeDomainSkeleton(
-      domainDir,
+      domainDir as string,
       domain,
       DEFAULT_DOMAIN_PURPOSE,
       [],
@@ -53,11 +77,6 @@ function registerFilehub(wbRoot: string, root: string, domainOpt: string | undef
     lines.push(`jspace: ok: created domain: ${domain}`);
   }
 
-  const bindingKey = "filehub-path";
-  const local = loadLocal(wbRoot) ?? freshLocal();
-  if (local.bindings[bindingKey] !== undefined) {
-    fail(`binding already exists: ${bindingKey} (remove the orphan binding first)`);
-  }
   local.bindings[bindingKey] = root;
   hub.resources.push({
     id: "filehub",
@@ -84,16 +103,29 @@ export function filehubInit(
   register: boolean,
   domainOpt: string | undefined,
   deps: FilehubDeps,
+  dryRun: boolean,
 ): CmdResult {
   const root = deps.resolvePath(deps.expandTilde(rootArg));
   if (existsSync(root) && !statSync(root).isDirectory()) {
     fail(`not a directory: ${root}`);
   }
+  const lines: string[] = [];
+
+  if (dryRun) {
+    lines.push(`jspace: ok: would initialize filehub at ${root}`);
+    if (register) {
+      registerFilehub(deps.wbRoot, root, domainOpt, lines, true);
+    } else {
+      lines.push(
+        `jspace: hint: register later from a workbench dir with: jspace resource add filehub --type filehub --domain <domain> --path ${root} (or re-run with --register)`,
+      );
+    }
+    return { lines };
+  }
 
   const readme = join(root, "README.md");
   const obsidianVault =
     existsSync(join(root, ".obsidian")) && statSync(join(root, ".obsidian")).isDirectory();
-  const lines: string[] = [];
 
   // Always ensure the skeleton dirs (mkdir is idempotent; never touches user
   // files). Write the README only when missing, so a re-run is a no-op.
@@ -114,7 +146,7 @@ export function filehubInit(
   );
 
   if (register) {
-    registerFilehub(deps.wbRoot, root, domainOpt, lines);
+    registerFilehub(deps.wbRoot, root, domainOpt, lines, false);
   } else {
     lines.push(
       `jspace: hint: register later from a workbench dir with: jspace resource add filehub --type filehub --domain <domain> --path ${root} (or re-run with --register)`,

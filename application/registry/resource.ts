@@ -59,6 +59,7 @@ export function resourceAdd(
   urlOpt: string | undefined,
   tagsRaw: string[] | undefined,
   notes: string | undefined,
+  dryRun: boolean,
 ): CmdResult {
   if (!isId(id)) failInvalidId(id);
   const hub = loadHub(root);
@@ -86,6 +87,9 @@ export function resourceAdd(
   const record: Resource = { id, type: resourceType, domain, tags, entrypoints: [entrypoint] };
   if (notes) record.notes = notes;
   hub.resources.push(record);
+  if (dryRun) {
+    return { lines: [`jspace: ok: would add resource: ${id}`] };
+  }
   try {
     writeHubAndLocal(root, hub, local);
   } catch (e) {
@@ -95,10 +99,13 @@ export function resourceAdd(
   return { lines: [`jspace: ok: added resource: ${id}`] };
 }
 
-export function resourceRemove(root: string, id: string): CmdResult {
+export function resourceRemove(root: string, id: string, dryRun: boolean): CmdResult {
   const hub: HubV4 = loadHub(root);
   const index = findIndex(hub.resources, id);
   if (index === null) fail(`no such resource: ${id}`);
+  if (dryRun) {
+    return { lines: [`jspace: ok: would remove resource: ${id}`] };
+  }
 
   const removed = hub.resources[index];
   const removedBindings = removed.entrypoints

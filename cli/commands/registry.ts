@@ -67,7 +67,7 @@ const doctorSpec: CommandSpec = {
 const domainListSpec: CommandSpec = {
   name: "list",
   summary: "list domains",
-  features: { json: true },
+  features: { json: true, dir: true },
   handler: (ctx, args) => domainList(ctx.root, b(args.json)),
 };
 
@@ -75,6 +75,7 @@ const domainAddSpec: CommandSpec = {
   name: "add",
   summary: "add a domain",
   positionals: [{ name: "id", required: true, help: "domain id (lowercase letters, digits, and hyphens)" }],
+  features: { dir: true, dryRun: true },
   options: [
     { name: "--path", takesValue: true, help: "relative path inside the workbench (default: workspace/<id>)" },
     { name: "--tag", takesValue: true, repeatable: true, help: "domain tag (repeatable)" },
@@ -87,6 +88,7 @@ const domainAddSpec: CommandSpec = {
       args.path === undefined ? undefined : s(args.path),
       args.tags as string[] | undefined,
       args.purpose === undefined ? undefined : s(args.purpose),
+      b(args.dryRun),
     ),
 };
 
@@ -94,8 +96,9 @@ const domainRemoveSpec: CommandSpec = {
   name: "remove",
   summary: "remove a domain",
   positionals: [{ name: "id", required: true, help: "domain id" }],
+  features: { dir: true, dryRun: true },
   options: [{ name: "--purge", takesValue: false, help: "also delete the domain directory" }],
-  handler: (ctx, args) => domainRemove(ctx.root, s(args.id), b(args.purge)),
+  handler: (ctx, args) => domainRemove(ctx.root, s(args.id), b(args.purge), b(args.dryRun)),
 };
 
 const domainSpec: CommandSpec = {
@@ -108,7 +111,7 @@ const domainSpec: CommandSpec = {
 const resourceListSpec: CommandSpec = {
   name: "list",
   summary: "list resources",
-  features: { json: true },
+  features: { json: true, dir: true },
   handler: (ctx, args) => resourceList(ctx.root, b(args.json)),
 };
 
@@ -116,6 +119,7 @@ const resourceAddSpec: CommandSpec = {
   name: "add",
   summary: "add a resource",
   positionals: [{ name: "id", required: true, help: "resource id (lowercase letters, digits, and hyphens)" }],
+  features: { dir: true, dryRun: true },
   options: [
     { name: "--domain", takesValue: true, required: true, help: "owning domain id" },
     { name: "--type", takesValue: true, help: "resource type (default: project)" },
@@ -142,6 +146,7 @@ const resourceAddSpec: CommandSpec = {
       args.url === undefined ? undefined : s(args.url),
       args.tags as string[] | undefined,
       args.notes === undefined ? undefined : s(args.notes),
+      b(args.dryRun),
     ),
 };
 
@@ -149,7 +154,8 @@ const resourceRemoveSpec: CommandSpec = {
   name: "remove",
   summary: "remove a resource",
   positionals: [{ name: "id", required: true, help: "resource id" }],
-  handler: (ctx, args) => resourceRemove(ctx.root, s(args.id)),
+  features: { dir: true, dryRun: true },
+  handler: (ctx, args) => resourceRemove(ctx.root, s(args.id), b(args.dryRun)),
 };
 
 const resourceSpec: CommandSpec = {
@@ -163,6 +169,7 @@ const filehubInitSpec: CommandSpec = {
   name: "init",
   summary: "create a file management center skeleton (asset layer)",
   positionals: [{ name: "root", required: true, help: "filehub root directory (absolute or relative path)" }],
+  features: { dir: true, dryRun: true },
   options: [
     { name: "--register", takesValue: false, help: "also register the filehub in the current workbench (.jspace/hub.json) as type=filehub" },
     { name: "--domain", takesValue: true, help: "owning domain id (default: files; created if missing)" },
@@ -174,7 +181,7 @@ const filehubInitSpec: CommandSpec = {
       filehubReadme,
       devRoot,
       wbRoot: ctx.root,
-    }),
+    }, b(args.dryRun)),
 };
 
 const filehubSpec: CommandSpec = {
@@ -187,7 +194,7 @@ const filehubSpec: CommandSpec = {
 const inboxStatusSpec: CommandSpec = {
   name: "status",
   summary: "list files waiting in the inbox (read-only)",
-  features: { json: true },
+  features: { json: true, dir: true },
   handler: (ctx, args) => inboxStatus(ctx.root, b(args.json)),
 };
 
@@ -257,7 +264,7 @@ const cronRunSpec: CommandSpec = {
   summary: "run a cron headlessly now",
   positionals: [{ name: "id", required: true, help: "cron id" }],
   options: [
-    { name: "--dry-run", takesValue: false, help: "print the command that would run, without executing" },
+    { name: "--dry-run", dest: "dryRun", takesValue: false, help: "print the command that would run, without executing" },
     {
       name: "--timeout",
       takesValue: true,

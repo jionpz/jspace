@@ -13,7 +13,13 @@ import { VERSION } from "./version.generated.ts";
 import { expandTilde } from "./embed.ts";
 import { resolvePath } from "./paths.ts";
 
-const ROOT: CommandSpec = { name: "", summary: "", children: COMMANDS };
+const ROOT: CommandSpec = {
+  name: "",
+  summary: "",
+  description:
+    "JSpace - create and validate local workbenches.\n\nExit codes: 0 success; 1 business failure / unhealthy check (doctor, cron check); 2 argument error.",
+  children: COMMANDS,
+};
 
 async function main(): Promise<void> {
   try {

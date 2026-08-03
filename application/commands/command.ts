@@ -24,6 +24,8 @@ export interface PositionalSpec {
 export interface OptionSpec {
   name: string; // "--dir"
   short?: string; // "-h"
+  /** args key (default: name without -- and dashes, e.g. --dry-run -> dry_run) */
+  dest?: string;
   takesValue: boolean;
   required?: boolean;
   repeatable?: boolean; // store-append (--tag)
@@ -120,12 +122,13 @@ const VERSION_OPTION: OptionSpec = {
 const FEATURE_OPTIONS: Record<keyof Required<CommandFeatures>, OptionSpec> = {
   dir: {
     name: "--dir",
+    dest: "dir",
     takesValue: true,
     metavar: "DIR",
     help: "workbench root directory (default: current directory)",
   },
-  json: { name: "--json", takesValue: false, help: "output JSON" },
-  dryRun: { name: "--dry-run", takesValue: false, help: "print the plan without executing" },
+  json: { name: "--json", dest: "json", takesValue: false, help: "output JSON" },
+  dryRun: { name: "--dry-run", dest: "dryRun", takesValue: false, help: "print the plan without executing" },
 };
 
 function featureOptions(features: CommandFeatures | undefined): OptionSpec[] {
@@ -342,11 +345,11 @@ function buildArgs(
   const groups = spec.groups ?? [];
   const inGroup = new Set(groups.flatMap((g) => g.members));
 
-  const keyOf = (name: string): string => name.replace(/^--/, "").replace(/-/g, "_");
+  const keyOf = (o: OptionSpec): string => o.dest ?? o.name.replace(/^--/, "").replace(/-/g, "_");
 
   // option values
   for (const o of opts) {
-    const key = keyOf(o.name);
+    const key = keyOf(o);
     const raw = collected.flags.get(o.name);
     if (raw === true) args[key] = true;
     else if (Array.isArray(raw)) args[key] = o.repeatable ? raw : lastVal(raw);
