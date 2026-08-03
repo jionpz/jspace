@@ -18,8 +18,8 @@
 
 | 类型 | 归位目标 | 说明 |
 |---|---|---|
-| pdf/ppt/txt/md 书籍、资料 | `areas/<领域>/` | 先摘要+指针,按需加深 |
-| excel | `projects/<项目>/` 或 `areas/<领域>/` | 摘要+指针,不做逐表抽取(GOAL 开放问题 4) |
+| pdf/txt/md 书籍、资料 | `areas/<领域>/` | 先摘要+指针,按需加深 |
+| excel / ppt | `projects/<项目>/` 或 `areas/<领域>/` | 常规:摘要+指针;用户要求时深度抽取(逐表/逐页 → 伴生 `.extract.md` + 页内 Key Facts 含关键数字),见 `references/deep-extract.md` |
 | 项目产出(报告/文档/资料) | `projects/<项目>/<子目录>/` | `-vN` 管理版本 |
 | 视频/音频/截图 | — | 路由到 gbrain `media-ingest` 深入路径;MVP 范围外 |
 

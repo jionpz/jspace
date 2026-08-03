@@ -2,17 +2,23 @@
 // cli/assets.generated.ts (embedded by bun build --compile for a self-contained
 // binary). Regenerate after editing templates or skills.
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { extname, join, relative, resolve, sep } from "node:path";
 
 const repoRoot = resolve(import.meta.dir, "..");
 const SOURCES = ["templates/workbench", "templates/filehub", "skills/jspace-bootstrap", "skills/asset-ingest"];
 
+// Skip VCS/build artifacts so they never get embedded into the binary.
+const SKIP_DIRS = new Set(["__pycache__", ".git", "node_modules"]);
+const SKIP_EXT = new Set([".pyc", ".pyo", ".DS_Store"]);
+
 function walk(dir: string, base: string, out: Map<string, string>): void {
   for (const name of readdirSync(dir)) {
+    if (SKIP_DIRS.has(name)) continue;
     const p = join(dir, name);
     if (statSync(p).isDirectory()) {
       walk(p, base, out);
     } else {
+      if (SKIP_EXT.has(extname(name))) continue;
       const rel = relative(base, p).split(sep).join("/");
       const baseRel = relative(repoRoot, base).split(sep).join("/");
       out.set(`${baseRel}/${rel}`, readFileSync(p, "utf-8"));

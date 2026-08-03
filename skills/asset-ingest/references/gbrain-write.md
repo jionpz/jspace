@@ -27,6 +27,15 @@ rel_path: <相对 filehub 根的路径>   # M5 起:机器无关指针标识(见�
 <原文件绝对路径>
 ```
 
+## 深度抽取(office)页内纪律
+
+excel / ppt 走深度抽取(`references/deep-extract.md`)时,reference 页在此模板上补两条:
+
+- `Key Facts` 只收**策展后的关键数字/表头要点**(精炼 ≤ ~10 条),不 dump 全量;数字带出处语境:`- 单价 32000 元/台 [Source: <rel_path>, Sheet 报价单 B2, YYYY-MM-DD]`。
+- `Pointer` 后加一行抽取注记:`抽取: <伴生文件 rel_path>`(如 `projects/<项目>/2026-08-03-acme报价.extract.md`),全量数据可随时重开。
+
+原则:**页内策展、伴生全量**。大表永远不进 gbrain 页(保持页精简与检索命中质量);抽取是派生数据,伴生文件删除安全(注记一并撤)。
+
 ## rel_path(机器无关指针,M5)
 
 - **定义**:从 filehub 根到文件的**全相对路径**(如 `projects/<项目>/<YYYY-MM-DD>-<语义名>.txt`),不含根前缀。

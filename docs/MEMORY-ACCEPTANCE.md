@@ -67,6 +67,25 @@
 
 **记录**:目标机查询原始输出 + rel_path 值 + 源机对照分数;失败 → 按校准循环诊断(rel_path 缺失 / 根读不到 / 资产未同步)。
 
+## office 深度抽取扩展(#4)
+
+验证「excel/ppt 经深度抽取后,关键数字/表格内容可召回」(asset-ingest 深入路径 + 伴生 `.extract.md`)。
+
+**前置**:JWorkspace 的 `skills/asset-ingest/scripts/office-extract.py` 为待验收版本(与源 REPO diff 无差异);待验收文件为**真实 excel/pptx**(含数值事实)。
+
+**用例**:
+
+| 步 | 动作 | 断言 |
+|---|---|---|
+| 1 | 归位:真实 xlsx 经 asset-ingest 移到 `<filehub>/projects/<项目>/`,命名 `YYYY-MM-DD-语义名-vN.xlsx` | 文件存在;`projects/<项目>/index.md` 登记行 |
+| 2 | 深度抽取:`python3 office-extract.py <文件> --out <文件>.extract.md` | 伴生 `.extract.md` 存在;含 sheet 名 + 单元格引用 + 值;**幻影行(全空高空行)不输出**;超 `ROWS_LIMIT` 行有截断注记 |
+| 3 | 策展写页:gbrain reference 页 slug `assets/<项目>/<语义名>-vN` | 页含 Key Facts(关键数字带 `[Source: <rel_path>, Sheet <名> <列>, 日期]`) + `抽取:` 注记行 + `rel_path` |
+| 4 | 召回:① `gbrain query "<关键数字相关措辞>"` ② `gbrain search "<关键词>"` ③ 指针断言四连(`get` → Pointer → `test -f` → top-1 slug 一致) | query 与 search 均 top-1 目标页;指针四连成立 |
+
+**通过标准**:步骤 1–4 全过;关键数字的语义查询与关键词查询均 top-1;幻影行过滤与截断行为符合契约。
+
+**真实样例记录(2026-08-03)**:`projects/某期训练营/2026-08-03-某期训练营同修跟进登记-v1.xlsx`(7 sheet;学员名单 sheet 含 1048574 行幻影行,过滤后 419 行非空)。抽取 132MB→265KB;页 Key Facts 含「单人正价费用金额 12800 元」;`query "某期训练营 单人正价 费用金额"` / `query "12800 训练营费用"` / `search "跟进 登记"` 均 top-1 目标页。
+
 ## 扩展性
 
 - 基线验收后,每次语料增长(新增领域/项目)追加 1 条区分性查询(表面词尽量不与目标页重叠)并整体重跑,top-1 命中率回退即触发校准。

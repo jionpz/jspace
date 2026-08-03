@@ -45,6 +45,7 @@ triggers:
 - `gbrain query <关键词>` 确认命中;未命中 → 检查 slug / tags / embedding。
 
 ### 6. (可选,用户要求时)深入
+- **office 深度抽取**(excel/ppt):用户要求把表格/关键数字也收了时,用 `scripts/office-extract.py` 逐表/逐页抽取 → 策展 Key Facts(含关键数字)入 reference 页 + 伴生 `.extract.md` 落 asset 层。细则见 `references/deep-extract.md`。
 - `strategic-reading`:纯 markdown skill,会话内可执行 → 产出 playbook。
 - `book-mirror`:CLI 命令,serve 持锁时阻塞、需 Anthropic 子代理与成本确认;不在常规路径。
 - `media-ingest`:serve 会话内经 MCP `file_upload`(其 Phase 2 CLI 被锁阻塞);MVP 不 invoke。
@@ -96,3 +97,5 @@ triggers:
 - `references/filing.md` — 归位/命名/类型策略/文件中心定位/降级
 - `references/gbrain-write.md` — 入脑模板 + slug 派生 + embedding 降级 + type 纪律
 - `references/batch.md` — 批量模式细则(两遍式、幂等、日志、无头)
+- `references/deep-extract.md` — excel/ppt 深度抽取(逐表/逐页 + 伴生 .extract.md + 策展纪律)
+- `scripts/office-extract.py` — 零依赖抽取器(python3 stdlib);`scripts/office-extract.test.py` 自测
