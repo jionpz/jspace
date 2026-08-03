@@ -10,10 +10,14 @@ import { ASSETS } from "./assets.generated.ts";
 
 export const PLACEHOLDER = "__DEV_ROOT__";
 
-/** True when running as a standalone compiled executable (bun embeds FS at /$bunfs/). */
+/** True when running as a standalone compiled executable. bun embeds its FS at
+ *  /$bunfs/ on POSIX and on a drive-letter mount (B:\~BUN\...) on Windows. */
 export function isCompiled(): boolean {
   const a1 = process.argv[1];
-  return typeof a1 === "string" && a1.startsWith("/$bunfs/");
+  if (typeof a1 === "string" && (a1.startsWith("/$bunfs/") || a1.includes("~BUN") || a1.includes("bunfs"))) {
+    return true;
+  }
+  return typeof process.execPath === "string" && /~BUN|bunfs/i.test(process.execPath);
 }
 
 /** CLI install/source root:
@@ -55,10 +59,18 @@ function hasAssets(prefix: string): boolean {
   return Object.keys(ASSETS).some((k) => k.startsWith(prefix));
 }
 
+/** JSON-escape a replacement value (backslashes/quotes) so a Windows path
+ *  injected into a .json template produces valid JSON (e.g. B:\~BUN\bin). */
+function jsonEscape(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
 /**
  * Write the embedded tree into `target`, replacing __DEV_ROOT__ placeholders.
- * Mirrors Python: shutil.copytree(template, target, dirs_exist_ok=True) +
- * copy of skills/{jspace-bootstrap,asset-ingest} + _materialize_placeholders.
+ * JSON assets escape the replacement (Windows paths contain backslashes that
+ * would otherwise produce invalid JSON). Mirrors Python:
+ * shutil.copytree(template, target, dirs_exist_ok=True) + copy of skills/
+ * {jspace-bootstrap,asset-ingest} + _materialize_placeholders.
  */
 export function materializeTree(target: string, devRootStr: string): void {
   if (!hasAssets("templates/workbench/")) {
@@ -81,9 +93,10 @@ export function materializeTree(target: string, devRootStr: string): void {
     } else {
       throw new Error(`unexpected asset key: ${key}`);
     }
+    const replacement = key.endsWith(".json") ? jsonEscape(devRootStr) : devRootStr;
     const out = join(target, rel);
     mkdirSync(dirname(out), { recursive: true });
-    writeFileSync(out, content.replaceAll(PLACEHOLDER, devRootStr), "utf-8");
+    writeFileSync(out, content.replaceAll(PLACEHOLDER, replacement), "utf-8");
   }
 }
 
