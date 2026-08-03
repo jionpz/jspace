@@ -38,9 +38,18 @@
 ## 操作约束
 
 - **gbrain 锁**:`gbrain serve` 是某 harness 会话的 stdio 子进程,非独立 daemon。**禁 `kill` serve、禁独立重启**(独立重启会变幽灵锁持有者)。处置:协调结束持锁会话释放锁 → CLI 窗口内完成验收 → 持锁会话重连/正常结束自然恢复 serve。窗口内勿唤醒持锁会话。
-- **SiliconFlow 在线依赖**:embedding 不可达 = 环境故障阻塞,不进校准循环,不写「通过」。
+- **在线 embedding 依赖**:embedding 不可达 = 环境故障阻塞,不进校准循环,不写「通过」。provider(SiliconFlow / OpenRouter bge-m3)不固定,以验收时刻 `gbrain models doctor --json` 可达为准。
 - **canonical 面**:验收与重跑统一用 CLI(`gbrain`),serve 停泊窗口内;真实使用面(MCP)在锁恢复后补一次 `query` 冒烟对齐。
 - **读回校验**(`gbrain get`)须在 serve 停泊窗口内完成。
+
+## 基线验收结果(2026-08-03)
+
+- **语料**:2 文档(含数值事实 X 的领域页 + 含公式 Y 的领域页)。结果已在两台真实运行下交叉验证,分数逐位一致:
+  - Q1 / Q1' / Q2 / Q2' 各连续 ×3 重跑**全部 top-1 正确**,负对照不串台;指针断言四连全部成立。
+  - 校准循环**未触发**(首跑即全过)。
+- **双路径诚实记录**:基线语料下 `search`(关键词)与 `query`(语义)top-1 **一致**——关键词路径已能命中,语义层不劣化但差异加分未凸显。变体查询(Q1'/Q2')证明语义同构表达可召回。「语义层加分」的差异证据留待语料增长后验证(见扩展性)。
+- **embedding 可达性**:在 SiliconFlow 与 OpenRouter 两个在线 bge-m3 provider 下分别验收,`embedding_reachability: ok`,均通过。
+- **后续跑**:每次重跑需重查 embedding 可达性并留痕,约束同「操作约束」。
 
 ## 扩展性
 
