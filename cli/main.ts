@@ -1,22 +1,44 @@
 #!/usr/bin/env bun
-// cli/main.ts — entry point + top-level dispatch.
-import { ArgError, VERSION, parseArgs } from "./args.ts";
+// cli/main.ts — entry point + top-level dispatch (CommandSpec-driven).
+import {
+  ArgError,
+  parse,
+  render,
+  type CmdContext,
+  type CommandSpec,
+} from "../application/commands/command.ts";
+import { COMMANDS } from "./commands/registry.ts";
 import { CliError } from "./errors.ts";
+import { VERSION } from "./version.generated.ts";
+import { expandTilde } from "./embed.ts";
+import { resolvePath } from "./paths.ts";
+
+const ROOT: CommandSpec = { name: "", summary: "", children: COMMANDS };
 
 async function main(): Promise<void> {
   try {
-    const argv = process.argv.slice(2);
-    const invocation = parseArgs(argv);
-    switch (invocation.action) {
+    const outcome = parse(process.argv.slice(2), ROOT);
+    switch (outcome.kind) {
       case "version":
         console.log(`jspace ${VERSION}`);
         return;
       case "help":
-        console.log(invocation.text);
+        console.log(outcome.text);
         return;
-      case "run":
-        await invocation.run!(invocation.values!);
+      case "run": {
+        const ctx: CmdContext = {
+          json: outcome.args.json === true,
+          dryRun: outcome.args.dryRun === true,
+          dir: outcome.dir,
+          root: resolvePath(expandTilde(outcome.dir ?? process.cwd())),
+          cwd: process.cwd(),
+        };
+        const result = await outcome.spec.handler!(ctx, outcome.args);
+        for (const w of result.warnings ?? []) console.error(`jspace: warning: ${w}`);
+        for (const line of render(ctx, result)) console.log(line);
+        if (result.exitCode !== undefined) process.exitCode = result.exitCode;
         return;
+      }
     }
   } catch (e) {
     if (e instanceof CliError) {
