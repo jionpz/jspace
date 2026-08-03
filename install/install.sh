@@ -28,12 +28,17 @@ resolve_realpath() {
     fi
 }
 
-# 下载（curl 优先，wget 回退）；失败返回非 0
+# 下载（curl 优先，wget 回退）；失败返回非 0。
+# 进度条仅 stderr 为终端时显示；管道/CI 下保持 -s 静默，避免 \r 刷屏
 dl() { # url outfile
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL "$1" -o "$2"
+        if [ -t 2 ]; then
+            curl -fSL --progress-bar "$1" -o "$2"   # 交互终端: 进度条
+        else
+            curl -fsSL "$1" -o "$2"                  # 管道/CI: 静默
+        fi
     elif command -v wget >/dev/null 2>&1; then
-        wget -qO "$2" "$1"
+        if [ -t 2 ]; then wget --show-progress -qO "$2" "$1"; else wget -qO "$2" "$1"; fi
     else
         return 1
     fi
