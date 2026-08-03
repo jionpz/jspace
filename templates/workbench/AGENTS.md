@@ -75,7 +75,7 @@ Resources are discoverable entrypoints inside a domain. They may represent proje
 - optional `tags`.
 - optional concise `notes`.
 
-Resource path entrypoints must use absolute paths. If a resource has path entrypoints, exactly one `kind: "path"` entrypoint must be `primary: true`. `primary` is not valid on URL entrypoints.
+Resource path entrypoints reference a machine-local binding by key; the absolute path value lives in `.jspace/local.json` (gitignored). If a resource has path entrypoints, exactly one `kind: "path"` entrypoint must be `primary: true`. `primary` is not valid on URL entrypoints.
 
 Do not put executable operation commands such as start/stop/deploy in resources. Operations belong in the owning domain's README, optional AGENTS, or optional runbook and are executed by the current human/AI session.
 
@@ -85,7 +85,8 @@ Do not put executable operation commands such as start/stop/deploy in resources.
 
 Read the registry and domain files directly with standard tools:
 
-- `.jspace/hub.json`: domain/resource discovery index.
+- `.jspace/hub.json`: domain/resource/project discovery index (portable).
+- `.jspace/local.json`: machine-local path bindings (gitignored).
 - `workspace/<domain>/README.md` and `workspace/<domain>/domain.json`: domain entry and detail.
 
 Validation uses the JSpace CLI: `jspace doctor --dir .` (`jspace` is the compiled binary on PATH; a source checkout runs `bun run cli/main.ts`). The registry is a map, not a file reader. It points to context files and must not duplicate full README/AGENTS/runbook content. For lookup, use `jq .jspace/hub.json`, `find workspace -maxdepth 2 -type f`, and `rg` queries.

@@ -4,14 +4,16 @@
 
 ## 结构
 
-- `.jspace/hub.json` - domain/resource 注册表(机器维护,平时无需手改)
-- `.jspace/marker.json` - 初始化标记(机器维护)
+- `.jspace/hub.json` - domain/resource/project 注册表(portable,机器维护,平时无需手改)
+- `.jspace/marker.json` - 初始化标记(portable,含 workbench_id;机器维护)
+- `.jspace/local.json` - 本机状态(安装实例 id + 路径绑定;git 忽略,init 生成)
 - `.jspace/logs/` - 执行日志(cron / 无头批量;git 忽略)
+- `.jspace/state/` - 运行时状态槽(预留;git 忽略)
 - `AGENTS.md` - 工作模式操作规则
 - `workspace/` - 域目录（初始不预建；按 AGENTS.md 的 Domain Governance 从真实使用涌现，首个域创建时生成）
 - `skills/jspace-bootstrap/` - 首次配置技能
 - `skills/asset-ingest/` - 资料转知识资产技能
-- `.gitignore` - 忽略 `.jspace/logs/`
+- `.gitignore` - 忽略 `.jspace/logs/`、`.jspace/local.json`、`.jspace/state/`
 
 ## 使用
 

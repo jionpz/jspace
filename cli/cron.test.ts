@@ -141,9 +141,12 @@ function makeWorkbench(opts: {
   const fh = join(wb, "filehub"); // per-workbench unique filehub → no cross-test pollution
   const resources: unknown[] = [];
   if (opts.filehub) {
-    resources.push({ id: "filehub", type: "filehub", entrypoints: [{ id: "path", kind: "path", value: fh, primary: true }] });
+    resources.push({ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] });
   }
-  writeFileSync(join(wb, ".jspace", "hub.json"), JSON.stringify({ version: "3", domains: [], resources }));
+  writeFileSync(join(wb, ".jspace", "hub.json"), JSON.stringify({ version: "4", domains: [{ id: "files", path: "workspace/files" }], resources, projects: [] }));
+  if (opts.filehub) {
+    writeFileSync(join(wb, ".jspace", "local.json"), JSON.stringify({ version: 1, installation_id: "inst", bindings: { "filehub-path": fh } }));
+  }
   const crons = (opts.crons ?? []).map((id) => ({ id, schedule: "0 21 * * *", harness: "claude", prompt: "test", enabled: true }));
   writeFileSync(join(wb, ".jspace", "cron.json"), JSON.stringify({ version: 1, crons }));
   if (opts.failed?.length) {

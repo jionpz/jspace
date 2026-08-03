@@ -8,7 +8,8 @@ import { fail, rejectErrors } from "./errors.ts";
 import { devRoot, expandTilde, isCompiled } from "./embed.ts";
 import { isFile, resolvePath } from "./paths.ts";
 import { CONFIG_DIR } from "./init.ts";
-import { findIndex, ID_PATTERN, loadRegistry, workbenchRoot } from "./registry.ts";
+import { findIndex, ID_PATTERN, readWorkbenchState, workbenchRoot } from "./registry.ts";
+import { primaryPathForResourceType, resolveEffectiveRegistry } from "../core/registry/effective.ts";
 
 export const CRON_FILE = join(CONFIG_DIR, "cron.json");
 const HARNESSES = ["claude", "codex", "pi"] as const;
@@ -698,29 +699,14 @@ export function lastStatusFor(root: string, id: string): string | null {
   return st?.[1] ?? null;
 }
 
-/** Resolve filehub root from hub.json (type:filehub, primary path), or null if unregistered. */
+/** Resolve the filehub root via the shared effective registry (type:filehub,
+ *  primary path), or null when unregistered/unbound — then pending scan is skipped. */
 export function filehubRoot(root: string): string | null {
-  let hub: Record<string, unknown>;
-  try {
-    hub = loadRegistry(root);
-  } catch {
-    return null; // registry missing/unreadable → skip pending scan
-  }
-  const resources = hub.resources;
-  if (!Array.isArray(resources)) return null;
-  for (const r of resources) {
-    if (!r || typeof r !== "object") continue;
-    const rec = r as Record<string, unknown>;
-    if (rec.type !== "filehub") continue;
-    const eps = rec.entrypoints;
-    if (!Array.isArray(eps)) continue;
-    for (const ep of eps) {
-      if (!ep || typeof ep !== "object") continue;
-      const e = ep as Record<string, unknown>;
-      if (e.primary === true && e.kind === "path" && typeof e.value === "string") return e.value;
-    }
-  }
-  return null;
+  const reads = readWorkbenchState(root);
+  if (reads.hub.status !== "ok") return null;
+  const local = reads.local.status === "ok" ? reads.local.value : null;
+  const effective = resolveEffectiveRegistry(reads.hub.value, local, { pathExists: existsSync });
+  return primaryPathForResourceType(effective, "filehub");
 }
 
 /** Find pending staged gbrain writes: <filehub>/.jspace-logs/*.APPLY.md. */

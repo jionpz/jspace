@@ -1,4 +1,6 @@
-// cli/cmds.ts — doctor + domain/resource/filehub commands (mirror Python cmd_*).
+// cli/cmds.ts — doctor + domain/resource/filehub commands. All commands consume
+// typed state via the core contracts + effective registry; no consumer re-parses
+// raw hub/local JSON.
 import {
   existsSync,
   mkdirSync,
@@ -14,19 +16,33 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fail, rejectErrors } from "./errors.ts";
 import { devRoot, expandTilde, filehubReadme } from "./embed.ts";
 import { isFile, resolvePath } from "./paths.ts";
-import { MARKER_FILE } from "./init.ts";
 import { loadCrons, parseSchedule, installedCronIds, linuxCronHealth } from "./cron.ts";
 import {
+  assertHubValid,
   cleanTags,
   findIndex,
   ID_PATTERN,
+  isId,
   isWithin,
-  loadRegistry,
+  PairedWriteError,
+  readWorkbenchState,
   REGISTRY_FILE,
-  saveRegistry,
-  validateHub,
   workbenchRoot,
+  writeHubAndLocal,
+  writeHubAtomic,
+  type WorkbenchStateReads,
 } from "./registry.ts";
+import { normalizePortablePath } from "../core/contracts/paths.ts";
+import {
+  decodeHub,
+  type HubV4,
+  type PathEntrypoint,
+  type Resource,
+  type UrlEntrypoint,
+} from "../core/contracts/hub.ts";
+import type { LocalStateV1 } from "../core/contracts/local.ts";
+import { primaryPathForResourceType, resolveEffectiveRegistry } from "../core/registry/effective.ts";
+import { inspectWorkbench, type InspectEnv } from "../core/registry/inspect.ts";
 
 export const DEFAULT_DOMAIN_PURPOSE =
   "本域由 jspace domain add 创建，尚未填充用途；请按需补充管理方式/工作流。";
@@ -44,9 +60,36 @@ const DOMAIN_PROJECTS_SECTION = `
 > ③ 记忆层建实体(gbrain,记录项目事实与指针)。
 `;
 
-/** Python dict.get(key, default): default only when the key is absent (not null). */
-function orD(v: unknown, d: unknown): unknown {
-  return v === undefined ? d : v;
+function hubOf(reads: WorkbenchStateReads): HubV4 {
+  switch (reads.hub.status) {
+    case "missing":
+      fail(`registry not found: ${join(reads.root, REGISTRY_FILE)}`);
+      break;
+    case "invalid":
+      rejectErrors(reads.hub.issues.map((i) => `${i.message} (${i.code})`));
+      break;
+    case "ok":
+      return reads.hub.value;
+  }
+  throw new Error("unreachable");
+}
+
+function localOf(reads: WorkbenchStateReads): LocalStateV1 | null {
+  switch (reads.local.status) {
+    case "missing":
+      return null;
+    case "invalid":
+      rejectErrors(reads.local.issues.map((i) => `${i.message} (${i.code})`));
+      break;
+    case "ok":
+      return reads.local.value;
+  }
+  throw new Error("unreachable");
+}
+
+/** Fresh machine-local state for a workbench that has none yet (e.g. a clone). */
+function freshLocal(): LocalStateV1 {
+  return { version: 1, installation_id: crypto.randomUUID(), bindings: {} };
 }
 
 // ---- doctor ----
@@ -66,62 +109,47 @@ function countFiles(dir: string): number {
 
 export function cmdDoctor(dir: string): void {
   const root = resolvePath(expandTilde(dir));
-  const warnings: string[] = [];
-  if (!isFile(join(root, MARKER_FILE))) {
-    warnings.push("not an initialized JSpace workbench (missing .jspace/marker.json)");
-  }
-
-  const registryPath = join(root, REGISTRY_FILE);
-  if (!isFile(registryPath)) fail(`registry not found: ${registryPath}`);
-  let data: unknown;
-  try {
-    data = JSON.parse(readFileSync(registryPath, "utf-8"));
-  } catch (e) {
-    fail(`${REGISTRY_FILE} is not valid JSON: ${(e as Error).message}`);
-  }
-
-  const errors = validateHub(data, root, warnings);
+  const reads = readWorkbenchState(root);
+  const env: InspectEnv = {
+    root,
+    hub: reads.hub,
+    marker: reads.marker,
+    local: reads.local,
+    pathExists: existsSync,
+    isFile,
+    readJson: (p) => JSON.parse(readFileSync(p, "utf-8")),
+  };
+  const diagnostics = inspectWorkbench(env);
+  const errors = diagnostics.filter((d) => d.severity === "error").map((d) => d.message);
+  const warnings = diagnostics.filter((d) => d.severity === "warning").map((d) => d.message);
 
   // filehub asset-layer checks (warnings only, never blocking).
-  const hub = data as Record<string, unknown>;
-  const filehubs = (Array.isArray(hub.resources) ? hub.resources : []).filter(
-    (r): r is Record<string, unknown> =>
-      !!r && typeof r === "object" && !Array.isArray(r) && r.type === "filehub",
-  );
-  if (filehubs.length === 0) {
-    warnings.push(
-      "no filehub resource registered (type=filehub); asset-ingest falls back to the degraded staging area",
-    );
-  } else {
-    for (const fh of filehubs) {
-      const ep = (Array.isArray(fh.entrypoints) ? fh.entrypoints : []).find(
-        (e): e is Record<string, unknown> =>
-          !!e && typeof e === "object" && e.kind === "path" && e.primary === true,
+  if (reads.hub.status === "ok") {
+    const local = reads.local.status === "ok" ? reads.local.value : null;
+    const effective = resolveEffectiveRegistry(reads.hub.value, local, { pathExists: existsSync });
+    const fhRoot = primaryPathForResourceType(effective, "filehub");
+    if (!fhRoot) {
+      warnings.push(
+        "no filehub resource registered (type=filehub); asset-ingest falls back to the degraded staging area",
       );
-      const fhRoot = typeof ep?.value === "string" ? ep.value : undefined;
-      if (!fhRoot) {
-        warnings.push(`${fh.id}: no primary path entrypoint`);
-        continue;
-      }
-      if (!existsSync(fhRoot)) continue; // validateHub already warns on a missing primary path
+    } else {
       const inboxDir = join(fhRoot, "_inbox");
       if (!existsSync(inboxDir) || !statSync(inboxDir).isDirectory()) {
-        warnings.push(`${fh.id}: _inbox missing: ${inboxDir}`);
+        warnings.push(`filehub: _inbox missing: ${inboxDir}`);
       } else {
         const unfiled = countFiles(inboxDir);
         if (unfiled > 0) {
           warnings.push(
-            `${fh.id}: _inbox has ${unfiled} unfiled file(s); run asset-ingest ("整理一下 inbox")`,
+            `filehub: _inbox has ${unfiled} unfiled file(s); run asset-ingest ("整理一下 inbox")`,
           );
         }
       }
-      // pending staged gbrain writes (APPLY.md) — apply when the lock frees.
       const stagedDir = join(fhRoot, ".jspace-logs");
       if (existsSync(stagedDir)) {
         const applies = readdirSync(stagedDir).filter((n) => n.endsWith(".APPLY.md"));
         if (applies.length > 0) {
           warnings.push(
-            `${fh.id}: ${applies.length} pending staged gbrain write(s) (*.APPLY.md in .jspace-logs); apply when gbrain lock frees (check jspace cron failures)`,
+            `filehub: ${applies.length} pending staged gbrain write(s) (*.APPLY.md in .jspace-logs); apply when gbrain lock frees (check jspace cron failures)`,
           );
         }
       }
@@ -179,22 +207,14 @@ export function cmdDoctor(dir: string): void {
 
 // ---- domain list ----
 export function cmdDomainList(json: boolean): void {
-  const data = loadRegistry(workbenchRoot());
-  const raw = data.domains;
-  const domains = (Array.isArray(raw) ? raw : []).filter(
-    (d): d is Record<string, unknown> => !!d && typeof d === "object",
-  );
+  const root = workbenchRoot();
+  const hub = hubOf(readWorkbenchState(root));
   if (json) {
-    const payload = domains.map((d) => ({
-      id: orD(d.id, ""),
-      path: orD(d.path, ""),
-      tags: orD(d.tags, []),
-    }));
-    console.log(JSON.stringify({ domains: payload }, null, 2));
+    console.log(JSON.stringify({ domains: hub.domains }, null, 2));
     return;
   }
-  for (const d of domains) {
-    console.log(`${d.id ?? ""}  ${d.path ?? ""}`);
+  for (const d of hub.domains) {
+    console.log(`${d.id}  ${d.path}`);
   }
 }
 
@@ -266,11 +286,17 @@ export function cmdDomainAdd(
   purposeOpt: string | undefined,
 ): void {
   const root = workbenchRoot();
-  const domainPath = pathOpt || `workspace/${domainId}`;
+  if (!isId(domainId)) {
+    fail(`invalid domain id: ${domainId} (lowercase letters, digits, and hyphens)`);
+  }
+  const domainPath = normalizePortablePath(pathOpt || `workspace/${domainId}`);
   const tags = cleanTags(tagsRaw);
   const purpose = (purposeOpt ?? "").trim() || DEFAULT_DOMAIN_PURPOSE;
 
   if (isAbsolute(domainPath)) fail("--path must be a relative path inside the workbench");
+  if (domainPath.split("/").some((s) => s === "." || s === "..")) {
+    fail(`--path must not contain . or .. segments: ${domainPath}`);
+  }
   const domainDir = resolvePath(resolve(root, domainPath));
   if (!isWithin(domainDir, root) || domainDir === root) {
     fail(`--path must resolve inside the workbench root: ${domainPath}`);
@@ -279,53 +305,39 @@ export function cmdDomainAdd(
     fail(`domain path is not a directory: ${domainPath}`);
   }
 
-  const data = loadRegistry(root);
-  if (!Array.isArray(data.domains)) fail("hub.json domains must be an array");
+  const hub = hubOf(readWorkbenchState(root));
+  if (hub.domains.some((d) => d.id === domainId)) fail(`duplicate domain id: ${domainId}`);
 
-  const { created, nearestExisting } = writeDomainSkeleton(
-    domainDir,
-    domainId,
-    purpose,
-    tags,
-  );
-  (data.domains as unknown[]).push({ id: domainId, path: domainPath, tags });
-  const errors = validateHub(data, root, []);
-  if (errors.length) {
+  const { created, nearestExisting } = writeDomainSkeleton(domainDir, domainId, purpose, tags);
+  hub.domains.push({ id: domainId, path: domainPath, ...(tags.length ? { tags } : {}) });
+  const check = decodeHub(hub);
+  if (!check.ok) {
     rollbackDomainSkeleton(domainDir, nearestExisting, created);
-    rejectErrors(errors);
+    rejectErrors(check.issues.map((i) => i.message));
   }
-
-  saveRegistry(root, data);
+  writeHubAtomic(root, hub);
   console.log(`jspace: ok: added domain: ${domainId} (${domainPath})`);
 }
 
 // ---- domain remove ----
 export function cmdDomainRemove(id: string, purge: boolean): void {
   const root = workbenchRoot();
-  const data = loadRegistry(root);
-  const domains = data.domains;
-  if (!Array.isArray(domains)) fail("hub.json domains must be an array");
-  const index = findIndex(domains, id);
+  const hub = hubOf(readWorkbenchState(root));
+  const index = findIndex(hub.domains, id);
   if (index === null) fail(`no such domain: ${id}`);
 
-  const resources = data.resources;
-  const references = (Array.isArray(resources) ? resources : [])
-    .filter(
-      (r): r is Record<string, unknown> => !!r && typeof r === "object" && r.domain === id,
-    )
-    .map((r) => (typeof r.id === "string" ? r.id : "?"));
+  const references = hub.resources.filter((r) => r.domain === id).map((r) => r.id);
   if (references.length) {
     fail(
       `domain ${id} is referenced by resources: ${references.join(", ")} (remove them first)`,
     );
   }
 
-  const domain = domains[index] as Record<string, unknown>;
-  const domainPath = typeof domain.path === "string" ? domain.path : "";
-  domains.splice(index, 1);
-  rejectErrors(validateHub(data, root, []));
-
-  saveRegistry(root, data);
+  const domain = hub.domains[index];
+  const domainPath = domain.path;
+  hub.domains.splice(index, 1);
+  assertHubValid(hub);
+  writeHubAtomic(root, hub);
 
   if (purge) {
     if (!domainPath) fail(`domain ${id} has no usable path to purge`);
@@ -343,28 +355,39 @@ export function cmdDomainRemove(id: string, purge: boolean): void {
 
 // ---- resource list ----
 export function cmdResourceList(json: boolean): void {
-  const data = loadRegistry(workbenchRoot());
-  const raw = data.resources;
-  const resources = (Array.isArray(raw) ? raw : []).filter(
-    (r): r is Record<string, unknown> => !!r && typeof r === "object",
-  );
+  const root = workbenchRoot();
+  const reads = readWorkbenchState(root);
+  const hub = hubOf(reads);
+  const local = localOf(reads);
+  const effective = resolveEffectiveRegistry(hub, local, { pathExists: existsSync });
   if (json) {
-    const payload = resources.map((r) => ({
-      id: orD(r.id, ""),
-      type: orD(r.type, ""),
-      domain: orD(r.domain, ""),
-      tags: orD(r.tags, []),
-      entrypoints: orD(r.entrypoints, []),
+    const payload = effective.resources.map((r) => ({
+      id: r.id,
+      type: r.type,
+      domain: r.domain,
+      tags: r.tags ?? [],
+      notes: r.notes ?? undefined,
+      entrypoints: r.entrypoints.map((ep) =>
+        ep.kind === "url"
+          ? { id: ep.id, kind: "url", value: ep.value }
+          : {
+              id: ep.id,
+              kind: "path",
+              binding: ep.binding,
+              primary: ep.primary ?? false,
+              resolved_path: ep.resolved_path,
+              resolution: ep.resolution,
+            },
+      ),
     }));
     console.log(JSON.stringify({ resources: payload }, null, 2));
     return;
   }
-  for (const r of resources) {
-    const entrypoints = (Array.isArray(r.entrypoints) ? r.entrypoints : [])
-      .filter((e): e is Record<string, unknown> => !!e && typeof e === "object")
-      .map((e) => e.value ?? "")
+  for (const r of effective.resources) {
+    const entrypoints = r.entrypoints
+      .map((ep) => (ep.kind === "url" ? ep.value : (ep.resolved_path ?? ep.binding)))
       .join(", ");
-    console.log(`${r.id ?? ""}  ${r.domain ?? ""}  ${entrypoints}`);
+    console.log(`${r.id}  ${r.domain}  ${entrypoints}`);
   }
 }
 
@@ -379,40 +402,77 @@ export function cmdResourceAdd(
   notes: string | undefined,
 ): void {
   const root = workbenchRoot();
-  const data = loadRegistry(root);
-  if (!Array.isArray(data.resources)) fail("hub.json resources must be an array");
-
-  const entrypoint =
-    pathOpt !== undefined
-      ? { id: "path", kind: "path", value: pathOpt, primary: true }
-      : { id: "url", kind: "url", value: urlOpt };
+  if (!isId(id)) fail(`invalid resource id: ${id} (lowercase letters, digits, and hyphens)`);
+  const reads = readWorkbenchState(root);
+  const hub = hubOf(reads);
   const resourceType = (typeOpt ?? "project").trim() || "project";
+  const tags = cleanTags(tagsRaw);
 
-  const record: Record<string, unknown> = {
-    id,
-    type: resourceType,
-    domain,
-    tags: cleanTags(tagsRaw),
-    entrypoints: [entrypoint],
-  };
+  if (!hub.domains.some((d) => d.id === domain)) fail(`no such domain: ${domain}`);
+  if (hub.resources.some((r) => r.id === id)) fail(`duplicate resource id: ${id}`);
+
+  const local = localOf(reads) ?? freshLocal();
+  let entrypoint: PathEntrypoint | UrlEntrypoint;
+  if (pathOpt !== undefined) {
+    if (!isAbsolute(pathOpt)) fail("--path must be an absolute path");
+    const bindingKey = `${id}-path`;
+    if (local.bindings[bindingKey] !== undefined) {
+      fail(`binding already exists: ${bindingKey} (remove the orphan binding first)`);
+    }
+    local.bindings[bindingKey] = pathOpt;
+    entrypoint = { id: "path", kind: "path", binding: bindingKey, primary: true };
+  } else {
+    if (urlOpt === undefined) fail("one of --path --url is required");
+    entrypoint = { id: "url", kind: "url", value: urlOpt };
+  }
+
+  const record: Resource = { id, type: resourceType, domain, tags, entrypoints: [entrypoint] };
   if (notes) record.notes = notes;
-  (data.resources as unknown[]).push(record);
-  rejectErrors(validateHub(data, root, []));
-  saveRegistry(root, data);
+  hub.resources.push(record);
+  try {
+    writeHubAndLocal(root, hub, local);
+  } catch (e) {
+    if (e instanceof PairedWriteError) fail(e.message);
+    throw e;
+  }
   console.log(`jspace: ok: added resource: ${id}`);
 }
 
 // ---- resource remove ----
 export function cmdResourceRemove(id: string): void {
   const root = workbenchRoot();
-  const data = loadRegistry(root);
-  const resources = data.resources;
-  if (!Array.isArray(resources)) fail("hub.json resources must be an array");
-  const index = findIndex(resources, id);
+  const reads = readWorkbenchState(root);
+  const hub = hubOf(reads);
+  const index = findIndex(hub.resources, id);
   if (index === null) fail(`no such resource: ${id}`);
-  resources.splice(index, 1);
-  rejectErrors(validateHub(data, root, []));
-  saveRegistry(root, data);
+
+  const removed = hub.resources[index];
+  const removedBindings = removed.entrypoints
+    .filter((ep) => ep.kind === "path")
+    .map((ep) => ep.binding);
+  hub.resources.splice(index, 1);
+  assertHubValid(hub);
+
+  const local = localOf(reads);
+  if (local) {
+    const referenced = new Set<string>();
+    for (const r of hub.resources) {
+      for (const ep of r.entrypoints) {
+        if (ep.kind === "path") referenced.add(ep.binding);
+      }
+    }
+    for (const b of removedBindings) {
+      if (!referenced.has(b)) delete local.bindings[b];
+    }
+    try {
+      writeHubAndLocal(root, hub, local);
+    } catch (e) {
+      if (e instanceof PairedWriteError) fail(e.message);
+      throw e;
+    }
+  } else {
+    writeHubAtomic(root, hub);
+  }
   console.log(`jspace: ok: removed resource: ${id}`);
 }
 
@@ -420,59 +480,58 @@ export function cmdResourceRemove(id: string): void {
 /** Register the filehub root as a type=filehub resource in the workbench at cwd. */
 function registerFilehub(root: string, domainOpt: string | undefined): void {
   const wb = workbenchRoot();
-  if (!isFile(join(wb, REGISTRY_FILE))) {
+  const reads = readWorkbenchState(wb);
+  const hub = hubOf(reads);
+  if (hub.resources.some((r) => r.type === "filehub")) {
+    const existing = hub.resources.find((r) => r.type === "filehub")!;
     fail(
-      `not a JSpace workbench: registry not found at ${join(wb, REGISTRY_FILE)} (run filehub init --register from a workbench dir, or register later with: jspace resource add filehub --type filehub --domain <domain> --path ${root})`,
-    );
-  }
-  const data = loadRegistry(wb);
-  if (!Array.isArray(data.resources)) fail("hub.json resources must be an array");
-  if (!Array.isArray(data.domains)) fail("hub.json domains must be an array");
-
-  // Single-root convention: refuse a second filehub registration.
-  const existing = data.resources.find(
-    (r): r is Record<string, unknown> =>
-      !!r && typeof r === "object" && !Array.isArray(r) && r.type === "filehub",
-  );
-  if (existing) {
-    fail(
-      `filehub already registered: ${typeof existing.id === "string" ? existing.id : "?"} (remove it first with jspace resource remove, or reuse)`,
+      `filehub already registered: ${existing.id} (remove it first with jspace resource remove, or reuse)`,
     );
   }
 
   const domain = (domainOpt ?? "files").trim() || "files";
-  if (!ID_PATTERN.test(domain)) fail(`invalid domain id: ${domain}`);
-  const domainIndex = findIndex(data.domains, domain);
-  if (domainIndex === null) {
-    const domainDir = resolve(resolve(wb, "workspace", domain));
+  if (!isId(domain)) fail(`invalid domain id: ${domain}`);
+  const domainPath = `workspace/${domain}`;
+  let created: string[] = [];
+  let nearestExisting = join(wb, "workspace");
+  if (!hub.domains.some((d) => d.id === domain)) {
+    const domainDir = resolvePath(resolve(wb, domainPath));
     if (!isWithin(domainDir, wb) || domainDir === wb) {
-      fail(`domain path must resolve inside the workbench root: workspace/${domain}`);
+      fail(`domain path must resolve inside the workbench root: ${domainPath}`);
     }
-    const { created, nearestExisting } = writeDomainSkeleton(
+    ({ created, nearestExisting } = writeDomainSkeleton(
       domainDir,
       domain,
       DEFAULT_DOMAIN_PURPOSE,
       [],
-    );
-    (data.domains as unknown[]).push({ id: domain, path: `workspace/${domain}`, tags: [] });
-    const errors = validateHub(data, wb, []);
-    if (errors.length) {
-      rollbackDomainSkeleton(domainDir, nearestExisting, created);
-      rejectErrors(errors);
-    }
+    ));
+    hub.domains.push({ id: domain, path: domainPath });
     console.log(`jspace: ok: created domain: ${domain}`);
   }
 
-  (data.resources as unknown[]).push({
+  const bindingKey = "filehub-path";
+  const local = localOf(reads) ?? freshLocal();
+  if (local.bindings[bindingKey] !== undefined) {
+    fail(`binding already exists: ${bindingKey} (remove the orphan binding first)`);
+  }
+  local.bindings[bindingKey] = root;
+  hub.resources.push({
     id: "filehub",
     type: "filehub",
     domain,
     tags: cleanTags(["assets"]),
-    entrypoints: [{ id: "path", kind: "path", value: root, primary: true }],
+    entrypoints: [{ id: "path", kind: "path", binding: bindingKey, primary: true }],
     notes: "文件管理中心(资产层本体);归位/整理见 skills/asset-ingest",
   });
-  rejectErrors(validateHub(data, wb, []));
-  saveRegistry(wb, data);
+  try {
+    writeHubAndLocal(wb, hub, local);
+  } catch (e) {
+    if (created.length) {
+      rollbackDomainSkeleton(resolve(wb, domainPath), nearestExisting, created);
+    }
+    if (e instanceof PairedWriteError) fail(e.message);
+    throw e;
+  }
   console.log(`jspace: ok: registered filehub resource (type=filehub, primary=${root})`);
 }
 
@@ -520,25 +579,19 @@ export function cmdFilehubInit(
 }
 
 // ---- inbox status ----
-/** Locate the inbox: filehub root/_inbox if registered, else the degraded
- *  staging dir (<workbench>-inbox/) next to the workbench. Mirrors the
+/** Locate the inbox: filehub root/_inbox if registered and bound, else the
+ *  degraded staging dir (<workbench>-inbox/) next to the workbench. Mirrors the
  *  asset-ingest skill's front-matter lookup. Returns null when neither exists. */
 function locateInbox(root: string): string | null {
-  const hub = loadRegistry(root) as Record<string, unknown>;
-  const filehub = (Array.isArray(hub.resources) ? hub.resources : []).find(
-    (r): r is Record<string, unknown> =>
-      !!r && typeof r === "object" && !Array.isArray(r) && r.type === "filehub",
-  );
-  if (filehub) {
-    const ep = (Array.isArray(filehub.entrypoints) ? filehub.entrypoints : []).find(
-      (e): e is Record<string, unknown> =>
-        !!e && typeof e === "object" && e.kind === "path" && e.primary === true,
-    );
-    const fhRoot = typeof ep?.value === "string" ? ep.value : undefined;
-    if (fhRoot) return join(fhRoot, "_inbox");
+  const reads = readWorkbenchState(root);
+  if (reads.hub.status !== "ok") {
+    return join(dirname(root), `${basename(root)}-inbox`);
   }
-  const staging = join(dirname(root), `${basename(root)}-inbox`);
-  return staging;
+  const local = reads.local.status === "ok" ? reads.local.value : null;
+  const effective = resolveEffectiveRegistry(reads.hub.value, local, { pathExists: existsSync });
+  const fhRoot = primaryPathForResourceType(effective, "filehub");
+  if (fhRoot) return join(fhRoot, "_inbox");
+  return join(dirname(root), `${basename(root)}-inbox`);
 }
 
 /** Read-only inbox listing (no semantic judgment). */

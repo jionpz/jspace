@@ -1,2 +1,6 @@
 # .jspace/logs/ — 执行日志(cron / asset-ingest 无头),机器噪声不进 git
 .jspace/logs/
+# .jspace/local.json — 本机状态(安装实例 id + 路径绑定),不进 git
+.jspace/local.json
+# .jspace/state/ — 运行时状态槽(预留;cron 结构化状态等),不进 git
+.jspace/state/

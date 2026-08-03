@@ -1,11 +1,15 @@
 // cli/init.ts — `jspace init` (mirrors Python cmd_init + _materialize_placeholders).
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fail } from "./errors.ts";
 import { devRoot, expandTilde, isCompiled, materializeTree } from "./embed.ts";
 import { resolvePath } from "./paths.ts";
+import { MARKER_FILE } from "../core/contracts/files.ts";
+export { MARKER_FILE };
+import { writeLocalAtomic, writeMarkerAtomic } from "../adapters/fs/workbench-state.ts";
+import type { LocalStateV1 } from "../core/contracts/local.ts";
+import type { WorkbenchMarkerV1 } from "../core/contracts/workbench.ts";
 
-export const MARKER_FILE = ".jspace/marker.json";
 export const CONFIG_DIR = ".jspace";
 import { VERSION } from "./version.generated.ts";
 
@@ -45,13 +49,25 @@ export function cmdInit(targetArg: string | undefined, force: boolean): void {
   // gen-assets only materializes files, so an empty dir must be created here.
   mkdirSync(join(target, CONFIG_DIR, "logs"), { recursive: true });
 
-  const marker = {
+  // Portable marker v1: logical workbench identity + template provenance. The
+  // legacy `source` field (dev-repo absolute path) is deliberately gone.
+  const marker: WorkbenchMarkerV1 = {
+    schema_version: 1,
     product: "JSpace",
+    workbench_id: crypto.randomUUID(),
     template_version: VERSION,
     created_at: localDate(),
-    source: devRoot(),
   };
-  writeFileSync(join(target, MARKER_FILE), JSON.stringify(marker, null, 2) + "\n", "utf-8");
+  writeMarkerAtomic(target, marker);
+
+  // Machine-local state v1 (gitignored): this machine's installation identity
+  // and path bindings. Fresh workbenches start with no bindings.
+  const local: LocalStateV1 = {
+    version: 1,
+    installation_id: crypto.randomUUID(),
+    bindings: {},
+  };
+  writeLocalAtomic(target, local);
 
   console.log(`Initialized JSpace workbench at ${target}`);
   // D4 (owner-confirmed): workbench references the `jspace` command on PATH;

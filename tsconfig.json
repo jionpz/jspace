@@ -10,5 +10,5 @@
     "strict": true,
     "noEmit": true
   },
-  "include": ["cli/**/*.ts", "scripts/**/*.ts"]
+  "include": ["cli/**/*.ts", "scripts/**/*.ts", "core/**/*.ts", "adapters/**/*.ts"]
 }
