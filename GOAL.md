@@ -80,8 +80,8 @@
 - **M1 ✅** 注册表可维护（R3 domain/resource 增删查 + R8 模板修正）——M2 的地基：文件管理中心经 `jspace resource add` / `filehub init --register` 注册。
 - **M2 ✅** 资产层最小协议：`filehub init` 骨架 + `type: filehub` 注册 + inbox 批量整理 skill（两遍式 / 人工调整 / cron 可驱动）+ 域↔项目挂接规则 + bootstrap 文件中心引导。先定协议，历史才会整齐。
   - 待真实环境验证：① 示例资料「入库→gbrain 页→中文召回」端到端（live gbrain）；② 双机重建冒烟（见开放问题 #1）。
-- **M3 ✅** cron MVP（R4）：`.jspace/cron.json` 声明式定义 + `jspace cron install`（macOS launchd，一 cron 一 plist）+ `cron run` 无头执行（argv 安全 + 权限白名单 + flock 互斥）+ 失败可见性（cron-failed + doctor 摘要 + status）。首批任务：inbox-tidy（旗舰，驱动 M2 无头批量，每日 21:00 已装）。
-  - 待真实环境验证：`jspace cron run inbox-tidy` 端到端跑通（真实 gbrain + 批量日志追加）后再依赖。
+- **M3 ✅** cron MVP（R4）：`.jspace/cron.json` 声明式定义 + `jspace cron install` + `cron run` 无头执行（argv 安全 + 权限白名单 + flock 互斥）+ 失败可见性（cron-failed + doctor 摘要 + status）。**跨平台调度后端**：macOS launchd / Linux crontab / Windows schtasks（一 cron 一任务，`--dir` 显式传 root，win 进程树杀）。首批任务：inbox-tidy（旗舰，驱动 M2 无头批量，每日 21:00）。纯函数单测 + 验证矩阵见 `docs/PLATFORMS.md`。
+  - 待真实环境验证：`jspace cron run inbox-tidy` 端到端跑通后再依赖；Linux/Windows 真机验证待 CI 解锁。
 - **M4 ⏳ 当前任务** 记忆精度打磨：实体/归属 slug 规范、端到端验收（"问一句，找到那个文件里的那个数"）。weekly-report / memory-consolidate 待此解锁。
 - **M4** 记忆精度打磨：实体/归属规范、端到端验收（"问一句，找到那个文件里的那个数"）。
 - **M5** 分发（R7）：模板去个人化、打包安装、多机演练。
