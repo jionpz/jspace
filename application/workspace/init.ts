@@ -48,8 +48,12 @@ export function initWorkbench(
   if (existsSync(target) && readdirSync(target).length > 0 && !force) {
     fail(`target directory is not empty: ${target} (use --force to initialize anyway)`);
   }
-  if (existsSync(join(target, MARKER_FILE)) && !force) {
-    fail(`target is already a JSpace workbench: ${target}`);
+  // init only creates new workbenches. An initialized workbench is never
+  // re-materialized here — even with --force — because upgrade owns that path
+  // (ownership + journal + rollback). --force still allows initializing into a
+  // non-empty directory that is not a JSpace workbench.
+  if (existsSync(join(target, MARKER_FILE))) {
+    fail(`target is already a JSpace workbench: ${target} (use jspace workspace upgrade to update it)`);
   }
   // Legacy-layout residue guard: refuse to silently produce a double registry
   // (root hub.json/.jspace.json leftover next to the new .jspace/ layout).

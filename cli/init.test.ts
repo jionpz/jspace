@@ -145,3 +145,11 @@ test("cloned workbench without local.json reports local missing and unbound bind
   expect(codes).toContain("binding.unbound");
   rmSync(root, { recursive: true, force: true });
 });
+
+test("init --force refuses an already-initialized workbench (upgrade path)", () => {
+  const root = mkdtempSync(join(tmpdir(), "jspace-init-force-"));
+  init(root);
+  // even --force must not re-materialize over an initialized workbench
+  expect(() => init(root, true)).toThrow(/already a JSpace workbench/);
+  rmSync(root, { recursive: true, force: true });
+});
