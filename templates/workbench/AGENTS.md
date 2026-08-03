@@ -108,6 +108,7 @@ Do not create a skill for one-off notes, simple domain metadata, coding conventi
 Approved workbench skills (copied in by `jspace init`):
 - `jspace-bootstrap` - first-time setup: verify the registry, bootstrap the gbrain memory base, and wire harnesses. Use it when the user asks to initialize or configure this workbench.
 - `asset-ingest` - ingest work material (books, pdf/ppt/txt, excel, reports) into the file hub and gbrain as searchable knowledge assets. Use it when the user asks to file a document, tidy the inbox, or turn a resource into knowledge.
+- `memory-recall` - read-side precise recall: answer "问一句" by semantic query → verify top-1 → pointer assertion chain → open the file and cite the source. Use it when the user asks a question that needs a fact out of the file hub / gbrain (find the file, that number).
 
 ## Durable Knowledge Routing
 
@@ -168,6 +169,7 @@ gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbr
 
 - **jspace-bootstrap**: initialize jspace | setup jspace | configure jspace | first-use jspace | workbench broken | registry broken | gbrain missing | wire gbrain | fresh environment
 - **asset-ingest**: 资料入库 | 整理 inbox | 归位资料 | 把这份资料入库
+- **memory-recall**: 问一句 | 找那个文件 | 那个数 | 精准召回 | 帮我找 | recall | find the file
 
 ## Quality Checks
 
