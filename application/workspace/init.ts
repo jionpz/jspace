@@ -15,6 +15,8 @@ import type { LocalStateV1 } from "../../core/contracts/local.ts";
 import type { WorkbenchMarkerV1 } from "../../core/contracts/workbench.ts";
 import { VERSION } from "../../cli/version.generated.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
+import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
+import { writeActualMaterializedJournal } from "./journal.ts";
 export { CONFIG_DIR };
 
 export interface InitDeps {
@@ -24,6 +26,8 @@ export interface InitDeps {
   devRoot: () => string;
   /** Materialize the embedded workbench template + skills into target. */
   materialize: (target: string, devRootStr: string) => void;
+  /** Bundle manifest, used to seed the materialization journal. */
+  manifest: DistributionManifestV1;
 }
 
 /** Local calendar date YYYY-MM-DD (Python date.today().isoformat(); toISOString is UTC). */
@@ -81,6 +85,10 @@ export function initWorkbench(
     bindings: {},
   };
   writeLocalAtomic(target, local);
+
+  // Materialization journal: records the actual hashes of every materialized
+  // file so workspace diff knows the applied base (gitignored, machine truth).
+  writeActualMaterializedJournal(target, deps.manifest);
 
   const validateCmd = deps.isCompiled() ? "jspace" : join(deps.devRoot(), "bin", "jspace");
   return {

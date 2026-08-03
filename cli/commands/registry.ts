@@ -7,6 +7,7 @@
 import type { CommandSpec } from "../../application/commands/command.ts";
 import { initWorkbench } from "../../application/workspace/init.ts";
 import { doctorWorkbench } from "../../application/workspace/doctor.ts";
+import { workspaceDiff, workspaceUpgrade } from "../../application/workspace/workspace.ts";
 import { domainAdd, domainList, domainRemove } from "../../application/registry/domain.ts";
 import {
   resourceAdd,
@@ -17,6 +18,10 @@ import { filehubInit } from "../../application/registry/filehub.ts";
 import { inboxStatus } from "../../application/registry/inbox.ts";
 import { expandTilde, filehubReadme, isCompiled, devRoot, materializeTree } from "../embed.ts";
 import { resolvePath } from "../paths.ts";
+import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
+import { readFileSync } from "node:fs";
+import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
+import { ASSETS } from "../assets.generated.ts";
 import {
   cmdCronAdd,
   cmdCronFailures,
@@ -36,6 +41,15 @@ import { cmdUpdate } from "../update.ts";
 const s = (v: unknown): string => (typeof v === "string" ? v : "");
 const b = (v: unknown): boolean => v === true;
 
+const cronDeps = { loadCrons, parseSchedule, installedCronIds, linuxCronHealth };
+const readFileOrNull = (p: string): string | null => {
+  try {
+    return readFileSync(p, "utf-8");
+  } catch {
+    return null;
+  }
+};
+
 const initSpec: CommandSpec = {
   name: "init",
   summary: "initialize a new JSpace workbench in a target directory",
@@ -48,6 +62,7 @@ const initSpec: CommandSpec = {
       isCompiled,
       devRoot,
       materialize: materializeTree,
+      manifest: BUNDLE_MANIFEST,
     }),
 };
 
@@ -55,13 +70,7 @@ const doctorSpec: CommandSpec = {
   name: "doctor",
   summary: "validate an existing JSpace workbench registry",
   features: { dir: true },
-  handler: (ctx) =>
-    doctorWorkbench(ctx.root, {
-      loadCrons,
-      parseSchedule,
-      installedCronIds,
-      linuxCronHealth,
-    }),
+  handler: (ctx) => doctorWorkbench(ctx.root, cronDeps),
 };
 
 const domainListSpec: CommandSpec = {
@@ -334,6 +343,52 @@ const updateSpec: CommandSpec = {
   },
 };
 
+const workspaceDiffSpec: CommandSpec = {
+  name: "diff",
+  summary: "show differences between the workbench and the running bundle",
+  features: { dir: true, json: true },
+  handler: (ctx, args) => workspaceDiff(ctx.root, BUNDLE_MANIFEST, b(args.json)),
+};
+
+const workspaceUpgradeSpec: CommandSpec = {
+  name: "upgrade",
+  summary: "upgrade the workbench to the running bundle (plan + journal + rollback)",
+  features: { dir: true, dryRun: true },
+  options: [
+    { name: "--accept-conflicts", dest: "acceptConflicts", takesValue: false, help: "overwrite locally modified managed files" },
+    { name: "--rollback", takesValue: true, metavar: "ID", help: "restore a previous upgrade from its journal" },
+  ],
+  handler: (ctx, args) => {
+    const result = workspaceUpgrade(
+      ctx.root,
+      {
+        dryRun: b(args.dryRun),
+        acceptConflicts: b(args.acceptConflicts),
+        rollbackId: s(args.rollback) || undefined,
+      },
+      { manifest: BUNDLE_MANIFEST, assets: ASSETS, readFile: readFileOrNull, writeFile: (p, c) => writeBytesAtomic(p, c) },
+    );
+    // dry-run is a preview, rollback restores a historical state: neither
+    // should run the follow-up doctor (both can report transient mismatches)
+    if (result.exitCode || b(args.dryRun) || s(args.rollback)) return result;
+    const doctor = doctorWorkbench(ctx.root, cronDeps);
+    return {
+      ...result,
+      lines: [...result.lines, ...doctor.lines],
+      warnings: doctor.warnings,
+      errors: doctor.errors,
+      exitCode: doctor.exitCode,
+    };
+  },
+};
+
+const workspaceSpec: CommandSpec = {
+  name: "workspace",
+  summary: "inspect and upgrade the workbench",
+  commandArgName: "workspace_command",
+  children: [workspaceDiffSpec, workspaceUpgradeSpec],
+};
+
 export const COMMANDS: CommandSpec[] = [
   initSpec,
   doctorSpec,
@@ -343,4 +398,5 @@ export const COMMANDS: CommandSpec[] = [
   inboxSpec,
   cronSpec,
   updateSpec,
+  workspaceSpec,
 ];

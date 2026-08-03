@@ -8,11 +8,12 @@ import { initWorkbench } from "../workspace/init.ts";
 import { loadHub } from "../workspace/state.ts";
 import { devRoot, expandTilde, isCompiled, materializeTree } from "../../cli/embed.ts";
 import { resolvePath } from "../../cli/paths.ts";
+import { BUNDLE_MANIFEST } from "../../cli/manifest.generated.ts";
 import { domainAdd, domainList, domainRemove } from "./domain.ts";
 import { inboxStatus } from "./inbox.ts";
 import { resourceAdd, resourceList, resourceRemove } from "./resource.ts";
 
-const initDeps = { resolvePath, expandTilde, isCompiled, devRoot, materialize: materializeTree };
+const initDeps = { resolvePath, expandTilde, isCompiled, devRoot, materialize: materializeTree, manifest: BUNDLE_MANIFEST };
 
 let root: string;
 beforeEach(() => {

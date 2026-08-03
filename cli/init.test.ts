@@ -21,9 +21,10 @@ import { decodeMarker } from "../core/contracts/workbench.ts";
 import { inspectWorkbench, type InspectEnv } from "../core/registry/inspect.ts";
 import { devRoot, expandTilde, isCompiled, materializeTree } from "./embed.ts";
 import { initWorkbench } from "../application/workspace/init.ts";
+import { BUNDLE_MANIFEST } from "./manifest.generated.ts";
 import { resolvePath } from "./paths.ts";
 
-const initDeps = { resolvePath, expandTilde, isCompiled, devRoot, materialize: materializeTree };
+const initDeps = { resolvePath, expandTilde, isCompiled, devRoot, materialize: materializeTree, manifest: BUNDLE_MANIFEST };
 function init(root: string, force = false): void {
   initWorkbench(root, force, initDeps);
 }
