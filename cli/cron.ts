@@ -495,7 +495,8 @@ function harnessArgv(harness: string, prompt: string): string[] {
     case "claude":
       // Permission whitelist for the batch needs: Bash/Read/Write/Edit + gbrain MCP.
       // NEVER bypassPermissions — cron is unattended.
-      return [bin, "-p", prompt, "--output-format", "text", "--allowedTools", "Bash,Read,Write,Edit,gbrain:*"];
+      // MCP allow-rule syntax: literal `mcp__<server>__` prefix then glob tool name.
+      return [bin, "-p", prompt, "--output-format", "text", "--allowedTools", "Bash,Read,Write,Edit,mcp__gbrain__*"];
     case "codex":
       return [bin, "exec", prompt];
     case "pi":
