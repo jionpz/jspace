@@ -90,6 +90,6 @@
 ## 开放问题
 
 1. **gbrain 多机**："同一份记忆"依赖文本规范源假设——**已于 M5 关闭（2026-08-03，本机模拟双机）**：A export → B import 重建 + embedding 重建 + 中文召回 top-1 与 A 一致 + 指针换机解析成立（`rel_path` 相对 filehub 根）。结论：假设成立、双字段指针采用；**真实第二机演练待实际使用**（本机模拟效力有限：同机/同 OS/同 embedding 可达；新机 setup 教训=init 即配 embedding）。图谱边/backlink 保留未验证（本语料无互链，边以正文 wikilink 承载）。
-2. **文件管理中心选址与存量迁移**：根目录放哪（本地盘 / 网盘目录）；既有资料一次性搬还是增量收编（建议增量：新东西一律走 inbox，旧的按项目按需收编）。
+2. **文件管理中心选址与存量迁移**——**已闭合（2026-08-03）**：根=本地盘 `/Users/jionpz/filehub`（每机一个根，注册进 hub.json 的 `type: filehub` resource primary path）；同步策略=内容走网盘/Obsidian Sync（重资产不进 git），根目录本身可由网盘同步或暂不同步，换机按「目标机根 + rel_path」重解析（M5 已验证）；存量收编=增量（新走 inbox，旧按项目/领域按需），runbook 见 `skills/asset-ingest/references/migration.md`；真实使用时代入 runbook 验证。
 3. **无头执行的运维**：账号/配额、失败通知（cron 任务挂了如何被发现——最低方案：执行日志落文件中心 + 下次会话检查）。
-4. **office 文件解析深度**：excel/ppt 先"摘要 + 指针"，按真实召回需求再加深（如逐表抽取）。
+4. **office 文件解析深度**——**已闭合（2026-08-03，#4 深度抽取交付）**：零依赖抽取器 `skills/asset-ingest/scripts/office-extract.py`（xlsx 逐表 / pptx 逐页，幻影行过滤 + 每 sheet 行数上限），深度路径=伴生 `.extract.md` 落 asset 层 + 页内 Key Facts 策展（含关键数字 + 引文）；端到端验收 top-1（某期跟进登记表，关键数字 12800 命中）。细则 `references/deep-extract.md`；可复跑协议 `docs/MEMORY-ACCEPTANCE.md`「office 深度抽取扩展(#4)」。

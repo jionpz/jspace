@@ -98,4 +98,5 @@ triggers:
 - `references/gbrain-write.md` — 入脑模板 + slug 派生 + embedding 降级 + type 纪律
 - `references/batch.md` — 批量模式细则(两遍式、幂等、日志、无头)
 - `references/deep-extract.md` — excel/ppt 深度抽取(逐表/逐页 + 伴生 .extract.md + 策展纪律)
+- `references/migration.md` — 存量旧资料按需收编 runbook(增量,复用本 skill 纪律)
 - `scripts/office-extract.py` — 零依赖抽取器(python3 stdlib);`scripts/office-extract.test.py` 自测
