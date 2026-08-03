@@ -8,7 +8,7 @@ import { fail, rejectErrors } from "./errors.ts";
 import { devRoot, expandTilde, isCompiled } from "./embed.ts";
 import { isFile, resolvePath } from "./paths.ts";
 import { CONFIG_DIR } from "./init.ts";
-import { findIndex, ID_PATTERN, workbenchRoot } from "./registry.ts";
+import { findIndex, ID_PATTERN, loadRegistry, workbenchRoot } from "./registry.ts";
 
 export const CRON_FILE = join(CONFIG_DIR, "cron.json");
 const HARNESSES = ["claude", "codex", "pi"] as const;
@@ -677,4 +677,102 @@ export function cmdCronStatus(id?: string): void {
     const t = /^time: (.+)$/m.exec(content);
     console.log(`${cid}: ${st?.[1] ?? "?"} (exit ${ex?.[1] ?? "?"}, ${t?.[1] ?? "?"}) log ${join(dir, last)}`);
   }
+}
+
+// ---- cron failures (session-start check surface) ----
+
+/** Read cron-failed.md lines (missing/empty file → []). */
+export function readCronFailed(root: string): string[] {
+  const p = join(root, ".jspace", "logs", "cron-failed.md");
+  if (!isFile(p)) return [];
+  return readFileSync(p, "utf-8").split("\n").filter((l) => l.trim().length > 0);
+}
+
+/** Last recorded status for a cron id (ok|suspect|failed), or null if never run. */
+export function lastStatusFor(root: string, id: string): string | null {
+  const dir = cronLogDir(root, id);
+  if (!existsSync(dir)) return null;
+  const last = readdirSync(dir).filter((n) => n.endsWith(".md")).sort().pop();
+  if (!last) return null;
+  const st = /^status: (.+)$/m.exec(readFileSync(join(dir, last), "utf-8"));
+  return st?.[1] ?? null;
+}
+
+/** Resolve filehub root from hub.json (type:filehub, primary path), or null if unregistered. */
+export function filehubRoot(root: string): string | null {
+  let hub: Record<string, unknown>;
+  try {
+    hub = loadRegistry(root);
+  } catch {
+    return null; // registry missing/unreadable → skip pending scan
+  }
+  const resources = hub.resources;
+  if (!Array.isArray(resources)) return null;
+  for (const r of resources) {
+    if (!r || typeof r !== "object") continue;
+    const rec = r as Record<string, unknown>;
+    if (rec.type !== "filehub") continue;
+    const eps = rec.entrypoints;
+    if (!Array.isArray(eps)) continue;
+    for (const ep of eps) {
+      if (!ep || typeof ep !== "object") continue;
+      const e = ep as Record<string, unknown>;
+      if (e.primary === true && e.kind === "path" && typeof e.value === "string") return e.value;
+    }
+  }
+  return null;
+}
+
+/** Find pending staged gbrain writes: <filehub>/.jspace-logs/*.APPLY.md. */
+export function findPendingApplies(root: string): { root: string | null; paths: string[] } {
+  const fh = filehubRoot(root);
+  if (!fh) return { root: null, paths: [] };
+  const dir = join(fh, ".jspace-logs");
+  if (!existsSync(dir)) return { root: fh, paths: [] };
+  const paths = readdirSync(dir).filter((n) => n.endsWith(".APPLY.md")).sort().map((n) => join(dir, n));
+  return { root: fh, paths };
+}
+
+/**
+ * `jspace cron failures [--json]` / `jspace cron check [--json]` — one-place
+ * session-start surface: recent failures + pending staged gbrain writes +
+ * per-cron status. Exit 1 when anything needs attention (for hooks/scripts).
+ */
+export function cmdCronFailures(json: boolean, root?: string): void {
+  const wb = root ?? workbenchRoot();
+  const ids = loadCrons(wb).crons.map((c) => c.id);
+
+  const failures = readCronFailed(wb);
+  const pending = findPendingApplies(wb);
+  const crons = ids.map((id) => ({ id, status: lastStatusFor(wb, id) ?? "never run" }));
+  const failed = crons.filter((c) => c.status === "failed").length;
+  const suspect = crons.filter((c) => c.status === "suspect").length;
+  const neverRun = crons.filter((c) => c.status === "never run").length;
+  const needsAttention = failures.length + failed + suspect + pending.paths.length;
+
+  if (json) {
+    console.log(JSON.stringify({
+      failures: failures.map((line) => ({ line })),
+      pending_applies: pending.paths,
+      crons,
+      summary: {
+        failures: failures.length,
+        failed,
+        suspect,
+        never_run: neverRun,
+        pending_applies: pending.paths.length,
+        needs_attention: needsAttention,
+      },
+    }));
+  } else {
+    console.log("jspace: cron failures");
+    console.log(`failures: (${failures.length})`);
+    for (const line of failures) console.log(`  ${line}`);
+    console.log(`pending gbrain writes (APPLY.md): (${pending.paths.length})`);
+    for (const p of pending.paths) console.log(`  ${p}`);
+    console.log("cron status:");
+    for (const c of crons) console.log(`  ${c.id}: ${c.status}`);
+    console.log(`needs_attention: ${needsAttention}`);
+  }
+  process.exitCode = needsAttention > 0 ? 1 : 0;
 }

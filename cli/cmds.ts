@@ -115,6 +115,16 @@ export function cmdDoctor(dir: string): void {
           );
         }
       }
+      // pending staged gbrain writes (APPLY.md) — apply when the lock frees.
+      const stagedDir = join(fhRoot, ".jspace-logs");
+      if (existsSync(stagedDir)) {
+        const applies = readdirSync(stagedDir).filter((n) => n.endsWith(".APPLY.md"));
+        if (applies.length > 0) {
+          warnings.push(
+            `${fh.id}: ${applies.length} pending staged gbrain write(s) (*.APPLY.md in .jspace-logs); apply when gbrain lock frees (check jspace cron failures)`,
+          );
+        }
+      }
     }
   }
 

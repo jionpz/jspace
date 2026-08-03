@@ -3,7 +3,7 @@
 // messages and exit code 2.
 import { cmdInit } from "./init.ts";
 import { cmdDoctor, cmdDomainList, cmdDomainAdd, cmdDomainRemove, cmdResourceList, cmdResourceAdd, cmdResourceRemove, cmdFilehubInit, cmdInboxStatus } from "./cmds.ts";
-import { cmdCronAdd, cmdCronList, cmdCronRemove, cmdCronInstall, cmdCronUninstall, cmdCronRun, cmdCronStatus } from "./cron.ts";
+import { cmdCronAdd, cmdCronList, cmdCronRemove, cmdCronInstall, cmdCronUninstall, cmdCronRun, cmdCronStatus, cmdCronFailures } from "./cron.ts";
 import { cmdUpdate } from "./update.ts";
 
 export { VERSION } from "./version.generated.ts";
@@ -23,7 +23,7 @@ const DOMAIN_CHOICES = ["list", "add", "remove"];
 const RESOURCE_CHOICES = ["list", "add", "remove"];
 const FILEHUB_CHOICES = ["init"];
 const INBOX_CHOICES = ["status"];
-const CRON_CHOICES = ["add", "list", "remove", "install", "uninstall", "run", "status"];
+const CRON_CHOICES = ["add", "list", "remove", "install", "uninstall", "run", "status", "failures", "check"];
 
 const TOP = "jspace";
 const P_INIT = "jspace init";
@@ -48,6 +48,8 @@ const P_CRON_INSTALL = "jspace cron install";
 const P_CRON_UNINSTALL = "jspace cron uninstall";
 const P_CRON_RUN = "jspace cron run";
 const P_CRON_STATUS = "jspace cron status";
+const P_CRON_FAILURES = "jspace cron failures";
+const P_CRON_CHECK = "jspace cron check";
 const P_UPDATE = "jspace update";
 
 const TOP_HELP = `usage: jspace [-h] [--version] {init,doctor,domain,resource,filehub,inbox,cron,update} ...
@@ -199,10 +201,10 @@ options:
   -h, --help  show this help message and exit
   --json      output JSON`;
 
-const CRON_HELP = `usage: jspace cron [-h] {add,list,remove,install,uninstall,run,status} ...
+const CRON_HELP = `usage: jspace cron [-h] {add,list,remove,install,uninstall,run,status,failures,check} ...
 
 positional arguments:
-  {add,list,remove,install,uninstall,run,status}
+  {add,list,remove,install,uninstall,run,status,failures,check}
     add                add a cron definition
     list               list cron definitions
     remove             remove a cron definition
@@ -210,6 +212,7 @@ positional arguments:
     uninstall          remove installed launchd agents
     run                run a cron headlessly now
     status             show last run result
+    failures           show recent failures + pending staged writes (alias: check)
 
 options:
   -h, --help  show this help message and exit`;
@@ -271,6 +274,16 @@ positional arguments:
 
 options:
   -h, --help  show this help message and exit`;
+
+const CRON_FAILURES_HELP = `usage: jspace cron failures [-h] [--json]
+                        (alias: jspace cron check [-h] [--json])
+
+One-place session-start surface: recent failures + pending staged gbrain
+writes (APPLY.md) + per-cron status. Exit 1 when anything needs attention.
+
+options:
+  -h, --help  show this help message and exit
+  --json      output JSON`;
 
 const UPDATE_HELP = `usage: jspace update [-h] [--check] [--version VERSION]
 
@@ -740,6 +753,15 @@ function parseCron(argv: string[]): Invocation {
       if (c.help) return help(CRON_STATUS_HELP);
       if (c.positionals.length > 1) extraPositional(u, c.positionals.slice(1));
       return { action: "run", run: (v) => cmdCronStatus(v.id as string | undefined), values: { id: c.positionals[0] } };
+    }
+    case "failures":
+    case "check": {
+      const prog = sub === "check" ? P_CRON_CHECK : P_CRON_FAILURES;
+      const u = usageBlock(CRON_FAILURES_HELP);
+      const c = collect(rest, u, prog, [{ name: "--json", takesValue: false }]);
+      if (c.help) return help(CRON_FAILURES_HELP);
+      if (c.positionals.length > 0) extraPositional(u, c.positionals);
+      return { action: "run", run: (v) => cmdCronFailures(!!v.json), values: { json: !!c.flags.get("--json")?.length } };
     }
   }
   throw new Error("unreachable");
