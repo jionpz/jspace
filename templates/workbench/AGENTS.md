@@ -109,6 +109,7 @@ Approved workbench skills (copied in by `jspace init`):
 - `jspace-bootstrap` - first-time setup: verify the registry, bootstrap the gbrain memory base, and wire harnesses. Use it when the user asks to initialize or configure this workbench.
 - `asset-ingest` - ingest work material (books, pdf/ppt/txt, excel, reports) into the file hub and gbrain as searchable knowledge assets. Use it when the user asks to file a document, tidy the inbox, or turn a resource into knowledge.
 - `memory-recall` - read-side precise recall: answer "问一句" by semantic query → verify top-1 → pointer assertion chain → open the file and cite the source. Use it when the user asks a question that needs a fact out of the file hub / gbrain (find the file, that number).
+- `memory-writeback` - end-of-session memory write-back: scan for durable session facts → classify (state/knowledge/snapshot) → write to gbrain per discipline (state fixed-slug overwrite / knowledge append-only / promotion). Use it at 收工 / session end to persist progress, decisions, and lessons.
 
 ## Durable Knowledge Routing
 
@@ -150,14 +151,7 @@ Can proceed with explanation:
 
 ## End-of-Work Capture
 
-Before finishing a work session, quietly check whether anything should be preserved:
-
-- Durable domain/resource fact.
-- Rule that future agents should follow.
-- Repeated workflow for a domain runbook.
-- Candidate reusable skill.
-
-If nothing durable was learned, do not mention the check. If something should be preserved, briefly explain what, where, why, and whether confirmation is needed.
+Before finishing a work session, quietly check whether anything should be preserved (durable domain/resource fact, rule for future agents, repeated workflow, candidate skill). **When something durable was learned, run `memory-writeback` skill to persist it to gbrain** (session-fact write-back: state 覆盖 / knowledge append-only / promotion). If nothing durable was learned, do not mention the check.
 
 ## Scheduled Tasks (cron)
 
@@ -170,6 +164,7 @@ gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbr
 - **jspace-bootstrap**: initialize jspace | setup jspace | configure jspace | first-use jspace | workbench broken | registry broken | gbrain missing | wire gbrain | fresh environment
 - **asset-ingest**: 资料入库 | 整理 inbox | 归位资料 | 把这份资料入库
 - **memory-recall**: 问一句 | 找那个文件 | 那个数 | 精准召回 | 帮我找 | recall | find the file
+- **memory-writeback**: 收工 | 写回记忆 | 记一下本次进展 | 本次进展 | end of work | session end | writeback
 
 ## Quality Checks
 
