@@ -160,7 +160,7 @@ If nothing durable was learned, do not mention the check. If something should be
 
 ## Scheduled Tasks (cron)
 
-Cron definitions live in `.jspace/cron.json` (declarative: schedule + harness + prompt) and install into macOS launchd via `jspace cron install` (one LaunchAgent per cron). **At session start, check `jspace cron status` and `.jspace/logs/cron-failed.md`; report any failures to the user.** Cron definitions are treated as code (git-synced) — review changes before applying. `weekly-report` / `memory-consolidate` ship disabled pending M4 (memory precision) and output contracts.
+Cron definitions live in `.jspace/cron.json` (declarative: schedule + harness + prompt) and install into macOS launchd via `jspace cron install` (one LaunchAgent per cron). **At session start, check `jspace cron status` and `.jspace/logs/cron-failed.md`; report any failures to the user.** Cron definitions are treated as code (git-synced) — review changes before applying. `weekly-report` / `memory-consolidate` ship `enabled: true` with self-contained output contracts in their prompts (weekly-report → `<filehub>/areas/周报/<YYYY-MM-DD>-周报.md` + gbrain `assets/周报/<YYYY-MM-DD>`; memory-consolidate → gbrain `memory/consolidate/<YYYY-MM-DD>` + state-page write-back). Before the machine-side `jspace cron install`, run each task once via `jspace cron run` to verify the contract (rehearsal gate).
 
 ## Brain operations
 

@@ -2,7 +2,7 @@
 
 > 本文件是整个项目的**最高对齐物**：所有 PRD、任务拆分、范围取舍、暂缓决策都向它对齐。
 > 根 `AGENTS.md` 的 Product Vision 是它的操作摘要；两者冲突时以本文件为准，并同步修订。
-> 最后更新：2026-08-02。决策留痕见当期任务 PRD 的 Key Decisions。
+> 最后更新：2026-08-03。决策留痕见当期任务 PRD 的 Key Decisions。
 
 ## 一句话终局
 
@@ -79,11 +79,11 @@
 - **M0 ✅** 工作台可生成、可校验（`init` / `doctor`）。
 - **M1 ✅** 注册表可维护（R3 domain/resource 增删查 + R8 模板修正）——M2 的地基：文件管理中心经 `jspace resource add` / `filehub init --register` 注册。
 - **M2 ✅** 资产层最小协议：`filehub init` 骨架 + `type: filehub` 注册 + inbox 批量整理 skill（两遍式 / 人工调整 / cron 可驱动）+ 域↔项目挂接规则 + bootstrap 文件中心引导。先定协议，历史才会整齐。
-  - 待真实环境验证：① 示例资料「入库→gbrain 页→中文召回」端到端（live gbrain）；② 双机重建冒烟（见开放问题 #1）。
+  - 待真实环境验证：① 示例资料「入库→gbrain 页→中文召回」端到端（live gbrain）——**已于 M4 验证通过**（2026-08-03，见 M4）；② 双机重建冒烟（见开放问题 #1，重排至 M5）。
 - **M3 ✅** cron MVP（R4）：`.jspace/cron.json` 声明式定义 + `jspace cron install` + `cron run` 无头执行（argv 安全 + 权限白名单 + flock 互斥）+ 失败可见性（cron-failed + doctor 摘要 + status）。**跨平台调度后端**：macOS launchd / Linux crontab / Windows schtasks（一 cron 一任务，`--dir` 显式传 root，win 进程树杀）。首批任务：inbox-tidy（旗舰，驱动 M2 无头批量，每日 21:00）。纯函数单测 + 验证矩阵见 `docs/PLATFORMS.md`。
   - 待真实环境验证：`jspace cron run inbox-tidy` 端到端跑通后再依赖；Linux/Windows 真机验证待 CI 解锁。
-- **M4 ⏳ 当前任务** 记忆精度打磨：实体/归属 slug 规范、端到端验收（"问一句，找到那个文件里的那个数"）。weekly-report / memory-consolidate 待此解锁。
-- **M4** 记忆精度打磨：实体/归属规范、端到端验收（"问一句，找到那个文件里的那个数"）。
+- **M4 ✅** 记忆精度打磨：校准召回 + 端到端验收（"问一句，找到那个文件里的那个数"；不重设 M2 已锁 slug 骨架）。示例环境验收通过（2026-08-03：2 份示例资料经 asset-ingest 入库→gbrain reference 页→四条中文语义查询含语义变体/负对照/×3 重跑/search·query 双路径全 top-1 + 指针定位「12800 / 示例值」）。weekly-report / memory-consolidate 契约解锁（模板 `enabled: true`，契约内联 prompt；gbrain.md 新增 dated memory record 周快照纪律）。可复跑验收协议见 `docs/MEMORY-ACCEPTANCE.md`。
+  - 待真实使用验证：机器端 `jspace cron install` 与首次 `cron run`（install 前 rehearsal gate）；语料增长后按 `docs/MEMORY-ACCEPTANCE.md` 复跑协议。
 - **M5** 分发（R7）：模板去个人化、打包安装、多机演练。
 - 顺序理由：cron 的第一批任务操作资产层，故 M2 在 M3 前；里程碑随真实使用可重排，重排时更新本文件。
 

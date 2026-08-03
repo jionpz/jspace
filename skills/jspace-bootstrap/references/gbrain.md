@@ -55,6 +55,14 @@ Two write patterns; never mix them:
 - Never invent a slug — derive it from project/topic + a stable identifier.
 - Promotion: when a memory fact becomes durable (e.g. a lesson learned), write a new knowledge page; don't overload the state page.
 
+### Dated memory record (weekly snapshot) — M4 authorized exception
+
+A `note` page with a **date slug** is a periodic snapshot of a topic's memory (e.g. `memory/consolidate/<YYYY-MM-DD>` or a weekly report page). Each period writes a **new page** (dated slug), NOT an overwrite of a fixed slug:
+
+- The **current state** is still owned by the fixed-slug `project/<id>/state` page (overwrite). The dated page is the historical record; never let the snapshot page substitute for `project/<id>/state`.
+- Because dated `note` pages accumulate, recent-injection can mix in old snapshots — mitigate with `embed_skip: true` on snapshot pages or a dedicated `tags` value (e.g. `weekly`), and rely on the state page for the "now" view.
+- Same-topic snapshots are idempotent per period: re-running a period overwrites/upserts the same dated slug (never create duplicates).
+
 ## Offline / embedding policy
 
 - Memory mixing across harnesses is a feature; `source`/`project` are provenance/trust metadata, never isolation.

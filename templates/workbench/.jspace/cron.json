@@ -12,15 +12,15 @@
       "id": "weekly-report",
       "schedule": "0 21 * * 0",
       "harness": "claude",
-      "prompt": "生成本周项目周报 md 存进 filehub,并把摘要写 gbrain。",
-      "enabled": false
+      "prompt": "生成本周项目周报(单一汇总)。在工作台根目录按 AGENTS.md 路由;从各域 README 与 gbrain 的 project/<id>/state 页发现活跃项目,汇总本周进展。契约(自包含):1) 写 markdown 到 <filehub>/areas/周报/<YYYY-MM-DD>-周报.md(周起始日命名;filehub 根从 hub.json 的 type:filehub resource 的 primary path 解析);2) 写 gbrain reference 页 assets/周报/<YYYY-MM-DD>(frontmatter project: jspace、tags: [weekly];正文以 Pointer + 极薄 Summary 为主,事实以 memory-consolidate 页为准);3) 同周重跑=周快照,固定 slug 覆盖更新,不重复建页。",
+      "enabled": true
     },
     {
       "id": "memory-consolidate",
       "schedule": "0 22 * * 0",
       "harness": "claude",
-      "prompt": "归纳近一周 gbrain 事实,写记忆巩固页。",
-      "enabled": false
+      "prompt": "归纳近一周 gbrain 事实,写记忆巩固页。在工作台根目录按 AGENTS.md 路由。契约(自包含):1) 写 gbrain note 页 memory/consolidate/<YYYY-MM-DD>(dated memory record:每周新页;frontmatter project: jspace、tags: [consolidate, weekly];正文=按域/项目归纳近一周关键事实+指针);2) 对每个涉项项目回写 project/<id>/state(固定 slug 覆盖,更新当前状态);3) 同周重跑=周快照,固定 slug 覆盖,不重复建页。",
+      "enabled": true
     }
   ]
 }
