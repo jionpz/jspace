@@ -69,7 +69,7 @@ const initSpec: CommandSpec = {
 const doctorSpec: CommandSpec = {
   name: "doctor",
   summary: "validate an existing JSpace workbench registry",
-  features: { dir: true },
+  features: { dir: true, json: true },
   handler: (ctx) => doctorWorkbench(ctx.root, cronDeps),
 };
 
