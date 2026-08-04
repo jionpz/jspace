@@ -59,6 +59,7 @@
 ## 定时自动化（cron）
 
 - cron 定义存在工作台目录（声明式：调度 + 提示词 + harness + 目标域），`jspace cron install` 装进系统调度（crontab / launchd），无头执行，不引入常驻进程。
+- 机械恢复层:`jspace ingest`(资料入库 journal,任一步失败补偿无孤儿、中断可续跑)与 `jspace pending`(gbrain 锁冲突写暂存,锁空闲幂等落 live)是失败可见性的代码保证;会话开始 `jspace cron check` 聚合未确认 incident 与 actionable pending。
 - 首批任务画像：inbox 整理、项目周报、记忆巩固（归纳近一周事实）。它们都作用于资产层与记忆层——所以资产协议先于 cron 落地（见里程碑）。
 
 ## 同步与可移植（分层同步）

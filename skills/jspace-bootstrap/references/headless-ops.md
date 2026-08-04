@@ -34,8 +34,9 @@
 - **会话开始检查**：`jspace cron check`（alias `failures`）一次聚合「未 ack incident + pending 暂存写 + 各 cron 状态」，需关注则退出码 1。
   - Claude Code：SessionStart hook best-effort（需 hook 真实触发；工作台 `.claude/settings.json`）。
   - 其他 harness：会话开始时手动 `jspace cron check`。
-- **gbrain 锁冲突 / 写暂存**：交互会话持 serve 锁时，无头 cron 的 gbrain 写契约**暂存**（`<filehub>/.jspace-logs/*.APPLY.json`），锁空闲窗口落 live；`jspace cron check` 会列出 pending APPLY 提醒应用。
-- **doctor**：`jspace doctor` 摘要 cron 失败数与 pending APPLY。
+- **gbrain 锁冲突 / 写暂存**：交互会话持 serve 锁时，gbrain 写契约**暂存**（`jspace pending stage <slug> --content <file> --producer <name>` → `<filehub>/.jspace-logs/<id>.APPLY.json`），锁空闲窗口 `jspace pending apply` 落 live（幂等，重复 apply 不产生重复事实）；terminal_failed 用 `jspace pending ack <id>` 确认。`jspace cron check` / `jspace doctor` 列出 actionable pending（staged/terminal_failed；applied/acked 不再告警）。
+- **asset-ingest 恢复**：资料入库走 `jspace ingest` journal（`begin` 暂存副本 → gbrain → index → `complete` 移除 source）；任一步失败 `jspace ingest <id> --fail <原因>`（gbrain 前失败移除暂存副本、source 留 inbox，无孤儿）；中断用 `jspace ingest list` 续跑（已完成步骤不重做）。
+- **doctor**：`jspace doctor` 摘要 cron 失败数与 actionable pending（`jspace pending apply/ack`）。
 
 ## 5. 敏感边界
 

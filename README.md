@@ -64,6 +64,13 @@ bun run cli/main.ts init ~/jworkspace
 bun run cli/main.ts doctor --dir ~/jworkspace
 ```
 
+## 常用运维命令
+
+- `jspace cron` — 定时任务:`cron run <id> --dry-run`(rehearsal)、`cron install --dry-run`(reconciliation 计划)、`cron check`(会话开始失败/暂存聚合)、`cron ack`。
+- `jspace ingest` — 资料入库 journal:`ingest begin`(暂存副本+journal)→ gbrain → `advance --index` → `advance --complete`(移除 source);任一步失败 `ingest <id> --fail <原因>`(补偿,source 留 inbox 无孤儿);中断 `ingest list` 续跑。
+- `jspace pending` — gbrain 写暂存:`pending stage`(锁冲突)、`pending apply`(锁空闲落 live,幂等)、`pending ack`(terminal_failed 确认)。锁冲突写不失败。
+- `jspace workspace diff / upgrade` — 工作台升级计划与执行(managed 内容刷新、本地修改保冲突)。
+
 ## 目录结构
 
 - `GOAL.md` - 最终目标（North Star），所有迭代的对齐物
