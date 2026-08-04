@@ -40,6 +40,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: "Generate version before assets (bundle_version must embed the tag)"
+        shell: bash
         env:
           # Tag builds embed the release version; non-tag builds fall back to
           # git describe (no tags fetched) -> 0.0.0-dev.
