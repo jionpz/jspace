@@ -10,6 +10,7 @@ import {
   advanceIngest,
   beginIngest,
   failIngest,
+  readJournal,
   readJournals,
   resumableJournals,
   rollbackIngest,
@@ -176,6 +177,20 @@ test("rollback abandons a staged ingest and refuses once the page exists", () =>
   const gbrain = beginIngest(root, { ...plan(src2), relPath: "projects/foo/doc2.txt" }, t.ops) as { kind: "created"; journal: { id: string } };
   advanceIngest(root, gbrain.journal.id, "gbrain", t.ops);
   expect(() => rollbackIngest(root, gbrain.journal.id, t.ops)).toThrow(/gbrain page already written/);
+});
+
+test("commit persists journal BEFORE removing source: unlink failure leaves committed, not stuck", () => {
+  const src = sourceFile();
+  const t = track({ unlink: () => { throw new Error("unlink failed"); } });
+  const { journal } = beginIngest(root, plan(src), t.ops) as { kind: "created"; journal: { id: string } };
+  advanceIngest(root, journal.id, "gbrain", t.ops);
+  advanceIngest(root, journal.id, "index", t.ops);
+  // journal is persisted as committed first; the source unlink fails but is caught
+  expect(advanceIngest(root, journal.id, "committed", t.ops).status).toBe("committed");
+  expect(readJournal(root, journal.id).status).toBe("committed");
+  expect(existsSync(src)).toBe(true); // leftover source; dupBySource prevents re-ingest
+  // and the journal is not stuck in a dead state: it reads back committed
+  expect(resumableJournals(root)).toHaveLength(0);
 });
 
 test("copy failure at begin does not write a journal", () => {

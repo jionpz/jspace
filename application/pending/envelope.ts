@@ -2,8 +2,9 @@
 // live in `<filehub>/.jspace-logs/<id>.APPLY.json` (same dir the cron/doctor
 // scanners surface). Pure persistence over an explicit fhRoot; the applier and
 // CLI use cases live in apply.ts / use-cases.ts.
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import {
   decodePendingEnvelope,
   ENVELOPE_EXT,
@@ -57,7 +58,9 @@ export function readEnvelope(fhRoot: string, id: string): PendingWriteEnvelopeV1
 
 export function writeEnvelope(fhRoot: string, env: PendingWriteEnvelopeV1): void {
   mkdirSync(envelopesDir(fhRoot), { recursive: true });
-  writeFileSync(envelopePath(fhRoot, env.id), JSON.stringify(env, null, 2) + "\n", "utf-8");
+  // atomic write (temp+rename): a crash mid-write must not leave a truncated
+  // .APPLY.json that readEnvelopes would silently skip.
+  writeBytesAtomic(envelopePath(fhRoot, env.id), JSON.stringify(env, null, 2) + "\n");
 }
 
 /** Producer: stage a gbrain write (lock conflict / deferred). Idempotency key is

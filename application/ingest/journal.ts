@@ -3,9 +3,10 @@
 // source stays in the inbox until `--complete` removes it, and a failure before
 // the gbrain page is written compensates by removing the staged target copy, so
 // no orphan file exists and nothing is silently lost.
-import { mkdirSync, readdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
+import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import {
   decodeIngestJournal,
   INGEST_STEPS,
@@ -47,8 +48,9 @@ function now(): string {
 }
 
 export function writeJournal(root: string, j: IngestJournalV1): void {
-  mkdirSync(dir(root), { recursive: true });
-  writeFileSync(join(dir(root), `${j.id}.json`), JSON.stringify(j, null, 2) + "\n", "utf-8");
+  // atomic (temp+rename) so a crash mid-write never leaves a truncated .json
+  // that readJournals would silently skip (machine-truth invariant).
+  writeBytesAtomic(join(dir(root), `${j.id}.json`), JSON.stringify(j, null, 2) + "\n");
 }
 
 export function readJournals(root: string): IngestJournalV1[] {
@@ -130,7 +132,18 @@ export function beginIngest(root: string, plan: IngestPlan, ops: IngestFileOps):
     createdAt: now(),
     updatedAt: now(),
   };
-  writeJournal(root, journal);
+  try {
+    writeJournal(root, journal);
+  } catch (e) {
+    // journal write failed after the staged copy: compensate (remove the copy)
+    // so no target file exists without a journal record (no-orphan invariant).
+    try {
+      ops.unlink(plan.target);
+    } catch {
+      /* best-effort compensation */
+    }
+    throw e;
+  }
   return { kind: "created", journal };
 }
 
@@ -143,11 +156,19 @@ export function advanceIngest(root: string, id: string, step: IngestStep, ops: I
   if (stepIndex !== currentIndex + 1) {
     throw new Error(`ingest ${id}: cannot advance to ${step} from ${j.status}`);
   }
-  if (step === "committed") {
-    ops.unlink(j.source); // source removed only at commit; target copy is authoritative
-  }
   const updated = withStamp({ ...j, status: step });
+  // persist the new state FIRST, then apply destructive operations. A crash
+  // between the two must leave a recoverable journal (committed) — never a
+  // source-deleted-but-journal-still-in-progress dead state (P1).
   writeJournal(root, updated);
+  if (step === "committed") {
+    try {
+      ops.unlink(j.source); // source removed only at commit; target copy is authoritative
+    } catch {
+      // unlink failed: journal says committed; the leftover inbox file is caught
+      // by beginIngest's dupBySource idempotency (never re-ingested, no dup page).
+    }
+  }
   return updated;
 }
 
