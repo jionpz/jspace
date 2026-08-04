@@ -6,6 +6,7 @@ import type { CmdResult } from "../commands/command.ts";
 import { HARNESSES, type Harness } from "../../core/contracts/cron.ts";
 import { isId } from "../../core/contracts/ids.ts";
 import { findIndex } from "../registry/helpers.ts";
+import { ackIncidents } from "./incidents.ts";
 import { loadCrons, parseSchedule, saveCrons } from "./definitions.ts";
 
 export interface CronInstalledCheck {
@@ -70,4 +71,11 @@ export function cronSetEnabled(root: string, id: string, enabled: boolean): CmdR
   saveCrons(root, data);
   const action = enabled ? "enabled" : "disabled";
   return { lines: [`jspace: ok: ${action} cron: ${id} (run "jspace cron install" to apply)`] };
+}
+
+/** Acknowledge open incidents (all, or just one cron); evidence is retained. */
+export function cronAck(root: string, id: string | undefined): CmdResult {
+  const n = ackIncidents(root, id);
+  const scope = id !== undefined ? ` for ${id}` : "";
+  return { lines: [`jspace: ok: acknowledged ${n} incident(s)${scope}`] };
 }

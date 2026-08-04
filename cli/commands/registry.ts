@@ -23,7 +23,7 @@ import { fail } from "../../application/errors.ts";
 import { readFileSync } from "node:fs";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
 import { ASSETS } from "../assets.generated.ts";
-import { cronAdd, cronList, cronRemove, cronSetEnabled } from "../../application/automation/use-cases.ts";
+import { cronAck, cronAdd, cronList, cronRemove, cronSetEnabled } from "../../application/automation/use-cases.ts";
 import { loadCrons } from "../../application/automation/definitions.ts";
 import {
   cmdCronFailures,
@@ -324,6 +324,14 @@ const cronFailuresSpec: CommandSpec = {
   },
 };
 
+const cronAckSpec: CommandSpec = {
+  name: "ack",
+  summary: "acknowledge open incidents (evidence retained, stops alerting)",
+  features: { dir: true },
+  positionals: [{ name: "id", help: "cron id (default: all incidents)" }],
+  handler: (ctx, args) => cronAck(ctx.root, args.id === undefined ? undefined : s(args.id)),
+};
+
 const cronSpec: CommandSpec = {
   name: "cron",
   summary: "manage scheduled tasks (declarative + launchd)",
@@ -339,6 +347,7 @@ const cronSpec: CommandSpec = {
     cronRunSpec,
     cronStatusSpec,
     cronFailuresSpec,
+    cronAckSpec,
   ],
 };
 

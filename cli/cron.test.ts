@@ -12,8 +12,6 @@ import {
   isWindowsInstallable,
   jspaceBinary,
   parseSchedule,
-  readCronFailed,
-  lastStatusFor,
   filehubRoot,
   findPendingApplies,
   cmdCronFailures,
@@ -128,11 +126,12 @@ test("jspaceBinary win32 probes .exe", () => {
 
 // ---- cron failures (session-start check surface) ----
 
-/** Build a temp workbench (and optional unique filehub) for failure-surface tests. */
+/** Build a temp workbench (and optional unique filehub) for failure-surface tests.
+ *  State is structured: incidents (.jspace/state/incidents) + runs (.jspace/state/runs). */
 function makeWorkbench(opts: {
   crons?: string[];
-  failed?: string[];
-  logs?: Record<string, string>;
+  incidents?: { cron: string; failureClass: string; status?: string }[];
+  runs?: Record<string, "ok" | "suspect" | "failed">;
   filehub?: boolean;
   applies?: string[];
 }): string {
@@ -149,14 +148,40 @@ function makeWorkbench(opts: {
   }
   const crons = (opts.crons ?? []).map((id) => ({ id, schedule: "0 21 * * *", harness: "claude", prompt: "test", enabled: true }));
   writeFileSync(join(wb, ".jspace", "cron.json"), JSON.stringify({ version: 1, crons }));
-  if (opts.failed?.length) {
-    mkdirSync(join(wb, ".jspace", "logs"), { recursive: true });
-    writeFileSync(join(wb, ".jspace", "logs", "cron-failed.md"), opts.failed.map((l) => `- ${l}`).join("\n") + "\n");
-  }
-  for (const [id, status] of Object.entries(opts.logs ?? {})) {
-    const dir = join(wb, ".jspace", "logs", "cron", id);
+
+  // structured incidents
+  for (const inc of opts.incidents ?? []) {
+    const dir = join(wb, ".jspace", "state", "incidents");
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "20260803T120000.md"), `status: ${status}\nexit: 0\ntime: 2026-08-03T12:00:00\n`);
+    writeFileSync(
+      join(dir, `${inc.cron}-${inc.failureClass}.json`),
+      JSON.stringify({
+        id: `${inc.cron}-${inc.failureClass}`,
+        cronId: inc.cron,
+        failureClass: inc.failureClass,
+        status: inc.status ?? "open",
+        openedAt: "2026-08-03T12:00:00",
+        evidence: ["run-1"],
+      }),
+    );
+  }
+  // structured runs
+  for (const [id, status] of Object.entries(opts.runs ?? {})) {
+    const dir = join(wb, ".jspace", "state", "runs", id);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "run-1.json"),
+      JSON.stringify({
+        id: "run-1",
+        cronId: id,
+        startedAt: "2026-08-03T12:00:00",
+        exit: status === "ok" ? 0 : 1,
+        status,
+        timedOut: false,
+        outputLog: "x",
+        batchChanged: true,
+      }),
+    );
   }
   if (opts.filehub && opts.applies?.length) {
     const dir = join(fh, ".jspace-logs");
@@ -177,28 +202,6 @@ function runFailures(wb: string, json: boolean): { out: string; exit: number } {
   process.exitCode = 0;
   return { out, exit };
 }
-
-test("readCronFailed: missing file -> []", () => {
-  const wb = makeWorkbench({});
-  expect(readCronFailed(wb)).toEqual([]);
-  rmSync(wb, { recursive: true, force: true });
-});
-
-test("readCronFailed: parses recorded failure lines", () => {
-  const wb = makeWorkbench({ failed: ["2026-08-03T120000  inbox-tidy  exit 1  log: a", "2026-08-03T130000  weekly  suspect  log: b"] });
-  const lines = readCronFailed(wb);
-  expect(lines).toHaveLength(2);
-  expect(lines[0]).toContain("inbox-tidy");
-  expect(lines[1]).toContain("weekly");
-  rmSync(wb, { recursive: true, force: true });
-});
-
-test("lastStatusFor: never run -> null; reads recorded status", () => {
-  const wb = makeWorkbench({ crons: ["a"], logs: { a: "failed" } });
-  expect(lastStatusFor(wb, "a")).toBe("failed");
-  expect(lastStatusFor(wb, "never")).toBeNull();
-  rmSync(wb, { recursive: true, force: true });
-});
 
 test("filehubRoot: unregistered -> null; registered -> primary path", () => {
   const wb = makeWorkbench({});
@@ -228,31 +231,35 @@ test("findPendingApplies: lists staged APPLY.md files", () => {
 });
 
 test("cmdCronFailures: needs attention -> exit 1, JSON has fields", () => {
-  const wb = makeWorkbench({ crons: ["a", "b"], logs: { a: "failed", b: "ok" }, filehub: true, applies: ["x.APPLY.md"] });
+  const wb = makeWorkbench({ crons: ["a", "b"], incidents: [{ cron: "a", failureClass: "failed" }], runs: { a: "failed", b: "ok" }, filehub: true, applies: ["x.APPLY.md"] });
   const { out, exit } = runFailures(wb, true);
   expect(exit).toBe(1);
   const parsed = JSON.parse(out.trim());
   expect(parsed.crons).toHaveLength(2);
-  expect(parsed.summary.failed).toBe(1);
+  expect(parsed.summary.failures).toBe(1);
   expect(parsed.summary.pending_applies).toBe(1);
-  expect(parsed.summary.needs_attention).toBe(2);
+  expect(parsed.open_incidents).toBe(1);
+  expect(parsed.summary.needs_attention).toBe(2); // open incident + pending
   rmSync(wb, { recursive: true, force: true });
 });
 
 test("cmdCronFailures: clean -> exit 0; never-run not counted", () => {
-  const wb = makeWorkbench({ crons: ["a", "b"], logs: { a: "ok" } }); // b never run
+  const wb = makeWorkbench({ crons: ["a", "b"], runs: { a: "ok" } }); // b never run
   const { out, exit } = runFailures(wb, true);
   expect(exit).toBe(0);
   const parsed = JSON.parse(out.trim());
   expect(parsed.summary.never_run).toBe(1);
+  expect(parsed.open_incidents).toBe(0);
   expect(parsed.summary.needs_attention).toBe(0);
   rmSync(wb, { recursive: true, force: true });
 });
 
-test("cmdCronFailures: suspect counts as needs attention; human output", () => {
-  const wb = makeWorkbench({ crons: ["a"], logs: { a: "suspect" } });
+test("cmdCronFailures: open suspect incident alerts; human output", () => {
+  const wb = makeWorkbench({ crons: ["a"], incidents: [{ cron: "a", failureClass: "suspect" }], runs: { a: "suspect" } });
   const { out, exit } = runFailures(wb, false);
   expect(exit).toBe(1);
+  expect(out).toContain("open incidents:");
+  expect(out).toContain("a [suspect]");
   expect(out).toContain("cron status:");
   expect(out).toContain("a: suspect");
   expect(out).toContain("needs_attention: 1");

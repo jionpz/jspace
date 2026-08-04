@@ -11,6 +11,8 @@ import { CONFIG_DIR } from "../core/contracts/files.ts";
 import { readWorkbenchState, workbenchRoot } from "./registry.ts";
 import { primaryPathForResourceType, resolveEffectiveRegistry } from "../core/registry/effective.ts";
 import { loadCrons, parseSchedule, type ScheduleDict } from "../application/automation/definitions.ts";
+import { lastRun, writeRun } from "../application/automation/runs.ts";
+import { openIncidents, openOrUpdate, readIncidents, resolveIncidents } from "../application/automation/incidents.ts";
 import type { CronDefinition } from "../core/contracts/cron.ts";
 export { parseSchedule };
 export type { ScheduleDict };
@@ -494,10 +496,6 @@ export async function cmdCronRun(id: string, dryRun: boolean, timeoutSec: number
     const st = statSync(batchLog);
     batchChanged = st.mtimeMs !== batchBefore.mtime || st.size !== batchBefore.size;
   }
-  if (isInboxTask && !batchChanged) {
-    // treat as suspect: batch did not run even though exit 0
-    appendFailed(root, id, `exit 0 but batch log unchanged (${batchLog})`, "");
-  }
 
   const logDir = cronLogDir(root, id);
   mkdirSync(logDir, { recursive: true });
@@ -515,11 +513,27 @@ export async function cmdCronRun(id: string, dryRun: boolean, timeoutSec: number
   ].join("\n"), "utf-8");
   pruneLogs(root, id, 30);
 
-  if (status === "failed" || suspect || (isInboxTask && !batchChanged)) {
-    appendFailed(root, id, status === "failed" ? `exit ${exited}${timedOut ? " (timeout)" : ""}` : `suspect: no output / batch not run`, logPath);
+  // structured run record (machine truth; prose log above is the human payload)
+  const runId = crypto.randomUUID();
+  writeRun(root, id, {
+    id: runId,
+    cronId: id,
+    startedAt: localStamp(),
+    exit: exited,
+    status,
+    timedOut,
+    outputLog: logPath,
+    batchChanged,
+  });
+
+  const failed = status === "failed" || suspect || (isInboxTask && !batchChanged);
+  if (failed) {
+    const failureClass = status === "failed" ? "failed" : isInboxTask && !batchChanged ? "batch-stale" : "suspect";
+    openOrUpdate(root, id, failureClass, runId);
     console.log(`jspace: ${status}: cron ${id} (exit ${exited}); log ${logPath}`);
     process.exitCode = status === "failed" ? 1 : 0;
   } else {
+    resolveIncidents(root, id);
     console.log(`jspace: ok: cron ${id} (exit ${exited}); log ${logPath}`);
   }
   unlinkSync(lock);
@@ -534,38 +548,16 @@ export function cmdCronStatus(id?: string): void {
     return;
   }
   for (const cid of ids) {
-    const dir = cronLogDir(root, cid);
-    const last = existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith(".md")).sort().pop() : undefined;
+    const last = lastRun(root, cid);
     if (!last) {
       console.log(`${cid}: never run`);
       continue;
     }
-    const content = readFileSync(join(dir, last), "utf-8");
-    const st = /^status: (.+)$/m.exec(content);
-    const ex = /^exit: (.+)$/m.exec(content);
-    const t = /^time: (.+)$/m.exec(content);
-    console.log(`${cid}: ${st?.[1] ?? "?"} (exit ${ex?.[1] ?? "?"}, ${t?.[1] ?? "?"}) log ${join(dir, last)}`);
+    console.log(`${cid}: ${last.status} (exit ${last.exit ?? "?"}, ${last.startedAt}) log ${last.outputLog}`);
   }
 }
 
 // ---- cron failures (session-start check surface) ----
-
-/** Read cron-failed.md lines (missing/empty file → []). */
-export function readCronFailed(root: string): string[] {
-  const p = join(root, ".jspace", "logs", "cron-failed.md");
-  if (!isFile(p)) return [];
-  return readFileSync(p, "utf-8").split("\n").filter((l) => l.trim().length > 0);
-}
-
-/** Last recorded status for a cron id (ok|suspect|failed), or null if never run. */
-export function lastStatusFor(root: string, id: string): string | null {
-  const dir = cronLogDir(root, id);
-  if (!existsSync(dir)) return null;
-  const last = readdirSync(dir).filter((n) => n.endsWith(".md")).sort().pop();
-  if (!last) return null;
-  const st = /^status: (.+)$/m.exec(readFileSync(join(dir, last), "utf-8"));
-  return st?.[1] ?? null;
-}
 
 /** Resolve the filehub root via the shared effective registry (type:filehub,
  *  primary path), or null when unregistered/unbound — then pending scan is skipped. */
@@ -596,32 +588,48 @@ export function cmdCronFailures(json: boolean, root?: string): void {
   const wb = root ?? workbenchRoot();
   const ids = loadCrons(wb).crons.map((c) => c.id);
 
-  const failures = readCronFailed(wb);
+  const incidents = readIncidents(wb);
+  const open = incidents.filter((i) => i.status === "open");
+  const acknowledged = incidents.filter((i) => i.status === "acknowledged");
   const pending = findPendingApplies(wb);
-  const crons = ids.map((id) => ({ id, status: lastStatusFor(wb, id) ?? "never run" }));
+  const crons = ids.map((id) => {
+    const last = lastRun(wb, id);
+    return { id, status: last?.status ?? "never run" };
+  });
   const failed = crons.filter((c) => c.status === "failed").length;
   const suspect = crons.filter((c) => c.status === "suspect").length;
   const neverRun = crons.filter((c) => c.status === "never run").length;
-  const needsAttention = failures.length + failed + suspect + pending.paths.length;
+  // alert only on open (unacknowledged) incidents or actionable pending writes
+  const needsAttention = open.length + pending.paths.length;
 
   if (json) {
     console.log(JSON.stringify({
-      failures: failures.map((line) => ({ line })),
+      incidents: incidents.map((i) => ({
+        cron: i.cronId,
+        failure_class: i.failureClass,
+        status: i.status,
+        opened_at: i.openedAt,
+        acknowledged_at: i.acknowledgedAt,
+        resolved_at: i.resolvedAt,
+        evidence: i.evidence,
+      })),
+      open_incidents: open.length,
+      acknowledged_incidents: acknowledged.length,
       pending_applies: pending.paths,
       crons,
       summary: {
-        failures: failures.length,
-        failed,
+        failures: failed,
         suspect,
         never_run: neverRun,
         pending_applies: pending.paths.length,
+        open_incidents: open.length,
         needs_attention: needsAttention,
       },
     }));
   } else {
     console.log("jspace: cron failures");
-    console.log(`failures: (${failures.length})`);
-    for (const line of failures) console.log(`  ${line}`);
+    console.log(`open incidents: (${open.length})`);
+    for (const i of open) console.log(`  ${i.cronId} [${i.failureClass}] ${i.openedAt} evidence: ${i.evidence.join(", ")}`);
     console.log(`pending gbrain writes (APPLY.md): (${pending.paths.length})`);
     for (const p of pending.paths) console.log(`  ${p}`);
     console.log("cron status:");

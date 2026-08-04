@@ -9,10 +9,8 @@ import type { CmdResult } from "../commands/command.ts";
 import type { RegistryDiagnostic } from "../../core/contracts/diagnostics.ts";
 import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
 import { inspectWorkbench, type InspectEnv } from "../../core/registry/inspect.ts";
-import {
-  primaryPathForResourceType,
-  resolveEffectiveRegistry,
-} from "../../core/registry/effective.ts";
+import { primaryPathForResourceType, resolveEffectiveRegistry } from "../../core/registry/effective.ts";
+import { openIncidents } from "../automation/incidents.ts";
 import { isFile } from "../fs.ts";
 
 /** Minimal cron view consumed by doctor; full cron surface lives in Child C. */
@@ -112,12 +110,14 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
       }
     }
   }
-  const failedPath = join(root, ".jspace", "logs", "cron-failed.md");
-  if (isFile(failedPath)) {
-    const failed = readFileSync(failedPath, "utf-8").split("\n").filter((l) => l.startsWith("- ")).length;
-    if (failed > 0) {
-      diags.push({ severity: "warning", code: "cron.failed_runs", path: "cron", message: `${failed} failed cron run(s) recorded in .jspace/logs/cron-failed.md (check with jspace cron status)` });
-    }
+  const openCron = openIncidents(root);
+  if (openCron.length > 0) {
+    diags.push({
+      severity: "warning",
+      code: "cron.open_incidents",
+      path: "cron",
+      message: `${openCron.length} open cron incident(s): ${openCron.map((i) => `${i.cronId}[${i.failureClass}]`).join(", ")} (check with jspace cron failures)`,
+    });
   }
 
   const errors = diags.filter((d) => d.severity === "error").map((d) => d.message);
