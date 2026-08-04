@@ -10,7 +10,7 @@ const manifest: DistributionManifestV1 = {
   files: [
     { path: "templates/workbench/AGENTS.md", sha256: sha256Of("new-agents"), ownership: "managed" },
     { path: "templates/workbench/README.md", sha256: sha256Of("new-readme"), ownership: "managed" },
-    { path: "skills/jspace-bootstrap/SKILL.md", sha256: sha256Of("new-skill"), ownership: "seed" },
+    { path: "skills/jspace-bootstrap/SKILL.md", sha256: sha256Of("new-skill"), ownership: "managed" },
     { path: "templates/filehub/README.md", sha256: sha256Of("fh"), ownership: "managed" },
   ],
 };
@@ -31,7 +31,7 @@ function byRel(entries: ReturnType<typeof diffBundle>): Record<string, string> {
 }
 
 test("ownershipFor and materializedRel map bundle keys", () => {
-  expect(ownershipFor("skills/x/SKILL.md")).toBe("seed");
+  expect(ownershipFor("skills/x/SKILL.md")).toBe("managed"); // skills revised seed->managed (Child D)
   expect(ownershipFor("templates/workbench/AGENTS.md")).toBe("managed");
   expect(materializedRel("templates/workbench/AGENTS.md")).toBe("AGENTS.md");
   expect(materializedRel("skills/jspace-bootstrap/SKILL.md")).toBe("skills/jspace-bootstrap/SKILL.md");
@@ -55,7 +55,7 @@ test("freshness: matching -> no-op; missing -> create; filehub skipped", () => {
   expect(entries.some((e) => e.rel === "templates/filehub/README.md")).toBe(false);
 });
 
-test("recorded base -> update (managed) / skip (seed)", () => {
+test("recorded base -> update (managed)", () => {
   const entries = diffBundle(
     "/wb",
     manifest,
@@ -69,10 +69,10 @@ test("recorded base -> update (managed) / skip (seed)", () => {
   );
   const map = byRel(entries);
   expect(map["AGENTS.md"]).toBe("update");
-  expect(map["skills/jspace-bootstrap/SKILL.md"]).toBe("skip");
+  expect(map["skills/jspace-bootstrap/SKILL.md"]).toBe("update"); // managed: refreshed on upgrade
 });
 
-test("unrecorded modification -> conflict (managed) / skip (seed)", () => {
+test("unrecorded modification -> conflict (managed)", () => {
   const entries = diffBundle(
     "/wb",
     manifest,
@@ -80,7 +80,7 @@ test("unrecorded modification -> conflict (managed) / skip (seed)", () => {
   );
   const map = byRel(entries);
   expect(map["AGENTS.md"]).toBe("conflict");
-  expect(map["skills/jspace-bootstrap/SKILL.md"]).toBe("skip");
+  expect(map["skills/jspace-bootstrap/SKILL.md"]).toBe("conflict"); // local edit protected
 });
 
 test("recorded but no longer in bundle -> stale", () => {

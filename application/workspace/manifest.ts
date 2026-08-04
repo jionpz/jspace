@@ -11,10 +11,12 @@ export function sha256Of(content: string): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
-/** Ownership by bundle-key prefix. skills are seed (created once, never
- *  overwritten); everything else from the template is managed. */
-export function ownershipFor(rel: string): AssetOwnership {
-  if (rel.startsWith("skills/")) return "seed";
+/** Ownership by bundle-key prefix. All bundled content is managed: upgrade
+ *  refreshes an unmodified file and reports conflict for a locally modified
+ *  one. skills were previously seed (created once, never overwritten); revised
+ *  to managed in Child D so bundled skills refresh on upgrade (F2 closure for
+ *  existing workbenches) while local edits stay protected via conflict. */
+export function ownershipFor(_rel: string): AssetOwnership {
   return "managed";
 }
 

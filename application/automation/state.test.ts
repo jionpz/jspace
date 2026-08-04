@@ -55,7 +55,8 @@ test("openOrUpdate opens on failure, resolves on success, acks keep evidence", (
   incs = readIncidents(root);
   expect(incs.find((i) => i.status === "open")).toBeUndefined();
   expect(incs.some((i) => i.status === "acknowledged")).toBe(true); // evidence retained
-  expect(incs[0].evidence).toContain("run-3");
+  // reopen creates a NEW incident (old one is resolved); assert the acked one kept run-3
+  expect(incs.find((i) => i.status === "acknowledged")?.evidence).toContain("run-3");
 });
 
 test("different failure classes are distinct incidents", () => {

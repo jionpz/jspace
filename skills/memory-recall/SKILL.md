@@ -1,6 +1,6 @@
 ---
 name: memory-recall
-description: "读侧精准召回：用户「问一句」时，把问题召回为有出处的答案——语义查询 → top-1 校验 → 指针断言链 → 打开文件引用出处；未命中走有终止的校准（≤3 轮）与不静默的 embedding 降级提示。纪律源 = docs/MEMORY-ACCEPTANCE.md（本 skill 引用协议，不复制）。与 asset-ingest（写侧：入库 + 自检）互补。Use when the user asks a question that needs recall from the file hub / gbrain: 问一句、找那个文件、那个数、精准召回、recall、find the file."
+description: "读侧精准召回：用户「问一句」时，把问题召回为有出处的答案——语义查询 → top-1 校验 → 指针断言链 → 打开文件引用出处；未命中走有终止的校准（≤3 轮）与不静默的 embedding 降级提示。纪律源 = references/memory-acceptance.md（本 skill 引用协议，不复制）。与 asset-ingest（写侧：入库 + 自检）互补。Use when the user asks a question that needs recall from the file hub / gbrain: 问一句、找那个文件、那个数、精准召回、recall、find the file."
 triggers:
   - "问一句"
   - "找那个文件"
@@ -58,10 +58,10 @@ triggers:
 - **降级不静默**：embedding 不可达时固定提示。
 - **校准有终止**：≤3 轮 + ROI 护栏（配置/措辞类不轻易改纪律）。
 - **canonical 面**：默认 CLI（serve 停泊窗口内）；真实使用面（MCP）query 冒烟对齐。
-- **回归**：可复跑验收见 `docs/MEMORY-ACCEPTANCE.md`（本 skill 引用协议，不复制全文）。
+- **回归**：可复跑验收见 `references/memory-acceptance.md`（本 skill 引用协议，不复制全文）。
 
 ## 参考
 
 - `references/discipline.md` — 召回纪律细则（断言链 / 变体负对照 / 诊断终止 / 降级提示 / 面约束）。
-- `docs/MEMORY-ACCEPTANCE.md` — 可复跑验收协议（基线结果：2026-08-03 通过）。
+- `references/memory-acceptance.md` — 可复跑验收协议（基线结果：2026-08-03 通过）。
 - `skills/asset-ingest/references/gbrain-write.md` — 写侧纪律（embedding 降级 / type 纪律，读侧触发时参考）。

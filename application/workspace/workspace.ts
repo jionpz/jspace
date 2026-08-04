@@ -117,7 +117,11 @@ export function workspaceUpgrade(
     (e) =>
       e.action === "create" ||
       e.action === "update" ||
-      (e.action === "conflict" && opts.acceptConflicts), // --accept-conflicts overwrites locally modified managed files
+      // --accept-conflicts overwrites locally modified managed files, EXCEPT
+      // skills/: a user's workbench skill edit is always preserved (reported
+      // as conflict in diff, never force-overwritten). Unmodified skills still
+      // refresh on upgrade (skills are managed since Child D).
+      (e.action === "conflict" && opts.acceptConflicts && !e.rel.startsWith("skills/")),
   );
 
   if (opts.dryRun) {

@@ -30,9 +30,9 @@
 
 ## 4. JSpace 侧兜底（失败可见性）
 
-- 无头执行失败 → `jspace cron run` 写 `cron-failed.md`（工作台 `.jspace/logs/`）+ 每次运行日志（`.jspace/logs/cron/<id>/`）。
-- **会话开始检查**：`jspace cron check`（alias `failures`）一次聚合「失败 + pending 暂存写 + 各 cron 状态」，需关注则退出码 1。
-  - Claude Code：SessionStart hook 自动跑（工作台 `.claude/settings.json`）。
+- 无头执行失败 → 打开结构化 incident（`.jspace/state/incidents/`，keyed cron+failure class）+ 每次运行日志（`.jspace/logs/cron/<id>/` 为人类 payload）；成功 retry 自动 resolve，`cron ack` 保留证据。
+- **会话开始检查**：`jspace cron check`（alias `failures`）一次聚合「未 ack incident + pending 暂存写 + 各 cron 状态」，需关注则退出码 1。
+  - Claude Code：SessionStart hook best-effort（需 hook 真实触发；工作台 `.claude/settings.json`）。
   - 其他 harness：会话开始时手动 `jspace cron check`。
 - **gbrain 锁冲突 / 写暂存**：交互会话持 serve 锁时，无头 cron 的 gbrain 写契约**暂存**（`<filehub>/.jspace-logs/*.APPLY.md`），锁空闲窗口落 live；`jspace cron check` 会列出 pending APPLY 提醒应用。
 - **doctor**：`jspace doctor` 摘要 cron 失败数与 pending APPLY。

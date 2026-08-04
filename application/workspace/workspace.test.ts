@@ -115,16 +115,16 @@ test("dry-run reports the plan without mutating", () => {
   rmSync(root, { recursive: true, force: true });
 });
 
-test("modified seed file is never overwritten", () => {
+test("modified workbench skill is never overwritten (managed, conflict preserved)", () => {
   const root = tmp();
   initWorkbench(root, false, initDeps);
-  const seedRel = "skills/jspace-bootstrap/SKILL.md";
-  writeFileSync(join(root, seedRel), "USER SKILL", "utf-8");
+  const skillRel = "skills/jspace-bootstrap/SKILL.md";
+  writeFileSync(join(root, skillRel), "USER SKILL", "utf-8");
   const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true);
-  const e = (data as { entries: { rel: string; action: string }[] }).entries.find((x) => x.rel === seedRel);
-  expect(e?.action).toBe("skip");
+  const e = (data as { entries: { rel: string; action: string }[] }).entries.find((x) => x.rel === skillRel);
+  expect(e?.action).toBe("conflict"); // visible in diff, never force-overwritten
   workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps);
-  expect(readFileSync(join(root, seedRel), "utf-8")).toBe("USER SKILL");
+  expect(readFileSync(join(root, skillRel), "utf-8")).toBe("USER SKILL");
   rmSync(root, { recursive: true, force: true });
 });
 

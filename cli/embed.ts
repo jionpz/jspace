@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fail } from "../application/errors.ts";
 import { ASSETS } from "./assets.generated.ts";
+import { SKILLS_MANIFEST } from "./skills.generated.ts";
 
 export const PLACEHOLDER = "__DEV_ROOT__";
 
@@ -76,11 +77,12 @@ export function materializeTree(target: string, devRootStr: string): void {
   if (!hasAssets("templates/workbench/")) {
     fail("workbench template assets missing in embedded bundle");
   }
-  if (!hasAssets("skills/jspace-bootstrap/")) {
-    fail("skill assets missing: skills/jspace-bootstrap");
-  }
-  if (!hasAssets("skills/asset-ingest/")) {
-    fail("skill assets missing: skills/asset-ingest");
+  // Every manifest-declared workbench skill must be embedded (F2: this now
+  // includes memory-recall / memory-writeback, not just bootstrap+asset-ingest).
+  for (const s of SKILLS_MANIFEST.workbench) {
+    if (!hasAssets(`skills/${s.name}/`)) {
+      fail(`skill assets missing: skills/${s.name}`);
+    }
   }
   for (const [key, content] of Object.entries(ASSETS)) {
     let rel: string;
