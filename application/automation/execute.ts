@@ -38,6 +38,8 @@ export interface ExecuteDeps {
   skillsManifest: SkillsManifestV1;
   bundleManifest: DistributionManifestV1;
   readFile: (p: string) => string | null;
+  /** optional harness binary override (tests: fake harness; prod: undefined → PATH resolve). */
+  harnessBin?: string;
 }
 
 export interface CronRunOptions {
@@ -94,7 +96,7 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   };
   // Skill-target crons validate + compile HERE, before the dry-run return: a
   // missing/stale skill fails with a fix action and never reaches execution.
-  const argv = harnessArgv(cron.harness, resolveCronPrompt(cron, root, skillCtx), deps.platform);
+  const argv = harnessArgv(cron.harness, resolveCronPrompt(cron, root, skillCtx), deps.platform, deps.harnessBin);
   if (opts.dryRun) {
     return { lines: [`jspace: dry-run: would run in ${root}:`, `  $ ${argv.join(" ")}`] };
   }
