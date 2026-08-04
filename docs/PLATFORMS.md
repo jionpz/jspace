@@ -10,7 +10,29 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 | Linux | crontab(注释块 `# jspace crons (managed)`…`# end jspace`) | **无补跑**(错过即跳过) | 登录用户,环境最小(PATH/HOME 由 install 烘焙) |
 | Windows | Task Scheduler(`schtasks`,任务名 `JSpaceCron_<wb-id>_<id>`) | **无补跑** | **默认仅登录时运行**(登出不触发);`/it` 交互令牌 |
 
-> **调度语义差异诚实声明**:三个平台对「错过的时间点」行为不同——macOS 会唤醒补跑,Linux/Windows 直接跳过。这是各系统调度器的固有差异,cron 定义(`.jspace/cron.json`)是平台无关的,同一份定义在三平台行为可能不同。失败都会写 `.jspace/logs/cron-failed.md`,下次会话可见。
+> **调度语义差异诚实声明**:三个平台对「错过的时间点」行为不同——macOS 会唤醒补跑,Linux/Windows 直接跳过。这是各系统调度器的固有差异,cron 定义(`.jspace/cron.json`)是平台无关的,同一份定义在三平台行为可能不同。失败都会打开结构化 incident(`.jspace/state/incidents/`),`cron failures` 在下个会话可见;成功 retry 自动 resolve,`cron ack` 保留证据但停止告警。
+
+## 运行状态与 incidents（结构化，M3）
+
+- 每次 run 写 `.jspace/state/runs/<cron>/<run-id>.json`（exit/status/timedOut/outputLog/batchChanged）；prose 日志保留在 `.jspace/logs/cron/<id>/` 作为人类 payload。
+- failed/suspect/batch-stale run 打开或更新 incident（keyed by cron + failure class）；成功 retry 自动 resolve。
+- `cron ack [id]`：open → acknowledged（证据保留，不再告警）；`cron check` 仅对 open（未 ack）incident 或 actionable pending write 返回非 0。
+
+## Harness 能力矩阵（M4）
+
+`jspace cron run` 调 headless harness。各 harness 的 argv 形状在 `adapters/harness/argv.ts`；能力分级：
+
+| harness | argv | 状态 | 备注 |
+|---|---|---|---|
+| claude | `-p <prompt> --output-format text --allowedTools Bash,Read,Write,Edit,mcp__gbrain__*` | automated | CI 验证 argv 生成；无头执行需本机 `claude` 可用 |
+| codex | `exec <prompt>` | best-effort | argv 已实现，未在 CI 全链验证 |
+| pi | `-p <prompt>` | best-effort | argv 已实现，未在 CI 全链验证 |
+
+> cron 是无头 unattended 执行：`--allowedTools` 白名单、绝不 bypassPermissions。
+
+## Scheduler 任务隔离（M5）
+
+reconciliation（`cron install --dry-run` 可预演）用 `workbenchTag(marker.workbench_id)` 派生稳定短 tag 隔离各工作台任务，避免两工作台同名 cron 互覆盖。已知遗留：launchd plist 名/crontab 标记/schtasks 任务名的 tag 注入与按 tag 卸载尚未在真实 apply 落地（见任务 implement.md M5 遗留），真机验证时按本矩阵人工复核。
 
 ## Windows 支持的调度子集
 
@@ -65,7 +87,7 @@ bin/jspace cron uninstall              # 期望:任务移除
 | 已 install | Linux | 无「enabled but not installed」;无 stale;crontab/cron 服务存在 → 无服务 warning |
 | 已 install | Windows | 无「enabled but not installed」;无 stale;`schtasks /query` 存在 |
 | cron 已删但调度器残留 | 全部 | warning `stale scheduled task com.jspace.cron.<id>` |
-| cron-failed.md 有记录 | 全部 | warning `N failed cron run(s)` |
+| 存在 open cron incident | 全部 | warning `cron.open_incidents`（`N open cron incident(s)`） |
 | Linux 无 crontab/无 crond | Linux | warning `crontab command not found` / `cron daemon not running` |
 | 非法 schedule | 全部 | warning `cron <id>: invalid schedule` |
 
@@ -75,7 +97,7 @@ bin/jspace cron uninstall              # 期望:任务移除
 
 ## 纯函数单测(本机可跑,无需真机)
 
-`bun test cli/cron.test.ts` 覆盖:`crontabBlock`(单引号引用/`%` 转义/1000 字符)、`replaceManagedBlock`(空输入/替换保留用户行/移除/标记异常)、`schtasksArgs`(DAILY/WEEKLY/dow 归一/不支持→null)、`isWindowsInstallable`、`jspaceBinary`(win32 探测)、`parseSchedule`(子集/拒绝)。对抗用例:路径含空格/单引号/`%`、dow=7、month 定值。
+`bun test` 覆盖:`application/automation/scheduler.test.ts`（planReconciliation create/update/delete、两 workbench tag 隔离）、`application/automation/state.test.ts`（runs/incidents 状态机）、`cli/cron.test.ts`（crontabBlock 单引号/`%` 转义/1000 字符、replaceManagedBlock、schtasksArgs、isWindowsInstallable、jspaceBinary、parseSchedule、cmdCronFailures 结构化 incidents）。对抗用例:路径含空格/单引号/`%`、dow=7、month 定值。
 
 ## 一键安装验证矩阵
 
