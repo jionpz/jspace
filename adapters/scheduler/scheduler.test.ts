@@ -64,3 +64,84 @@ test("schtasksArgs is DAILY/WEEKLY only + task name tagged", () => {
   expect(isWindowsInstallable("0 21 * * 1")).toBe(true); // weekly
   expect(isWindowsInstallable("0 21 15 * *")).toBe(false); // dom fixed -> not installable
 });
+
+// ---- migrated from cli/cron.test.ts (now single-source on the adapters) ----
+
+test("crontabBlock quotes every path and escapes percent", () => {
+  const c: CronDefinition = { id: "inbox-tidy", schedule: "0 21 * * *", harness: "claude", prompt: "x", enabled: true };
+  const block = crontabBlock([c], "tag", "/home/u/my work", "/opt/jspace/bin/jspace", "/usr/bin:/bin", "/home/u");
+  expect(block).toContain("cd '/home/u/my work'");
+  const pct = crontabBlock([{ ...c, id: "pct" }], "tag", "/tmp/100%folder", "/bin/jspace", "/bin", "/home");
+  expect(pct).toContain("\\%");
+});
+
+test("crontabBlock rejects lines over 1000 chars", () => {
+  const c: CronDefinition = { id: "long", schedule: "0 21 * * *", harness: "claude", prompt: "x", enabled: true };
+  const longRoot = "/x".repeat(1200);
+  expect(() => crontabBlock([c], "tag", longRoot, "/bin/jspace", "/bin", "/home")).toThrow();
+});
+
+test("replaceManagedBlock: empty input -> block", () => {
+  const block = "# jspace crons (managed) DO NOT EDIT\n0 21 * * *  cmd\n# end jspace\n";
+  expect(replaceManagedBlock("", block)).toBe(block);
+});
+
+test("replaceManagedBlock: replaces old block, keeps user lines", () => {
+  const existing = "0 6 * * *  /usr/bin/backup\n# jspace crons (managed) DO NOT EDIT\n0 21 * * *  old\n# end jspace\n0 7 * * *  /usr/bin/other\n";
+  const block = "# jspace crons (managed) DO NOT EDIT\n0 22 * * *  new\n# end jspace\n";
+  const out = replaceManagedBlock(existing, block);
+  expect(out).toContain("0 6 * * *  /usr/bin/backup");
+  expect(out).toContain("0 22 * * *  new");
+  expect(out).not.toContain("0 21 * * *  old");
+  expect(out).toContain("0 7 * * *  /usr/bin/other");
+});
+
+test("replaceManagedBlock: no existing block -> appended", () => {
+  const existing = "0 6 * * *  /usr/bin/backup\n";
+  const block = "# jspace crons (managed) DO NOT EDIT\n0 21 * * *  new\n# end jspace\n";
+  const out = replaceManagedBlock(existing, block);
+  expect(out.startsWith("0 6 * * *  /usr/bin/backup"));
+  expect(out).toContain(block.trim());
+});
+
+test("replaceManagedBlock: empty block removes the jspace block", () => {
+  const existing = "0 6 * * *  /usr/bin/backup\n# jspace crons (managed) DO NOT EDIT\n0 21 * * *  old\n# end jspace\n0 7 * * *  /usr/bin/other\n";
+  const out = replaceManagedBlock(existing, "");
+  expect(out).toContain("0 6 * * *  /usr/bin/backup");
+  expect(out).toContain("0 7 * * *  /usr/bin/other");
+  expect(out).not.toContain("jspace crons");
+  expect(out).not.toContain("0 21 * * *  old");
+});
+
+test("replaceManagedBlock: malformed markers throw", () => {
+  const block = "# jspace crons (managed) DO NOT EDIT\nx\n# end jspace\n";
+  expect(() => replaceManagedBlock("# jspace crons (managed) DO NOT EDIT\nx\n", block)).toThrow();
+  expect(() => replaceManagedBlock("# end jspace\n", block)).toThrow();
+  expect(() => replaceManagedBlock("# jspace crons (managed) DO NOT EDIT\nx\n# end jspace\n# jspace crons (managed) DO NOT EDIT\ny\n# end jspace\n", block)).toThrow();
+});
+
+test("schtasksArgs: DAILY and WEEKLY mapping", () => {
+  const mk = (id: string, schedule: string): CronDefinition => ({ id, schedule, harness: "claude", prompt: "test", enabled: true });
+  const daily = schtasksArgs(mk("inbox-tidy", "0 21 * * *"), "C:\\jspace.exe", "C:\\wb", "JSpaceCron_wb_inbox");
+  expect(daily).toContain("/sc"); expect(daily).toContain("DAILY"); expect(daily).toContain("/st"); expect(daily).toContain("21:00");
+  expect(daily).toContain("/tn"); expect(daily).toContain("JSpaceCron_wb_inbox");
+  expect(daily!.join(" ")).toContain('cron run --dir "C:\\wb" --id inbox-tidy');
+
+  const weekly = schtasksArgs(mk("weekly", "0 21 * * 0"), "C:\\jspace.exe", "C:\\wb", "JSpaceCron_wb_weekly");
+  expect(weekly).toContain("WEEKLY"); expect(weekly).toContain("/d"); expect(weekly).toContain("SUN");
+  const sun7 = schtasksArgs(mk("sun7", "0 21 * * 7"), "C:\\jspace.exe", "C:\\wb", "JSpaceCron_wb_sun7");
+  expect(sun7).toContain("SUN"); // dow=7 also maps to SUN
+});
+
+test("schtasksArgs: unsupported schedules -> null", () => {
+  const mk = (id: string, schedule: string): CronDefinition => ({ id, schedule, harness: "claude", prompt: "test", enabled: true });
+  expect(schtasksArgs(mk("monthly", "0 0 1 * *"), "C:\\jspace.exe", "C:\\wb", "x")).toBeNull();
+  expect(schtasksArgs(mk("dom", "0 0 1 6 *"), "C:\\jspace.exe", "C:\\wb", "x")).toBeNull();
+});
+
+test("isWindowsInstallable", () => {
+  expect(isWindowsInstallable("0 21 * * *")).toBe(true);
+  expect(isWindowsInstallable("0 21 * * 0")).toBe(true);
+  expect(isWindowsInstallable("0 0 1 * *")).toBe(false);
+  expect(isWindowsInstallable("0 0 1 6 *")).toBe(false);
+});
