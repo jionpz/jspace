@@ -79,7 +79,17 @@ export GBRAIN_HOME="$TARGET/brain"
 }
 echo "  ✓ 隔离 gbrain 已就绪(GBRAIN_HOME=$TARGET/brain)"
 
-# --- 5. 写 AC1 场景请求(给 Haiku 的一句话,模拟真实用户) ---
+# --- 5. dev wrapper:让模型跑 jspace 时用最新源码,而非可能过期的编译二进制 ---
+mkdir -p "$TARGET/bin"
+cat > "$TARGET/bin/jspace" << MAKEWRAPPER
+#!/bin/sh
+# dev wrapper: always run the latest source (gen-assets already rebuilt assets)
+exec bun run "$REPO/cli/main.ts" "\$@"
+MAKEWRAPPER
+chmod +x "$TARGET/bin/jspace"
+echo "  ✓ dev wrapper 已建(TARGET/bin/jspace → 最新源码)"
+
+# --- 6. 写 AC1 场景请求(给 Haiku 的一句话,模拟真实用户) ---
 cat > "$TARGET/AC1-TASK.md" << 'EOF'
 # AC1 任务
 
@@ -88,20 +98,21 @@ cat > "$TARGET/AC1-TASK.md" << 'EOF'
 EOF
 echo "  ✓ 场景请求已写(AC1-TASK.md)"
 
-# --- 6. 验证就绪 ---
+# --- 7. 验证就绪 ---
 cd "$TARGET"
-"$REPO"/bin/jspace doctor --dir . >/dev/null 2>&1 && echo "  ✓ doctor 通过" || echo "  ! doctor 有 warning(filehub 相关,AC1 不受影响)"
+"$TARGET/bin/jspace" doctor --dir . >/dev/null 2>&1 && echo "  ✓ doctor 通过(wrapper 可用)" || echo "  ! doctor 有 warning(filehub 相关,AC1 不受影响)"
 "$GBRAIN_BIN" doctor --fast >/dev/null 2>&1 && echo "  ✓ gbrain 健康" || echo "  ! gbrain doctor 非致命"
 
 echo ""
-echo "================ AC1 就绪,按下面操作 ================"
+echo "================ AC1 就绪 ================"
 echo ""
-echo "1) 切 Haiku 会话(带隔离 gbrain 环境变量):"
-echo "   export GBRAIN_HOME=$TARGET/brain"
-echo "   cd $TARGET && claude --model haiku"
+echo "交互式(推荐,最接近真实):"
+echo "  export GBRAIN_HOME=$TARGET/brain"
+echo "  export PATH=$TARGET/bin:\$PATH"
+echo "  cd $TARGET && claude --model haiku"
+echo "  在会话里说: 读一下 AC1-TASK.md,按里面要求做。"
 echo ""
-echo "2) 在 Haiku 会话里给它一句话:"
-echo "   读一下 AC1-TASK.md,按里面要求做。"
-echo ""
-echo "3) 完成后把 Haiku 的 transcript 交给主会话判定 AC1。"
-echo "====================================================="
+echo "Headless(复刻 cron 无头配置,~15 分钟):"
+echo "  export GBRAIN_HOME=$TARGET/brain PATH=$TARGET/bin:\$PATH"
+echo "  cd $TARGET && claude --model haiku -p \"读一下 AC1-TASK.md,按里面要求做。把每步命令和输出都记下来\" --dangerously-skip-permissions"
+echo "==========================================="
