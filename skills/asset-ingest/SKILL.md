@@ -1,6 +1,6 @@
 ---
 name: asset-ingest
-description: "将工作资料(书籍 pdf/ppt/txt/md、excel、报告)转化为可召回的知识资产:归位到文件中心 + 写 gbrain reference 页 + 中文语义召回。复用 gbrain 现成检索能力,遵守 JSpace 记忆/知识纪律。Use when the user asks to file a document, tidy the inbox, or turn a resource into knowledge."
+description: "把一份工作资料(书籍/pdf/ppt/excel/报告)变成可召回的知识资产:本体归位文件中心 + 要点写进 gbrain reference 页。Use when 资料入库/整理 inbox/归位资料。Do NOT use for 会话进度写回(→memory-writeback)或用户主动问句召回(→memory-recall)。"
 triggers:
   - "资料入库"
   - "整理 inbox"
@@ -8,109 +8,77 @@ triggers:
   - "把这份资料入库"
 ---
 
-# asset-ingest — 资料转知识资产
+# asset-ingest — 资料转知识资产(写侧)
 
-把一份资料变成"可召回的知识资产":**本体归位到文件中心 + 要点写进 gbrain**。调用 gbrain 现成检索能力,skill 只负责 JSpace 侧纪律(归位、命名、type 映射、写回)。
+把一份资料变成「可召回的知识资产」:**本体归位文件中心 + 要点写 gbrain**。确定性由 CLI 兜底(`jspace ingest` journal 状态机:幂等/补偿/中断可续跑);skill 只做语义判断(归属/命名/查重/策展)。读侧召回用 `memory-recall`,会话事实写回用 `memory-writeback`。
 
-## 前置
+## 何时用 / 何时不用
+- ✅ 用:单份资料入库 / 批量整理 inbox(`整理一下 inbox`)。
+- ❌ 不用:会话进展/决策/教训写回 → `memory-writeback`;用户「问一句找那个数」 → `memory-recall`;office 深度抽取是本 skill 的**可选深入**分支(见下),不另开 skill。
 
-- **文件中心**:读 `.jspace/hub.json` 中 `type: filehub` 的 resource,取其 `primary: true` 的 path entrypoint 作为根(`filehub/`)。
-  - 未注册 → 用**降级暂存区**:工作台同级、不进 git 的 `../<workbench>-inbox/`(或用户指定目录),并提示"待文件中心注册为 type=filehub 后正式归位"。
-- **gbrain**:经 CLI 或 MCP 操作;brain 被 `gbrain serve` 持锁时按其提示处理,不绕过锁。
-- 归档纪律:按**主要内容物**归档、不按格式(源自 gbrain `_brain-filing-rules.md`;本 skill 细则见 `references/filing.md`)。
+## 决策表
 
-## 步骤
+| 判断 | 取值 | 动作 |
+|---|---|---|
+| 归属 | 项目产出 / 领域资料(书籍) | `projects/<项目>/` / `areas/<领域>/` |
+| 类型 | pdf·txt·md·book / excel·ppt / video·audio | 摘要+指针 / +需深度抽取(可选) / 路由 media-ingest(MVP 外) |
+| 查重(`gbrain get assets/<id>/<语义名>`) | 已存在 / 不存在 | 询问用户:跳过·修复(覆盖错页)·升版本`-vN`(新页) / 继续 |
+| gbrain serve 持锁 | 是 / 否 | `jspace pending stage`(暂存,不失败) / 直接写页 |
+| embedding 不可达 | 是 / 否 | `embed_skip: true` 重写(写入必成功)+固定提示 / 正常写 |
 
-### 1. 识别
-- 确定类型:pdf / ppt / txt / md / book / excel。
-- 判断归属:项目产出 → `projects/<项目>/`;书籍/领域资料 → `areas/<领域>/`。
-- **查重**:检查目标目录同名/同语义文件,以及 `gbrain get assets/<项目|领域>/<语义名>` 是否已建页。
-  - 已存在 → 询问用户:跳过 / **修复**(同名同内容重入,允许覆盖错页)/ 升版本(`-vN`,写新页、旧页保留并注 supersedes)。
+## 命令速查
 
-### 2. 暂存(机械,不丢 source)
-- 语义决策(归属 project/领域、命名、slug)→ 调用 `jspace ingest begin <file> --target <路径> --slug <slug> --project <id> [--index <行>]`:
-  - jspace **复制**文件到目标(暂存副本),**source 留在 inbox**;写 ingest journal(status=staged),返回 journal id。
-  - journal 级幂等:同内容同目标已入库 → 报 duplicate 跳过;in-progress → 报 resume 续跑。
-- 查重仍含 `gbrain get assets/<id>/<语义名>`(语义);已存在 → 询问用户:跳过 / 修复 / 升版本,不机械覆盖。
+```bash
+# journal 四步(单份;每步成功后下一步)
+jspace ingest begin <file> --target <路径> --slug <slug> --project <id> [--index <行>]
+jspace ingest advance <journal-id> --gbrain      # 写入 gbrain 后
+jspace ingest advance <journal-id> --index       # index.md 登记后
+jspace ingest advance <journal-id> --complete     # 移除 inbox source,journal=committed
+# 失败/中断(无孤儿)
+jspace ingest fail <journal-id> --reason <原因>   # gbrain 前失败:移除暂存副本,source 留 inbox
+jspace ingest list                                # 找 in-progress/cleanup-pending,续跑
+# gbrain 锁冲突
+jspace pending stage <slug> --content <正文文件> --producer asset-ingest
+jspace pending apply                               # 锁空闲落 live(幂等)
+# 召回自检
+gbrain query <关键词>
+```
 
-### 3. 入脑(gbrain 页)
-- 写 gbrain reference 页(slug `assets/<projectId>/<语义名>`,正文 = Summary + Key Facts + Pointer;frontmatter `type/source/project/tags/rel_path`):
-  - 写成功 → `jspace ingest advance <journal-id> --gbrain`。
-  - **serve 持锁 / 写失败** → `jspace pending stage <slug> --content <正文文件> --producer asset-ingest`(**暂存 envelope,不失败**);锁空闲时 `jspace pending apply` 落 live。
-- embedding 不可达 → 以 `embed_skip: true` 重写(写入必须成功),检索降级并固定提示。
+## 步骤(主流程骨架)
 
-### 4. 登记(index) + 提交
-- 项目 `index.md` 挂一行 → `jspace ingest advance <journal-id> --index`。
-- `jspace ingest advance <journal-id> --complete` → jspace **移除 inbox source**,journal=committed。
-  - **cleanup-pending 可恢复(非一般失败)**:移除前 journal 先记 `failed/failedStep=committed`(source cleanup pending)。unlink 失败或中断 → 退出非零、不虚报 source 已删,并给出同一重试命令。
-  - 重试幂等:source 仍在 inbox → 重试删除;source 已删除 → 直接收敛 committed。`ingest list` 会标注 `failed/cleanup-pending`,`ingest status` 显示 `cleanup pending`,都是收尾入口。
+1. **识别**:定类型/归属;查重(`gbrain get assets/<id>/<语义名>`)→ 冲突按决策表。
+2. **暂存**:`jspace ingest begin ...`(jspace 复制到目标、source 留 inbox、写 journal,返回 id)。
+3. **入脑**:写 gbrain reference 页(slug `assets/<projectId>/<语义名>`,模板见 `references/gbrain-write.md`)→ 成功 `advance --gbrain`;锁冲突 `jspace pending stage`。
+4. **登记+提交**:`advance --index` → `advance --complete`(jspace 移除 source)。
+5. **召回自检**(必做):`gbrain query <关键词>` 命中;未命中 → 查 slug/tags/embedding。
 
-### 失败 / 中断(可恢复,无孤儿)
-- 任一步失败 → `jspace ingest fail <journal-id> --reason <原因>`:
-  - gbrain 页未写前失败 → jspace **移除暂存副本**,source 留 inbox(无孤儿),可重试。
-  - 页已写、index 失败 → 不破坏,`--index` 可重试补写。
-- 中断 → 下轮 `jspace ingest list` 找 in-progress journal,从记录步骤续跑(**已完成步骤不重做**)。
-- **cleanup-pending 收尾**:list 显示 `failed/cleanup-pending` / status 显示 `cleanup pending` → 用同一 `jspace ingest advance <journal-id> --complete` 收尾,不要 `--fail` / `--rollback`(会拒绝)。
+**任一步失败** → `jspace ingest fail <id> --reason <原因>`(gbrain 前失败移除暂存副本无孤儿);中断 → 下轮 `jspace ingest list` 续跑(已完成步骤不重做)。
 
-### 5. 召回自检(必做)
-- `gbrain query <关键词>` 确认命中;未命中 → 检查 slug / tags / embedding。
+## 按需深入(条件读指针)
 
-### 6. (可选,用户要求时)深入
-- **office 深度抽取**(excel/ppt):用户要求把表格/关键数字也收了时,用 `scripts/office-extract.py` 逐表/逐页抽取 → 策展 Key Facts(含关键数字)入 reference 页 + 伴生 `.extract.md` 落 asset 层。细则见 `references/deep-extract.md`。
-- `strategic-reading`:纯 markdown skill,会话内可执行 → 产出 playbook。
-- `book-mirror`:CLI 命令,serve 持锁时阻塞、需 Anthropic 子代理与成本确认;不在常规路径。
-- `media-ingest`:serve 会话内经 MCP `file_upload`(其 Phase 2 CLI 被锁阻塞);MVP 不 invoke。
-- 需要时按 gbrain 提示操作。
+- 要做**批量整理** inbox(`整理一下 inbox` / cron 无头)→ 先读 `references/batch.md`(两遍式·幂等·日志·无头只跑第一遍;执行日志落 `<filehub>/.jspace-logs/inbox-batch.md`)
+- 要做 **office 深度抽取**(excel/ppt 把数字/表格也收)→ 先读 `references/deep-extract.md`(`scripts/office-extract.py` + 伴生 `.extract.md` + 策展)
+- 存量旧资料按需收编 → 先读 `references/migration.md`
+- 归位/命名/类型细则、降级暂存区定位 → `references/filing.md`
+- 写页模板/slug 派生/embedding 降级/type 纪律 → `references/gbrain-write.md`
 
-## 批量模式(整理一下 inbox)
+## Golden run
 
-一次性处理 `_inbox/` 存量。与单文件共用同一套纪律(步骤 1-5),外层加「两遍式 + 幂等 + 汇总 + 日志」。触发:「整理一下 inbox」「批量整理」。无头/定时(cron)用同一模式,只跑第一遍。细则见 `references/batch.md`。
+端到端范例(journal 四步 + 一次 cleanup-pending 收尾)见 `references/example-ingest.md`。
 
-### 0. 定位 inbox
-- 读 `.jspace/hub.json` 中 `type: filehub` resource 的 `primary: true` path → `<根>/_inbox/`。
-- 未注册 → 降级暂存区(工作台外 `../<workbench>-inbox/`)。可用 `jspace inbox status` 预检。
-- 空 inbox → 报告"无事可做",结束。
+## 自检(做完跑这条)
 
-### 1. 处理前排除(可选)
-- 用户指定「这个别动」的文件/模式 → 加入 skip 清单,本轮不处理。
-
-### 2. 第一遍(确定性,零提问)
-- 遍历 inbox 剩余文件(排除 `.processing` 已完成项、skip 清单、点文件)。
-- 每个文件判断**确定性**:类型明确(pdf/ppt/txt/md/excel)且归属可判(项目/领域)且无查重冲突(`gbrain get assets/<项目|领域>/<语义名>` 未存在)且命名可直接提取。
-  - 确定性 → 逐份走「步骤 1-5」,零提问,单文件原子性(该份失败即停、报告、不留半成品)。
-  - 不确定 → 记入第二遍清单(附「不确定点」:归属?命名?查重冲突?类型?)。
-- 处理前写 `.processing` 标记(瞬态锁),成功或失败都删除;失败的文件留在 `_inbox/` + 原因记日志 → 下次批量(含 cron 无头)自然重试(中断可续跑,不重复已完成项)。
-
-### 3. 第二遍(模糊项,人工过目)
-- 把第二遍清单列成**短清单**一次给用户过目,每项:跳过 / 改归属 / 改命名 / 升版本 / 覆盖。
-- 用户确认后再处理;无头模式跳过本步(模糊项留清单,等用户在场时处理)。
-
-### 4. 汇总与校验
-- 报告:成功 / 跳过 / 失败 + 原因 + 计数对比(批量前后 `_inbox/` 数一致)。
-- 召回自检:每份(或抽样)贴出实际 `gbrain query <关键词>` 输出(不得静默)。
-
-### 5. 人工纠错(处理后)
-- 用户指出某份归错/命名不当 → 「撤销本次」(移回 `_inbox/`,删/标注 gbrain 页、撤销 index 行)或「重跑该份」(修复语义,允许覆盖错页)。
-
-### 无头模式(cron / `-p`)
-- 只跑第一遍(确定性),不提问、不等待;模糊项留清单。
-- 写执行日志到 `<filehub>/.jspace-logs/inbox-batch.md`(时间/输入计数/成功/跳过/失败/逐文件结果),供下次会话检查(对接 M3 失败可见性)。
-
-## 纪律
-
-- **journal 是机器 truth**:恢复/幂等/补偿判断一律基于 `jspace ingest` journal;prose 日志只作人类报告。
-- **失败可恢复、无孤儿**:gbrain 页成功前 source 留在 inbox(暂存副本可被 `--fail` 补偿移除);页已写后失败只影响 index/commit(可重试)。任一步失败 → `jspace ingest fail <id> --reason <原因>` 记入 journal,不静默。
-- **不虚报 cleanup**:commit 的 source 移除未证明完成前,journal 保持 `failed/failedStep=committed`(cleanup-pending)而非 committed;发现它就用同一 `--complete` 收尾,不当作普通失败跳过。
-- **锁冲突暂存,不绕过锁**:gbrain serve 持锁 → `jspace pending stage` 暂存 envelope,锁空闲 `jspace pending apply`;绝不 kill serve 或强写。
-- **本体不复制进 gbrain**:指针 = reference 页 Source 字段(绝对路径)。不依赖 `files upload-raw`。
-- **embedding 不可用时固定提示**:`embedding 不可用,当前为关键词检索,中文命中率可能偏低`(不得静默)。
-- **逐份处理**:单文件模式每次一份(会话可循环);批量模式见「批量模式」与 `references/batch.md`。
+```bash
+gbrain get assets/<projectId>/<语义名>   # 页存在;project/tags/rel_path 齐
+gbrain query <关键词>                      # top-1 命中本页
+jspace ingest list                          # 无 in-progress(已 committed 或已 fail)
+```
 
 ## 参考
-
-- `references/filing.md` — 归位/命名/类型策略/文件中心定位/降级
-- `references/gbrain-write.md` — 入脑模板 + slug 派生 + embedding 降级 + type 纪律
-- `references/batch.md` — 批量模式细则(两遍式、幂等、日志、无头)
-- `references/deep-extract.md` — excel/ppt 深度抽取(逐表/逐页 + 伴生 .extract.md + 策展纪律)
-- `references/migration.md` — 存量旧资料按需收编 runbook(增量,复用本 skill 纪律)
-- `scripts/office-extract.py` — 零依赖抽取器(python3 stdlib);`scripts/office-extract.test.py` 自测
+- `references/filing.md` — 归位/命名/类型/文件中心定位/降级
+- `references/gbrain-write.md` — 写页模板/slug/embedding 降级/type 纪律
+- `references/batch.md` — 批量模式(两遍式/幂等/日志/无头)
+- `references/deep-extract.md` — excel/ppt 深度抽取
+- `references/migration.md` — 存量收编 runbook
+- `references/example-ingest.md` — golden run(S5 产出)
+- `scripts/office-extract.py` — 零依赖抽取器;`scripts/office-extract.test.py` 自测

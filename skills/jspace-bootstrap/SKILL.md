@@ -1,6 +1,6 @@
 ---
 name: jspace-bootstrap
-description: "Configure a fresh JSpace workbench after at least one AI harness (Pi, Claude Code, Codex, or Cursor) is already installed - the user picks which one to use: installs the gbrain unified memory base (PGLite + knowledge graph + local embedding), verifies the domain/resource registry, and wires the chosen harness via MCP/CLI with session-start retrieval injection and work-end write-back. hermes is optional (mentioned for awareness, not proactively promoted). Use when the user asks to initialize/set up/configure a JSpace workbench for the first time, when the registry looks broken, when gbrain is missing or unwired, or when starting a fresh environment."
+description: "**首次配置** JSpace 工作台(需已装至少一个 harness):装 gbrain 统一记忆库(PGLite+知识图谱+本地 embedding)、校验注册表、接线所选 harness(MCP/CLI + 会话注入/写回)。Use when 初始化/配置 jspace、registry broken、gbrain missing、fresh environment。Do NOT use for 机器级多-harness 全局治理接线(→harness-config)或日常资料入库(→asset-ingest)。"
 triggers:
   - "initialize jspace"
   - "setup jspace"
@@ -13,103 +13,74 @@ triggers:
   - "fresh environment"
 ---
 
-# jspace-bootstrap
+# jspace-bootstrap — 工作台首次配置
 
-Bootstrap a fresh JSpace workbench end to end. Run phases in order; never skip a verification step. Report a checklist at the end.
+端到端 bootstrap 一个全新 JSpace 工作台。**按 Phase 顺序执行,不跳验证步**,末尾报 checklist。
 
-## Phase 0 - Prerequisites
+## 何时用 / 何时不用
+- ✅ 用:全新工作台首配 / registry 坏 / gbrain 缺失或未接线。
+- ❌ 不用:配置**机器级**多-harness 全局治理文档(`~/.agents/agents.md` 单源接线)→ `harness-config`;日常把资料入库 → `asset-ingest`。
+- **前提**:至少一个 harness(Pi/Claude Code/Codex/Cursor)已装且可用;本 skill 不装 harness。
 
-**Assumption: at least one AI harness (Pi, Claude Code, Codex, or Cursor) is already installed and functional.** This skill configures what comes after that: the registry, gbrain memory, and harness wiring. It does not install harnesses.
+## 决策表
 
-检测缺失工具;**不默认执行远程管道安装**(父任务设计 §11:远程安装器下载到临时文件、展示来源/校验和、执行需用户显式确认):
+| 判断 | 取值 | 动作 |
+|---|---|---|
+| 缺失工具(bun/git) | 缺 | 给官方安装命令+来源,**默认不执行**(治理红线:下载临时文件→展示核验→用户确认后跑) |
+| embedding | 默认(零账号) / 提升 / 不可达 | 本地 Ollama bge-m3 / SiliconFlow bge-m3(需 key) / `embed_skip: true` 保底(bootstrap 不失败) |
+| filehub 根 | Obsidian / 本地 / 网盘 / 暂不配 | `jspace filehub init <根> --register` / 同左 / 同左 / 降级暂存区(告知) |
+| harness 接线 | 用户选一个 | 按 Phase 4 表 wire 那一个 |
 
-1. `bun` - if missing (needed to install/upgrade gbrain):
-   - 先探测:`command -v bun`(Windows `where bun`);缺失则给出安装命令并注明来源:
-     - macOS / Linux: `curl -fsSL https://bun.sh/install | bash`
-     - Windows: `powershell -c "irm bun.sh/install.ps1 | iex"`
-   - **执行纪律(治理红线 + §11)**:以上均为 bun 官方安装脚本,属 `curl | bash` 一类。**默认不执行**;确需安装时按顺序:
-     1. **下载到临时文件、不直接管道执行**:`curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh`(Windows 等价下载 `.ps1`);
-     2. **展示来源与内容供核验**:bun.sh 官方 + 抽查脚本(勿盲跑未审查脚本);
-     3. **用户显式确认后**再 `bash /tmp/bun-install.sh`(Windows:`powershell -ExecutionPolicy Bypass -File <下载的 .ps1>`)。
-2. `git` - if missing, install via the platform package manager(Windows: `winget install Git.Git`)。
-
-Verify after installs: `bun --version`。
-
-## Phase 1 - Install gbrain (first core)
-
-1. Resolve the binary: `$GBRAIN_BIN` -> `which gbrain`(Windows `where gbrain`) -> `~/.bun/bin/gbrain`(Windows `%USERPROFILE%\.bun\bin\gbrain.exe`).
-2. If missing: `bun install -g gbrain`, then `gbrain upgrade`.
-3. If `~/.gbrain`(Windows `%USERPROFILE%\.gbrain`) is absent: `gbrain init` (defaults to PGLite, no server).
-4. `gbrain doctor --json` - check brain, resolver, embeddings; fix what it reports.
-5. Embeddings are a **default-required config** — Chinese recall depends on semantic search (tsvector does not tokenize CJK). **默认(零外部账号):本地 Ollama bge-m3**(offline,见 `skills/jspace-bootstrap/references/gbrain.md`);可选提升:SiliconFlow bge-m3(在线,需 API key)。If no embedding is reachable, bootstrap must still succeed: writes use `embed_skip: true` (never fail a write because embedding is down), and retrieval degrades to keyword search with a clear notice (ingest-side policy: `skills/asset-ingest/references/gbrain-write.md`).
-6. Recommended AI config (ask the user; never force): **默认本地 Ollama bge-m3**;可选提升 = SiliconFlow embedding + chat-parity-with-harness scheme from `skills/jspace-bootstrap/references/gbrain.md` (Recommended AI configuration). Needs a SiliconFlow API key; chat parity additionally needs a local proxy running (user-environment specific). Skip entirely if the user declines or has no key.
-7. Smoke test, then clean up (no probe pages left behind):
+## 命令速查
 
 ```bash
-printf '---\ntype: smoke\nembed_skip: true\n---\nbootstrap probe\n' | gbrain put smoke/bootstrap
-gbrain get smoke/bootstrap
-gbrain delete smoke/bootstrap
-gbrain list -n 10   # no smoke pages remain
+gbrain init                                   # 建 brain(PGLite,默认无 server)
+gbrain init --embedding-model ollama:bge-m3 --embedding-dimensions 1024  # 本地 embedding
+gbrain doctor --json                          # brain/resolver/embeddings 健康
+gbrain models doctor --json                   # embedding_config + embedding_reachability
+jspace doctor --dir .                         # 注册表校验(缺外部路径=warning)
+jspace filehub init <根> --register           # 建 filehub 骨架 + 注册 type:filehub
+# smoke(用后清理,不留探针页)
+printf '---\ntype: smoke\nembed_skip: true\n---\nprobe\n' | gbrain put smoke/bootstrap
+gbrain get smoke/bootstrap && gbrain delete smoke/bootstrap
 ```
 
-Frontmatter schema and offline policy: `skills/jspace-bootstrap/references/gbrain.md`.
+## Phase 骨架(顺序执行)
 
-## Phase 2 - Registry health
+0. **Prerequisites**:检测 bun/git;缺失按决策表(不默认远程管道安装)。
+   - bun 缺失(装 gbrain 需要):官方脚本 `curl -fsSL https://bun.sh/install | bash`(macOS/Linux)或 `powershell -c "irm bun.sh/install.ps1 | iex"`(Windows)——**默认不执行**(`curl | bash` 一类,治理红线)。
+   - 确需安装:① 下载临时文件、不直接管道执行(`curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh`);② 展示来源(bun.sh 官方)+ 抽查脚本核验;③ **用户显式确认后**才 `bash /tmp/bun-install.sh`。
+1. **装 gbrain**(first core):解析二进制 → `bun install -g gbrain` → `gbrain init` → `gbrain doctor --json` 修所报 → embedding(默认 Ollama bge-m3)→ smoke 后清理。细则 `references/gbrain.md`。
+2. **Registry health**:`jspace doctor --dir .`;`hub.json` 合法 JSON;域文件夹/id 一致;每资源恰一 primary。细则 `references/registry.md`。
+3. **File center**:问用户选 filehub 根(默认第一选择 Obsidian 文件夹)→ `jspace filehub init <根> --register`;暂不配则告知降级暂存区。**首配验收**:放一份示例文件进 `_inbox/` 跑一次「整理一下 inbox」,确认入库→gbrain 页→中文召回闭环。
+4. **Harness wiring**:问用户用哪个 harness,wire 那一个(MCP/CLI + 会话注入/写回)。细则 `references/harnesses.md`。
+5. **Final smoke + sign-off**:`jspace doctor` + `jq hub.json` + `gbrain doctor --fast`;报 configured/already-OK/missing-deferred。
 
-The workbench has no standalone CLI inside itself; validation lives in the JSpace CLI: `jspace doctor --dir .`(`jspace` 为编译二进制,需在 PATH 上;源码检出则 `bun run cli/main.ts`)。`.jspace/hub.json` must stay valid JSON; repair drift only with explanation. Never invent domains/resources.
+## 按需深入(条件读指针)
 
-1. `jq .jspace/hub.json` parses(Windows 无 jq → PowerShell `Get-Content .jspace/hub.json | ConvertFrom-Json`)。
-2. Every `domains[]` folder exists and contains `README.md` + `domain.json`; the `domain.json` id matches both the folder name and `.jspace/hub.json`.
-3. Every resource with path entrypoints has exactly one primary path entrypoint; missing external paths are warnings, not blocking errors.
-4. Domain/resource ids are globally unique; every resource `domain` references a registered domain.
+- gbrain 安装/embedding 三方案/frontmatter schema/离线策略 → `references/gbrain.md`
+- registry schema(hub v4 / local / marker)/drift 规则 → `references/registry.md`
+- 逐 harness 接线(Pi/Claude/Codex/Cursor + 跨平台路径 + lifecycle 矩阵)→ `references/harnesses.md`
+- 无头执行运维(账号/配额/失败可见性)→ `references/headless-ops.md`
 
-Schema and drift rules: `skills/jspace-bootstrap/references/registry.md`.
+## Golden run
 
-## Phase 3 - File center (文件中心/资产层)
+首配端到端范例(gbrain → registry → filehub → wiring → 首配验收)见 `references/example-bootstrap.md`。
 
-The asset layer is a separate folder (`filehub`) for heavy files (pdf/ppt/excel/md). Ask the user which root to use — **first choice = Obsidian folder**, then local dir / cloud-dir / **skip for now**. Structure is pure md + relative links (Obsidian is a view, not a system): no `.obsidian/` config is written.
-
-1. **Ask the user (offer options, one decision)**: ① Obsidian 文件夹(默认第一选择:已有的 vault 或新目录)② 本地普通目录 ③ 网盘同步目录 ④ 暂不配置。
-2. **If Obsidian**: recognize an existing vault (`test -d <root>/.obsidian`) or a new folder that can be opened as a vault; explain the Obsidian compatibility conventions are already in the filehub root `README.md` (Obsidian Sync option, wikilink, frontmatter discipline) — no plugin / private format, no `.obsidian` written by us.
-3. **Register**: `jspace filehub init <root> --register`(`jspace` 为编译二进制,需在 PATH 上;源码检出则 `bun run cli/main.ts`)。Creates the skeleton and registers `type: filehub` (auto-creates the `files` domain).
-4. **Skip for now**: explicitly tell the user that asset-ingest falls back to the degraded staging area (`../<workbench>-inbox/`) until a filehub is registered — they can register later with the command above.
-
-> **首配验收(端到端)**:not "everything configured" — put one real file into `<root>/_inbox/` and run `整理一下 inbox` once, confirming 入库→gbrain 页→中文召回 round trip. This is the acceptance for first-use.
-
-## Phase 4 - Harness wiring (MCP/CLI)
-
-Four session harnesses are supported: **Pi, Claude Code, Codex, Cursor**. Ask the user which one they will use (or detect it); wire that one. Each harness reads/writes the same gbrain store over MCP/CLI. gbrain CLI/MCP is the interface - do not add a JSpace wrapper around it:
-
-| Harness | Config location | Wire |
-| --- | --- | --- |
-| Pi | MCP or CLI | gbrain reachable at least via CLI |
-| Claude Code | `~/.claude.json` | `mcpServers.gbrain` with `command: <gbrain>, args: [serve], type: stdio` |
-| Codex | `~/.codex/config.toml` | `[mcp_servers.gbrain]` stdio `gbrain serve`; hooks `features.hooks = true` for session-start injection |
-| Cursor | `~/.cursor/mcp.json` (user) or `.cursor/mcp.json` (project) | `mcpServers.gbrain` with `command: <gbrain>, args: [serve]` |
-| hermes (optional) | `~/.hermes/config.yaml` | gbrain MCP server entry - mention only, do not proactively set up |
-
-hermes is optional: hint that it exists for autonomous/cron/multi-endpoint use, but do not promote or install it unless the user asks.
-
-> Windows 注意:上表为 macOS/Linux 路径;Windows 下各 harness 的 config 路径与 stdio MCP command 全路径写法见 `skills/jspace-bootstrap/references/harnesses.md` 的"跨平台路径速查"表。
-
-Verify the chosen wiring and confirm the session-start retrieval-injection and work-end write-back flows (see `skills/jspace-bootstrap/references/harnesses.md`).
-
-AI provider/model/proxy config is user-environment specific and outside this workbench's defaults; if the user has a management tool or local proxy, manage it via a registered resource in `.jspace/hub.json`.
-
-## Phase 5 - Final smoke and sign-off
+## 自检(做完跑这条)
 
 ```bash
-# 校验(编译二进制在 PATH 时用 jspace;源码检出则 bun run cli/main.ts)
-jspace doctor --dir .
-# .jspace/hub.json 合法 JSON(POSIX: jq;Windows: ConvertFrom-Json)
-jq .jspace/hub.json
-# 列出工作区文件(POSIX: find|sort;Windows: Get-ChildItem)
-find workspace -maxdepth 2 -type f | sort
-gbrain doctor --fast
+jspace doctor --dir .        # 注册表通过
+gbrain doctor --fast          # brain 健康
+jq .jspace/hub.json           # 合法 JSON
 ```
+(首配真正验收 = Phase 3 的「放一份文件跑 inbox 整理」闭环成立)
 
-Windows 等价(如适用):`Get-ChildItem -Path workspace -Recurse -Depth 1 -File | Sort-Object FullName`。
+## 参考
+- `references/gbrain.md` — gbrain 安装/embedding/schema/离线策略
+- `references/registry.md` — 注册表 schema + drift
+- `references/harnesses.md` — 逐 harness 接线 + lifecycle 矩阵
+- `references/headless-ops.md` — 无头运维(账号/配额/失败可见性)
+- `references/example-bootstrap.md` — golden run(S5 产出)
 
-Report: configured / already-OK / missing-deferred items (e.g., Ollama offline, chosen harness not fully wired). Explain any registry or domain-file repairs.
-
-> **Note — skill updates and existing workbenches.** New workbench skills added to the dev repo (e.g. `asset-ingest`) are only copied into workbenches by `jspace init`; an **existing live workbench does not get them retrofitted**. To pick them up: re-run `jspace init --force .` (clobbers local skill edits) or copy the skill manually. If a freshly generated workbench lacks a skill you expected, first check whether you are inside an old workbench.
+> **Note**:新工作台 skill 只随 `jspace init` 复制,既有工作台不自动回填;要拿到新 skill 需 `jspace init --force .` 或手动复制。

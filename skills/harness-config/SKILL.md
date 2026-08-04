@@ -1,6 +1,6 @@
 ---
 name: harness-config
-description: "Configure recommended settings for all installed AI harnesses (Pi, Claude Code, Codex, Cursor): auto-detects which harnesses are installed on this machine, installs/upgrades itself to the user-root global dir, creates the single-source governance document ~/.agents/agents.md (user root, harness-agnostic rules), wires each installed harness's native global file (symlink / @import / .mdc pointer) to that document, cross-checks recommended session-level config (gbrain MCP/CLI, session-start injection, hooks) read-only, and verifies. Use when the user asks to configure harnesses, set up a global governance doc, unify multi-harness entry, or when an installed harness's global context is missing or stale."
+description: "**机器级**多-harness 全局治理接线:检测已装 harness(Pi/Claude Code/Codex/Cursor)、装自身到用户根、建/维护单源治理文档 ~/.agents/agents.md、把各 harness 全局文件(symlink/@import/.mdc 指针)接到它、只读核对会话级配置(gbrain MCP/注入/hooks)。Use when 配置 harness、统一多-harness 入口、全局治理文档缺失/陈旧。Do NOT use for 单个 JSpace 工作台首配(→jspace-bootstrap)。"
 triggers:
   - "configure harness"
   - "harness config"
@@ -10,83 +10,67 @@ triggers:
   - "agent memory setup"
 ---
 
-# harness-config
+# harness-config — 多-harness 全局治理接线(机器级)
 
-Configure recommended settings for **all** AI harnesses on this machine, under a single-source governance document. Run phases in order; skip-not-installed harnesses; report a checklist at the end.
+给本机**所有** AI harness 接线到单一事实源治理文档(`~/.agents/agents.md`)。**按 Phase 顺序执行,跳过未装 harness,末尾报 checklist**。
 
-> **命名**:所有 `~/.agents` 均指 **用户根目录**(`$HOME/.agents`),与本仓库项目级 `.agents/` 目录是不同位置,勿混淆。
-> **符号**:`$SKILL_DIR` = 本 skill 当前所在目录(含 SKILL.md);`<gbrain>` = gbrain 二进制路径,按 `$GBRAIN_BIN` → `command -v gbrain` → `~/.bun/bin/gbrain` 解析。
+> **命名**:`~/.agents` = **用户根目录**(`$HOME/.agents`),与本仓库项目级 `.agents/` 不同,勿混淆。
+> **符号**:`$SKILL_DIR` = 本 skill 目录;`<gbrain>` = 按 `$GBRAIN_BIN`→`command -v gbrain`→`~/.bun/bin/gbrain` 解析。
 
-## Phase 0 - Detect installed harnesses
+## 何时用 / 何时不用
+- ✅ 用:机器级统一多-harness 入口 / 建维护 `~/.agents/agents.md` / 某 harness 全局上下文缺失或陈旧。
+- ❌ 不用:配单个 JSpace 工作台(gbrain 记忆库 + 注册表 + 单 harness 接线)→ `jspace-bootstrap`。本 skill 是**机器级全局**,不随工作台物化(需要时按 Phase 1 自装到 `~/.agents/skills/`)。
 
-Run the bundled detector; it outputs one TSV row per harness (`harness<TAB>binary<TAB>config_dir<TAB>state`):
+## 决策表
 
-```bash
-bash "$SKILL_DIR/scripts/detect.sh"
-# 安装后: bash "$HOME/.agents/skills/harness-config/scripts/detect.sh"
-```
+| 判断 | 取值 | 动作 |
+|---|---|---|
+| harness state(`detect.sh`) | installed / config_only / not_found | 接线 / 向用户确认后决定 / 跳过 |
+| 治理文档 `~/.agents/agents.md` | 不存在 / 已存在 | 用 `references/governance.md` 骨架创建 / review 分层 + 确认红线最高优先级 |
+| 既有全局文件非空 | 是 / 否(空 stub/不存在) | **不覆盖**:并入治理文档或保留+附加接线,二选一说明 / 直接 symlink |
+| Phase 4 会话级配置 | wired / missing / n/a | **只核对报告,不改既有配置** |
 
-- `state = installed`:binary 在 PATH,可接线。
-- `state = config_only`:无 binary 但有配置目录或 GUI 应用。对 Pi/Codex/Claude Code 通常是残留配置;对 **Cursor** 常是"GUI 已装但 CLI 未在 PATH(未启用 shell integration)"。都不是"已卸载",向用户确认后决定接线方式。
-- `state = not_found`:未安装,接线时跳过。
-- detect.sh 尊重配置目录环境变量(`PI_CODING_AGENT_DIR` / `CODEX_HOME` / `CLAUDE_CONFIG_DIR`)。已装但从未运行的 harness 可能尚无配置目录(`installed` 仍成立,接线需先 `mkdir -p` 父目录)。
-
-**前提**:至少一个 harness 为 `installed`;否则提示用户先安装 harness 再运行本 skill。
-
-## Phase 1 - Install/upgrade this skill
-
-Install (idempotent) to user root, alongside the governance doc:
+## 命令速查
 
 ```bash
-SKILL_DIR="<this skill's directory, e.g. repo skills/harness-config/>"   # 源
-DEST="$HOME/.agents/skills/harness-config"
-mkdir -p "$DEST"
-# 幂等:补缺本 skill 自己的文件;同名且本地已改过的既有文件不静默覆盖
-rsync -a --ignore-existing "$SKILL_DIR"/. "$DEST/" 2>/dev/null || cp -Rn "$SKILL_DIR"/. "$DEST/"
-# 列出与源不一致的既有文件(可能含你改过的本地文件),确认后决定是否更新
-diff -rq "$SKILL_DIR" "$DEST" | grep -v '^Only in' || true
-```
-
-Verify: `ls "$DEST/SKILL.md" "$DEST/scripts/detect.sh" "$DEST/references/"`.
-
-## Phase 2 - Create / maintain the governance document
-
-`~/.agents/agents.md`(用户根目录)是 **所有 harness 的单一事实源**,只放 harness 无关规则。
-
-- 若不存在:用 `references/governance.md` 的骨架模板创建,引导用户填写红线 / 规范 / 工作台入口。
-- 若已存在:review 内容分层(放 harness 无关规则;MCP/hooks/注入不放),并确认**安全红线为最高优先级**(见 governance.md)。
-- 记忆在 gbrain,规则在此文档;工作台 `AGENTS.md` 是路由层,本文件不重复其细节。
-- **本文件不放任何密钥/令牌**;敏感配置一律走密钥管理/环境变量。
-
-## Phase 3 - Wire installed harnesses' global files
-
-对 Phase 0 检测为 `installed` 的每个 harness,按 `references/harnesses.md` 对应节接线(全局文件 → `~/.agents/agents.md`)。各节提供**幂等、带守卫**的接线命令,自动处理:父目录不存在、已接线、空 stub、非空既有文件、Codex `AGENTS.override.md`。
-
-- Pi / Codex / Claude Code:symlink(Claude Code 备选 `@import`);接线前 `mkdir -p` 父目录。
-- **Cursor**:文件式规则是**项目级**(`<project>/.cursor/rules/*.mdc`),用户级无规则文件——用项目级指针 `.mdc`,或把指针规则粘贴进 Cursor UI User Rules(详见 harnesses.md)。
-- **跳过** `not_found`;`config_only` 的 harness 向用户确认后决定接线或跳过。
-- **不覆盖**非空既有全局文件:内容并入治理文档,或保留原文件 + 附加接线,二选一并向用户说明。
-- 逐 harness 报告:**wired / skipped / already-OK**。
-
-## Phase 4 - Recommended config check(read-only)
-
-对每个已接线 harness,按 `references/harnesses.md` 核对推荐会话级配置:gbrain MCP/CLI、session-start 注入、hooks。输出三态 **wired / missing / n/a**。
-
-- **只核对报告,不修改既有配置**(gbrain MCP 写入由 bootstrap 负责)。
-- **密钥卫生**:只报告 server 名称与状态;不回显/复制 `~/.claude.json` 的 oauth/令牌字段、`auth.json`、`config.toml` 的 env 值。
-- missing 项列入报告,由用户决定是否另行处理。
-
-## Phase 5 - Verify and report
-
-```bash
+bash "$SKILL_DIR/scripts/detect.sh"       # 检测已装 harness(TSV: harness/binary/config_dir/state)
+# 装自身到用户根(幂等,不覆盖本地已改文件)
+rsync -a --ignore-existing "$SKILL_DIR"/. "$HOME/.agents/skills/harness-config/"
+# Phase 5 验证
 ls -la "$HOME/.agents/agents.md"
-ls -la "$HOME/.pi/agent/AGENTS.md" "$HOME/.codex/AGENTS.md" "$HOME/.claude/CLAUDE.md"   # symlink -> $HOME/.agents/agents.md
-# Cursor(已装时):确认 <project>/.cursor/rules/ 下指针规则存在,或 Cursor UI User Rules 已含指针规则
+ls -la "$HOME/.pi/agent/AGENTS.md" "$HOME/.codex/AGENTS.md" "$HOME/.claude/CLAUDE.md"
 ```
 
-- 对 Claude Code 做 **内容层** 验证:新会话 `/context` 确认治理文档出现在 Memory files(symlink 跟随为官方文档化行为;`/rewind` 不恢复 symlink 文件,与读取无关)。
-- 其余 harness 文件层验证即可。
-- 输出报告,两维词汇区分清楚:
-  - **接线状态**(Phase 3):`wired / skipped / already-OK`
-  - **配置核对状态**(Phase 4):`wired / missing / n/a`
-  - 含跳过原因与 Phase 4 的 missing 项。
+## Phase 骨架(顺序执行)
+
+0. **Detect**:跑 `detect.sh`;installed 接线 / config_only 确认 / not_found 跳过。前提:至少一个 installed。
+1. **Install self**:幂等装到 `~/.agents/skills/harness-config`(补缺不覆盖本地改动)。
+2. **治理文档**:`~/.agents/agents.md` 不存在则用 `references/governance.md` 骨架建;已存在则 review 内容分层(harness 无关规则进、MCP/hooks/注入不进)+ 确认安全红线最高优先级。
+3. **Wire installed**:对 installed 的每个 harness 按 `references/harnesses.md` 接线(全局文件 → `~/.agents/agents.md`);幂等带守卫,不覆盖非空既有文件。逐 harness 报 wired/skipped/already-OK。
+4. **Config check(只读)**:核对 gbrain MCP/CLI、session-start 注入、hooks,三态 wired/missing/n/a。**不改既有配置**;密钥卫生(只报名称状态,不回显令牌)。
+5. **Verify + report**:文件层验证(+ Claude Code 内容层 `/context`);两维词汇分清(接线状态 vs 配置核对状态)。
+
+## 按需深入(条件读指针)
+
+- 逐 harness 接线命令(幂等守卫 / symlink / @import / .mdc / Codex override)+ 跨平台路径 + lifecycle 矩阵 → `references/harnesses.md`
+- 治理文档骨架模板 + 内容分层表 + 回滚 → `references/governance.md`
+- harness 检测逻辑 → `scripts/detect.sh`
+
+## Golden run
+
+端到端范例(detect → 建治理文档 → 接线一个 harness → 核对 → 验证)见 `references/example-harness-config.md`。
+
+## 自检(做完跑这条)
+
+```bash
+ls -la "$HOME/.agents/agents.md"                              # 治理文档在
+readlink "$HOME/.claude/CLAUDE.md"  # 或对应 harness 入口     # symlink 指向治理文档
+bash "$SKILL_DIR/scripts/detect.sh"                           # 各 harness state 与报告一致
+```
+(Claude Code 内容层:新会话 `/context` 确认治理文档出现在 Memory files)
+
+## 参考
+- `references/harnesses.md` — 逐 harness 接线 + 跨平台路径 + lifecycle 矩阵
+- `references/governance.md` — 治理文档骨架 + 内容分层 + 回滚
+- `scripts/detect.sh` — 检测已装 harness
+- `references/example-harness-config.md` — golden run(S5 产出)

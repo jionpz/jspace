@@ -57,7 +57,7 @@
 
 ## 决策记录（2026-08-03 定，GOAL.md 开放问题 #2 闭合）
 
-- **根位置**：本地盘 `/Users/jionpz/filehub`（每机一个根，注册进 hub.json 的 `type: filehub` resource primary path）。不迁到网盘/iCloud。
+- **根位置**：本机 filehub 根目录（如 `~/filehub`；每机一个根，注册进 hub.json 的 `type: filehub` resource primary path）。不迁到网盘/iCloud。
 - **同步策略**：内容同步走网盘/Obsidian Sync（重资产不进工作台 git）；根目录本身可由网盘同步该目录，或暂不同步；换机按「目标机根 + rel_path」重解析（M5 已验证）。
 - **收编边界**：新文件一律 inbox；存量按项目/领域按需收编。
 - **真实迁移**：本轮未做（机器上无零散存量素材）；真实使用时按本 runbook 执行并回填验证。

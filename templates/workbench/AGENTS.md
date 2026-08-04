@@ -107,10 +107,13 @@ Propose a skill when at least two signals apply:
 Do not create a skill for one-off notes, simple domain metadata, coding conventions that belong in `AGENTS.md`, large content dumps, or rules that fit clearly in `AGENTS.md` / a domain README.
 
 Approved workbench skills (copied in by `jspace init`):
-- `jspace-bootstrap` - first-time setup: verify the registry, bootstrap the gbrain memory base, and wire harnesses. Use it when the user asks to initialize or configure this workbench.
-- `asset-ingest` - ingest work material (books, pdf/ppt/txt, excel, reports) into the file hub and gbrain as searchable knowledge assets. Use it when the user asks to file a document, tidy the inbox, or turn a resource into knowledge.
-- `memory-recall` - read-side precise recall: answer "问一句" by semantic query → verify top-1 → pointer assertion chain → open the file and cite the source. Use it when the user asks a question that needs a fact out of the file hub / gbrain (find the file, that number).
-- `memory-writeback` - end-of-session memory write-back: scan for durable session facts → classify (state/knowledge/snapshot) → write to gbrain per discipline (state fixed-slug overwrite / knowledge append-only / promotion). Use it at 收工 / session end to persist progress, decisions, and lessons.
+<!-- TRELLIS-SKILL-GOV:BEGIN -->
+- `jspace-bootstrap` - **首次配置** JSpace 工作台(需已装至少一个 harness):装 gbrain 统一记忆库(PGLite+知识图谱+本地 embedding)、校验注册表、接线所选 harness(MCP/CLI + 会话注入/写回)。Use when 初始化/配置 jspace、registry broken、gbrain missing、fresh environment。Do NOT use for 机器级多-harness 全局治理接线(→harness-config)或日常资料入库(→asset-ingest)。
+- `asset-ingest` - 把一份工作资料(书籍/pdf/ppt/excel/报告)变成可召回的知识资产:本体归位文件中心 + 要点写进 gbrain reference 页。Use when 资料入库/整理 inbox/归位资料。Do NOT use for 会话进度写回(→memory-writeback)或用户主动问句召回(→memory-recall)。
+- `memory-recall` - **读侧精准召回**:用户「问一句」时,把问题召回为有出处的答案——语义查询 → top-1 校验 → 指针断言链 → 打开文件引用出处。Use when 问一句/找那个文件/那个数/精准召回/recall/find the file。Do NOT use for 资料入库(→asset-ingest 写侧)或会话进度写回(→memory-writeback)。
+- `memory-writeback` - **会话结束收工**时把本次持久事实按纪律写回 gbrain:扫描 → 分类(状态/知识/周快照) → 归属(project+slug) → 写回 → 验证读回。Use when 收工/写回记忆/记一下本次进展/session end/writeback。Do NOT use for 资料文件入库(→asset-ingest)、用户问句召回(→memory-recall)、周快照(→memory-consolidate cron)。
+<!-- TRELLIS-SKILL-GOV:END -->
+> 区间内由 `scripts/gen-assets.ts` 从 SKILL.md frontmatter 渲染生成,勿手工编辑;改 skill 的 name/description 后重跑 gen-assets。
 
 ## Durable Knowledge Routing
 
@@ -162,10 +165,13 @@ Cron definitions live in `.jspace/cron.json` (declarative: schedule + harness + 
 
 gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbrain` for skill routing; keep the format intact.
 
+<!-- TRELLIS-BRAIN-OPS:BEGIN -->
 - **jspace-bootstrap**: initialize jspace | setup jspace | configure jspace | first-use jspace | workbench broken | registry broken | gbrain missing | wire gbrain | fresh environment
 - **asset-ingest**: 资料入库 | 整理 inbox | 归位资料 | 把这份资料入库
-- **memory-recall**: 问一句 | 找那个文件 | 那个数 | 精准召回 | 帮我找 | recall | find the file
+- **memory-recall**: 问一句 | 找那个文件 | 那个数 | 精准召回 | recall | find the file | 帮我找
 - **memory-writeback**: 收工 | 写回记忆 | 记一下本次进展 | 本次进展 | end of work | session end | writeback
+<!-- TRELLIS-BRAIN-OPS:END -->
+> 区间内由 `scripts/gen-assets.ts` 从 SKILL.md frontmatter `triggers` 渲染生成,勿手工编辑;改 triggers 后重跑 gen-assets。
 
 ## Quality Checks
 

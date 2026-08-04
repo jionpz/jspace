@@ -79,3 +79,15 @@ export function readRequiredString(
   }
   return v;
 }
+
+/** Read an optional string; records an issue only when present but wrong-typed/empty. */
+export function readOptionalString(
+  obj: Record<string, unknown>,
+  key: string,
+  prefix: string,
+  code: string,
+  issues: IssueCollector,
+): string | undefined {
+  if (obj[key] === undefined) return undefined;
+  return readRequiredString(obj, key, prefix, code, issues);
+}

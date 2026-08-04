@@ -8,8 +8,7 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
       "name": "jspace-bootstrap",
       "version": "1",
       "scope": "workbench",
-      "dependencies": [],
-      "description": "首次配置与核验：registry 健康、gbrain 记忆底座、harness 接线、远程安装审批。"
+      "dependencies": []
     },
     {
       "name": "asset-ingest",
@@ -18,8 +17,7 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
       "dependencies": [],
       "entrypoints": [
         "batch"
-      ],
-      "description": "资产入库（写侧）：inbox 批量整理 → 归位 → gbrain reference 页 → 索引与召回自检。"
+      ]
     },
     {
       "name": "memory-recall",
@@ -27,8 +25,7 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
       "scope": "workbench",
       "dependencies": [
         "asset-ingest"
-      ],
-      "description": "精准召回（读侧）：语义查询 → 校验 → 指针断言链 → 引用出处。"
+      ]
     },
     {
       "name": "memory-writeback",
@@ -37,8 +34,7 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
       "dependencies": [
         "asset-ingest",
         "jspace-bootstrap"
-      ],
-      "description": "会话结束写回（写侧·会话事实）：扫描 → 分类 → 归属 → 写回 → 验证读回。"
+      ]
     }
   ],
   "global": [
@@ -47,8 +43,7 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
       "version": "1",
       "scope": "global",
       "dependencies": [],
-      "install_source": "~/.agents/skills/harness-config",
-      "description": "机器级全局 skill：检测并接线全部已装 harness 到单一治理文档 ~/.agents/agents.md；不随工作台物化，使用前按其 Phase 1 自装。"
+      "install_source": "~/.agents/skills/harness-config"
     }
   ]
 };

@@ -7,6 +7,7 @@ import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { extname, join, relative, resolve, sep } from "node:path";
 import { ownershipFor, sha256Of } from "../application/workspace/manifest.ts";
 import { decodeSkillsManifest } from "../core/contracts/skills.ts";
+import { renderAgentsBlocks } from "./skill-frontmatter.ts";
 import { VERSION } from "../cli/version.generated.ts";
 
 const repoRoot = resolve(import.meta.dir, "..");
@@ -30,6 +31,12 @@ for (const d of skillDirs) {
   }
 }
 const SOURCES = ["templates/workbench", "templates/filehub", ...skillDirs];
+
+// Render the two generated AGENTS.md blocks (Brain operations / Skill Governance)
+// from each workbench skill's SKILL.md frontmatter. Writes the template back to
+// disk so the checked-in template stays fresh (regenerate -> diff clean) and the
+// walk below embeds the same rendered bytes.
+renderAgentsBlocks(repoRoot, skillsManifest.workbench.map((s) => s.name));
 
 // Skip VCS/build artifacts so they never get embedded into the binary.
 const SKIP_DIRS = new Set(["__pycache__", ".git", "node_modules"]);

@@ -9,6 +9,7 @@ import {
   failure,
   isRecord,
   IssueCollector,
+  readOptionalString,
   readRequiredString,
   success,
   type DecodeResult,
@@ -25,7 +26,7 @@ export interface SkillEntry {
   dependencies: string[]; // cross-skill references (e.g. memory-recall -> asset-ingest)
   entrypoints?: string[]; // semantic entries a cron skill target may invoke (e.g. asset-ingest: batch)
   install_source?: string; // global only: install/upgrade source (e.g. ~/.agents/skills/harness-config)
-  description: string;
+  description?: string; // optional; single source for descriptions is SKILL.md frontmatter (gen-assets renders from it)
 }
 
 export interface SkillsManifestV1 {
@@ -70,7 +71,7 @@ function decodeEntries(raw: unknown, group: string, issues: IssueCollector): Ski
     const name = readRequiredString(item, "name", prefix, "skills.entry.name.invalid", issues);
     const version = readRequiredString(item, "version", prefix, "skills.entry.version.invalid", issues);
     const scope = readRequiredString(item, "scope", prefix, "skills.entry.scope.invalid", issues);
-    const description = readRequiredString(item, "description", prefix, "skills.entry.description.invalid", issues);
+    const description = readOptionalString(item, "description", prefix, "skills.entry.description.invalid", issues);
     if (name !== undefined && !isId(name)) {
       issues.add("skills.entry.name.invalid", `${prefix}.name`, `name must match ${ID_PATTERN}`);
     }
@@ -123,7 +124,7 @@ function decodeEntries(raw: unknown, group: string, issues: IssueCollector): Ski
         dependencies: Array.isArray(item.dependencies) ? (item.dependencies as string[]) : [],
         ...(entrypoints !== undefined ? { entrypoints } : {}),
         ...(hasInstall ? { install_source: item.install_source as string } : {}),
-        description: description as string,
+        ...(description !== undefined ? { description } : {}),
       });
     }
   });
