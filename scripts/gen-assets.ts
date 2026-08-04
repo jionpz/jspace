@@ -36,7 +36,9 @@ const SKIP_DIRS = new Set(["__pycache__", ".git", "node_modules"]);
 const SKIP_EXT = new Set([".pyc", ".pyo", ".DS_Store"]);
 
 function walk(dir: string, base: string, out: Map<string, string>): void {
-  for (const name of readdirSync(dir)) {
+  // deterministic traversal: readdir order differs across filesystems (APFS vs
+  // ext4) and would make generated output non-reproducible / freshness-flaky.
+  for (const name of readdirSync(dir).sort()) {
     if (SKIP_DIRS.has(name)) continue;
     const p = join(dir, name);
     if (statSync(p).isDirectory()) {

@@ -30,13 +30,33 @@ jobs:
       - name: Office extraction tests
         run: python3 skills/asset-ingest/scripts/office-extract.test.py
 
-      - name: Asset freshness (gen-assets must be a no-op)
+      - name: Asset freshness (gen-assets must be a no-op, incl. skills manifest)
         run: |
           bun run scripts/gen-assets.ts
-          git diff --exit-code -- cli/assets.generated.ts cli/manifest.generated.ts
+          git diff --exit-code -- cli/assets.generated.ts cli/manifest.generated.ts cli/skills.generated.ts
 
-      - name: Init integration (temp workbench)
+      - name: Scheduler argv round-trip + reconciliation smoke (pure, no real scheduler)
+        run: bun test application/automation/invocation.test.ts application/automation/scheduler.test.ts adapters/harness/argv.test.ts
+
+      # Full-chain integration on a temp workbench only: no real scheduler apply,
+      # no home config, no real gbrain store, no real filehub. Each mutating step
+      # asserts its output so a silent no-op (e.g. a disabled cron) turns red.
+      - name: Full-chain integration (temp workbench)
         run: |
+          rm -rf /tmp/jspace-verify /tmp/jspace-fh
           bun run cli/main.ts init /tmp/jspace-verify
           bun run cli/main.ts doctor --dir /tmp/jspace-verify
+          bun run cli/main.ts domain add files --dir /tmp/jspace-verify
+          # filehub init --register creates the domain + registers type=filehub + binds;
+          # do NOT also resource-add "filehub" (filehub-path binding would collide).
+          bun run cli/main.ts filehub init /tmp/jspace-fh --register --dir /tmp/jspace-verify
+          mkdir -p /tmp/jspace-fh/projects/acme
+          bun run cli/main.ts resource add acme --domain files --type project --path /tmp/jspace-fh/projects/acme --dir /tmp/jspace-verify
+          # rehearsal: skill-target validate + argv, asserted (not a silent pass)
+          bun run cli/main.ts cron run inbox-tidy --dir /tmp/jspace-verify --dry-run | grep "dry-run: would run"
+          # reconciliation plan preview (no real scheduler apply)
+          bun run cli/main.ts cron install --dir /tmp/jspace-verify --dry-run | grep "would apply"
+          bun run cli/main.ts cron check --dir /tmp/jspace-verify
+          (cd /tmp/jspace-verify && bun run "${{ github.workspace }}/cli/main.ts" cron status)
           bun run cli/main.ts workspace diff --dir /tmp/jspace-verify
+          bun run cli/main.ts workspace upgrade --dir /tmp/jspace-verify --dry-run
