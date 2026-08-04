@@ -16,7 +16,10 @@ import {
 import { join } from "node:path";
 import { fail } from "../errors.ts";
 import type { CmdResult } from "../commands/command.ts";
-import { loadCrons } from "./definitions.ts";
+import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
+import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
+import { loadCrons, resolveCronPrompt, type SkillTargetContext } from "./definitions.ts";
+import { readMaterializedJournal } from "../workspace/journal.ts";
 import { writeRun } from "./runs.ts";
 import { openOrUpdate, resolveIncidents } from "./incidents.ts";
 import { harnessArgv } from "../../adapters/harness/argv.ts";
@@ -30,6 +33,11 @@ export interface ExecuteDeps {
   logDir: (root: string, cronId: string) => string;
   /** clock in ms since epoch (injectable for deterministic timeouts). */
   now: () => number;
+  /** skill-target validation/compile context (Child D); injected so application
+   *  never imports the generated cli/*.generated.ts. */
+  skillsManifest: SkillsManifestV1;
+  bundleManifest: DistributionManifestV1;
+  readFile: (p: string) => string | null;
 }
 
 export interface CronRunOptions {
@@ -78,7 +86,15 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   if (!cron.enabled) {
     return { lines: [`jspace: ok: cron ${opts.cronId} is disabled, skipping`] };
   }
-  const argv = harnessArgv(cron.harness, cron.prompt, deps.platform);
+  const skillCtx: SkillTargetContext = {
+    skillsManifest: deps.skillsManifest,
+    bundleManifest: deps.bundleManifest,
+    readFile: deps.readFile,
+    recorded: readMaterializedJournal(root)?.files ?? {},
+  };
+  // Skill-target crons validate + compile HERE, before the dry-run return: a
+  // missing/stale skill fails with a fix action and never reaches execution.
+  const argv = harnessArgv(cron.harness, resolveCronPrompt(cron, root, skillCtx), deps.platform);
   if (opts.dryRun) {
     return { lines: [`jspace: dry-run: would run in ${root}:`, `  $ ${argv.join(" ")}`] };
   }
@@ -103,7 +119,10 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   // inbox-tidy guard: skills/asset-ingest must exist; batch log must change.
   // F3: the batch log lives at <filehub>/.jspace-logs/inbox-batch.md — the same
   // path the asset-ingest skill writes — not the workbench .jspace/logs/.
-  const isInboxTask = cron.prompt.includes("inbox");
+  // inbox-tidy detection no longer reads prose prompt text (prompt is optional
+  // for skill-target crons): key off the cron id or the asset-ingest target so
+  // the batch guard survives the prompt→target migration (F3 not regressed).
+  const isInboxTask = cron.id === "inbox-tidy" || cron.target?.skill === "asset-ingest";
   const fhRoot = deps.filehubRoot(root);
   const batchLog = fhRoot !== null ? join(fhRoot, ".jspace-logs", "inbox-batch.md") : null;
   let batchBefore = { mtime: 0, size: -1 };

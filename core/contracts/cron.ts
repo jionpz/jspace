@@ -4,6 +4,11 @@
 // contract shared by the CLI codec and every scheduler backend (backend argv is
 // serialized from it and must parse back through the real parser — closes audit
 // F1). Decoder mirrors the diagnostics pattern from hub/local.
+//
+// schema_version stays 1: the optional `target` field is additive, so existing
+// v1 files (with `prompt`) decode unchanged. A pre-Child-D binary reading a
+// cron.json that uses `target` rejects it via unknown-field — upgrade the CLI
+// first (no silent misinterpretation).
 import {
   checkNoUnknownFields,
   failure,
@@ -18,11 +23,19 @@ import { ID_PATTERN, isId } from "./ids.ts";
 export const HARNESSES = ["claude", "codex", "pi"] as const;
 export type Harness = (typeof HARNESSES)[number];
 
+export interface CronSkillTarget {
+  kind: "skill"; // fixed: a skill target references a manifest-declared workbench skill
+  skill: string; // manifest.workbench skill name (e.g. "asset-ingest")
+  entrypoint: string; // skill-internal semantic entry (e.g. "batch")
+  input: string; // semantic input compiled into the headless prompt
+}
+
 export interface CronDefinition {
   id: string;
   schedule: string;
   harness: Harness;
-  prompt: string;
+  prompt?: string; // custom escape hatch (exactly one of prompt | target)
+  target?: CronSkillTarget; // versioned skill target (exactly one of prompt | target)
   enabled: boolean;
 }
 
@@ -60,11 +73,22 @@ export function decodeCrons(input: unknown): DecodeResult<CronsFile> {
         return;
       }
       const before = issues.issues.length;
-      checkNoUnknownFields(item, ["id", "schedule", "harness", "prompt", "enabled"], prefix, "cron.entry.unknown-field", issues);
+      checkNoUnknownFields(item, ["id", "schedule", "harness", "prompt", "target", "enabled"], prefix, "cron.entry.unknown-field", issues);
       const id = readRequiredString(item, "id", prefix, "cron.id.invalid", issues);
       const schedule = readRequiredString(item, "schedule", prefix, "cron.schedule.invalid", issues);
       const harness = readRequiredString(item, "harness", prefix, "cron.harness.invalid", issues);
-      const prompt = readRequiredString(item, "prompt", prefix, "cron.prompt.invalid", issues);
+      // exactly one of prompt | target; prompt remains the custom escape hatch.
+      const hasPrompt = item.prompt !== undefined;
+      const hasTarget = item.target !== undefined;
+      let prompt: string | undefined;
+      if (hasPrompt) {
+        if (typeof item.prompt === "string") prompt = item.prompt;
+        else issues.add("cron.prompt.invalid", `${prefix}.prompt`, "prompt must be a string");
+      }
+      const target = hasTarget ? decodeSkillTarget(item.target, `${prefix}.target`, issues) : undefined;
+      if (hasPrompt === hasTarget) {
+        issues.add("cron.entry.prompt_or_target", `${prefix}.target`, "exactly one of prompt or target must be set");
+      }
       if (id !== undefined && !isId(id)) {
         issues.add("cron.id.invalid", `${prefix}.id`, `id must match ${ID_PATTERN}`);
       }
@@ -79,7 +103,8 @@ export function decodeCrons(input: unknown): DecodeResult<CronsFile> {
           id: id as string,
           schedule: schedule as string,
           harness: harness as Harness,
-          prompt: prompt as string,
+          ...(prompt !== undefined ? { prompt } : {}),
+          ...(target !== undefined ? { target } : {}),
           enabled: item.enabled as boolean,
         });
       }
@@ -87,4 +112,28 @@ export function decodeCrons(input: unknown): DecodeResult<CronsFile> {
   }
   if (!issues.ok) return failure(issues.issues);
   return success({ version: 1, crons });
+}
+
+/** Decode a CronSkillTarget object. Returns undefined when invalid (issues added). */
+function decodeSkillTarget(raw: unknown, prefix: string, issues: IssueCollector): CronSkillTarget | undefined {
+  if (!isRecord(raw)) {
+    issues.add("cron.target.type", prefix, "target must be an object");
+    return undefined;
+  }
+  const before = issues.issues.length;
+  checkNoUnknownFields(raw, ["kind", "skill", "entrypoint", "input"], prefix, "cron.target.unknown-field", issues);
+  const kind = readRequiredString(raw, "kind", prefix, "cron.target.kind.invalid", issues);
+  const skill = readRequiredString(raw, "skill", prefix, "cron.target.skill.invalid", issues);
+  const entrypoint = readRequiredString(raw, "entrypoint", prefix, "cron.target.entrypoint.invalid", issues);
+  const input = readRequiredString(raw, "input", prefix, "cron.target.input.invalid", issues);
+  if (kind !== undefined && kind !== "skill") {
+    issues.add("cron.target.kind.invalid", `${prefix}.kind`, 'kind must be "skill"');
+  }
+  if (skill !== undefined && !isId(skill)) {
+    issues.add("cron.target.skill.invalid", `${prefix}.skill`, `skill must match ${ID_PATTERN}`);
+  }
+  if (issues.issues.length === before) {
+    return { kind: "skill", skill: skill as string, entrypoint: entrypoint as string, input: input as string };
+  }
+  return undefined;
 }

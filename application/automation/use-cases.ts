@@ -91,6 +91,10 @@ export interface CronInstallDeps {
   buildDesired: (enabled: CronDefinition[]) => DesiredTask[];
   inspect: (tag: string) => InstalledTask[];
   apply: (ops: SchedulerOp[]) => string[];
+  /** Optional: fail install/rehearsal before touching the scheduler when a
+   *  skill-target cron's skill is unknown/missing/stale (Child D, AC-D4).
+   *  Returns a fix message, or null when all target crons validate. */
+  validateSkillTargets?: (enabled: CronDefinition[]) => string | null;
 }
 
 /** `cron install [--dry-run]`: reconcile desired (enabled crons, workbench-tagged)
@@ -101,6 +105,10 @@ export function cronInstall(root: string, dryRun: boolean, deps: CronInstallDeps
   const enabled = data.crons.filter((c) => c.enabled);
   if (enabled.length === 0) {
     return { lines: ["jspace: ok: no enabled crons to install (all disabled)"] };
+  }
+  if (deps.validateSkillTargets) {
+    const fix = deps.validateSkillTargets(enabled);
+    if (fix !== null) fail(fix);
   }
   const desired = deps.buildDesired(enabled);
   const installed = deps.inspect(deps.tag);

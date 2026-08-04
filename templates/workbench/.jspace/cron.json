@@ -5,7 +5,12 @@
       "id": "inbox-tidy",
       "schedule": "0 21 * * *",
       "harness": "claude",
-      "prompt": "整理一下 inbox(无头模式:只处理确定性文件,模糊项留清单不提问)。在工作台根目录,按 AGENTS.md 路由;优先用 asset-ingest 批量模式。",
+      "target": {
+        "kind": "skill",
+        "skill": "asset-ingest",
+        "entrypoint": "batch",
+        "input": "整理一下 inbox(无头模式:只处理确定性文件,模糊项留清单不提问)。在工作台根目录,按 AGENTS.md 路由,执行 asset-ingest 批量模式。"
+      },
       "enabled": true
     },
     {

@@ -23,8 +23,11 @@ import { fail } from "../../application/errors.ts";
 import { readFileSync } from "node:fs";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
 import { ASSETS } from "../assets.generated.ts";
+import { SKILLS_MANIFEST } from "../skills.generated.ts";
 import { cronAck, cronAdd, cronInstall, cronList, cronRemove, cronSetEnabled } from "../../application/automation/use-cases.ts";
 import { cronRun } from "../../application/automation/execute.ts";
+import { compileSkillTarget, type SkillTargetContext } from "../../application/automation/definitions.ts";
+import { readMaterializedJournal } from "../../application/workspace/journal.ts";
 import { loadCrons } from "../../application/automation/definitions.ts";
 import { workbenchTag } from "../../application/automation/scheduler.ts";
 import { readMarker } from "../../adapters/fs/workbench-state.ts";
@@ -283,6 +286,20 @@ const cronInstallSpec: CommandSpec = {
             argv: `cron run --id ${c.id} --dir ${ctx.root}`,
             content: c.id,
           })),
+        validateSkillTargets: (enabled) => {
+          const skillCtx: SkillTargetContext = {
+            skillsManifest: SKILLS_MANIFEST,
+            bundleManifest: BUNDLE_MANIFEST,
+            readFile: readFileOrNull,
+            recorded: readMaterializedJournal(ctx.root)?.files ?? {},
+          };
+          for (const c of enabled) {
+            if (!c.target) continue;
+            const r = compileSkillTarget(c.target, ctx.root, skillCtx);
+            if (!r.ok) return r.fix;
+          }
+          return null;
+        },
         inspect: () =>
           process.platform === "darwin"
             ? installedPlists().map((n) => ({ taskId: n.replace(/\.plist$/, ""), cronId: n, schedule: "", argv: "" }))
@@ -331,7 +348,15 @@ const cronRunSpec: CommandSpec = {
         timeoutSec: Number(s(args.timeout) || "1800"),
         force: b(args.force),
       },
-      { platform: process.platform, filehubRoot, logDir: cronLogDir, now: Date.now },
+      {
+        platform: process.platform,
+        filehubRoot,
+        logDir: cronLogDir,
+        now: Date.now,
+        skillsManifest: SKILLS_MANIFEST,
+        bundleManifest: BUNDLE_MANIFEST,
+        readFile: readFileOrNull,
+      },
     );
   },
 };
