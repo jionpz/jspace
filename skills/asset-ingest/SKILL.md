@@ -35,19 +35,22 @@ triggers:
 
 ### 3. 入脑(gbrain 页)
 - 写 gbrain reference 页(slug `assets/<projectId>/<语义名>`,正文 = Summary + Key Facts + Pointer;frontmatter `type/source/project/tags/rel_path`):
-  - 写成功 → `jspace ingest <journal-id> --gbrain`。
+  - 写成功 → `jspace ingest advance <journal-id> --gbrain`。
   - **serve 持锁 / 写失败** → `jspace pending stage <slug> --content <正文文件> --producer asset-ingest`(**暂存 envelope,不失败**);锁空闲时 `jspace pending apply` 落 live。
 - embedding 不可达 → 以 `embed_skip: true` 重写(写入必须成功),检索降级并固定提示。
 
 ### 4. 登记(index) + 提交
-- 项目 `index.md` 挂一行 → `jspace ingest <journal-id> --index`。
-- `jspace ingest <journal-id> --complete` → jspace **移除 inbox source**,journal=committed。
+- 项目 `index.md` 挂一行 → `jspace ingest advance <journal-id> --index`。
+- `jspace ingest advance <journal-id> --complete` → jspace **移除 inbox source**,journal=committed。
+  - **cleanup-pending 可恢复(非一般失败)**:移除前 journal 先记 `failed/failedStep=committed`(source cleanup pending)。unlink 失败或中断 → 退出非零、不虚报 source 已删,并给出同一重试命令。
+  - 重试幂等:source 仍在 inbox → 重试删除;source 已删除 → 直接收敛 committed。`ingest list` 会标注 `failed/cleanup-pending`,`ingest status` 显示 `cleanup pending`,都是收尾入口。
 
 ### 失败 / 中断(可恢复,无孤儿)
-- 任一步失败 → `jspace ingest <journal-id> --fail <原因>`:
+- 任一步失败 → `jspace ingest fail <journal-id> --reason <原因>`:
   - gbrain 页未写前失败 → jspace **移除暂存副本**,source 留 inbox(无孤儿),可重试。
   - 页已写、index 失败 → 不破坏,`--index` 可重试补写。
 - 中断 → 下轮 `jspace ingest list` 找 in-progress journal,从记录步骤续跑(**已完成步骤不重做**)。
+- **cleanup-pending 收尾**:list 显示 `failed/cleanup-pending` / status 显示 `cleanup pending` → 用同一 `jspace ingest advance <journal-id> --complete` 收尾,不要 `--fail` / `--rollback`(会拒绝)。
 
 ### 5. 召回自检(必做)
 - `gbrain query <关键词>` 确认命中;未命中 → 检查 slug / tags / embedding。
@@ -96,7 +99,8 @@ triggers:
 ## 纪律
 
 - **journal 是机器 truth**:恢复/幂等/补偿判断一律基于 `jspace ingest` journal;prose 日志只作人类报告。
-- **失败可恢复、无孤儿**:gbrain 页成功前 source 留在 inbox(暂存副本可被 `--fail` 补偿移除);页已写后失败只影响 index/commit(可重试)。任一步失败 → `--fail <原因>` 记入 journal,不静默。
+- **失败可恢复、无孤儿**:gbrain 页成功前 source 留在 inbox(暂存副本可被 `--fail` 补偿移除);页已写后失败只影响 index/commit(可重试)。任一步失败 → `jspace ingest fail <id> --reason <原因>` 记入 journal,不静默。
+- **不虚报 cleanup**:commit 的 source 移除未证明完成前,journal 保持 `failed/failedStep=committed`(cleanup-pending)而非 committed;发现它就用同一 `--complete` 收尾,不当作普通失败跳过。
 - **锁冲突暂存,不绕过锁**:gbrain serve 持锁 → `jspace pending stage` 暂存 envelope,锁空闲 `jspace pending apply`;绝不 kill serve 或强写。
 - **本体不复制进 gbrain**:指针 = reference 页 Source 字段(绝对路径)。不依赖 `files upload-raw`。
 - **embedding 不可用时固定提示**:`embedding 不可用,当前为关键词检索,中文命中率可能偏低`(不得静默)。

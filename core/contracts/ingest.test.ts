@@ -63,3 +63,17 @@ test("failed journal with optional fields decodes", () => {
   expect(result.ok).toBe(true);
   if (result.ok) expect(result.value).toEqual(j);
 });
+
+test("cleanup-pending v1 journal (failed + failedStep=committed) decodes unchanged", () => {
+  // the legal combination used for source-cleanup recovery; must remain a v1
+  // journal (no new field/status) so journals written by older releases decode.
+  const j: IngestJournalV1 = {
+    ...valid(),
+    status: "failed",
+    failedStep: "committed",
+    failureReason: "source cleanup pending",
+  };
+  const result = decodeIngestJournal(JSON.parse(JSON.stringify(j)));
+  expect(result.ok).toBe(true);
+  if (result.ok) expect(result.value).toEqual(j);
+});

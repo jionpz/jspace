@@ -35,7 +35,7 @@
   - Claude Code：SessionStart hook best-effort（需 hook 真实触发；工作台 `.claude/settings.json`）。
   - 其他 harness：会话开始时手动 `jspace cron check`。
 - **gbrain 锁冲突 / 写暂存**：交互会话持 serve 锁时，gbrain 写契约**暂存**（`jspace pending stage <slug> --content <file> --producer <name>` → `<filehub>/.jspace-logs/<id>.APPLY.json`），锁空闲窗口 `jspace pending apply` 落 live（幂等，重复 apply 不产生重复事实）；terminal_failed 用 `jspace pending ack <id>` 确认。`jspace cron check` / `jspace doctor` 列出 actionable pending（staged/terminal_failed；applied/acked 不再告警）。
-- **asset-ingest 恢复**：资料入库走 `jspace ingest` journal（`begin` 暂存副本 → gbrain → index → `complete` 移除 source）；任一步失败 `jspace ingest <id> --fail <原因>`（gbrain 前失败移除暂存副本、source 留 inbox，无孤儿）；中断用 `jspace ingest list` 续跑（已完成步骤不重做）。
+- **asset-ingest 恢复**：资料入库走 `jspace ingest` journal（`begin` 暂存副本 → `advance --gbrain` → `advance --index` → `advance --complete` 移除 source）；任一步失败 `jspace ingest fail <id> --reason <原因>`（gbrain 前失败移除暂存副本、source 留 inbox，无孤儿）；中断用 `jspace ingest list` 续跑（已完成步骤不重做）。**cleanup-pending**：commit 的 source 移除未证明完成时 journal 为 `failed/failedStep=committed`（`list` 标注 `failed/cleanup-pending`），用同一 `advance <id> --complete` 幂等收尾（source 在 → 重试删除；已删除 → 直接收敛 committed），不虚报 source 已删。
 - **doctor**：`jspace doctor` 摘要 cron 失败数与 actionable pending（`jspace pending apply/ack`）。
 
 ## 5. 敏感边界

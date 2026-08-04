@@ -13,7 +13,10 @@ import type { IngestStep } from "../../core/contracts/ingest.ts";
 import {
   advanceIngest,
   beginIngest,
+  completeIngest,
+  completeRetryCommand,
   failIngest,
+  isCleanupPending,
   readJournal,
   readJournals,
   rollbackIngest,
@@ -53,6 +56,16 @@ export function ingestBegin(root: string, args: IngestBeginArgs): CmdResult {
   const lines: string[] = [];
   if (res.kind === "duplicate") {
     lines.push(`jspace: ok: already ingested (id ${res.journal.id}); skipping duplicate`);
+  } else if (res.kind === "cleanup-pending") {
+    // the previous commit did not prove source removal; finish it before restaging.
+    return {
+      exitCode: 1,
+      errors: [`ingest ${res.journal.id}: source cleanup pending from a previous commit; finish it first`],
+      lines: [
+        `jspace: ingest ${res.journal.id}: source cleanup pending (failedStep=committed); source NOT removed`,
+        `  retry: ${completeRetryCommand(res.journal.id)}`,
+      ],
+    };
   } else if (res.kind === "resume") {
     lines.push(`jspace: ok: ingest already in progress (id ${res.journal.id}, ${res.journal.status}); continuing`);
   } else {
@@ -66,11 +79,26 @@ export function ingestBegin(root: string, args: IngestBeginArgs): CmdResult {
   return { lines };
 }
 
-/** Advance to the next step (gbrain / index / committed). */
+/** Advance to the next step (gbrain / index / committed). The committed step
+ *  runs the cleanup-pending machine: on source-removal failure it exits non-zero,
+ *  reports the reason and the exact retry command — never a fake `source removed`. */
 export function ingestAdvance(root: string, id: string, step: IngestStep): CmdResult {
+  if (step === "committed") {
+    const res = completeIngest(root, id, REAL_OPS);
+    if (res.kind === "cleanup-pending") {
+      return {
+        exitCode: 1,
+        errors: [`ingest ${id}: source cleanup failed: ${res.error.message}`],
+        lines: [
+          `jspace: ingest ${id}: source cleanup pending; source NOT removed`,
+          `  retry: ${completeRetryCommand(id)}`,
+        ],
+      };
+    }
+    return { lines: [`jspace: ok: ingest ${id} -> committed (source removed)`] };
+  }
   const j = advanceIngest(root, id, step, REAL_OPS);
-  const verb = step === "committed" ? "committed (source removed)" : step;
-  return { lines: [`jspace: ok: ingest ${id} -> ${verb}`] };
+  return { lines: [`jspace: ok: ingest ${id} -> ${step}`] };
 }
 
 /** Mark failed with compensation for the step in progress. */
@@ -92,12 +120,19 @@ export function ingestRollback(root: string, id: string): CmdResult {
 export function ingestStatus(root: string, id: string, json: boolean): CmdResult {
   const j = readJournal(root, id);
   if (json) return { lines: [], data: j };
+  const pending = isCleanupPending(j);
   const statusLine = `jspace: ingest ${id}: status=${j.status}` +
     (j.failedStep ? ` failedStep=${j.failedStep}` : "") +
     (j.failureReason ? ` reason=${j.failureReason}` : "");
-  return {
-    lines: [statusLine, `  ${j.source} -> ${j.target}`, `  slug=${j.slug} project=${j.projectId} hash=${j.contentHash.slice(0, 8)}`],
-  };
+  const lines = [
+    statusLine,
+    `  ${j.source} -> ${j.target}`,
+    `  slug=${j.slug} project=${j.projectId} hash=${j.contentHash.slice(0, 8)}`,
+  ];
+  if (pending) {
+    lines.push(`  cleanup pending: source not yet removed; finish cleanup: ${completeRetryCommand(id)}`);
+  }
+  return { lines };
 }
 
 export function ingestList(root: string, json: boolean): CmdResult {
@@ -106,5 +141,10 @@ export function ingestList(root: string, json: boolean): CmdResult {
     return { lines: [], data: { journals } };
   }
   if (journals.length === 0) return { lines: ["jspace: ok: no ingest journals"] };
-  return { lines: journals.map((j) => `${j.id}  ${j.status}  ${j.relPath}`) };
+  return {
+    lines: journals.map((j) => {
+      const st = isCleanupPending(j) ? "failed/cleanup-pending" : j.status;
+      return `${j.id}  ${st}  ${j.relPath}`;
+    }),
+  };
 }

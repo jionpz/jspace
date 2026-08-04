@@ -21,10 +21,11 @@
 - 确定性 → 逐份走单文件「步骤 1-5」(识别→查重→归位→入脑→登记→自检),**零提问**。
 - 不确定 → 记入第二遍清单:`文件路径 + 不确定点(归属?命名?查重冲突?类型?)`。
 
-**单文件原子性(journal 驱动)**:每份走 `jspace ingest begin → (gbrain) → (index) → complete`;任一份失败 → `jspace ingest <id> --fail <原因>`(gbrain 前失败移除暂存副本、source 留 inbox,无孤儿);**其余文件继续,不整批回滚**。
+**单文件原子性(journal 驱动)**:每份走 `jspace ingest begin → advance --gbrain → advance --index → advance --complete`;任一份失败 → `jspace ingest fail <id> --reason <原因>`(gbrain 前失败移除暂存副本、source 留 inbox,无孤儿);**其余文件继续,不整批回滚**。
 
 **幂等 / 断点续跑(journal 为机器 truth)**:每份的进度在 `.jspace/state/ingest/` journal(不是 `.processing` 点文件)。`begin` 前查重:同内容同目标已 committed → duplicate 跳过;in-progress → resume 续跑(从记录步骤继续,已完成步骤不重做)。
-- 中断续跑:下轮 `jspace ingest list` 列出 in-progress journal;source 仍在 inbox → 继续;source 缺失且未 committed → `--rollback` 恢复。
+- 中断续跑:下轮 `jspace ingest list` 列出 in-progress journal;source 仍在 inbox → 继续。
+- **cleanup-pending**(list 标注 `failed/cleanup-pending`,status 显示 `cleanup pending`):source 删除未证明完成 → 同一 `jspace ingest advance <id> --complete` 幂等收尾(source 在 → 重试删除;已删除 → 直接收敛 committed);**不要 `--rollback` / `--fail`**(会拒绝)。
 - **失败重试**:失败的文件留在 `_inbox/`,原因记入 journal + 执行日志 → 下次批量(含 cron 无头)重试,不永久跳过。
 
 ## 第二遍(模糊项,人工过目)
@@ -52,7 +53,7 @@
 ## 无头模式(cron / `claude -p`)
 
 - 只跑第一遍(确定性),不提问、不等待;模糊项留清单。
-- 每份走 journal(`jspace ingest begin → gbrain → index → complete`);gbrain 锁冲突 → `jspace pending stage` 暂存,不失败。
+- 每份走 journal(`jspace ingest begin → advance --gbrain → advance --index → advance --complete`);gbrain 锁冲突 → `jspace pending stage` 暂存,不失败。
 - 写执行日志到 `<filehub>/.jspace-logs/inbox-batch.md`(追加):时间、输入计数、成功/跳过/失败、逐文件结果(路径 → 目标)。未注册 filehub 时:写工作台 `.jspace/logs/inbox-batch.md`(工作台侧日志槽位)。
 - 失败可见性:journal + 日志落固定路径,供下次会话检查(`jspace ingest list` / `jspace pending list` / `jspace cron check`);不做静默吞错。
 

@@ -511,7 +511,7 @@ const ingestAdvanceSpec: CommandSpec = {
   options: [
     { name: "--gbrain", takesValue: false, help: "gbrain page written" },
     { name: "--index", takesValue: false, help: "project index updated" },
-    { name: "--complete", takesValue: false, help: "remove source + mark committed" },
+    { name: "--complete", takesValue: false, help: "remove source + mark committed (idempotent cleanup recovery)" },
   ],
   groups: [
     { id: "step", members: ["--gbrain", "--index", "--complete"], required: true, message: "one of --gbrain --index --complete is required" },

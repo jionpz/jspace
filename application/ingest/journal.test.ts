@@ -3,17 +3,20 @@
 // never touches a real filehub.
 // Run: bun test application/ingest/journal.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   advanceIngest,
   beginIngest,
+  completeIngest,
   failIngest,
+  isCleanupPending,
   readJournal,
   readJournals,
   resumableJournals,
   rollbackIngest,
+  writeJournal,
   type IngestFileOps,
   type IngestPlan,
 } from "./journal.ts";
@@ -87,8 +90,10 @@ test("full advance staged→gbrain→index→committed removes the source", () =
   const id = journal.id;
   expect(advanceIngest(root, id, "gbrain", t.ops).status).toBe("gbrain");
   expect(advanceIngest(root, id, "index", t.ops).status).toBe("index");
-  const done = advanceIngest(root, id, "committed", t.ops);
-  expect(done.status).toBe("committed");
+  const done = completeIngest(root, id, t.ops);
+  expect(done.kind).toBe("committed");
+  if (done.kind !== "committed") return;
+  expect(done.journal.status).toBe("committed");
   expect(t.unlinked).toEqual([src]); // source removed only at commit
 });
 
@@ -98,7 +103,7 @@ test("illegal state transitions are rejected", () => {
   const { journal } = beginIngest(root, plan(src), t.ops) as { kind: "created"; journal: { id: string } };
   const id = journal.id;
   expect(() => advanceIngest(root, id, "index", t.ops)).toThrow(/cannot advance/); // staged→index skips gbrain
-  expect(() => advanceIngest(root, id, "committed", t.ops)).toThrow(/cannot advance/);
+  expect(() => completeIngest(root, id, t.ops)).toThrow(/cannot complete from staged/); // staged→committed illegal
   expect(advanceIngest(root, id, "gbrain", t.ops).status).toBe("gbrain");
   expect(() => advanceIngest(root, id, "gbrain", t.ops)).toThrow(/cannot advance/); // no-op re-advance
 });
@@ -109,7 +114,7 @@ test("duplicate ingest (same content+relPath, committed) is skipped idempotently
   const first = beginIngest(root, plan(src), t.ops) as { kind: "created"; journal: { id: string } };
   advanceIngest(root, first.journal.id, "gbrain", t.ops);
   advanceIngest(root, first.journal.id, "index", t.ops);
-  advanceIngest(root, first.journal.id, "committed", t.ops);
+  completeIngest(root, first.journal.id, t.ops);
   const again = beginIngest(root, plan(src), t.ops);
   expect(again.kind).toBe("duplicate");
   expect(readJournals(root)).toHaveLength(1); // no second journal, no second page
@@ -158,7 +163,10 @@ test("interruption resumes from the recorded step without redoing", () => {
   // next batch: journal is resumable; continue from gbrain -> index -> complete
   expect(resumableJournals(root).map((j) => j.id)).toContain(journal.id);
   expect(advanceIngest(root, journal.id, "index", t.ops).status).toBe("index");
-  expect(advanceIngest(root, journal.id, "committed", t.ops).status).toBe("committed");
+  const done = completeIngest(root, journal.id, t.ops);
+  expect(done.kind).toBe("committed");
+  if (done.kind !== "committed") return;
+  expect(done.journal.status).toBe("committed");
   // staged/gbrain steps were NOT re-executed (no extra copy, single source removal)
   expect(t.copied).toHaveLength(1);
   expect(t.unlinked).toEqual([src]);
@@ -179,18 +187,175 @@ test("rollback abandons a staged ingest and refuses once the page exists", () =>
   expect(() => rollbackIngest(root, gbrain.journal.id, t.ops)).toThrow(/gbrain page already written/);
 });
 
-test("commit persists journal BEFORE removing source: unlink failure leaves committed, not stuck", () => {
+test("unlink failure leaves durable cleanup-pending, not a false committed", () => {
   const src = sourceFile();
   const t = track({ unlink: () => { throw new Error("unlink failed"); } });
   const { journal } = beginIngest(root, plan(src), t.ops) as { kind: "created"; journal: { id: string } };
-  advanceIngest(root, journal.id, "gbrain", t.ops);
-  advanceIngest(root, journal.id, "index", t.ops);
-  // journal is persisted as committed first; the source unlink fails but is caught
-  expect(advanceIngest(root, journal.id, "committed", t.ops).status).toBe("committed");
+  const id = journal.id;
+  advanceIngest(root, id, "gbrain", t.ops);
+  advanceIngest(root, id, "index", t.ops);
+  // cleanup-pending is durably recorded before the unlink; the unlink failure keeps it
+  const res = completeIngest(root, id, t.ops);
+  expect(res.kind).toBe("cleanup-pending");
+  if (res.kind !== "cleanup-pending") return;
+  expect(res.error.message).toContain("unlink failed");
+  const j = readJournal(root, id);
+  expect(j.status).toBe("failed");
+  expect(j.failedStep).toBe("committed");
+  expect(j.failureReason).toContain("source cleanup pending: unlink failed");
+  expect(existsSync(src)).toBe(true); // source was NOT removed
+  expect(resumableJournals(root)).toHaveLength(0); // not auto-resumed; needs explicit --complete
+});
+
+test("cleanup retry with source still present unlinks and converges to committed", () => {
+  const src = sourceFile();
+  const failOps = track({ unlink: () => { throw new Error("unlink failed"); } });
+  const { journal } = beginIngest(root, plan(src), failOps.ops) as { kind: "created"; journal: { id: string } };
+  const id = journal.id;
+  advanceIngest(root, id, "gbrain", failOps.ops);
+  advanceIngest(root, id, "index", failOps.ops);
+  expect(completeIngest(root, id, failOps.ops).kind).toBe("cleanup-pending"); // first attempt fails
+  expect(isCleanupPending(readJournal(root, id))).toBe(true);
+  // retry the same --complete with working ops: source exists -> unlink -> committed
+  const ok = track();
+  const res = completeIngest(root, id, ok.ops);
+  expect(res.kind).toBe("committed");
+  expect(ok.unlinked).toEqual([src]); // source exists -> unlinked once
+  expect(readJournal(root, id).status).toBe("committed");
+});
+
+test("cleanup retry with source already absent skips unlink and converges", () => {
+  const src = sourceFile();
+  const failOps = track({ unlink: () => { throw new Error("unlink failed"); } });
+  const { journal } = beginIngest(root, plan(src), failOps.ops) as { kind: "created"; journal: { id: string } };
+  const id = journal.id;
+  advanceIngest(root, id, "gbrain", failOps.ops);
+  advanceIngest(root, id, "index", failOps.ops);
+  expect(completeIngest(root, id, failOps.ops).kind).toBe("cleanup-pending");
+  // simulate the crash window: cleanup-pending durable + source already removed
+  // (e.g. the unlink succeeded but the committed write never landed)
+  unlinkSync(src);
+  expect(isCleanupPending(readJournal(root, id))).toBe(true);
+  const ok = track();
+  const res = completeIngest(root, id, ok.ops);
+  expect(res.kind).toBe("committed");
+  expect(ok.unlinked).toEqual([]); // source already gone: no second unlink
+  expect(readJournal(root, id).status).toBe("committed");
+});
+
+test("failed committed write after unlink leaves cleanup-pending; retry converges", () => {
+  const src = sourceFile();
+  const t = track();
+  const { journal } = beginIngest(root, plan(src), t.ops) as { kind: "created"; journal: { id: string } };
+  const id = journal.id;
+  advanceIngest(root, id, "gbrain", t.ops);
+  advanceIngest(root, id, "index", t.ops);
+  // injected writer: first write (cleanup-pending) ok, second write (committed) fails
+  let writes = 0;
+  const flakyWrite = (r: string, j: IngestJournalV1): void => {
+    writes += 1;
+    if (writes === 2) throw new Error("committed write failed");
+    writeJournal(r, j);
+  };
+  const res = completeIngest(root, id, t.ops, flakyWrite);
+  expect(res.kind).toBe("cleanup-pending");
+  if (res.kind !== "cleanup-pending") return;
+  expect(res.error.message).toContain("committed write failed");
+  // durable cleanup-pending survives; the source unlink already happened
+  expect(isCleanupPending(readJournal(root, id))).toBe(true);
+  expect(t.unlinked).toEqual([src]);
+  // physically remove the source to match the real post-unlink crash state
+  unlinkSync(src);
+  // retry with a working writer converges without re-unlinking
+  const ok = track();
+  const retry = completeIngest(root, id, ok.ops);
+  expect(retry.kind).toBe("committed");
+  expect(ok.unlinked).toEqual([]);
+  expect(readJournal(root, id).status).toBe("committed");
+});
+
+test("begin on a cleanup-pending source does not create a second journal", () => {
+  const src = sourceFile();
+  const failOps = track({ unlink: () => { throw new Error("unlink failed"); } });
+  const first = beginIngest(root, plan(src), failOps.ops) as { kind: "created"; journal: { id: string } };
+  advanceIngest(root, first.journal.id, "gbrain", failOps.ops);
+  advanceIngest(root, first.journal.id, "index", failOps.ops);
+  expect(completeIngest(root, first.journal.id, failOps.ops).kind).toBe("cleanup-pending");
+  const again = beginIngest(root, plan(src), failOps.ops);
+  expect(again.kind).toBe("cleanup-pending");
+  expect(readJournals(root)).toHaveLength(1); // no second journal, no re-stage
+  expect(isCleanupPending(readJournal(root, first.journal.id))).toBe(true);
+});
+
+test("a hand-written v1 cleanup-pending journal decodes and recovers", () => {
+  const src = sourceFile();
+  const t = track();
+  const { journal } = beginIngest(root, plan(src), t.ops) as { kind: "created"; journal: { id: string } };
+  // write the raw v1 shape directly (what an older release / crash leaves on disk)
+  const pendingRaw = { ...journal, status: "failed", failedStep: "committed", failureReason: "source cleanup pending" };
+  writeJournal(root, pendingRaw);
+  expect(isCleanupPending(readJournal(root, journal.id))).toBe(true);
+  const res = completeIngest(root, journal.id, t.ops);
+  expect(res.kind).toBe("committed");
+  expect(t.unlinked).toEqual([src]); // cleanup unlinks the leftover source once
   expect(readJournal(root, journal.id).status).toBe("committed");
-  expect(existsSync(src)).toBe(true); // leftover source; dupBySource prevents re-ingest
-  // and the journal is not stuck in a dead state: it reads back committed
-  expect(resumableJournals(root)).toHaveLength(0);
+});
+
+test("failed cleanup-pending write leaves journal at index; retry --complete works", () => {
+  const src = sourceFile();
+  const t = track();
+  const { journal } = beginIngest(root, plan(src), t.ops) as { kind: "created"; journal: { id: string } };
+  const id = journal.id;
+  advanceIngest(root, id, "gbrain", t.ops);
+  advanceIngest(root, id, "index", t.ops);
+  // first write of the committed path (the cleanup-pending persist) fails
+  let writes = 0;
+  const failFirstWrite = (r: string, j: IngestJournalV1): void => {
+    writes += 1;
+    if (writes === 1) throw new Error("pending write failed");
+    writeJournal(r, j);
+  };
+  expect(() => completeIngest(root, id, t.ops, failFirstWrite)).toThrow(/still index/);
+  expect(readJournal(root, id).status).toBe("index"); // durable state unchanged
+  expect(t.unlinked).toEqual([]); // no unlink before the pending write
+  const res = completeIngest(root, id, t.ops); // rerun the same --complete
+  expect(res.kind).toBe("committed");
+  expect(readJournal(root, id).status).toBe("committed");
+  expect(t.unlinked).toEqual([src]);
+});
+
+test("advance/fail/rollback reject a cleanup-pending journal and point to --complete", () => {
+  const src = sourceFile();
+  const failOps = track({ unlink: () => { throw new Error("unlink failed"); } });
+  const { journal } = beginIngest(root, plan(src), failOps.ops) as { kind: "created"; journal: { id: string } };
+  const id = journal.id;
+  advanceIngest(root, id, "gbrain", failOps.ops);
+  advanceIngest(root, id, "index", failOps.ops);
+  expect(completeIngest(root, id, failOps.ops).kind).toBe("cleanup-pending");
+  expect(isCleanupPending(readJournal(root, id))).toBe(true);
+  expect(() => advanceIngest(root, id, "gbrain", failOps.ops)).toThrow(/--complete/);
+  expect(() => failIngest(root, id, "nope", failOps.ops)).toThrow(/--complete/);
+  expect(() => rollbackIngest(root, id, failOps.ops)).toThrow(/--complete/);
+  expect(isCleanupPending(readJournal(root, id))).toBe(true); // rejections never disturb it
+});
+
+test("failIngest at index records the cleanup-pending marker; --complete converges it", () => {
+  const src = sourceFile();
+  const t = track();
+  const { journal } = beginIngest(root, plan(src), t.ops) as { kind: "created"; journal: { id: string } };
+  const id = journal.id;
+  advanceIngest(root, id, "gbrain", t.ops);
+  advanceIngest(root, id, "index", t.ops);
+  // a user/skill abort at index lands on the same legal state (failedStep=committed);
+  // --complete is the recovery: gbrain + index are already written, commit removes source
+  const failed = failIngest(root, id, "manual abort", t.ops);
+  expect(failed.status).toBe("failed");
+  expect(failed.failedStep).toBe("committed");
+  expect(isCleanupPending(readJournal(root, id))).toBe(true);
+  const res = completeIngest(root, id, t.ops);
+  expect(res.kind).toBe("committed");
+  expect(t.unlinked).toEqual([src]);
+  expect(readJournal(root, id).status).toBe("committed");
 });
 
 test("copy failure at begin does not write a journal", () => {
