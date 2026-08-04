@@ -9,11 +9,12 @@ import { devRoot, isCompiled } from "./embed.ts";
 import { isFile, resolvePath } from "./paths.ts";
 import { CONFIG_DIR } from "../core/contracts/files.ts";
 import { readWorkbenchState, workbenchRoot } from "./registry.ts";
-import { primaryPathForResourceType, resolveEffectiveRegistry } from "../core/registry/effective.ts";
+import { resolveFilehubRoot } from "../application/registry/filehub-lookup.ts";
 import { loadCrons, parseSchedule, type ScheduleDict } from "../application/automation/definitions.ts";
 import { harnessArgv } from "../adapters/harness/argv.ts";
 import { lastRun } from "../application/automation/runs.ts";
 import { openIncidents, readIncidents } from "../application/automation/incidents.ts";
+import { readEnvelopes, envelopePath } from "../application/pending/envelope.ts";
 import type { CronDefinition } from "../core/contracts/cron.ts";
 export { parseSchedule };
 export type { ScheduleDict };
@@ -379,21 +380,17 @@ export function cmdCronStatus(id?: string): void {
 /** Resolve the filehub root via the shared effective registry (type:filehub,
  *  primary path), or null when unregistered/unbound — then pending scan is skipped. */
 export function filehubRoot(root: string): string | null {
-  const reads = readWorkbenchState(root);
-  if (reads.hub.status !== "ok") return null;
-  const local = reads.local.status === "ok" ? reads.local.value : null;
-  const effective = resolveEffectiveRegistry(reads.hub.value, local, { pathExists: existsSync });
-  return primaryPathForResourceType(effective, "filehub");
+  return resolveFilehubRoot(root);
 }
 
-/** Find pending staged gbrain writes: <filehub>/.jspace-logs/*.APPLY.md. */
+/** Find actionable pending gbrain writes: staged (needs apply) or
+ *  terminal_failed (needs ack) envelopes in <filehub>/.jspace-logs/*.APPLY.json.
+ *  Applied/acked envelopes no longer alert. */
 export function findPendingApplies(root: string): { root: string | null; paths: string[] } {
   const fh = filehubRoot(root);
   if (!fh) return { root: null, paths: [] };
-  const dir = join(fh, ".jspace-logs");
-  if (!existsSync(dir)) return { root: fh, paths: [] };
-  const paths = readdirSync(dir).filter((n) => n.endsWith(".APPLY.md")).sort().map((n) => join(dir, n));
-  return { root: fh, paths };
+  const actionable = readEnvelopes(fh).filter((e) => e.status === "staged" || e.status === "terminal_failed");
+  return { root: fh, paths: actionable.map((e) => envelopePath(fh, e.id)) };
 }
 
 /**
@@ -447,7 +444,7 @@ export function cmdCronFailures(json: boolean, root?: string): void {
     console.log("jspace: cron failures");
     console.log(`open incidents: (${open.length})`);
     for (const i of open) console.log(`  ${i.cronId} [${i.failureClass}] ${i.openedAt} evidence: ${i.evidence.join(", ")}`);
-    console.log(`pending gbrain writes (APPLY.md): (${pending.paths.length})`);
+    console.log(`pending gbrain writes (APPLY.json): (${pending.paths.length})`);
     for (const p of pending.paths) console.log(`  ${p}`);
     console.log("cron status:");
     for (const c of crons) console.log(`  ${c.id}: ${c.status}`);

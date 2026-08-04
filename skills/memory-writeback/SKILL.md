@@ -46,6 +46,7 @@ triggers:
 
 - 按分类表写语义;**晋升**:记忆事实变持久(跨会话重复/决策已定/提炼成教训)→ 写新知识页,state 页保持「现状」。
 - 每页带 `project` + `tags` + `source`(harness 出处)。
+- **serve 持锁 / 写失败** → `jspace pending stage <slug> --content <正文文件> --producer memory-writeback`(暂存 envelope,不失败;锁空闲 `jspace pending apply` 落 live)。
 - embedding 不可达 → 写仍成功(`embed_skip: true`),提示「写入成功,embedding 不可用,检索降级」(不得静默、不得失败)。
 
 ### 5. 验证

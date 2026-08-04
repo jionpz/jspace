@@ -27,19 +27,27 @@ triggers:
 - **查重**:检查目标目录同名/同语义文件,以及 `gbrain get assets/<项目|领域>/<语义名>` 是否已建页。
   - 已存在 → 询问用户:跳过 / **修复**(同名同内容重入,允许覆盖错页)/ 升版本(`-vN`,写新页、旧页保留并注 supersedes)。
 
-### 2. 归位
-- 命名:`YYYY-MM-DD-语义名-vN.ext`(机器可排序、人可扫读)。
-- 移动到目标目录(`projects/<项目>/...` 或 `areas/<领域>/...`)。
+### 2. 暂存(机械,不丢 source)
+- 语义决策(归属 project/领域、命名、slug)→ 调用 `jspace ingest begin <file> --target <路径> --slug <slug> --project <id> [--index <行>]`:
+  - jspace **复制**文件到目标(暂存副本),**source 留在 inbox**;写 ingest journal(status=staged),返回 journal id。
+  - journal 级幂等:同内容同目标已入库 → 报 duplicate 跳过;in-progress → 报 resume 续跑。
+- 查重仍含 `gbrain get assets/<id>/<语义名>`(语义);已存在 → 询问用户:跳过 / 修复 / 升版本,不机械覆盖。
 
-### 3. 入脑
-- 写 gbrain reference 页(slug `assets/<项目|领域>/<语义名>`,与文件语义名绑定):
-  - frontmatter:`type: reference` / `source: <harness>` / `project: <id>` / `tags` / `rel_path`
-  - 正文:`Summary` + `Key Facts` + `Pointer`(文件**绝对路径**)
-- **rel_path 计算(M5)**:`rel_path` = Pointer 减去 filehub 根前缀(根 = `hub.json` 的 `type: filehub` resource primary path);换机时按「新机根 + rel_path」重解析。
-- **embedding**:正常写(不带 embed_skip);若**写失败并报 embedding 错误** → 以 `embed_skip: true` 重写(写入必须成功),随后检索降级并提示。
+### 3. 入脑(gbrain 页)
+- 写 gbrain reference 页(slug `assets/<projectId>/<语义名>`,正文 = Summary + Key Facts + Pointer;frontmatter `type/source/project/tags/rel_path`):
+  - 写成功 → `jspace ingest <journal-id> --gbrain`。
+  - **serve 持锁 / 写失败** → `jspace pending stage <slug> --content <正文文件> --producer asset-ingest`(**暂存 envelope,不失败**);锁空闲时 `jspace pending apply` 落 live。
+- embedding 不可达 → 以 `embed_skip: true` 重写(写入必须成功),检索降级并固定提示。
 
-### 4. 登记
-- 项目 `index.md` 挂一行:文件名 + 日期 + gbrain slug(areas 是否建 index 按 filing.md:由使用涌现,不预先设计)。
+### 4. 登记(index) + 提交
+- 项目 `index.md` 挂一行 → `jspace ingest <journal-id> --index`。
+- `jspace ingest <journal-id> --complete` → jspace **移除 inbox source**,journal=committed。
+
+### 失败 / 中断(可恢复,无孤儿)
+- 任一步失败 → `jspace ingest <journal-id> --fail <原因>`:
+  - gbrain 页未写前失败 → jspace **移除暂存副本**,source 留 inbox(无孤儿),可重试。
+  - 页已写、index 失败 → 不破坏,`--index` 可重试补写。
+- 中断 → 下轮 `jspace ingest list` 找 in-progress journal,从记录步骤续跑(**已完成步骤不重做**)。
 
 ### 5. 召回自检(必做)
 - `gbrain query <关键词>` 确认命中;未命中 → 检查 slug / tags / embedding。
@@ -87,8 +95,10 @@ triggers:
 
 ## 纪律
 
-- **失败即停**:任一步失败 → 停止、向用户报告具体原因,不留下半成品(put 前归位完成;put 失败不产生孤儿 reference)。
-- **本体不复制进 gbrain**:指针 = reference 页 Source 字段(绝对路径)。不依赖 `files upload-raw`(小文件为 no-op)。
+- **journal 是机器 truth**:恢复/幂等/补偿判断一律基于 `jspace ingest` journal;prose 日志只作人类报告。
+- **失败可恢复、无孤儿**:gbrain 页成功前 source 留在 inbox(暂存副本可被 `--fail` 补偿移除);页已写后失败只影响 index/commit(可重试)。任一步失败 → `--fail <原因>` 记入 journal,不静默。
+- **锁冲突暂存,不绕过锁**:gbrain serve 持锁 → `jspace pending stage` 暂存 envelope,锁空闲 `jspace pending apply`;绝不 kill serve 或强写。
+- **本体不复制进 gbrain**:指针 = reference 页 Source 字段(绝对路径)。不依赖 `files upload-raw`。
 - **embedding 不可用时固定提示**:`embedding 不可用,当前为关键词检索,中文命中率可能偏低`(不得静默)。
 - **逐份处理**:单文件模式每次一份(会话可循环);批量模式见「批量模式」与 `references/batch.md`。
 

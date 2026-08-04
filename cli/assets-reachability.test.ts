@@ -7,6 +7,7 @@
 // cli/lifecycle-and-safety.test.ts (Child D M7/M8).
 // Run: bun test cli/assets-reachability.test.ts
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { ASSETS } from "./assets.generated.ts";
 import { SKILLS_MANIFEST } from "./skills.generated.ts";
 
@@ -95,4 +96,17 @@ test("docs/ references are external-only (explicit owner marker)", () => {
     }
   }
   expect(bad).toEqual([]);
+});
+
+test("inbox batch log path is unified: skill writes, cron reads the same file (RE4)", () => {
+  const expected = ".jspace-logs/inbox-batch.md";
+  // writer: asset-ingest skill (bundled md)
+  for (const key of ["skills/asset-ingest/SKILL.md", "skills/asset-ingest/references/batch.md"]) {
+    expect(ASSETS[key], `${key} must exist`).toBeDefined();
+    expect(ASSETS[key], `${key} must reference the batch log`).toContain(expected);
+  }
+  // reader: cron batch guard in execute.ts (source)
+  const src = readFileSync(new URL("../application/automation/execute.ts", import.meta.url), "utf-8");
+  expect(src).toContain("inbox-batch.md");
+  expect(src).toContain(".jspace-logs");
 });

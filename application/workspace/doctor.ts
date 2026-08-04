@@ -11,6 +11,7 @@ import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
 import { inspectWorkbench, type InspectEnv } from "../../core/registry/inspect.ts";
 import { primaryPathForResourceType, resolveEffectiveRegistry } from "../../core/registry/effective.ts";
 import { openIncidents } from "../automation/incidents.ts";
+import { readEnvelopes } from "../pending/envelope.ts";
 import { isFile } from "../fs.ts";
 
 /** Minimal cron view consumed by doctor; full cron surface lives in Child C. */
@@ -73,12 +74,11 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
           diags.push({ severity: "warning", code: "filehub.inbox_unfiled", path: `filehub.${fhRoot}`, message: `filehub: _inbox has ${unfiled} unfiled file(s); run asset-ingest ("整理一下 inbox")` });
         }
       }
-      const stagedDir = join(fhRoot, ".jspace-logs");
-      if (existsSync(stagedDir)) {
-        const applies = readdirSync(stagedDir).filter((n) => n.endsWith(".APPLY.md"));
-        if (applies.length > 0) {
-          diags.push({ severity: "warning", code: "filehub.pending_applies", path: `filehub.${fhRoot}/.jspace-logs`, message: `filehub: ${applies.length} pending staged gbrain write(s) (*.APPLY.md in .jspace-logs); apply when gbrain lock frees (check jspace cron failures)` });
-        }
+      // actionable pending gbrain writes (staged needs apply; terminal_failed
+      // needs ack). applied/acked no longer alert.
+      const actionable = readEnvelopes(fhRoot).filter((e) => e.status === "staged" || e.status === "terminal_failed");
+      if (actionable.length > 0) {
+        diags.push({ severity: "warning", code: "filehub.pending_applies", path: `filehub.${fhRoot}/.jspace-logs`, message: `filehub: ${actionable.length} actionable pending gbrain write(s); apply with "jspace pending apply", ack terminal_failed with "jspace pending ack"` });
       }
     }
   }

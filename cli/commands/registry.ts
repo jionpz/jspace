@@ -387,9 +387,9 @@ const cronFailuresSpec: CommandSpec = {
   summary: "show recent failures + pending staged writes (alias: check)",
   description:
     "One-place session-start surface: recent failures + pending staged gbrain writes (APPLY.json) + per-cron status. Exit 1 when anything needs attention.",
-  features: { json: true },
-  handler: (_ctx, args) => {
-    cmdCronFailures(b(args.json));
+  features: { dir: true, json: true },
+  handler: (ctx, args) => {
+    cmdCronFailures(b(args.json), ctx.root);
     return { lines: [] };
   },
 };

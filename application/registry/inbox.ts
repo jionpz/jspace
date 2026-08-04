@@ -2,23 +2,13 @@
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { CmdResult } from "../commands/command.ts";
-import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
-import {
-  primaryPathForResourceType,
-  resolveEffectiveRegistry,
-} from "../../core/registry/effective.ts";
+import { resolveFilehubRoot } from "./filehub-lookup.ts";
 
 /** Locate the inbox: filehub root/_inbox if registered and bound, else the
  *  degraded staging dir (<workbench>-inbox/) next to the workbench. Mirrors the
  *  asset-ingest skill's front-matter lookup. Returns null when neither exists. */
 function locateInbox(root: string): string | null {
-  const reads = readWorkbenchState(root);
-  if (reads.hub.status !== "ok") {
-    return join(dirname(root), `${basename(root)}-inbox`);
-  }
-  const local = reads.local.status === "ok" ? reads.local.value : null;
-  const effective = resolveEffectiveRegistry(reads.hub.value, local, { pathExists: existsSync });
-  const fhRoot = primaryPathForResourceType(effective, "filehub");
+  const fhRoot = resolveFilehubRoot(root);
   if (fhRoot) return join(fhRoot, "_inbox");
   return join(dirname(root), `${basename(root)}-inbox`);
 }
