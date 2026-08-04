@@ -23,9 +23,11 @@ import { fail } from "../../application/errors.ts";
 import { readFileSync } from "node:fs";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
 import { ASSETS } from "../assets.generated.ts";
-import { cronAck, cronAdd, cronList, cronRemove, cronSetEnabled } from "../../application/automation/use-cases.ts";
+import { cronAck, cronAdd, cronInstall, cronList, cronRemove, cronSetEnabled } from "../../application/automation/use-cases.ts";
 import { cronRun } from "../../application/automation/execute.ts";
 import { loadCrons } from "../../application/automation/definitions.ts";
+import { workbenchTag } from "../../application/automation/scheduler.ts";
+import { readMarker } from "../../adapters/fs/workbench-state.ts";
 import {
   cmdCronFailures,
   cmdCronInstall,
@@ -34,6 +36,7 @@ import {
   cronLogDir,
   filehubRoot,
   installedCronIds,
+  installedPlists,
   linuxCronHealth,
   parseSchedule,
   plistExists,
@@ -263,8 +266,30 @@ const cronDisableSpec: CommandSpec = {
 
 const cronInstallSpec: CommandSpec = {
   name: "install",
-  summary: "install enabled crons into macOS launchd",
-  handler: () => {
+  summary: "reconcile enabled crons into the platform scheduler",
+  features: { dir: true, dryRun: true },
+  handler: (ctx, args) => {
+    if (b(args.dryRun)) {
+      // reconciliation preview: workbench-tagged desired vs installed
+      const marker = readMarker(ctx.root);
+      const tag = marker.status === "ok" ? workbenchTag(marker.value.workbench_id) : "unknown";
+      return cronInstall(ctx.root, true, {
+        tag,
+        buildDesired: (enabled) =>
+          enabled.map((c) => ({
+            taskId: `${tag}:${c.id}`,
+            cronId: c.id,
+            schedule: c.schedule,
+            argv: `cron run --id ${c.id} --dir ${ctx.root}`,
+            content: c.id,
+          })),
+        inspect: () =>
+          process.platform === "darwin"
+            ? installedPlists().map((n) => ({ taskId: n.replace(/\.plist$/, ""), cronId: n, schedule: "", argv: "" }))
+            : [],
+        apply: () => [],
+      });
+    }
     cmdCronInstall();
     return { lines: [] };
   },

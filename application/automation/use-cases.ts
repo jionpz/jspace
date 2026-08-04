@@ -3,11 +3,17 @@
 // injected (launchd plist inspection lands with the scheduler adapters in M5).
 import { fail } from "../errors.ts";
 import type { CmdResult } from "../commands/command.ts";
-import { HARNESSES, type Harness } from "../../core/contracts/cron.ts";
+import { HARNESSES, type CronDefinition, type Harness } from "../../core/contracts/cron.ts";
 import { isId } from "../../core/contracts/ids.ts";
 import { findIndex } from "../registry/helpers.ts";
 import { ackIncidents } from "./incidents.ts";
 import { loadCrons, parseSchedule, saveCrons } from "./definitions.ts";
+import {
+  planReconciliation,
+  type DesiredTask,
+  type InstalledTask,
+  type SchedulerOp,
+} from "./scheduler.ts";
 
 export interface CronInstalledCheck {
   isInstalled: (cronId: string) => boolean;
@@ -78,4 +84,35 @@ export function cronAck(root: string, id: string | undefined): CmdResult {
   const n = ackIncidents(root, id);
   const scope = id !== undefined ? ` for ${id}` : "";
   return { lines: [`jspace: ok: acknowledged ${n} incident(s)${scope}`] };
+}
+
+export interface CronInstallDeps {
+  tag: string; // workbench tag from marker workbench_id
+  buildDesired: (enabled: CronDefinition[]) => DesiredTask[];
+  inspect: (tag: string) => InstalledTask[];
+  apply: (ops: SchedulerOp[]) => string[];
+}
+
+/** `cron install [--dry-run]`: reconcile desired (enabled crons, workbench-tagged)
+ *  against what the platform scheduler has installed, then apply. */
+export function cronInstall(root: string, dryRun: boolean, deps: CronInstallDeps): CmdResult {
+  const data = loadCrons(root);
+  if (data.crons.length === 0) fail(`no crons defined (${root}/.jspace/cron.json empty/missing)`);
+  const enabled = data.crons.filter((c) => c.enabled);
+  if (enabled.length === 0) {
+    return { lines: ["jspace: ok: no enabled crons to install (all disabled)"] };
+  }
+  const desired = deps.buildDesired(enabled);
+  const installed = deps.inspect(deps.tag);
+  const ops = planReconciliation(desired, installed);
+  if (dryRun) {
+    return ops.length === 0
+      ? { lines: ["jspace: ok: would install: nothing to do"] }
+      : { lines: [`jspace: ok: would apply ${ops.length} change(s):`, ...ops.map((o) => `[${o.action}] ${o.taskId}`)] };
+  }
+  if (ops.length === 0) {
+    return { lines: ["jspace: ok: cron install: up to date"] };
+  }
+  const results = deps.apply(ops);
+  return { lines: [`jspace: ok: cron install applied ${ops.length} change(s)`, ...results] };
 }
