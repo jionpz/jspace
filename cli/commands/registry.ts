@@ -24,13 +24,15 @@ import { readFileSync } from "node:fs";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
 import { ASSETS } from "../assets.generated.ts";
 import { cronAck, cronAdd, cronList, cronRemove, cronSetEnabled } from "../../application/automation/use-cases.ts";
+import { cronRun } from "../../application/automation/execute.ts";
 import { loadCrons } from "../../application/automation/definitions.ts";
 import {
   cmdCronFailures,
   cmdCronInstall,
-  cmdCronRun,
   cmdCronStatus,
   cmdCronUninstall,
+  cronLogDir,
+  filehubRoot,
   installedCronIds,
   linuxCronHealth,
   parseSchedule,
@@ -294,10 +296,18 @@ const cronRunSpec: CommandSpec = {
     },
     { name: "--dir", takesValue: true, metavar: "DIR", help: "workbench root (default: current directory; schedulers pass this explicitly)" },
   ],
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
     if (s(args.id) === "") fail("the following arguments are required: id");
-    await cmdCronRun(s(args.id), b(args.dryRun), Number(s(args.timeout) || "1800"), args.dir === undefined ? undefined : s(args.dir), b(args.force));
-    return { lines: [] };
+    return cronRun(
+      ctx.root,
+      {
+        cronId: s(args.id),
+        dryRun: b(args.dryRun),
+        timeoutSec: Number(s(args.timeout) || "1800"),
+        force: b(args.force),
+      },
+      { platform: process.platform, filehubRoot, logDir: cronLogDir, now: Date.now },
+    );
   },
 };
 

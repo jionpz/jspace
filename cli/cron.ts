@@ -1,18 +1,19 @@
 // cli/cron.ts — declarative cron definitions (.jspace/cron.json) + macOS launchd
 // install + headless harness execution. Follows the registry.ts / cmds.ts idioms.
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { fail } from "../application/errors.ts";
-import { devRoot, expandTilde, isCompiled } from "./embed.ts";
+import { devRoot, isCompiled } from "./embed.ts";
 import { isFile, resolvePath } from "./paths.ts";
 import { CONFIG_DIR } from "../core/contracts/files.ts";
 import { readWorkbenchState, workbenchRoot } from "./registry.ts";
 import { primaryPathForResourceType, resolveEffectiveRegistry } from "../core/registry/effective.ts";
 import { loadCrons, parseSchedule, type ScheduleDict } from "../application/automation/definitions.ts";
-import { lastRun, writeRun } from "../application/automation/runs.ts";
-import { openIncidents, openOrUpdate, readIncidents, resolveIncidents } from "../application/automation/incidents.ts";
+import { harnessArgv } from "../adapters/harness/argv.ts";
+import { lastRun } from "../application/automation/runs.ts";
+import { openIncidents, readIncidents } from "../application/automation/incidents.ts";
 import type { CronDefinition } from "../core/contracts/cron.ts";
 export { parseSchedule };
 export type { ScheduleDict };
@@ -351,192 +352,8 @@ export function cmdCronUninstall(): void {
 }
 
 // ---- cron run / status ----
-function cronLogDir(root: string, id: string): string {
+export function cronLogDir(root: string, id: string): string {
   return join(root, ".jspace", "logs", "cron", id);
-}
-function resolveHarnessBin(harness: string): string {
-  const cmd = platform === "win32" ? "where" : "which";
-  const w = spawnSync(cmd, [harness], { encoding: "utf-8" });
-  return (w.stdout ?? "").trim().split(/\r?\n/)[0] || harness; // win: first line only
-}
-function harnessArgv(harness: string, prompt: string): string[] {
-  const bin = resolveHarnessBin(harness);
-  switch (harness) {
-    case "claude":
-      // Permission whitelist for the batch needs: Bash/Read/Write/Edit + gbrain MCP.
-      // NEVER bypassPermissions — cron is unattended.
-      // MCP allow-rule syntax: literal `mcp__<server>__` prefix then glob tool name.
-      return [bin, "-p", prompt, "--output-format", "text", "--allowedTools", "Bash,Read,Write,Edit,mcp__gbrain__*"];
-    case "codex":
-      return [bin, "exec", prompt];
-    case "pi":
-      return [bin, "-p", prompt];
-    default:
-      fail(`unsupported harness: ${harness}`);
-  }
-}
-function todaySuccess(root: string, id: string): boolean {
-  const dir = cronLogDir(root, id);
-  if (!existsSync(dir)) return false;
-  const today = localDate();
-  for (const n of readdirSync(dir)) {
-    if (n.startsWith(today) && n.endsWith(".md")) {
-      const s = readFileSync(join(dir, n), "utf-8");
-      if (s.includes("status: ok")) return true;
-    }
-  }
-  return false;
-}
-function pruneLogs(root: string, id: string, keep: number): void {
-  const dir = cronLogDir(root, id);
-  if (!existsSync(dir)) return;
-  const files = readdirSync(dir).filter((n) => n.endsWith(".md")).sort();
-  while (files.length > keep) {
-    const rm = files.shift()!;
-    unlinkSync(join(dir, rm));
-  }
-}
-function appendFailed(root: string, id: string, reason: string, logPath: string): void {
-  const p = join(root, ".jspace", "logs", "cron-failed.md");
-  mkdirSync(dirname(p), { recursive: true });
-  const entry = `- ${localStamp()}  ${id}  ${reason}  log: ${logPath}\n`;
-  writeFileSync(p, entry, { flag: "a" });
-  // keep last 30 lines
-  const lines = readFileSync(p, "utf-8").split("\n");
-  if (lines.length > 31) {
-    writeFileSync(p, lines.slice(lines.length - 31).join("\n"), "utf-8");
-  }
-}
-
-export async function cmdCronRun(id: string, dryRun: boolean, timeoutSec: number, dirArg?: string, force = false): Promise<void> {
-  const root = dirArg ? resolvePath(expandTilde(dirArg)) : workbenchRoot();
-  const data = loadCrons(root);
-  const cron = data.crons.find((c) => c.id === id);
-  if (!cron) fail(`no such cron: ${id}`);
-  if (!cron.enabled) {
-    console.log(`jspace: ok: cron ${id} is disabled, skipping`);
-    return;
-  }
-  const argv = harnessArgv(cron.harness, cron.prompt);
-  if (dryRun) {
-    console.log(`jspace: dry-run: would run in ${root}:`);
-    console.log(`  $ ${argv.join(" ")}`);
-    return;
-  }
-
-  // Same-day success skip (launchd catch-up + manual rerun both covered);
-  // --force bypasses it.
-  if (!force && todaySuccess(root, id)) {
-    console.log(`jspace: ok: cron ${id} already succeeded today, skipping`);
-    return;
-  }
-  // Best-effort single-instance lock (stale after timeout*2).
-  const lock = join(root, ".jspace", "logs", "cron", `${id}.lock`);
-  mkdirSync(dirname(lock), { recursive: true });
-  if (existsSync(lock)) {
-    const age = Date.now() - statSync(lock).mtimeMs;
-    if (age < timeoutSec * 2000) {
-      console.log(`jspace: skip: cron ${id} already running (lock ${lock})`);
-      return;
-    }
-    unlinkSync(lock);
-  }
-  writeFileSync(lock, String(process.pid), "utf-8");
-
-  // inbox-tidy guard: skills/asset-ingest must exist; batch log must change.
-  const isInboxTask = cron.prompt.includes("inbox");
-  const batchLog = join(root, ".jspace", "logs", "inbox-batch.md");
-  let batchBefore = { mtime: 0, size: -1 };
-  if (isInboxTask) {
-    if (!existsSync(join(root, "skills", "asset-ingest"))) {
-      unlinkSync(lock);
-      appendFailed(root, id, "missing skills/asset-ingest (batch pipeline)", "");
-      fail(`cron ${id}: skills/asset-ingest not found in ${root}; refusing to run`);
-    }
-    if (isFile(batchLog)) {
-      const st = statSync(batchLog);
-      batchBefore = { mtime: st.mtimeMs, size: st.size };
-    }
-  }
-
-  const defaultPath = platform === "win32" ? "C:\\Windows\\system32;C:\\Windows" : "/usr/local/bin:/usr/bin:/bin";
-  const env = { ...process.env, PATH: process.env.PATH ?? defaultPath };
-  const out: Buffer[] = [];
-  const started = Date.now();
-  const needsShell = platform === "win32" && /\.(cmd|exe|bat)$/i.test(argv[0]);
-  const child = spawn(argv[0], argv.slice(1), { cwd: root, env, detached: platform !== "win32", shell: needsShell, stdio: ["ignore", "pipe", "pipe"] });
-  child.stdout?.on("data", (d: Buffer) => { if (out.join("").length < 1_000_000) out.push(d); });
-  child.stderr?.on("data", (d: Buffer) => { if (out.join("").length < 1_000_000) out.push(d); });
-  const timer = setTimeout(() => {
-    if (platform === "win32") {
-      // Windows has no POSIX process groups; kill the whole tree via taskkill.
-      try { spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"]); } catch {}
-    } else {
-      try { process.kill(-child.pid!, "SIGTERM"); } catch { try { child.kill("SIGKILL"); } catch {} }
-    }
-  }, timeoutSec * 1000);
-
-  const exited = await new Promise<number>((resolveExit) => {
-    child.on("error", (e) => { console.error(`jspace: spawn error: ${e.message}`); resolveExit(1); });
-    child.on("exit", (code) => resolveExit(code ?? 1));
-  }).then((code) => {
-    clearTimeout(timer);
-    return code;
-  });
-  const output = Buffer.concat(out).toString("utf-8");
-  const timedOut = Date.now() - started > timeoutSec * 1000;
-  const exitOk = exited === 0 && !timedOut;
-  const hasOutput = output.trim().length > 0;
-  const suspect = exited === 0 && !timedOut && !hasOutput;
-  const status = exitOk ? (suspect ? "suspect" : "ok") : "failed";
-
-  // batch log change check for inbox tasks
-  let batchChanged = true;
-  if (isInboxTask && isFile(batchLog)) {
-    const st = statSync(batchLog);
-    batchChanged = st.mtimeMs !== batchBefore.mtime || st.size !== batchBefore.size;
-  }
-
-  const logDir = cronLogDir(root, id);
-  mkdirSync(logDir, { recursive: true });
-  const logPath = join(logDir, `${localStamp()}.md`);
-  writeFileSync(logPath, [
-    `# cron ${id}`,
-    `time: ${localStamp()}`,
-    `command: ${argv.join(" ")}`,
-    `exit: ${exited}`,
-    `status: ${status}`,
-    `timed_out: ${timedOut}`,
-    `batch_log_changed: ${batchChanged}`,
-    "---",
-    output.slice(0, 64_000),
-  ].join("\n"), "utf-8");
-  pruneLogs(root, id, 30);
-
-  // structured run record (machine truth; prose log above is the human payload)
-  const runId = crypto.randomUUID();
-  writeRun(root, id, {
-    id: runId,
-    cronId: id,
-    startedAt: localStamp(),
-    exit: exited,
-    status,
-    timedOut,
-    outputLog: logPath,
-    batchChanged,
-  });
-
-  const failed = status === "failed" || suspect || (isInboxTask && !batchChanged);
-  if (failed) {
-    const failureClass = status === "failed" ? "failed" : isInboxTask && !batchChanged ? "batch-stale" : "suspect";
-    openOrUpdate(root, id, failureClass, runId);
-    console.log(`jspace: ${status}: cron ${id} (exit ${exited}); log ${logPath}`);
-    process.exitCode = status === "failed" ? 1 : 0;
-  } else {
-    resolveIncidents(root, id);
-    console.log(`jspace: ok: cron ${id} (exit ${exited}); log ${logPath}`);
-  }
-  unlinkSync(lock);
 }
 
 export function cmdCronStatus(id?: string): void {
