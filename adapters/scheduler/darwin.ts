@@ -25,6 +25,43 @@ function parsePlistName(name: string): { taskId: string; tag: string; cronId: st
   return { taskId: m[1] + m[2] + "." + m[3], tag: m[2], cronId: m[3] };
 }
 
+/** Extract the StartCalendarInterval dict keys as a canonical schedule string
+ *  (matches the cron.json `0 3 * * *` shape when mapped back). We only need
+ *  enough to detect drift vs cron.json, not a full round-trip. */
+function plistSchedule(name: string): string {
+  const p = join(process.env.HOME ?? "", "Library", "LaunchAgents", name);
+  if (!existsSync(p)) return "";
+  const res = spawnSync("plutil", ["-extract", "StartCalendarInterval", "json", "-o", "-", p], { encoding: "utf-8" });
+  if (res.status !== 0) return "";
+  try {
+    const d = JSON.parse(res.stdout ?? "{}") as Record<string, number>;
+    const min = d.Minute ?? "*";
+    const hour = d.Hour ?? "*";
+    const dom = d.Day ?? "*";
+    const mon = d.Month ?? "*";
+    const dow = d.Weekday ?? "*";
+    return `${min} ${hour} ${dom} ${mon} ${dow}`;
+  } catch {
+    return "";
+  }
+}
+
+/** Extract the WorkingDirectory from an installed plist (the workbench root the
+ *  cron runs against; matches buildDesired's argv intent). */
+function plistArgv(name: string): string {
+  const p = join(process.env.HOME ?? "", "Library", "LaunchAgents", name);
+  if (!existsSync(p)) return "";
+  // plutil -extract WorkingDirectory json fails on bare strings; use -p and grep
+  const res = spawnSync("plutil", ["-p", p], { encoding: "utf-8" });
+  if (res.status !== 0) return "";
+  const m = (res.stdout ?? "").match(/"WorkingDirectory" => "([^"]+)"/);
+  const wd = m?.[1] ?? "";
+  const parts = name.replace(/\.plist$/, "").split(".");
+  const id = parts[parts.length - 1] ?? "";
+  // same shape as buildDesired.argv so planReconciliation no-ops on identical state
+  return `cron run --id ${id} --dir ${wd}`;
+}
+
 export const darwinAdapter: SchedulerAdapter = {
   platform: "darwin",
 
@@ -34,7 +71,12 @@ export const darwinAdapter: SchedulerAdapter = {
       const parsed = parsePlistName(name);
       if (!parsed) continue; // not ours (malformed — leave alone)
       if (parsed.tag !== tag) continue; // another workbench's agent — never touch
-      out.push({ taskId: parsed.taskId, cronId: parsed.cronId, schedule: "", argv: "" });
+      out.push({
+        taskId: parsed.taskId,
+        cronId: parsed.cronId,
+        schedule: plistSchedule(name),
+        argv: plistArgv(name),
+      });
     }
     return out;
   },

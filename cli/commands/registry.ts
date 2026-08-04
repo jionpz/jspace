@@ -368,6 +368,7 @@ const cronInstallSpec: CommandSpec = {
 const cronUninstallSpec: CommandSpec = {
   name: "uninstall",
   summary: "remove installed launchd agents for this workbench",
+  features: { dir: true },
   handler: (ctx) => {
     const marker = readMarker(ctx.root);
     const tag = marker.status === "ok" ? workbenchTag(marker.value.workbench_id) : "unknown";
