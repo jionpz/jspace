@@ -39,7 +39,7 @@ jobs:
       - name: Install deps
         run: bun install --frozen-lockfile
 
-      - name: Generate version (before assets: bundle_version must embed the tag)
+      - name: "Generate version before assets (bundle_version must embed the tag)"
         env:
           # Tag builds embed the release version; non-tag builds fall back to
           # git describe (no tags fetched) -> 0.0.0-dev.

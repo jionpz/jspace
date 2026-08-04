@@ -43,7 +43,10 @@ export function readEnvelopes(fhRoot: string): PendingWriteEnvelopeV1[] {
       /* skip corrupt envelope */
     }
   }
-  return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  // deterministic order: createdAt then id — readdir order differs across
+  // filesystems (APFS vs ext4) and a createdAt tie must not make the order
+  // filesystem-dependent (CI caught a flaky order in cron.test.ts).
+  return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 }
 
 export function readEnvelope(fhRoot: string, id: string): PendingWriteEnvelopeV1 {
