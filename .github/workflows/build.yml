@@ -47,7 +47,8 @@ jobs:
         run: |
           bun run scripts/gen-version.ts
           if [ -n "$JSPACE_BUILD_VERSION" ]; then
-            grep -q "\"$JSPACE_BUILD_VERSION\"" cli/version.generated.ts || { echo "version.generated.ts does not embed tag $JSPACE_BUILD_VERSION"; exit 1; }
+            EXPECTED="${JSPACE_BUILD_VERSION#v}"
+            grep -q "\"$EXPECTED\"" cli/version.generated.ts || { echo "version.generated.ts does not embed $EXPECTED (tag $JSPACE_BUILD_VERSION)"; exit 1; }
           fi
 
       - name: Regenerate embedded assets
