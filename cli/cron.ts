@@ -2,26 +2,20 @@
 // install + headless harness execution. Follows the registry.ts / cmds.ts idioms.
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { fail, rejectErrors } from "../application/errors.ts";
+import { fail } from "../application/errors.ts";
 import { devRoot, expandTilde, isCompiled } from "./embed.ts";
 import { isFile, resolvePath } from "./paths.ts";
 import { CONFIG_DIR } from "../core/contracts/files.ts";
-import { findIndex, ID_PATTERN, readWorkbenchState, workbenchRoot } from "./registry.ts";
+import { readWorkbenchState, workbenchRoot } from "./registry.ts";
 import { primaryPathForResourceType, resolveEffectiveRegistry } from "../core/registry/effective.ts";
+import { loadCrons, parseSchedule, type ScheduleDict } from "../application/automation/definitions.ts";
+import type { CronDefinition } from "../core/contracts/cron.ts";
+export { parseSchedule };
+export type { ScheduleDict };
 
 export const CRON_FILE = join(CONFIG_DIR, "cron.json");
-const HARNESSES = ["claude", "codex", "pi"] as const;
-type Harness = (typeof HARNESSES)[number];
-
-interface CronRecord {
-  id: string;
-  schedule: string;
-  harness: string;
-  prompt: string;
-  enabled: boolean;
-}
 
 type Platform = "darwin" | "linux" | "win32";
 const platform: Platform = process.platform as Platform;
@@ -47,138 +41,11 @@ function localStamp(): string {
   return `${localDate()}T${String(new Date().getHours()).padStart(2, "0")}${String(new Date().getMinutes()).padStart(2, "0")}${String(new Date().getSeconds()).padStart(2, "0")}`;
 }
 
-// ---- load/save ----
-export function loadCrons(root: string): { version: number; crons: CronRecord[] } {
-  const p = join(root, CRON_FILE);
-  if (!isFile(p)) return { version: 1, crons: [] };
-  let data: unknown;
-  try {
-    data = JSON.parse(readFileSync(p, "utf-8"));
-  } catch (e) {
-    fail(`${CRON_FILE} is not valid JSON: ${(e as Error).message}`);
-  }
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
-    fail(`${CRON_FILE} root must be an object`);
-  }
-  const rec = data as Record<string, unknown>;
-  if (rec.version !== 1) fail(`${CRON_FILE} version must be 1`);
-  const crons = Array.isArray(rec.crons) ? (rec.crons as unknown[]) : [];
-  return { version: 1, crons: crons.filter(isCronRecord) };
-}
-
-function isCronRecord(r: unknown): r is CronRecord {
-  if (!r || typeof r !== "object" || Array.isArray(r)) return false;
-  const o = r as Record<string, unknown>;
-  return (
-    typeof o.id === "string" &&
-    typeof o.schedule === "string" &&
-    typeof o.harness === "string" &&
-    typeof o.prompt === "string" &&
-    typeof o.enabled === "boolean"
-  );
-}
-
-function saveCrons(root: string, data: { version: number; crons: CronRecord[] }): void {
-  mkdirSync(join(root, CONFIG_DIR), { recursive: true });
-  writeFileSync(join(root, CRON_FILE), JSON.stringify(data, null, 2) + "\n", "utf-8");
-}
-
-// ---- schedule validation (restricted subset -> launchd dict) ----
-interface ScheduleDict {
-  Minute: number;
-  Hour: number;
-  Day?: number;
-  Month?: number;
-  Weekday?: number;
-}
-/** Parse a restricted 5-field cron expression. `*` omits the launchd key (any).
- *  Rejects lists/ranges/steps and day-of-month+day-of-week both set (launchd
- *  AND/OR semantics differ across macOS versions — refuse instead of guessing). */
-export function parseSchedule(schedule: string): ScheduleDict {
-  const fields = schedule.trim().split(/\s+/);
-  if (fields.length !== 5) fail(`invalid schedule: ${schedule} (expected 5 fields)`);
-  const [minute, hour, dom, month, dow] = fields;
-  const num = (v: string, lo: number, hi: number, label: string): number | undefined => {
-    if (v === "*") return undefined;
-    if (!/^\d+$/.test(v)) {
-      fail(`invalid ${label} in schedule: ${schedule} (MVP supports single values or *; lists/ranges/steps rejected)`);
-    }
-    const n = Number(v);
-    if (n < lo || n > hi) fail(`invalid ${label} in schedule: ${schedule} (range ${lo}-${hi})`);
-    return n;
-  };
-  const m = num(minute, 0, 59, "minute");
-  const h = num(hour, 0, 23, "hour");
-  const d = num(dom, 1, 31, "day-of-month");
-  const mo = num(month, 1, 12, "month");
-  const w = num(dow, 0, 7, "weekday");
-  if (m === undefined) fail(`invalid schedule: ${schedule} (minute cannot be * for launchd; use e.g. "0 * * * *")`);
-  if (h === undefined) fail(`invalid schedule: ${schedule} (hour cannot be * for launchd; use e.g. "0 21 * * *")`);
-  if (d !== undefined && w !== undefined) {
-    fail(`invalid schedule: ${schedule} (day-of-month and day-of-week cannot both be set in MVP; launchd semantics differ)`);
-  }
-  return { Minute: m, Hour: h, ...(d !== undefined && { Day: d }), ...(mo !== undefined && { Month: mo }), ...(w !== undefined && { Weekday: w }) };
-}
-
-// ---- cron add / list / remove ----
-export function cmdCronAdd(
-  id: string,
-  schedule: string,
-  harness: string,
-  prompt: string,
-  disabled: boolean,
-): void {
-  const root = workbenchRoot();
-  const data = loadCrons(root);
-  if (!ID_PATTERN.test(id)) fail(`invalid cron id: ${id} (lowercase letters, digits, hyphens)`);
-  if (findIndex(data.crons, id) !== null) fail(`duplicate cron id: ${id}`);
-  if (!HARNESSES.includes(harness as Harness)) {
-    fail(`invalid harness: ${harness} (choose from ${HARNESSES.join(", ")})`);
-  }
-  if (!prompt.trim()) fail("prompt must be non-empty");
-  parseSchedule(schedule); // validate
-  data.crons.push({ id, schedule, harness, prompt, enabled: !disabled });
-  saveCrons(root, data);
-  console.log(`jspace: ok: added cron: ${id} (${schedule}, ${harness}, ${disabled ? "disabled" : "enabled"})`);
-  if (plistExists(id)) {
-    console.log(`jspace: hint: cron ${id} is installed; re-run "jspace cron install" to apply changes`);
-  }
-}
-
-export function cmdCronList(json: boolean): void {
-  const root = workbenchRoot();
-  const data = loadCrons(root);
-  if (json) {
-    console.log(JSON.stringify({ version: data.version, crons: data.crons }, null, 2));
-    return;
-  }
-  if (data.crons.length === 0) {
-    console.log("jspace: ok: no crons defined (add one with: jspace cron add <id> --schedule ... )");
-    return;
-  }
-  for (const c of data.crons) {
-    console.log(`${c.enabled ? "" : "[disabled] "}${c.id}  ${c.schedule}  ${c.harness}`);
-  }
-}
-
-export function cmdCronRemove(id: string): void {
-  const root = workbenchRoot();
-  const data = loadCrons(root);
-  const index = findIndex(data.crons, id);
-  if (index === null) fail(`no such cron: ${id}`);
-  data.crons.splice(index, 1);
-  saveCrons(root, data);
-  console.log(`jspace: ok: removed cron: ${id}`);
-  if (plistExists(id)) {
-    console.log(`jspace: hint: cron ${id} is installed; re-run "jspace cron install" (or uninstall) to apply`);
-  }
-}
-
 // ---- launchd install / uninstall ----
 function plistPath(id: string): string {
   return join(homedir(), "Library", "LaunchAgents", `com.jspace.cron.${id}.plist`);
 }
-function plistExists(id: string): boolean {
+export function plistExists(id: string): boolean {
   return isFile(plistPath(id));
 }
 export function installedPlists(): string[] {
@@ -243,7 +110,7 @@ export const CRON_BLOCK_END = "# end jspace";
 /** Build the managed crontab block for the enabled crons. Every path is POSIX
  *  single-quoted (no space/quote/`$()`/backtick breakage) and `%` is escaped
  *  (cronie treats it as a newline). Lines over 1000 chars are rejected. */
-export function crontabBlock(crons: CronRecord[], root: string, jspaceBin: string, path: string, home: string): string {
+export function crontabBlock(crons: CronDefinition[], root: string, jspaceBin: string, path: string, home: string): string {
   const lines = crons
     .filter((c) => c.enabled)
     .map((c) => {
@@ -296,7 +163,7 @@ export function isWindowsInstallable(schedule: string): boolean {
 
 /** Build schtasks args for a cron (DAILY/WEEKLY subset). Returns null when the
  *  schedule can't be expressed (reject with a clear error). */
-export function schtasksArgs(cron: CronRecord, jspaceBin: string, root: string, taskName: string): string[] | null {
+export function schtasksArgs(cron: CronDefinition, jspaceBin: string, root: string, taskName: string): string[] | null {
   const d = parseSchedule(cron.schedule);
   if (!isWindowsInstallable(cron.schedule)) return null;
   const st = `${String(d.Hour).padStart(2, "0")}:${String(d.Minute).padStart(2, "0")}`;
@@ -343,7 +210,7 @@ export function linuxCronHealth(): { crontab: boolean; service: boolean } {
   return { crontab: (c.stdout ?? "").trim() !== "", service: s.status === 0 };
 }
 
-function installLinuxCrons(root: string, enabled: CronRecord[]): void {
+function installLinuxCrons(root: string, enabled: CronDefinition[]): void {
   mkdirSync(join(root, ".jspace", "logs", "cron"), { recursive: true });
   const res = spawnSync("crontab", ["-l"], { encoding: "utf-8" });
   let existing = "";
@@ -366,7 +233,7 @@ function installLinuxCrons(root: string, enabled: CronRecord[]): void {
   console.log(`jspace: ok: installed ${enabled.length} cron(s) into crontab`);
 }
 
-function installWindowsCrons(root: string, enabled: CronRecord[]): void {
+function installWindowsCrons(root: string, enabled: CronDefinition[]): void {
   const wbId = shortHash(root);
   for (const c of enabled) {
     if (!isWindowsInstallable(c.schedule)) {
@@ -382,7 +249,7 @@ function installWindowsCrons(root: string, enabled: CronRecord[]): void {
 }
 
 
-function installDarwinCrons(root: string, enabled: CronRecord[]): void {
+function installDarwinCrons(root: string, enabled: CronDefinition[]): void {
   mkdirSync(join(root, ".jspace", "logs", "cron"), { recursive: true });
   for (const c of enabled) {
     const p = plistPath(c.id);

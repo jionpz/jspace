@@ -23,19 +23,18 @@ import { fail } from "../../application/errors.ts";
 import { readFileSync } from "node:fs";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
 import { ASSETS } from "../assets.generated.ts";
+import { cronAdd, cronList, cronRemove, cronSetEnabled } from "../../application/automation/use-cases.ts";
+import { loadCrons } from "../../application/automation/definitions.ts";
 import {
-  cmdCronAdd,
   cmdCronFailures,
   cmdCronInstall,
-  cmdCronList,
-  cmdCronRemove,
   cmdCronRun,
   cmdCronStatus,
   cmdCronUninstall,
   installedCronIds,
   linuxCronHealth,
-  loadCrons,
   parseSchedule,
+  plistExists,
 } from "../cron.ts";
 import { cmdUpdate } from "../update.ts";
 
@@ -219,36 +218,45 @@ const cronAddSpec: CommandSpec = {
   name: "add",
   summary: "add a cron definition",
   positionals: [{ name: "id", required: true, help: "cron id (lowercase letters, digits, and hyphens)" }],
+  features: { dir: true },
   options: [
     { name: "--schedule", takesValue: true, required: true, help: 'restricted 5-field cron expression (e.g. "0 21 * * *"; single values or *; no lists/ranges/steps)' },
     { name: "--harness", takesValue: true, required: true, help: "harness to run: claude | codex | pi" },
     { name: "--prompt", takesValue: true, required: true, help: "instruction for the headless harness" },
     { name: "--disabled", takesValue: false, help: "add the cron disabled" },
   ],
-  handler: (_ctx, args) => {
-    cmdCronAdd(s(args.id), s(args.schedule), s(args.harness), s(args.prompt), b(args.disabled));
-    return { lines: [] };
-  },
+  handler: (ctx, args) => cronAdd(ctx.root, s(args.id), s(args.schedule), s(args.harness), s(args.prompt), b(args.disabled), { isInstalled: plistExists }),
 };
 
 const cronListSpec: CommandSpec = {
   name: "list",
   summary: "list cron definitions",
-  features: { json: true },
-  handler: (_ctx, args) => {
-    cmdCronList(b(args.json));
-    return { lines: [] };
-  },
+  features: { json: true, dir: true },
+  handler: (ctx, args) => cronList(ctx.root, b(args.json)),
 };
 
 const cronRemoveSpec: CommandSpec = {
   name: "remove",
   summary: "remove a cron definition",
   positionals: [{ name: "id", required: true, help: "cron id" }],
-  handler: (_ctx, args) => {
-    cmdCronRemove(s(args.id));
-    return { lines: [] };
-  },
+  features: { dir: true },
+  handler: (ctx, args) => cronRemove(ctx.root, s(args.id), { isInstalled: plistExists }),
+};
+
+const cronEnableSpec: CommandSpec = {
+  name: "enable",
+  summary: "enable a cron definition",
+  positionals: [{ name: "id", required: true, help: "cron id" }],
+  features: { dir: true },
+  handler: (ctx, args) => cronSetEnabled(ctx.root, s(args.id), true),
+};
+
+const cronDisableSpec: CommandSpec = {
+  name: "disable",
+  summary: "disable a cron definition",
+  positionals: [{ name: "id", required: true, help: "cron id" }],
+  features: { dir: true },
+  handler: (ctx, args) => cronSetEnabled(ctx.root, s(args.id), false),
 };
 
 const cronInstallSpec: CommandSpec = {
@@ -324,6 +332,8 @@ const cronSpec: CommandSpec = {
     cronAddSpec,
     cronListSpec,
     cronRemoveSpec,
+    cronEnableSpec,
+    cronDisableSpec,
     cronInstallSpec,
     cronUninstallSpec,
     cronRunSpec,
