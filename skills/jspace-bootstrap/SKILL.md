@@ -21,12 +21,16 @@ Bootstrap a fresh JSpace workbench end to end. Run phases in order; never skip a
 
 **Assumption: at least one AI harness (Pi, Claude Code, Codex, or Cursor) is already installed and functional.** This skill configures what comes after that: the registry, gbrain memory, and harness wiring. It does not install harnesses.
 
-Auto-install missing tooling; do not stop to ask (分平台命令):
+检测缺失工具;**不默认执行远程管道安装**(父任务设计 §11:远程安装器下载到临时文件、展示来源/校验和、执行需用户显式确认):
 
 1. `bun` - if missing (needed to install/upgrade gbrain):
-   - macOS / Linux: `curl -fsSL https://bun.sh/install | bash`
-   - Windows: `powershell -c "irm bun.sh/install.ps1 | iex"`
-   - ⚠️ 治理红线:两者均为 bun 官方安装脚本,属 `curl | bash` 一类;**执行前先核验来源与内容**(bun.sh 官方),不盲跑未审查脚本。
+   - 先探测:`command -v bun`(Windows `where bun`);缺失则给出安装命令并注明来源:
+     - macOS / Linux: `curl -fsSL https://bun.sh/install | bash`
+     - Windows: `powershell -c "irm bun.sh/install.ps1 | iex"`
+   - **执行纪律(治理红线 + §11)**:以上均为 bun 官方安装脚本,属 `curl | bash` 一类。**默认不执行**;确需安装时按顺序:
+     1. **下载到临时文件、不直接管道执行**:`curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh`(Windows 等价下载 `.ps1`);
+     2. **展示来源与内容供核验**:bun.sh 官方 + 抽查脚本(勿盲跑未审查脚本);
+     3. **用户显式确认后**再 `bash /tmp/bun-install.sh`(Windows:`powershell -ExecutionPolicy Bypass -File <下载的 .ps1>`)。
 2. `git` - if missing, install via the platform package manager(Windows: `winget install Git.Git`)。
 
 Verify after installs: `bun --version`。

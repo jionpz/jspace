@@ -14,6 +14,12 @@
 - `gbrain doctor [--json] [--fast]` - health: resolver, pgvector, RLS, embeddings
 - `gbrain upgrade` / `gbrain check-update`
 
+## 版本兼容与升级前健康检查
+
+- **支持范围**:本工作台按 bootstrap 验收通过的 gbrain 版本校准(2026-08 基线);声明「支持/已验证」= 该版本经 `gbrain doctor --json` 全绿 + 端到端验收通过。升级前用 `gbrain check-update` 查看目标版本,不跨未知大版本盲升。
+- **升级前健康检查(必做)**:`gbrain doctor --json` → resolver / pgvector / embeddings 均 `ok` 才允许 `gbrain upgrade`;存在未解决项先修复再升级,不携带已知故障升级。
+- **降级路径**:升级后 `gbrain doctor` 不绿 → 回退到上一已知好版本恢复,再处理根因。
+
 ## Page frontmatter
 
 Minimal contract shared by all harnesses:

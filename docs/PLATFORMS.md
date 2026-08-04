@@ -18,17 +18,21 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 - failed/suspect/batch-stale run 打开或更新 incident（keyed by cron + failure class）；成功 retry 自动 resolve。
 - `cron ack [id]`：open → acknowledged（证据保留，不再告警）；`cron check` 仅对 open（未 ack）incident 或 actionable pending write 返回非 0。
 
-## Harness 能力矩阵（M4）
+## Harness 能力矩阵（M4，cron argv）
 
-`jspace cron run` 调 headless harness。各 harness 的 argv 形状在 `adapters/harness/argv.ts`；能力分级：
+`jspace cron run` 调 headless harness。各 harness 的 argv 形状在 `adapters/harness/argv.ts`；能力分级（automated = 有 `adapters/harness/argv.test.ts` 单测证据）：
 
 | harness | argv | 状态 | 备注 |
 |---|---|---|---|
-| claude | `-p <prompt> --output-format text --allowedTools Bash,Read,Write,Edit,mcp__gbrain__*` | automated | CI 验证 argv 生成；无头执行需本机 `claude` 可用 |
+| claude | `-p <prompt> --output-format text --allowedTools Bash,Read,Write,Edit,mcp__gbrain__*` | automated | argv 形状 + 白名单有单测（`adapters/harness/argv.test.ts`）；无头执行需本机 `claude` 可用 |
 | codex | `exec <prompt>` | best-effort | argv 已实现，未在 CI 全链验证 |
 | pi | `-p <prompt>` | best-effort | argv 已实现，未在 CI 全链验证 |
 
 > cron 是无头 unattended 执行：`--allowedTools` 白名单、绝不 bypassPermissions。
+
+## Harness lifecycle 能力矩阵（M4，会话生命周期）
+
+会话级能力（session-start / session-end / fallback / crash recovery）的**权威矩阵**在 `skills/jspace-bootstrap/references/harnesses.md`「Lifecycle 能力矩阵」节，逐格标注 automated / best-effort / manual / unsupported 并注明验证方法；本文档不复制整表以避免漂移。要点：当前无 automated 格（hook 真实触发是 harness 运行时行为，未在 CI 验证），产品措辞只在 automated 处使用「自动」。
 
 ## Scheduler 任务隔离（M5）
 

@@ -1,6 +1,7 @@
 # Harness wiring reference
 
 > 完整推荐配置、全局治理文档(`~/.agents/agents.md`)接线与逐 harness 差异见 **`harness-config` skill**;本文件保留 bootstrap 首次 wiring 视角。
+> **`harness-config` 是机器级全局 skill**,**不随本工作台物化**(不在 `skills/` 下);需要时按其 Phase 1 自装到 `~/.agents/skills/harness-config` 后再用,勿假设工作台已内置。
 > `<gbrain>` = gbrain 二进制绝对路径,按 `$GBRAIN_BIN` → `command -v gbrain`(Windows `where gbrain`) → `~/.bun/bin/gbrain` 解析(Windows:`%USERPROFILE%\.bun\bin\gbrain.exe`)。
 
 Four session harnesses are supported: Pi, Claude Code, Codex, Cursor. The user picks which one to use; wire that one. hermes is optional (mention, don't promote). All harnesses read/write the same gbrain store over MCP/CLI.
@@ -64,6 +65,24 @@ args = ["serve"]
 
 - Optional harness for autonomous/cron/multi-endpoint work. Mention that it exists; do not proactively wire or install it.
 - If already configured: MCP in `~/.hermes/config.yaml`; MCP stderr logs at `~/.hermes/logs/mcp-stderr.log`.
+
+## Lifecycle 能力矩阵（权威，单一来源）
+
+> **本矩阵是 JSpace 对四 harness 生命周期能力的唯一权威声明**；JSpace 开发仓库 `docs/PLATFORMS.md`（外部稳定依赖，不随工作台物化）交叉引用本表，不另写整表。分级语义（父任务 invariant #7：不虚报自动化可靠性）：
+> - **automated**：有 CI/测试证据、可作为保证的路径（如 claude headless cron argv 生成，见 `adapters/harness/argv.test.ts`）。
+> - **best_effort**：机制存在（hook / Rules / 指令），但真实触发依赖用户环境（需启用/审批/会话条件），不构成保证。
+> - **manual**：无自动机制，须用户/agent 显式执行。
+> - **unsupported**：机制不存在。
+
+| harness | session-start retrieval | session-end write-back | 显式 fallback | crash recovery |
+|---|---|---|---|---|
+| Pi | best_effort（context 文件 / SYSTEM.md，加载依赖 `/reload` 或会话条件） | best_effort（AGENTS End-of-Work Capture + 显式「收工」；无原生 session-end hook） | manual（用户显式调用 skill/命令） | best_effort（下次会话 context 重载可见 pending/incident） |
+| Claude Code | best_effort（SessionStart hook，`.claude/settings.json`；需 hook 真实触发，非 CI 验证） | best_effort（End-of-Work Capture + 显式「收工」；无原生 session-end hook） | manual | best_effort（SessionStart 跑 `cron check` 暴露未确认 incident） |
+| Codex | best_effort（SessionStart hook 需用户 enable `features.hooks` + `/hooks` 审批） | manual（无 hook；靠显式收工） | manual | best_effort（hook 生效时 SessionStart 检查） |
+| Cursor | best_effort（Rules `.mdc` / sessionStart hook） | manual（无 hook；靠显式收工） | manual | manual（无自动 SessionStart 检查） |
+
+- **automated 的边界**：本矩阵不含 automated 格——所有 lifecycle 操作的真实触发都是 harness 运行时行为，未在 CI 验证，如实标 best_effort/manual。CLI 侧的 automated 见 `docs/PLATFORMS.md`「Harness 能力矩阵」（claude cron argv 有单测证据）。
+- 措辞约定：产品文档（模板 AGENTS / references / PLATFORMS）**只在 automated 处**使用「自动/保证」类措辞；best_effort/manual 路径说「按需」「显式」「可」等。
 
 ## Provider / proxy management (optional)
 
