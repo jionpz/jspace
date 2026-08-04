@@ -3,6 +3,7 @@
 // never touches a real filehub.
 // Run: bun test application/ingest/journal.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +17,7 @@ import {
   readJournals,
   resumableJournals,
   rollbackIngest,
+  sha256File,
   writeJournal,
   type IngestFileOps,
   type IngestPlan,
@@ -363,4 +365,29 @@ test("copy failure at begin does not write a journal", () => {
   const t = track({ copyFile: () => { throw new Error("disk full"); } });
   expect(() => beginIngest(root, plan(src), t.ops)).toThrow(/disk full/);
   expect(readJournals(root)).toHaveLength(0);
+});
+
+test("sha256File is byte-level (matches shasum, not utf-8 text hash)", () => {
+  // synthetic PDF bytes: include a byte sequence invalid under utf-8
+  // (e.g. 0xFF 0xFE) so a text-based hash would differ.
+  const pdf = Buffer.concat([
+    Buffer.from("%PDF-1.4\n"),
+    Buffer.from([0xff, 0xfe, 0x00, 0x01]),
+    Buffer.from("\n%%EOF\n"),
+  ]);
+  const xlsx = Buffer.concat([
+    Buffer.from("PK\x03\x04"),
+    Buffer.from([0x80, 0x81, 0x82, 0x83]),
+    Buffer.from("mock xlsx body"),
+  ]);
+  for (const [name, buf] of [["sample.pdf", pdf], ["sample.xlsx", xlsx]] as const) {
+    const p = join(inbox, name);
+    writeFileSync(p, buf);
+    // expected: real sha256 of the bytes (compute independently via crypto)
+    const expected = createHash("sha256").update(buf).digest("hex");
+    expect(sha256File(p)).toBe(expected);
+    // sanity: must differ from utf-8 text hash when bytes are invalid utf-8
+    const textHash = createHash("sha256").update(buf.toString("utf-8")).digest("hex");
+    expect(sha256File(p)).not.toBe(textHash);
+  }
 });

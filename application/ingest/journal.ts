@@ -9,7 +9,8 @@
 // source, and persists `committed` only after cleanup is proven complete. A
 // crash or unlink failure therefore leaves a visible, retryable residue instead
 // of a committed journal whose source removal silently failed (P1).
-import { mkdirSync, readdirSync, readFileSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { closeSync, mkdirSync, openSync, readSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
@@ -23,6 +24,27 @@ import {
 import { sha256Of } from "../workspace/manifest.ts";
 
 export const INGEST_STATE_DIR = join(CONFIG_DIR, "state", "ingest");
+
+/**
+ * Byte-level sha256 of a file (streamed in chunks; never decodes to text).
+ * Distinct from sha256Of (string content) — contentHash must be the file's real
+ * sha256, which utf-8 decoding corrupts for PDF/PPTX/XLSX (illegal bytes → U+FFFD).
+ */
+export function sha256File(p: string): string {
+  const h = createHash("sha256");
+  const fd = openSync(p, "r");
+  try {
+    const buf = new Uint8Array(65536);
+    for (;;) {
+      const n = readSync(fd, buf, 0, buf.length, null);
+      if (n <= 0) break;
+      h.update(buf.subarray(0, n));
+    }
+  } finally {
+    closeSync(fd);
+  }
+  return h.digest("hex");
+}
 
 export interface IngestPlan {
   source: string; // inbox file absolute path
@@ -140,7 +162,7 @@ export function beginIngest(root: string, plan: IngestPlan, ops: IngestFileOps):
 
   let contentHash = "";
   if (existsSync(plan.source)) {
-    contentHash = sha256Of(readFileSync(plan.source, "utf-8"));
+    contentHash = sha256File(plan.source);
     const dupByContent = journals.find(
       (j) => j.status === "committed" && j.contentHash === contentHash && j.relPath === plan.relPath,
     );
