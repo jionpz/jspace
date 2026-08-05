@@ -40,7 +40,13 @@ export function applyPending(fhRoot: string, gbrain: GbrainDeps, targetId?: stri
       continue;
     }
     const existing = gbrain.get(env.slug);
-    if (existing.ok && existing.content !== undefined) {
+    // An existing page only dedupes/protects when it carries real content: an
+    // empty page (`content === ""`) counts as absent, so a staged write can
+    // proceed instead of being misclassified as "existing content differs".
+    // Note: get→put is not atomic (gbrain is an external CLI; no compare-and-swap
+    // here). This is a single-user local CLI — a concurrent external writer could
+    // in theory race between the get and the put and be overwritten.
+    if (existing.ok && existing.content !== undefined && existing.content !== "") {
       if (sha256Of(existing.content) === env.idempotencyKey) {
         // identical content already stored -> applied, no duplicate fact
         writeEnvelope(fhRoot, { ...env, status: "applied" });

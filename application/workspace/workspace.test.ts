@@ -210,6 +210,30 @@ test("hub schema gap with no registered migration -> upgrade fails, hub.json unt
   rmSync(root, { recursive: true, force: true });
 });
 
+test("dry-run with a no-migration hub gap reports [manual], not a fake [migrate]", () => {
+  const root = tmp();
+  markerOnlyWorkbench(root);
+  writeFileSync(
+    join(root, ".jspace", "hub.json"),
+    JSON.stringify({ version: "4", domains: [{ id: "d", path: "workspace/d" }], resources: [], projects: [] }, null, 2) + "\n",
+    "utf-8",
+  );
+  const deps = syntheticDeps([
+    {
+      path: "templates/workbench/.jspace/hub.json",
+      content: JSON.stringify({ version: "5", domains: [], resources: [], projects: [] }),
+      ownership: "user",
+    },
+  ]);
+  // no deps.migrations registered -> no-migration gap; dry-run must not pretend
+  // it would auto-migrate (the real upgrade refuses).
+  const result = workspaceUpgrade(root, { dryRun: true, acceptConflicts: true }, deps);
+  expect(result.lines.some((l) => l.includes("[manual] .jspace/hub.json"))).toBe(true);
+  expect(result.lines.some((l) => l.includes("[migrate]"))).toBe(false);
+  expect(result.lines.some((l) => l.includes("no registered migration"))).toBe(true);
+  rmSync(root, { recursive: true, force: true });
+});
+
 test("hub schema migration writes the migrated document, user data preserved, marker bumped", () => {
   const root = tmp();
   markerOnlyWorkbench(root);

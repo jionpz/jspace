@@ -2,7 +2,7 @@
 // Business logic moved out of cli/init.ts; environment-dependent bits
 // (binary root, asset materialization, path resolution) are injected so this
 // layer stays free of cli/env coupling.
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fail } from "../errors.ts";
 import type { CmdResult } from "../commands/command.ts";
@@ -16,6 +16,7 @@ import type { WorkbenchMarkerV1 } from "../../core/contracts/workbench.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import { writeActualMaterializedJournal } from "./journal.ts";
+import { materializedRel } from "./manifest.ts";
 export { CONFIG_DIR };
 
 export interface InitDeps {
@@ -65,6 +66,23 @@ export function initWorkbench(
     );
   }
 
+  // --force into a non-empty directory: never clobber existing files silently.
+  // Back up each colliding template path to <rel>.jspace-bak (mirrors install.sh's
+  // rc backup) and disclose it in the result — a destructive overwrite is always
+  // recoverable and always announced.
+  const backedUp: string[] = [];
+  if (force) {
+    for (const f of deps.manifest.files) {
+      const rel = materializedRel(f.path);
+      if (rel === null) continue;
+      const p = join(target, rel);
+      if (existsSync(p) && statSync(p).isFile()) {
+        writeFileSync(`${p}.jspace-bak`, readFileSync(p));
+        backedUp.push(rel);
+      }
+    }
+  }
+
   mkdirSync(target, { recursive: true });
   deps.materialize(target, deps.devRoot());
   // .jspace/logs/ is a preallocated slot for execution logs (cron / headless);
@@ -97,6 +115,9 @@ export function initWorkbench(
   return {
     lines: [
       `Initialized JSpace workbench at ${target}`,
+      ...(backedUp.length > 0
+        ? [`  note: backed up ${backedUp.length} pre-existing file(s) to <name>.jspace-bak: ${backedUp.join(", ")}`]
+        : []),
       `Validate: ${validateCmd} doctor --dir ${target}`,
       "Next: read AGENTS.md, then follow skills/jspace-bootstrap/SKILL.md",
     ],

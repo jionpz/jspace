@@ -169,13 +169,21 @@ export function workspaceUpgrade(
     const changes = entries.filter(
       (e) => e.action === "create" || e.action === "update" || e.action === "conflict",
     );
-    const lines = changes.length === 0 && hubMigration === null
+    // mirror the real path: a registered migration is planned as [migrate]; a
+    // schema gap with NO registered migration is [manual] (the real upgrade will
+    // refuse) — never shown as an auto-migrate that would silently succeed.
+    const mig = hubMigration !== null && hubMigration.outcome.status === "migrated";
+    const manual = hubMigration !== null && hubMigration.outcome.status === "no-migration";
+    const lines = changes.length === 0 && !mig && !manual
       ? ["jspace: ok: would upgrade: nothing to do"]
       : [
-          `jspace: ok: would upgrade ${changes.length + (hubMigration ? 1 : 0)} file(s):`,
+          `jspace: ok: would upgrade ${changes.length + (mig ? 1 : 0)} file(s):`,
           ...changes.map((e) => `[${e.action}] ${e.rel}`),
-          ...(hubMigration
+          ...(mig
             ? [`[migrate] ${hubMigration.rel} (hub schema ${hubMigration.outcome.from} -> ${hubMigration.outcome.to})`]
+            : []),
+          ...(manual
+            ? [`[manual] ${hubMigration.rel} (hub schema ${hubMigration.outcome.from} -> ${hubMigration.outcome.to}; no registered migration — the real upgrade will refuse)`]
             : []),
         ];
     return { lines };

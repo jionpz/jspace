@@ -87,6 +87,15 @@ test("existing page with DIFFERENT content is never overwritten -> terminal_fail
   expect(readEnvelopes(fh)[0].error).toContain("different content");
 });
 
+test("existing EMPTY page counts as absent -> put proceeds (not terminal)", () => {
+  stageEnvelope(fh, "asset-ingest", "assets/foo/doc", "real content");
+  const s = stub({ get: () => ({ ok: true, content: "" }) }); // empty existing page
+  const res = applyPending(fh, s.deps);
+  expect(s.puts).toEqual(["assets/foo/doc"]);
+  expect(res.applied).toHaveLength(1);
+  expect(statuses()).toEqual(["applied"]);
+});
+
 test("put failure retries then reaches terminal_failed at MAX_RETRY", () => {
   stageEnvelope(fh, "asset-ingest", "assets/foo/doc", "content");
   const fail = stub({ put: () => ({ ok: false, error: "gbrain lock held" }) });

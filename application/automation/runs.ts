@@ -1,9 +1,10 @@
 // application/automation/runs.ts — structured run records (.jspace/state/runs/).
 // Machine truth for cron status; prose logs stay as human payloads referenced
 // by outputLog. Written by the executor on every run.
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
+import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 
 const RUNS_DIR = join(CONFIG_DIR, "state", "runs");
 
@@ -28,7 +29,7 @@ function runsDir(root: string, cronId: string): string {
 export function writeRun(root: string, cronId: string, record: RunRecord): void {
   const dir = runsDir(root, cronId);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, `${record.id}.json`), JSON.stringify(record, null, 2) + "\n", "utf-8");
+  writeBytesAtomic(join(dir, `${record.id}.json`), JSON.stringify(record, null, 2) + "\n");
 }
 
 export function readRuns(root: string, cronId: string): RunRecord[] {

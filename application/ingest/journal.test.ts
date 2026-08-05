@@ -138,7 +138,7 @@ test("fail at staged compensates: staged copy removed, source stays in inbox (no
   const { journal } = beginIngest(root, plan(src), t.ops) as { kind: "created"; journal: { id: string } };
   const failed = failIngest(root, journal.id, "gbrain put failed", t.ops);
   expect(failed.status).toBe("failed");
-  expect(failed.failedStep).toBe("gbrain"); // gbrain was the step in progress
+  expect(failed.failedStep).toBe("staged"); // the last completed step (staged copy removed)
   expect(failed.failureReason).toBe("gbrain put failed");
   expect(t.unlinked).toEqual([plan(src).target]); // staged copy removed
   expect(existsSync(src)).toBe(true); // source remains, retryable
@@ -152,7 +152,7 @@ test("fail at index (page already written) does not destructively compensate", (
   t.unlinked.length = 0;
   const failed = failIngest(root, journal.id, "index update failed", t.ops);
   expect(failed.status).toBe("failed");
-  expect(failed.failedStep).toBe("index");
+  expect(failed.failedStep).toBe("gbrain"); // last completed step; index/commit still retryable
   expect(t.unlinked).toEqual([]); // keep file+page; index retryable
   expect(existsSync(src)).toBe(true);
 });
@@ -341,23 +341,28 @@ test("advance/fail/rollback reject a cleanup-pending journal and point to --comp
   expect(isCleanupPending(readJournal(root, id))).toBe(true); // rejections never disturb it
 });
 
-test("failIngest at index records the cleanup-pending marker; --complete converges it", () => {
+test("fail at index is NOT cleanup-pending; --complete refuses; re-begin recovers", () => {
   const src = sourceFile();
   const t = track();
   const { journal } = beginIngest(root, plan(src), t.ops) as { kind: "created"; journal: { id: string } };
   const id = journal.id;
   advanceIngest(root, id, "gbrain", t.ops);
   advanceIngest(root, id, "index", t.ops);
-  // a user/skill abort at index lands on the same legal state (failedStep=committed);
-  // --complete is the recovery: gbrain + index are already written, commit removes source
+  // a user/skill abort at index is a PLAIN failure (failedStep=index), never the
+  // cleanup-pending marker — only completeIngest may create that. --complete must
+  // refuse (not force-commit + unlink the source), and the source stays for a retry.
   const failed = failIngest(root, id, "manual abort", t.ops);
   expect(failed.status).toBe("failed");
-  expect(failed.failedStep).toBe("committed");
-  expect(isCleanupPending(readJournal(root, id))).toBe(true);
-  const res = completeIngest(root, id, t.ops);
-  expect(res.kind).toBe("committed");
-  expect(t.unlinked).toEqual([src]);
-  expect(readJournal(root, id).status).toBe("committed");
+  expect(failed.failedStep).toBe("index");
+  expect(isCleanupPending(readJournal(root, id))).toBe(false);
+  expect(() => completeIngest(root, id, t.ops)).toThrow(/cannot complete/);
+  expect(t.unlinked).toEqual([]); // source never touched
+  expect(existsSync(src)).toBe(true);
+  // retry: re-begin stages a fresh journal; the source is still in inbox
+  const again = beginIngest(root, plan(src), t.ops);
+  expect(again.kind).toBe("created");
+  expect(readJournals(root)).toHaveLength(2);
+  expect(existsSync(src)).toBe(true);
 });
 
 test("copy failure at begin does not write a journal", () => {

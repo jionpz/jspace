@@ -186,7 +186,10 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
 
   const logDir = deps.logDir(root, opts.cronId);
   mkdirSync(logDir, { recursive: true });
-  const logPath = join(logDir, `${localStamp()}.md`);
+  const runId = crypto.randomUUID();
+  // filename carries the run id so two runs in the same second (e.g. launchd
+  // catch-up + a manual --force) never overwrite each other's prose log.
+  const logPath = join(logDir, `${localStamp()}-${runId.slice(0, 8)}.md`);
   writeFileSync(logPath, [
     `# cron ${opts.cronId}`,
     `time: ${localStamp()}`,
@@ -200,7 +203,6 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   ].join("\n"), "utf-8");
   pruneLogs(root, opts.cronId, 30, deps.logDir);
 
-  const runId = crypto.randomUUID();
   writeRun(root, opts.cronId, {
     id: runId,
     cronId: opts.cronId,

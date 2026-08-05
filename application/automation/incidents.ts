@@ -2,9 +2,10 @@
 // (.jspace/state/incidents/). A failed/suspect run opens or updates an incident
 // keyed by cron + failure class; a successful retry resolves it; `cron ack`
 // records acknowledgment (evidence retained) so it stops alerting.
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
+import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 
 const INCIDENTS_DIR = join(CONFIG_DIR, "state", "incidents");
 
@@ -53,7 +54,7 @@ export function readIncidents(root: string): Incident[] {
 
 function writeIncident(root: string, inc: Incident): void {
   mkdirSync(dir(root), { recursive: true });
-  writeFileSync(join(dir(root), `${inc.id}.json`), JSON.stringify(inc, null, 2) + "\n", "utf-8");
+  writeBytesAtomic(join(dir(root), `${inc.id}.json`), JSON.stringify(inc, null, 2) + "\n");
 }
 
 /** Open a new incident for cron+failureClass, or re-open/update an existing

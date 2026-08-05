@@ -132,13 +132,6 @@ export function completeRetryCommand(id: string): string {
   return `jspace ingest advance ${id} --complete`;
 }
 
-const NEXT_STEP: Record<IngestStep, IngestStep | undefined> = {
-  staged: "gbrain",
-  gbrain: "index",
-  index: "committed",
-  committed: undefined,
-};
-
 function withStamp(j: IngestJournalV1): IngestJournalV1 {
   return { ...j, updatedAt: now() };
 }
@@ -307,7 +300,11 @@ function finishCleanup(root: string, pending: IngestJournalV1, ops: IngestFileOp
 /** Mark an ingest failed and apply the compensation for the step in progress.
  *  staged (gbrain never written) -> remove the staged target copy, source stays
  *  in inbox (no orphan). gbrain/index -> page already exists; no destructive
- *  compensation (index/commit remain retryable). */
+ *  compensation (index/commit remain retryable). failedStep records the LAST
+ *  COMPLETED step (j.status) — never "committed": the cleanup-pending marker
+ *  (`failed/failedStep=committed`) is produced ONLY by completeIngest when the
+ *  source removal is in doubt. A plain failure must not masquerade as
+ *  cleanup-pending, or `--complete` would force-commit it and unlink the source. */
 export function failIngest(root: string, id: string, reason: string, ops: IngestFileOps): IngestJournalV1 {
   const j = readJournal(root, id);
   if (j.status === "committed") throw new Error(`ingest ${id} is already committed`);
@@ -319,11 +316,10 @@ export function failIngest(root: string, id: string, reason: string, ops: Ingest
     // gbrain page was never written: remove the staged copy, keep source in inbox.
     ops.unlink(j.target);
   }
-  const failedStep = NEXT_STEP[j.status as IngestStep]; // the step that was in progress
   const updated = withStamp({
     ...j,
     status: "failed" as IngestStatus,
-    failedStep,
+    failedStep: j.status as IngestStep,
     failureReason: reason,
   });
   writeJournal(root, updated);

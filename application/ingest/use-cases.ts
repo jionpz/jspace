@@ -105,7 +105,7 @@ export function ingestAdvance(root: string, id: string, step: IngestStep): CmdRe
 export function ingestFail(root: string, id: string, reason: string): CmdResult {
   const j = failIngest(root, id, reason, REAL_OPS);
   const lines = [`jspace: ingest ${id} failed at ${j.failedStep ?? "?"}: ${reason}`];
-  if (j.failedStep === "gbrain") {
+  if (j.failedStep === "staged") {
     lines.push("  compensated: removed staged target copy; source stays in inbox (no orphan)");
   }
   return { exitCode: 1, lines };
