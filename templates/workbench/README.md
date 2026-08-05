@@ -4,27 +4,29 @@
 
 ## 结构
 
-- `.jspace/hub.json` - domain/resource/project 注册表(portable;**用户数据**,由 CLI 维护;升级永不覆盖)
-- `.jspace/cron.json` - 声明式 cron 定义(portable;**用户数据**,由 CLI 维护;升级永不覆盖)
-- `.jspace/marker.json` - 初始化标记(portable,含 workbench_id;机器维护)
-- `.jspace/local.json` - 本机状态(安装实例 id + 路径绑定;git 忽略,init 生成)
-- `.jspace/logs/` - 执行日志(cron / 无头批量;git 忽略)
-- `.jspace/state/` - 运行时状态槽(升级 journal / 材料化记录;git 忽略)
-- `.jspace/skills/` - 官方打包技能(`jspace init` 物化;升级刷新未改动副本、保留本地修改)
-- `AGENTS.md` - 工作模式操作规则
-- `workspace/` - 域目录（初始不预建；按 AGENTS.md 的 Domain Governance 从真实使用涌现，首个域创建时生成）
-- `skills/` - 用户自建技能保留地（需用户确认；官方技能不在根目录）
-- `.gitignore` - 忽略 `.jspace/logs/`、`.jspace/local.json`、`.jspace/state/`
+**位置即所有权**:入口面在根,其余一律在 `.jspace/`。
+
+- 根目录(入口面 + 用户区):
+  - `AGENTS.md` - 你的文件:`<!-- JSPACE:START -->…<!-- JSPACE:END -->` 块内是 JSpace 规则(init 嵌入、upgrade 只更新块内),块外内容归你,永不覆盖
+  - `README.md` / `.gitignore` / `.claude/settings.json` - 入口文件(未修改随升级刷新,本地修改保留)
+  - `workspace/` - 域目录（初始不预建；按 AGENTS.md 的 Domain Governance 从真实使用涌现，首个域创建时生成）
+  - `skills/` - 用户自建技能保留地（需用户确认；官方技能不在根目录）
+- `.jspace/`(JSpace 管理区):
+  - `hub.json` - domain/resource/project 注册表(**用户数据**;升级永不覆盖;缺失时重建空注册表)
+  - `cron.json` - 声明式 cron 定义(**用户数据**;升级永不覆盖;删除即停用,不复活)
+  - `skills/` - 官方打包技能(seed;未修改随升级刷新,本地修改保留)
+  - `marker.json` / `local.json` / `logs/` / `state/` - 机器状态(git 忽略;本地/日志/升级 journal)
 
 ## 目录边界与升级范围
 
-`jspace workspace upgrade` 只动**材料化清单(manifest)内的文件**,其余一概不碰。三类所有权:
+`jspace workspace upgrade` 只动**材料化清单(manifest)内的文件**,其余一概不碰。按位置与所有权分四类:
 
-| 类别 | 含义 | 升级行为 |
+| 位置 | 所有权 | 升级行为 |
 | --- | --- | --- |
-| `seed`(模板) | 可定制的模板文件:README/AGENTS/.gitignore/.claude 设置、官方 skill(`.jspace/skills/`) | **未修改**随升级刷新到新模板;**本地修改过**的一律保留(显示 `skip`,不阻断) |
-| `user`(数据) | 用户数据:`.jspace/hub.json`、`.jspace/cron.json` | **永不覆盖**;schema 演进走迁移。hub.json 缺失时升级重建空注册表;cron.json 删除即视为停用,升级不复活 |
-| machine(状态) | `.jspace/marker.json`/`local.json`/`logs/`/`state/` | 机器生成/重写,不进替换范围 |
+| 根 `AGENTS.md` | 块内 = managed / 块外 = user | 只对比并更新 `<!-- JSPACE:START -->…<!-- JSPACE:END -->` 块内文本(整文件备份 + rollback);块外内容永不触碰。块相同 → `no-op` |
+| 根 `README.md`/`.gitignore`/`.claude/settings.json`、`.jspace/skills/` | seed(模板) | **未修改**随升级刷新;**本地修改过**的一律保留(显示 `skip`,不阻断) |
+| `.jspace/hub.json`、`.jspace/cron.json` | user(数据) | **永不覆盖**;schema 演进走迁移。hub.json 缺失时升级重建空注册表;cron.json 删除即视为停用,升级不复活 |
+| `.jspace/marker.json`/`local.json`/`logs/`/`state/` | machine(状态) | 机器生成/重写,不进替换范围 |
 
 **用户预留区**:`workspace/`、`filehub/` 以及工作台根目录下任何不在上面清单内的文件夹(如你自己建的 `notes/`、`drafts/`)——升级永不触碰。判断方法:`jspace workspace diff --json` 看每条 action,`skip`/`no-op` 即升级不动。
 

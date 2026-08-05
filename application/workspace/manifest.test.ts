@@ -2,13 +2,21 @@
 // Run: bun test application/workspace/manifest.test.ts
 import { expect, test } from "bun:test";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
-import { diffBundle, materializedRel, ownershipFor, recreateOnMissing, sha256Of } from "./manifest.ts";
+import { JSPACE_BLOCK_END, JSPACE_BLOCK_START } from "./agents-block.ts";
+import { diffBundle, materializedRel, ownershipFor, recreateOnMissing, sha256Of, skillRel, skillRoot } from "./manifest.ts";
+
+// AGENTS.md is a JSPACE block template: the bundle file IS the managed block.
+// Fixture files carry the block markers so diff/upgrade exercise block semantics.
+export const AGENTS_BLOCK = `${JSPACE_BLOCK_START}
+# JSpace 工作台 - fixture block body
+${JSPACE_BLOCK_END}`;
+export const AGENTS_BUNDLE = AGENTS_BLOCK; // template = block (no user content in bundle)
 
 const manifest: DistributionManifestV1 = {
   version: 1,
   bundle_version: "1.0.2",
   files: [
-    { path: "templates/workbench/AGENTS.md", sha256: sha256Of("new-agents"), ownership: "seed" },
+    { path: "templates/workbench/AGENTS.md", sha256: sha256Of(AGENTS_BUNDLE), ownership: "seed" },
     { path: "templates/workbench/README.md", sha256: sha256Of("new-readme"), ownership: "seed" },
     { path: "templates/workbench/.jspace/hub.json", sha256: sha256Of("new-hub"), ownership: "user" },
     { path: "templates/workbench/.jspace/cron.json", sha256: sha256Of("new-cron"), ownership: "user" },
@@ -20,11 +28,15 @@ const manifest: DistributionManifestV1 = {
 function deps(
   files: Record<string, string>,
   recorded: Record<string, { sha256: string }> = {},
+  bundleContent?: (key: string) => string | null,
 ) {
   return {
     // diffBundle reads join(root, rel); the fixture keys are root-relative.
     readFile: (p: string) => files[p] ?? files[p.replace("/wb/", "")] ?? null,
     recorded,
+    bundleContent:
+      bundleContent ??
+      ((key: string) => (key === "templates/workbench/AGENTS.md" ? AGENTS_BUNDLE : null)),
   };
 }
 
@@ -55,12 +67,18 @@ test("materializedRel maps workbench + skills to .jspace/skills, skips filehub",
   expect(materializedRel("templates/filehub/README.md")).toBeNull(); // on-demand, not in workbench
 });
 
+test("skillRel / skillRoot resolve official skills under .jspace/skills/", () => {
+  expect(skillRel("jspace-bootstrap")).toBe(".jspace/skills/jspace-bootstrap");
+  expect(skillRoot("/wb", "asset-ingest")).toBe("/wb/.jspace/skills/asset-ingest");
+  expect(materializedRel("skills/jspace-bootstrap/SKILL.md")).toBe(`${skillRel("jspace-bootstrap")}/SKILL.md`);
+});
+
 test("freshness: matching -> no-op; missing -> create; filehub skipped", () => {
   const entries = diffBundle(
     "/wb",
     manifest,
     deps({
-      "AGENTS.md": "new-agents",
+      "AGENTS.md": AGENTS_BLOCK,
       "README.md": "new-readme",
       ".jspace/skills/jspace-bootstrap/SKILL.md": "new-skill",
       ".jspace/hub.json": "new-hub",
@@ -89,7 +107,7 @@ test("recorded base + bundle forward -> seed refreshes (update)", () => {
     ),
   );
   const map = byRel(entries);
-  expect(map["AGENTS.md"]).toBe("update"); // seed: unmodified -> refreshed
+  expect(map["AGENTS.md"]).toBe("block-update"); // legacy file has no block -> embed only, never whole-file refresh
   expect(map[".jspace/skills/jspace-bootstrap/SKILL.md"]).toBe("update");
 });
 
@@ -100,7 +118,7 @@ test("unrecorded modification -> seed skip (preserved), managed conflict", () =>
     deps({ "AGENTS.md": "user-edit", ".jspace/skills/jspace-bootstrap/SKILL.md": "user-edit-skill" }, {}),
   );
   const map = byRel(entries);
-  expect(map["AGENTS.md"]).toBe("skip"); // seed: local content kept, non-blocking
+  expect(map["AGENTS.md"]).toBe("block-update"); // no block -> embedded on upgrade, user content preserved
   expect(map[".jspace/skills/jspace-bootstrap/SKILL.md"]).toBe("skip");
 
   // the reserved managed class still surfaces edits as conflict
@@ -141,7 +159,61 @@ test("user data deletion: hub.json recreated (recovery), cron.json respected", (
   expect(map["AGENTS.md"]).toBe("create"); // seed template re-created when missing
 });
 
-test("recorded but no longer in bundle -> stale", () => {
+test("AGENTS.md: same block with user edits outside -> no-op (block untouched)", () => {
+  const entries = diffBundle(
+    "/wb",
+    manifest,
+    deps({
+      "AGENTS.md": `# My own header\n\n${AGENTS_BLOCK}\n\n## My notes\n`,
+    }),
+  );
+  expect(byRel(entries)["AGENTS.md"]).toBe("no-op"); // outside-the-block edits never trigger
+});
+
+test("AGENTS.md: block differs -> block-update (block only, outside preserved)", () => {
+  const staleBlock = AGENTS_BLOCK.replace("# JSpace 工作台 - fixture block body", "# old body");
+  const entries = diffBundle("/wb", manifest, deps({ "AGENTS.md": staleBlock }));
+  expect(byRel(entries)["AGENTS.md"]).toBe("block-update");
+});
+
+test("AGENTS.md: malformed single marker -> skip, never mutated", () => {
+  const entries = diffBundle(
+    "/wb",
+    manifest,
+    deps({ "AGENTS.md": `# user file\n${JSPACE_BLOCK_START}\nbroken` }),
+  );
+  expect(byRel(entries)["AGENTS.md"]).toBe("skip");
+  expect(entries.find((e) => e.rel === "AGENTS.md")?.reason).toContain("malformed");
+});
+
+test("AGENTS.md: bundleContent unavailable -> conservative skip, never whole-file refresh", () => {
+  const entries = diffBundle("/wb", manifest, deps({ "AGENTS.md": "user content, no block" }, {}, () => null));
+  expect(byRel(entries)["AGENTS.md"]).toBe("skip");
+  expect(entries.find((e) => e.rel === "AGENTS.md")?.reason).toContain("unavailable");
+});
+
+test("recorded but no longer in bundle -> remove when unmodified, stale when modified", () => {
+  // old-file.md: disk content matches the recorded hash (pristine legacy seed) -> remove
+  // modified-old.md: disk content differs from recorded (user touched it) -> stale
+  const entries = diffBundle(
+    "/wb",
+    manifest,
+    deps(
+      {
+        "old-file.md": "OLD",
+        "modified-old.md": "USER EDIT",
+      },
+      {
+        "old-file.md": { sha256: sha256Of("OLD") },
+        "modified-old.md": { sha256: sha256Of("OLD") },
+      },
+    ),
+  );
+  expect(entries.find((e) => e.rel === "old-file.md")?.action).toBe("remove");
+  expect(entries.find((e) => e.rel === "modified-old.md")?.action).toBe("stale");
+});
+
+test("recorded but no longer in bundle and missing on disk -> stale (nothing to remove)", () => {
   const entries = diffBundle(
     "/wb",
     manifest,

@@ -153,3 +153,16 @@ test("init --force refuses an already-initialized workbench (upgrade path)", () 
   expect(() => init(root, true)).toThrow(/already a JSpace workbench/);
   rmSync(root, { recursive: true, force: true });
 });
+
+test("init --force into a dir with a user AGENTS.md embeds the JSPACE block, user content preserved", () => {
+  const root = mkdtempSync(join(tmpdir(), "jspace-init-embed-"));
+  mkdirSync(root, { recursive: true });
+  const userHeader = "# My own project notes\n\nThis directory is not a workbench yet.\n";
+  writeFileSync(join(root, "AGENTS.md"), userHeader, "utf-8");
+  init(root, true);
+  const out = readFileSync(join(root, "AGENTS.md"), "utf-8");
+  expect(out.startsWith("<!-- JSPACE:START -->")).toBe(true); // block embedded at the top
+  expect(out).toContain("<!-- JSPACE:END -->");
+  expect(out).toContain(userHeader); // user content preserved verbatim after the block
+  rmSync(root, { recursive: true, force: true });
+});

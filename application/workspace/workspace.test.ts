@@ -20,6 +20,7 @@ import { resolvePath } from "../../cli/paths.ts";
 import { BUNDLE_MANIFEST } from "../../cli/manifest.generated.ts";
 import { ASSETS } from "../../cli/assets.generated.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
+import { JSPACE_BLOCK_START } from "./agents-block.ts";
 import { sha256Of } from "./manifest.ts";
 import type { UpgradeDeps } from "./workspace.ts";
 
@@ -108,23 +109,47 @@ function syntheticDeps(
 test("fresh init -> workspace diff is all no-op", () => {
   const root = tmp();
   initWorkbench(root, false, initDeps);
-  const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true);
+  const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true, ASSETS);
   const entries = (data as { entries: { action: string }[] }).entries;
   expect(entries.length).toBeGreaterThan(0);
   expect(entries.every((e) => e.action === "no-op")).toBe(true);
   rmSync(root, { recursive: true, force: true });
 });
 
-test("modified seed file (AGENTS.md) -> skip, upgrade proceeds, edit preserved", () => {
+test("AGENTS.md: outside-the-block edits are never touched (no-op, no upgrade)", () => {
   const root = tmp();
   initWorkbench(root, false, initDeps);
-  writeFileSync(join(root, "AGENTS.md"), "USER EDIT", "utf-8");
-  const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true);
+  const original = readFileSync(join(root, "AGENTS.md"), "utf-8");
+  writeFileSync(join(root, "AGENTS.md"), `# My own header\n\n${original}\n\n## My notes\n`, "utf-8");
+  const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true, ASSETS);
   const e = (data as { entries: { rel: string; action: string }[] }).entries.find((x) => x.rel === "AGENTS.md");
-  expect(e?.action).toBe("skip"); // seed: preserved, non-blocking
+  expect(e?.action).toBe("no-op"); // user content outside the block never triggers
   const result = workspaceUpgrade(root, { dryRun: false, acceptConflicts: false }, upgradeDeps);
-  expect(result.lines.some((l) => l.includes("up to date"))).toBe(true); // not blocked by the edit
-  expect(readFileSync(join(root, "AGENTS.md"), "utf-8")).toBe("USER EDIT");
+  expect(result.lines.some((l) => l.includes("up to date"))).toBe(true);
+  expect(readFileSync(join(root, "AGENTS.md"), "utf-8")).toContain("# My own header");
+  expect(readFileSync(join(root, "AGENTS.md"), "utf-8")).toContain("## My notes");
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("AGENTS.md: stale block is refreshed block-only, user content preserved", () => {
+  const root = tmp();
+  initWorkbench(root, false, initDeps);
+  const current = readFileSync(join(root, "AGENTS.md"), "utf-8");
+  // user header + a stale (old) block
+  const staleBlock = current.replaceAll("# JSpace 工作台 - 本地工作控制平面", "# old title");
+  writeFileSync(join(root, "AGENTS.md"), `# My own header\n\n${staleBlock}\n`, "utf-8");
+  const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true, ASSETS);
+  const e = (data as { entries: { rel: string; action: string }[] }).entries.find((x) => x.rel === "AGENTS.md");
+  expect(e?.action).toBe("block-update");
+  const result = workspaceUpgrade(root, { dryRun: false, acceptConflicts: false }, upgradeDeps);
+  expect(result.lines.some((l) => l.includes("upgraded"))).toBe(true);
+  const out = readFileSync(join(root, "AGENTS.md"), "utf-8");
+  expect(out).toContain("# My own header"); // outside the block: preserved
+  expect(out).toContain("# JSpace 工作台 - 本地工作控制平面"); // block refreshed
+  expect(out).not.toContain("# old title");
+  // second run is a no-op
+  const again = workspaceUpgrade(root, { dryRun: false, acceptConflicts: false }, upgradeDeps);
+  expect(again.lines.some((l) => l.includes("up to date"))).toBe(true);
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -138,7 +163,7 @@ test("modified hub.json (user data) -> skip, upgrade proceeds, registry preserve
       2,
     ) + "\n";
   writeFileSync(join(root, ".jspace", "hub.json"), userHub, "utf-8");
-  const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true);
+  const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true, ASSETS);
   const e = (data as { entries: { rel: string; action: string }[] }).entries.find((x) => x.rel === ".jspace/hub.json");
   expect(e?.action).toBe("skip"); // user data: never overwritten
   const result = workspaceUpgrade(root, { dryRun: false, acceptConflicts: false }, upgradeDeps);
@@ -162,11 +187,14 @@ test("deleted cron.json is not recreated by upgrade; deleted hub.json is (recove
 test("seed edit preserved across successive upgrades (never refreshed once edited)", () => {
   const root = tmp();
   initWorkbench(root, false, initDeps);
-  writeFileSync(join(root, "AGENTS.md"), "USER EDIT", "utf-8");
+  const original = readFileSync(join(root, "AGENTS.md"), "utf-8");
+  writeFileSync(join(root, "AGENTS.md"), `# My own header\n\n${original}\n`, "utf-8");
   rmSync(join(root, ".jspace", "hub.json")); // force a plan so the journal updates
   workspaceUpgrade(root, { dryRun: false, acceptConflicts: false }, upgradeDeps);
   workspaceUpgrade(root, { dryRun: false, acceptConflicts: false }, upgradeDeps);
-  expect(readFileSync(join(root, "AGENTS.md"), "utf-8")).toBe("USER EDIT");
+  const out = readFileSync(join(root, "AGENTS.md"), "utf-8");
+  expect(out).toContain("# My own header"); // user content survives both upgrades
+  expect(out).toContain(JSPACE_BLOCK_START);
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -273,9 +301,11 @@ test("old fixture (no journal) -> upgrade creates missing files, seed content pr
   writeFileSync(join(root, "user-note.md"), "keep me", "utf-8");
   const result = workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps);
   expect(result.lines.some((l) => l.includes("upgraded"))).toBe(true);
-  // without a materialization journal, existing seed content is treated as
-  // locally-owned and preserved (safe default); missing files are created
-  expect(readFileSync(join(root, "AGENTS.md"), "utf-8")).toBe("OLD AGENTS CONTENT");
+  // without a materialization journal, existing content is preserved; the
+  // JSPACE block is embedded (block-only), never a whole-file rewrite
+  const agents = readFileSync(join(root, "AGENTS.md"), "utf-8");
+  expect(agents).toContain("OLD AGENTS CONTENT");
+  expect(agents).toContain(JSPACE_BLOCK_START);
   expect(existsSync(join(root, "README.md"))).toBe(true);
   expect(existsSync(join(root, ".jspace", "hub.json"))).toBe(true); // recovery: empty registry created
   // user-owned content untouched
@@ -308,7 +338,7 @@ test("modified workbench skill is never overwritten (seed, skip preserved)", () 
   initWorkbench(root, false, initDeps);
   const skillRel = ".jspace/skills/jspace-bootstrap/SKILL.md";
   writeFileSync(join(root, skillRel), "USER SKILL", "utf-8");
-  const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true);
+  const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true, ASSETS);
   const e = (data as { entries: { rel: string; action: string }[] }).entries.find((x) => x.rel === skillRel);
   expect(e?.action).toBe("skip"); // seed: preserved, non-blocking
   workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps);
@@ -316,13 +346,13 @@ test("modified workbench skill is never overwritten (seed, skip preserved)", () 
   rmSync(root, { recursive: true, force: true });
 });
 
-test("legacy workbench: root skills/ becomes stale, upgrade creates .jspace/skills/ and never deletes", () => {
+test("legacy workbench: unmodified root skills/ copy is removed, upgrade creates .jspace/skills/", () => {
   const root = tmp();
   oldWorkbench(root);
   // simulate a pre-move workbench that materialized official skills to root skills/
   mkdirSync(join(root, "skills", "jspace-bootstrap"), { recursive: true });
   writeFileSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"), "OLD SKILL", "utf-8");
-  // seed its materialized journal recording the legacy rel
+  // seed its materialized journal recording the legacy rel (unmodified == recorded)
   mkdirSync(join(root, ".jspace", "state"), { recursive: true });
   writeBytesAtomic(
     join(root, ".jspace", "state", "materialized.json"),
@@ -333,15 +363,82 @@ test("legacy workbench: root skills/ becomes stale, upgrade creates .jspace/skil
       files: { "skills/jspace-bootstrap/SKILL.md": { sha256: sha256Of("OLD SKILL") } },
     }) + "\n",
   );
-  // diff: new rel -> create, legacy rel -> stale
-  const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true);
+  // diff: new rel -> create, legacy unmodified copy -> remove
+  const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true, ASSETS);
   const entries = (data as { entries: { rel: string; action: string }[] }).entries;
   expect(entries.find((x) => x.rel === ".jspace/skills/jspace-bootstrap/SKILL.md")?.action).toBe("create");
-  expect(entries.find((x) => x.rel === "skills/jspace-bootstrap/SKILL.md")?.action).toBe("stale");
-  // upgrade: .jspace/skills/ lands, legacy skills/ is reported-stale but NOT deleted
+  expect(entries.find((x) => x.rel === "skills/jspace-bootstrap/SKILL.md")?.action).toBe("remove");
+  // upgrade: .jspace/skills/ lands, legacy unmodified copy is cleaned up
   workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps);
   expect(existsSync(join(root, ".jspace", "skills", "jspace-bootstrap", "SKILL.md"))).toBe(true);
-  expect(existsSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"))).toBe(true); // never auto-deleted
+  expect(existsSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"))).toBe(false); // removed on upgrade
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("legacy workbench: modified root skills/ copy is kept as stale", () => {
+  const root = tmp();
+  oldWorkbench(root);
+  mkdirSync(join(root, "skills", "jspace-bootstrap"), { recursive: true });
+  writeFileSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"), "USER MODIFIED SKILL", "utf-8");
+  // journal records the pristine seed hash; disk content differs -> modified
+  mkdirSync(join(root, ".jspace", "state"), { recursive: true });
+  writeBytesAtomic(
+    join(root, ".jspace", "state", "materialized.json"),
+    JSON.stringify({
+      version: 1,
+      asset_version: "1.0.6",
+      applied_at: "2026-08-05",
+      files: { "skills/jspace-bootstrap/SKILL.md": { sha256: sha256Of("OLD SKILL") } },
+    }) + "\n",
+  );
+  const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true, ASSETS);
+  const entries = (data as { entries: { rel: string; action: string }[] }).entries;
+  expect(entries.find((x) => x.rel === "skills/jspace-bootstrap/SKILL.md")?.action).toBe("stale");
+  workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps);
+  expect(existsSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"))).toBe(true); // user content kept
+  expect(readFileSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"), "utf-8")).toBe("USER MODIFIED SKILL");
+  expect(existsSync(join(root, ".jspace", "skills", "jspace-bootstrap", "SKILL.md"))).toBe(true); // new copy landed
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("remove during upgrade is backed up and restored by --rollback", () => {
+  const root = tmp();
+  oldWorkbench(root);
+  mkdirSync(join(root, "skills", "jspace-bootstrap"), { recursive: true });
+  writeFileSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"), "OLD SKILL", "utf-8");
+  mkdirSync(join(root, ".jspace", "state"), { recursive: true });
+  writeBytesAtomic(
+    join(root, ".jspace", "state", "materialized.json"),
+    JSON.stringify({
+      version: 1,
+      asset_version: "1.0.6",
+      applied_at: "2026-08-05",
+      files: { "skills/jspace-bootstrap/SKILL.md": { sha256: sha256Of("OLD SKILL") } },
+    }) + "\n",
+  );
+  workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps);
+  expect(existsSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"))).toBe(false);
+  // rollback restores the removed legacy copy from the upgrade backup
+  const dir = join(root, ".jspace", "state", "upgrades");
+  const ids = existsSync(dir) ? readdirSync(dir) : [];
+  expect(ids.length).toBe(1);
+  workspaceUpgrade(root, { rollbackId: ids[0], dryRun: false, acceptConflicts: true }, upgradeDeps);
+  expect(existsSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"))).toBe(true);
+  expect(readFileSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"), "utf-8")).toBe("OLD SKILL");
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("block-update during upgrade is backed up and restored by --rollback", () => {
+  const root = tmp();
+  oldWorkbench(root); // AGENTS.md = "OLD AGENTS CONTENT" (no block)
+  workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps);
+  expect(readFileSync(join(root, "AGENTS.md"), "utf-8")).toContain(JSPACE_BLOCK_START);
+  const dir = join(root, ".jspace", "state", "upgrades");
+  const ids = existsSync(dir) ? readdirSync(dir) : [];
+  expect(ids.length).toBe(1);
+  workspaceUpgrade(root, { rollbackId: ids[0], dryRun: false, acceptConflicts: true }, upgradeDeps);
+  // rollback restores the whole pre-upgrade file (block embedded earlier is gone)
+  expect(readFileSync(join(root, "AGENTS.md"), "utf-8")).toBe("OLD AGENTS CONTENT");
   rmSync(root, { recursive: true, force: true });
 });
 

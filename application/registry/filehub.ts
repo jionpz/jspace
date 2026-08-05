@@ -84,7 +84,7 @@ function registerFilehub(
     domain,
     tags: cleanTags(["assets"]),
     entrypoints: [{ id: "path", kind: "path", binding: bindingKey, primary: true }],
-    notes: "文件管理中心(资产层本体);归位/整理见 skills/asset-ingest",
+    notes: "文件管理中心(资产层本体);归位/整理见 .jspace/skills/asset-ingest",
   });
   try {
     writeHubAndLocal(wbRoot, hub, local);

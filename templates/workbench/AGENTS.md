@@ -1,6 +1,12 @@
-# JSpace 工作台 - 本地工作控制平面
+<!-- JSPACE:START -->
+<!-- JSpace 工作台受管块。本块由 jspace 维护:
+     - jspace init 嵌入你的 AGENTS.md(无 AGENTS.md 时创建含本块的最小文件);
+     - jspace workspace upgrade 只更新块内文本;
+     - 块外内容归你所有,永不覆盖、永不删除。
+     两个生成子块(Brain operations / Skill Governance)由 scripts/gen-assets.ts
+     从 SKILL.md frontmatter 渲染,勿手工编辑。 -->
 
-## Core Positioning
+# JSpace 工作台 - 本地工作控制平面
 
 本目录由 JSpace CLI (`jspace init`) 生成，是用户本地工作控制平面。大多数非项目特定的计算机工作从这里开始：domain 路由、资源查找和上下文进入。
 
@@ -119,7 +125,7 @@ Approved workbench skills (official; materialized by `jspace init` into `.jspace
 
 | Knowledge | Destination |
 | --- | --- |
-| Daily operating rule for all agents | Root `AGENTS.md` |
+| Daily operating rule for all agents | Root `AGENTS.md`(本块外是你的内容,块内是 JSpace 规则) |
 | Persistent facts and asset pointers | gbrain（bootstrap 后接线；见 `.jspace/skills/jspace-bootstrap/references/gbrain.md`） |
 | Domain entry point/resource/workflow | `workspace/<domain>/README.md` or `domain.json` |
 | Domain-specific AI boundary | `workspace/<domain>/AGENTS.md` |
@@ -135,11 +141,9 @@ When the user says "开发模式" and wants to maintain the JSpace CLI/templates
 
 1. This workbench is generated output. Do not edit template sources here.
 2. Go to the JSpace development repository the user maintains (register it first via `jspace domain add` / `jspace resource add` if not already registered); read its `AGENTS.md` and follow its own workflow for non-trivial changes.
-3. After template/CLI changes, preview with `jspace workspace upgrade --dry-run` then `jspace workspace upgrade`, and run `jspace doctor --dir .`. (`jspace init` refuses to re-initialize an existing workbench; refresh goes through `workspace upgrade`, which refreshes unmodified seed/skill files and preserves local edits.)
+3. Preview changes with `jspace workspace upgrade --dry-run`, then `jspace workspace upgrade`, and run `jspace doctor --dir .`.
 
-## Workspace Upgrade & Ownership
-
-`jspace workspace upgrade` 只动材料化清单内的文件。模板文件(README/AGENTS/.gitignore/.claude 设置/官方 skill)未修改则随升级刷新,本地修改过的一律保留(显示 `skip`,不阻断);`.jspace/hub.json` 与 `.jspace/cron.json` 是用户数据,升级永不覆盖;`.jspace/skills/` 是官方 skill 的 seed 落位(与用户数据同目录但所有权不同:未改动刷新、改过保留),`workspace/`、`filehub/` 等用户预留区永不触碰。边界与判断方法见 README「目录边界与升级范围」。
+> 升级范围与所有权边界见 `README.md`「目录边界与升级范围」。本块由 upgrade 维护,块外内容不会被覆盖。
 
 ## Agents
 
@@ -147,17 +151,14 @@ Agent 定义是**声明式**的:作为上下文读取、按描述扮演,不物�
 
 | 适用范围 | 归属 |
 | --- | --- |
-| 用户个人 agents(跨机器 / 所有项目) | 全局 `~/.agents/agents.md` 的 `# agents` 段(用户定义,对象标签格式见下) |
-| 工作台能力 agents(本工作台) | 本文件 `## Agents` 段(工作台能力见下方「Approved workbench skills」) |
+| 用户个人 agents(跨机器 / 所有项目) | 全局 `~/.agents/agents.md` 的 `# agents` 段(用户定义) |
+| 工作台能力 agents(本工作台) | 本块下方「Approved workbench skills」的 skill(skill 即 agent 形态) |
 | 项目专属 agents(单项目) | 项目根 `AGENTS.md` |
 
-本工作台以 agent 形态提供的能力 = 下方「Approved workbench skills」的 4 个 skill(**skill 即 agent 形态**):`jspace-bootstrap` / `asset-ingest` / `memory-recall` / `memory-writeback`——按需读取对应 SKILL.md,不在此重复。
+本工作台以 agent 形态提供的能力 = 下方「Approved workbench skills」的 4 个 skill:`jspace-bootstrap` / `asset-ingest` / `memory-recall` / `memory-writeback`——按需读取对应 SKILL.md,不在此重复。
 
 **项目级继承**:在项目根 `AGENTS.md` 顶部加一行——
 > Agents:读 `~/.agents/agents.md`(用户级)+ 工作台 `AGENTS.md`(如在此工作台下);本项目只定义项目专属 agents。
-
-**对象标签格式**(用户写个人 agents 时参考,模仿 Trellis agent frontmatter):`name` 唯一短名;`description` 一句"做什么 / 何时用 / 不用什么";`labels` 触发关键词;正文 = 扮演说明(可选)。例:
-- **`jspace-bootstrap`**:首次配置工作台(gbrain 记忆库 + 注册表 + harness 接线)。Use when 初始化/配置 jspace。Do NOT use for 资料入库(→asset-ingest)。
 
 ## Confirmation Rules
 
@@ -181,7 +182,7 @@ Before finishing a work session, quietly check whether anything should be preser
 
 ## Scheduled Tasks (cron)
 
-Cron definitions live in `.jspace/cron.json` (declarative: schedule + harness + prompt) and install into macOS launchd via `jspace cron install` (one LaunchAgent per cron). **At session start, run `jspace cron check`** (Claude Code best-effort: its SessionStart hook usually runs it, but the hook must actually fire; other harnesses — pi/codex/cursor — run it manually; lifecycle 分级见 `.jspace/skills/jspace-bootstrap/references/harnesses.md`) and report any failures / pending staged gbrain writes (`.jspace-logs/*.APPLY.json`) to the user.** Cron definitions are treated as code (git-synced) — review changes before applying. `weekly-report` / `memory-consolidate` ship `enabled: true` with self-contained output contracts in their prompts (weekly-report → `<filehub>/areas/周报/<YYYY-MM-DD>-周报.md` + gbrain `assets/周报/<YYYY-MM-DD>`; memory-consolidate → gbrain `memory/consolidate/<YYYY-MM-DD>` + state-page write-back). Before the machine-side `jspace cron install`, run each task once via `jspace cron run` to verify the contract (rehearsal gate). **Headless runs go through the cc-switch local proxy with failover; account/quota model & exhaustion handling live with the jspace distribution (`.jspace/skills/jspace-bootstrap/references/headless-ops.md`) — if a cron fails from rate-limit/quota, failover → retry → downgrade, then let `jspace cron check` surface it.**
+Cron definitions live in `.jspace/cron.json` (declarative: schedule + harness + prompt) and install into macOS launchd via `jspace cron install` (one LaunchAgent per cron). **At session start, run `jspace cron check`** (Claude Code best-effort: its SessionStart hook usually runs it, but the hook must actually fire; other harnesses — pi/codex/cursor — run it manually; lifecycle 分级见 `.jspace/skills/jspace-bootstrap/references/harnesses.md`) and report any failures / pending staged gbrain writes (`.jspace-logs/*.APPLY.json`) to the user. Cron definitions are treated as code (git-synced) — review changes before applying. Before the machine-side `jspace cron install`, run each task once via `jspace cron run` to verify the contract (rehearsal gate). **Headless runs go through the cc-switch local proxy with failover; account/quota model & exhaustion handling live with the jspace distribution (`.jspace/skills/jspace-bootstrap/references/headless-ops.md`) — if a cron fails from rate-limit/quota, failover → retry → downgrade, then let `jspace cron check` surface it.**
 
 ## Brain operations
 
@@ -203,3 +204,5 @@ gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbr
 - `workspace/<domain>/domain.json` ids must match both the folder name and `.jspace/hub.json`.
 - `jspace doctor --dir .` must pass after registry changes.
 - Do not introduce task-management concepts; this workbench has no task manager.
+
+<!-- JSPACE:END -->

@@ -1,6 +1,7 @@
 // application/workspace/manifest.ts — bundle manifest ownership rules, path
 // mapping and freshness diff (pure; consumed by gen-assets and workspace diff).
 import { createHash } from "node:crypto";
+import { extractAgentsBlock, JSPACE_BLOCK_START, JSPACE_BLOCK_END } from "./agents-block.ts";
 import { join } from "node:path";
 import type {
   AssetOwnership,
@@ -12,9 +13,11 @@ export function sha256Of(content: string): string {
 }
 
 /** Ownership by bundle-key prefix. Three tiers drive diff/upgrade:
- *  - seed: user-customizable templates (README/AGENTS/.gitignore/.claude
- *    settings + bundled skills). Upgrade refreshes an unmodified file and
- *    preserves a locally modified one (skip, non-blocking).
+ *  - seed: user-customizable templates (README/.gitignore/.claude settings +
+ *    bundled skills). Upgrade refreshes an unmodified file and preserves a
+ *    locally modified one (skip, non-blocking). AGENTS.md is also seed, but
+ *    diffBundle special-cases it: JSpace owns only the JSPACE block inside
+ *    the user's file, so only the block is ever refreshed (block-update).
  *  - user: user data under .jspace/ (hub.json registry, cron.json definitions).
  *    Upgrade never overwrites them; schema evolution goes through migration.
  *  - managed: reserved force-replace class (currently unused). Upgrade
@@ -34,16 +37,26 @@ export function recreateOnMissing(rel: string): boolean {
   return rel !== ".jspace/cron.json";
 }
 
+/** Official skill name → workbench-relative path under `.jspace/skills/`. */
+export function skillRel(name: string): string {
+  return `.jspace/skills/${name}`;
+}
+
+/** Official skill name → absolute path rooted at the workbench root. */
+export function skillRoot(root: string, name: string): string {
+  return join(root, skillRel(name));
+}
+
 /** Map a bundle manifest key to the workbench-relative path it materializes to,
  *  or null when the key is not materialized into the workbench (filehub is
  *  created on demand by `filehub init`, not by init/upgrade). */
 export function materializedRel(key: string): string | null {
   if (key.startsWith("templates/workbench/")) return key.slice("templates/workbench/".length);
-  if (key.startsWith("skills/")) return `.jspace/skills/${key.slice("skills/".length)}`; // 官方 skill → .jspace/skills/
+  if (key.startsWith("skills/")) return skillRel(key.slice("skills/".length)); // 官方 skill → .jspace/skills/
   return null;
 }
 
-export type DiffAction = "create" | "no-op" | "update" | "conflict" | "skip" | "stale" | "migrate";
+export type DiffAction = "create" | "no-op" | "update" | "conflict" | "skip" | "stale" | "remove" | "block-update" | "migrate";
 
 export interface DiffEntry {
   rel: string;
@@ -56,6 +69,10 @@ export interface DiffEntry {
 export interface DiffDeps {
   /** Read a workbench file's content, or null when missing. */
   readFile: (p: string) => string | null;
+  /** Bundle manifest key -> raw bundled content (embedded ASSETS). Required
+   *  for the AGENTS.md block compare; when absent, AGENTS.md is conservatively
+   *  left untouched (skip) — never refreshed as a whole file. */
+  bundleContent?: (key: string) => string | null;
   /** Last-applied materialization journal (empty for an old workbench). */
   recorded: Record<string, { sha256: string }>;
 }
@@ -82,6 +99,39 @@ export function diffBundle(root: string, manifest: DistributionManifestV1, deps:
     }
     const currentSha = sha256Of(current);
     const recorded = deps.recorded[rel]?.sha256;
+    if (rel === "AGENTS.md") {
+      // JSpace owns only the JSPACE block inside AGENTS.md; everything outside
+      // belongs to the user. Compare the embedded block against the bundle
+      // block and plan a block-only refresh — never a whole-file rewrite.
+      const bundleContent = deps.bundleContent?.(f.path) ?? null;
+      if (bundleContent === null) {
+        out.push({ rel, ownership: f.ownership, action: "skip", reason: "AGENTS.md: block compare unavailable; left untouched", currentSha });
+      } else {
+        const bundleBlock = extractAgentsBlock(bundleContent);
+        if (bundleBlock === null) {
+          out.push({ rel, ownership: f.ownership, action: "skip", reason: "bundle AGENTS.md has no JSPACE block", currentSha });
+        } else {
+          const currentBlock = extractAgentsBlock(current);
+          const hasStart = current.includes(JSPACE_BLOCK_START);
+          const hasEnd = current.includes(JSPACE_BLOCK_END);
+          if (currentBlock === null && (hasStart || hasEnd)) {
+            // only one marker present: damaged user file — never mutate it.
+            out.push({ rel, ownership: f.ownership, action: "skip", reason: "AGENTS.md: malformed JSPACE block; left untouched", currentSha });
+          } else if (currentBlock === bundleBlock) {
+            out.push({ rel, ownership: f.ownership, action: "no-op", reason: "up to date (block)", currentSha });
+          } else {
+            out.push({
+              rel,
+              ownership: f.ownership,
+              action: "block-update",
+              reason: currentBlock === null ? "no JSPACE block; embedded on upgrade" : "JSPACE block updated",
+              currentSha,
+            });
+          }
+        }
+      }
+      continue;
+    }
     if (currentSha === f.sha256) {
       out.push({ rel, ownership: f.ownership, action: "no-op", reason: "up to date", currentSha });
     } else if (recorded !== undefined && currentSha === recorded) {
@@ -109,10 +159,19 @@ export function diffBundle(root: string, manifest: DistributionManifestV1, deps:
       });
     }
   }
-  // recorded but no longer in the bundle -> stale (reported, never auto-deleted)
+  // recorded but no longer in the bundle: an old seed copy that is unchanged
+  // since it was applied can be cleaned up by upgrade (remove); a locally
+  // modified one is preserved (stale, reported, never auto-deleted).
   for (const rel of Object.keys(deps.recorded)) {
     if (!manifest.files.some((f) => materializedRel(f.path) === rel)) {
-      out.push({ rel, ownership: "managed", action: "stale", reason: "no longer in bundle" });
+      const cur = deps.readFile(join(root, rel));
+      const unmodified = cur !== null && sha256Of(cur) === deps.recorded[rel]?.sha256;
+      out.push({
+        rel,
+        ownership: "managed",
+        action: unmodified ? "remove" : "stale",
+        reason: unmodified ? "legacy seed copy, unmodified; removed on upgrade" : "locally modified; kept",
+      });
     }
   }
   return out;

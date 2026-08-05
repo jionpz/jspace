@@ -20,6 +20,7 @@ import type { DistributionManifestV1 } from "../../core/contracts/distribution.t
 import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
 import { loadCrons, resolveCronPrompt, type SkillTargetContext } from "./definitions.ts";
 import { readMaterializedJournal } from "../workspace/journal.ts";
+import { skillRel, skillRoot } from "../workspace/manifest.ts";
 import { writeRun } from "./runs.ts";
 import { openOrUpdate, resolveIncidents } from "./incidents.ts";
 import { acquireLock } from "./lock.ts";
@@ -124,9 +125,9 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   const batchLog = fhRoot !== null ? join(fhRoot, ".jspace-logs", "inbox-batch.md") : null;
   let batchBefore = { mtime: 0, size: -1 };
   if (isInboxTask) {
-    if (!existsSync(join(root, "skills", "asset-ingest"))) {
+    if (!existsSync(skillRoot(root, "asset-ingest"))) {
       openOrUpdate(root, opts.cronId, "batch-stale", crypto.randomUUID());
-      fail(`cron ${opts.cronId}: skills/asset-ingest not found in ${root}; refusing to run`);
+      fail(`cron ${opts.cronId}: ${skillRel("asset-ingest")} not found in ${root}; refusing to run`);
     }
     if (batchLog !== null && isFile(batchLog)) {
       const st = statSync(batchLog);

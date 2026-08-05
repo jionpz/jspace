@@ -27,7 +27,7 @@ const workspaceDiffSpec: CommandSpec = {
   name: "diff",
   summary: "show differences between the workbench and the running bundle",
   features: { dir: true, json: true },
-  handler: (ctx, args) => workspaceDiff(ctx.root, BUNDLE_MANIFEST, b(args.json)),
+  handler: (ctx, args) => workspaceDiff(ctx.root, BUNDLE_MANIFEST, b(args.json), ASSETS),
 };
 
 const workspaceUpgradeSpec: CommandSpec = {

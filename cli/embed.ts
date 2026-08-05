@@ -4,10 +4,11 @@
 // on disk except itself. Ground truth: research/empirical-bun-probe.md.
 import { basename, dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fail } from "../core/shared/errors.ts";
 import { ASSETS } from "./assets.generated.ts";
 import { SKILLS_MANIFEST } from "./skills.generated.ts";
+import { replaceAgentsBlock } from "../application/workspace/agents-block.ts";
 
 export const PLACEHOLDER = "__DEV_ROOT__";
 
@@ -60,6 +61,15 @@ function hasAssets(prefix: string): boolean {
   return Object.keys(ASSETS).some((k) => k.startsWith(prefix));
 }
 
+/** Read an existing target-relative file, or null when absent. */
+function readExisting(target: string, rel: string): string | null {
+  try {
+    return readFileSync(join(target, rel), "utf-8");
+  } catch {
+    return null;
+  }
+}
+
 /** JSON-escape a replacement value (backslashes/quotes) so a Windows path
  *  injected into a .json template produces valid JSON (e.g. B:\~BUN\bin). */
 function jsonEscape(s: string): string {
@@ -98,7 +108,15 @@ export function materializeTree(target: string, devRootStr: string): void {
     const replacement = key.endsWith(".json") ? jsonEscape(devRootStr) : devRootStr;
     const out = join(target, rel);
     mkdirSync(dirname(out), { recursive: true });
-    writeFileSync(out, content.replaceAll(PLACEHOLDER, replacement), "utf-8");
+    let bytes = content.replaceAll(PLACEHOLDER, replacement);
+    if (rel === "AGENTS.md") {
+      // JSpace owns only the JSPACE block inside AGENTS.md, never the whole file.
+      // When a user file already exists (e.g. --force into a non-empty dir),
+      // embed/replace the block and preserve everything outside it.
+      const existing = readExisting(target, rel);
+      if (existing !== null) bytes = replaceAgentsBlock(existing, bytes);
+    }
+    writeFileSync(out, bytes, "utf-8");
   }
 }
 

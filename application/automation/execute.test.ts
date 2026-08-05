@@ -28,7 +28,7 @@ beforeEach(() => {
       { id: "inbox-tidy", schedule: "0 21 * * *", harness: "claude", target: { kind: "skill", skill: "asset-ingest", entrypoint: "batch", input: "tidy inbox" }, enabled: true },
     ],
   }));
-  mkdirSync(join(root, "skills", "asset-ingest"), { recursive: true }); // satisfies inbox guard
+  mkdirSync(join(root, ".jspace", "skills", "asset-ingest"), { recursive: true }); // satisfies inbox guard
   fakeHarness = join(root, "fake-harness");
   writeFileSync(fakeHarness, "#!/bin/sh\necho fake-harness-ran\nexit 0\n");
   chmodSync(fakeHarness, 0o755);

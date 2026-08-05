@@ -8,7 +8,7 @@ import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { decodeCrons, type CronDefinition, type CronSkillTarget, type CronsFile } from "../../core/contracts/cron.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
-import { diffBundle } from "../workspace/manifest.ts";
+import { diffBundle, skillRel, skillRoot } from "../workspace/manifest.ts";
 import { isFile } from "../fs.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { parseSchedule, type ScheduleDict } from "../../core/shared/schedule.ts";
@@ -65,20 +65,20 @@ export function compileSkillTarget(target: CronSkillTarget, wbRoot: string, ctx:
   if (!entry) {
     return { ok: false, fix: `run jspace update (unknown skill ${target.skill} in cron target)` };
   }
-  const skillRoot = join(wbRoot, "skills", target.skill);
-  if (!ctx.readFile(join(skillRoot, "SKILL.md"))) {
-    return { ok: false, fix: `re-run jspace init or jspace workspace upgrade to restore bundled skill ${target.skill} (missing skills/${target.skill}/SKILL.md)` };
+  const skillRootPath = skillRoot(wbRoot, target.skill);
+  if (!ctx.readFile(join(skillRootPath, "SKILL.md"))) {
+    return { ok: false, fix: `re-run jspace init or jspace workspace upgrade to restore bundled skill ${target.skill} (missing ${skillRel(target.skill)}/SKILL.md)` };
   }
   if (entry.entrypoints !== undefined && entry.entrypoints.length > 0 && !entry.entrypoints.includes(target.entrypoint)) {
     return { ok: false, fix: `skill ${target.skill} has no entrypoint ${target.entrypoint} (choose from: ${entry.entrypoints.join(", ")})` };
   }
   const diff = diffBundle(wbRoot, ctx.bundleManifest, { readFile: ctx.readFile, recorded: ctx.recorded });
-  if (diff.some((e) => e.rel.startsWith(`skills/${target.skill}/`) && e.action !== "no-op")) {
+  if (diff.some((e) => e.rel.startsWith(`${skillRel(target.skill)}/`) && e.action !== "no-op")) {
     return { ok: false, fix: `run jspace workspace upgrade (skill ${target.skill} is out of date; a local edit is preserved as conflict)` };
   }
   return {
     ok: true,
-    prompt: `在工作台 ${wbRoot} 按 AGENTS.md 路由。阅读并执行 ${join(skillRoot, "SKILL.md")} 的 ${target.entrypoint} 流程：${target.input}`,
+    prompt: `在工作台 ${wbRoot} 按 AGENTS.md 路由。阅读并执行 ${join(skillRootPath, "SKILL.md")} 的 ${target.entrypoint} 流程：${target.input}`,
   };
 }
 

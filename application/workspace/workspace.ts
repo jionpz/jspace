@@ -10,6 +10,7 @@ import type { DistributionManifestV1 } from "../../core/contracts/distribution.t
 import { readMarker, writeMarkerAtomic, writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { decodeUpgradeJournal, type UpgradeJournalV1 } from "../../core/contracts/upgrade.ts";
+import { extractAgentsBlock, replaceAgentsBlock } from "./agents-block.ts";
 import { diffBundle, materializedRel } from "./manifest.ts";
 import { readMaterializedJournal, writeUpdatedMaterializedJournal } from "./journal.ts";
 import { migrateHubSchema, type HubTransform, type MigrationOutcome } from "../../core/registry/migrations.ts";
@@ -70,9 +71,14 @@ export function workspaceDiff(
   root: string,
   manifest: DistributionManifestV1,
   json: boolean,
+  assets?: Record<string, string>,
 ): CmdResult {
   const recorded = readMaterializedJournal(root)?.files ?? {};
-  const entries = diffBundle(root, manifest, { readFile: safeReadFile, recorded });
+  const entries = diffBundle(root, manifest, {
+    readFile: safeReadFile,
+    recorded,
+    bundleContent: assets === undefined ? undefined : (key) => assets[key] ?? null,
+  });
   if (json) {
     return { lines: [], data: { bundle_version: manifest.bundle_version, entries } };
   }
@@ -167,12 +173,18 @@ export function workspaceUpgrade(
   if (opts.rollbackId !== undefined) return rollbackUpgrade(root, opts.rollbackId, deps);
 
   const recorded = readMaterializedJournal(root)?.files ?? {};
-  const entries = diffBundle(root, deps.manifest, { readFile: deps.readFile, recorded });
+  const entries = diffBundle(root, deps.manifest, {
+    readFile: deps.readFile,
+    recorded,
+    bundleContent: (key) => deps.assets[key] ?? null,
+  });
   const conflicts = entries.filter((e) => e.action === "conflict");
   const plan = entries.filter(
     (e) =>
       e.action === "create" ||
       e.action === "update" ||
+      e.action === "remove" ||
+      e.action === "block-update" ||
       // --accept-conflicts force-overwrites locally modified files, but only
       // the reserved `managed` class. seed/user edits (AGENTS.md, README,
       // .claude settings, skills, hub.json, cron.json) are always preserved —
@@ -183,7 +195,7 @@ export function workspaceUpgrade(
 
   if (opts.dryRun) {
     const changes = entries.filter(
-      (e) => e.action === "create" || e.action === "update" || e.action === "conflict",
+      (e) => e.action === "create" || e.action === "update" || e.action === "conflict" || e.action === "remove" || e.action === "block-update",
     );
     // mirror the real path: a registered migration is planned as [migrate]; a
     // schema gap with NO registered migration is [manual] (the real upgrade will
@@ -257,6 +269,29 @@ export function workspaceUpgrade(
         const doc = hubMigration?.outcome.document;
         if (doc === undefined) throw new Error(`missing migrated document for ${e.rel}`);
         deps.writeFile(join(root, e.rel), JSON.stringify(doc, null, 2) + "\n");
+        continue;
+      }
+      if (e.action === "block-update") {
+        // AGENTS.md: refresh only the JSPACE block; everything outside the
+        // block belongs to the user and is preserved verbatim.
+        const key = pathByRel.get(e.rel);
+        const content = key !== undefined ? deps.assets[key] : undefined;
+        if (content === undefined) throw new Error(`missing bundle asset for ${e.rel}`);
+        const bundleBlock = extractAgentsBlock(content);
+        if (bundleBlock === null) throw new Error(`bundle AGENTS.md has no JSPACE block for ${e.rel}`);
+        const cur = deps.readFile(join(root, e.rel));
+        if (cur === null) throw new Error(`missing AGENTS.md for block update: ${e.rel}`);
+        deps.writeFile(join(root, e.rel), replaceAgentsBlock(cur, bundleBlock));
+        continue;
+      }
+      if (e.action === "remove") {
+        // legacy seed copy (unchanged since applied); remove with backup so
+        // rollback can restore it.
+        try {
+          unlinkSync(join(root, e.rel));
+        } catch {
+          /* best-effort: file already gone */
+        }
         continue;
       }
       const key = pathByRel.get(e.rel);
