@@ -30,7 +30,9 @@ max_journal_lines: 2000
 #
 # Accepts: true / false / yes / no / 1 / 0 / on / off (case-insensitive).
 #
-# session_auto_commit: true
+# journals/tasks stay gitignored (public repo, real personal paths) — scripts
+# write files to disk only; spec/ changes are committed manually.
+session_auto_commit: false
 
 #-------------------------------------------------------------------------------
 # Task Lifecycle Hooks
