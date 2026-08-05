@@ -114,7 +114,7 @@ export const linuxAdapter: SchedulerAdapter = {
     return out;
   },
 
-  apply(op: SchedulerOp, tag: string, root: string, env: SchedulerEnv): string[] {
+  apply(op: SchedulerOp, _tag: string, root: string, _env: SchedulerEnv): string[] {
     const existing = readCrontab();
     if (op.action === "delete") {
       // rebuild block without this cron: parse existing, drop the taskId line
@@ -137,7 +137,7 @@ export const linuxAdapter: SchedulerAdapter = {
     return [`jspace: ok: installed cron block (${op.taskId})`];
   },
 
-  uninstallAll(_tag: string, root: string, env: SchedulerEnv): string[] {
+  uninstallAll(_tag: string, root: string, _env: SchedulerEnv): string[] {
     const existing = readCrontab();
     const merged = replaceManagedBlock(existing, "");
     const backup = join(root, ".jspace", "logs", "cron", "crontab.backup");
@@ -152,7 +152,7 @@ export const linuxAdapter: SchedulerAdapter = {
     return ["jspace: ok: removed jspace crons from crontab"];
   },
 
-  health(env: SchedulerEnv): { crontab: boolean; service: boolean } {
+  health(_env: SchedulerEnv): { crontab: boolean; service: boolean } {
     const c = spawnSync("sh", ["-c", "command -v crontab"], { encoding: "utf-8" });
     const s = spawnSync("sh", ["-c", "pgrep -x crond >/dev/null 2>&1 || pgrep -x cron >/dev/null 2>&1"], { encoding: "utf-8" });
     return { crontab: (c.stdout ?? "").trim() !== "", service: s.status === 0 };

@@ -8,6 +8,7 @@ import { dirname, join } from "node:path";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { materializedRel, sha256Of } from "./manifest.ts";
+import { localDate } from "../time.ts";
 
 export const MATERIALIZED_FILE = join(CONFIG_DIR, "state", "materialized.json");
 
@@ -16,11 +17,6 @@ export interface MaterializedJournal {
   asset_version: string;
   applied_at: string;
   files: Record<string, { sha256: string }>;
-}
-
-function localDate(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function safeReadFile(p: string): string | null {

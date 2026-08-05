@@ -47,7 +47,7 @@ test("cronInstall: all-disabled -> reconciles to delete ops (no early return)", 
       return [];
     },
   });
-  expect(applied).toEqual([{ action: "delete", taskId: taskIdFor(tag, "old") }]);
+  expect(applied!).toEqual([{ action: "delete", taskId: taskIdFor(tag, "old") }]);
   expect(res.lines.some((l) => l.includes("applied 1 change"))).toBe(true);
   rmSync(wb, { recursive: true, force: true });
 });
@@ -56,7 +56,7 @@ test("cronInstall: enabled cron not installed -> create op", () => {
   const wb = makeWorkbench([{ id: "a", enabled: true }]);
   const tag = "abc123";
   let applied: SchedulerOp[] | null = null;
-  const res = cronInstall(wb, false, {
+  cronInstall(wb, false, {
     tag,
     buildDesired: buildDesired(tag),
     inspect: () => [],
@@ -65,7 +65,7 @@ test("cronInstall: enabled cron not installed -> create op", () => {
       return [];
     },
   });
-  expect(applied).toEqual([{ action: "create", taskId: taskIdFor(tag, "a"), content: "plist" }]);
+  expect(applied!).toEqual([{ action: "create", taskId: taskIdFor(tag, "a"), content: "plist" }]);
   rmSync(wb, { recursive: true, force: true });
 });
 

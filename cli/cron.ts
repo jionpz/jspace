@@ -4,7 +4,6 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { devRoot, isCompiled } from "./embed.ts";
-import { CONFIG_DIR } from "../core/contracts/files.ts";
 import { workbenchRoot } from "./registry.ts";
 import { resolveFilehubRoot } from "../application/registry/filehub-lookup.ts";
 import { loadCrons, parseSchedule, type ScheduleDict } from "../application/automation/definitions.ts";
@@ -14,24 +13,8 @@ import { readEnvelopes, envelopePath } from "../application/pending/envelope.ts"
 export { parseSchedule };
 export type { ScheduleDict };
 
-export const CRON_FILE = join(CONFIG_DIR, "cron.json");
-
 type Platform = "darwin" | "linux" | "win32";
 const platform: Platform = process.platform as Platform;
-
-/** POSIX single-quote quoting for crontab lines (paths may contain spaces/quotes). */
-function shq(s: string): string {
-  return "'" + s.replace(/'/g, `'\\''`) + "'";
-}
-
-/** Local calendar date YYYY-MM-DD (no UTC shift). */
-function localDate(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-function localStamp(): string {
-  return `${localDate()}T${String(new Date().getHours()).padStart(2, "0")}${String(new Date().getMinutes()).padStart(2, "0")}${String(new Date().getSeconds()).padStart(2, "0")}`;
-}
 
 /** Absolute jspace binary for scheduling. Compiled: process.execPath; source
  *  checkout: repo bin/jspace[.exe] (win32 probes for the .exe, H4). */

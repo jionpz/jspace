@@ -4,7 +4,7 @@
 // Run: bun test core/contracts/cron.test.ts
 import { expect, test } from "bun:test";
 import type { DecodeResult } from "./diagnostics.ts";
-import { decodeCrons, type CronDefinition, type CronsFile } from "./cron.ts";
+import { decodeCrons, type CronsFile } from "./cron.ts";
 
 function promptCron(): CronsFile {
   return {

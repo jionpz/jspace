@@ -97,7 +97,7 @@ export function ingestAdvance(root: string, id: string, step: IngestStep): CmdRe
     }
     return { lines: [`jspace: ok: ingest ${id} -> committed (source removed)`] };
   }
-  const j = advanceIngest(root, id, step, REAL_OPS);
+  advanceIngest(root, id, step, REAL_OPS);
   return { lines: [`jspace: ok: ingest ${id} -> ${step}`] };
 }
 

@@ -18,7 +18,7 @@ const helloSpec: CommandSpec = {
   features: { json: true },
   positionals: [{ name: "name", help: "name to greet (default: world)" }],
   options: [{ name: "--shout", takesValue: false, help: "shout the greeting" }],
-  handler: (ctx, args) => {
+  handler: (_ctx, args) => {
     const greeting = `hello, ${(args.name as string | undefined) ?? "world"}${args.shout ? "!" : ""}`;
     return { lines: [greeting], data: { greeting } };
   },

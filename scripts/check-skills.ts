@@ -12,7 +12,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { decodeSkillsManifest } from "../core/contracts/skills.ts";
-import { parseSkillFrontmatter, renderAgentsBlocks } from "./skill-frontmatter.ts";
+import { parseSkillFrontmatter } from "./skill-frontmatter.ts";
 
 const repoRoot = resolve(import.meta.dir, "..");
 const failures: string[] = [];

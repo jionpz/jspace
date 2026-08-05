@@ -6,7 +6,6 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -20,14 +19,7 @@ import { HUB_FILE, LOCAL_FILE, MARKER_FILE } from "../../core/contracts/files.ts
 import { decodeHub, type HubV4 } from "../../core/contracts/hub.ts";
 import { decodeLocal, type LocalStateV1 } from "../../core/contracts/local.ts";
 import { decodeMarker, type WorkbenchMarkerV1 } from "../../core/contracts/workbench.ts";
-
-function isFile(p: string): boolean {
-  try {
-    return statSync(p).isFile();
-  } catch {
-    return false;
-  }
-}
+import { isFile } from "../../application/fs.ts";
 
 function parseJsonFile(file: string, code: string, pathLabel: string): { data: unknown } | { issue: ContractIssue } {
   try {
@@ -163,7 +155,6 @@ export function writeHubAndLocal(root: string, hub: HubV4, local: LocalStateV1):
 
   mkdirSync(dirname(hubPath), { recursive: true });
   const hubOriginal = isFile(hubPath) ? readFileSync(hubPath, "utf-8") : null;
-  const localOriginal = isFile(localPath) ? readFileSync(localPath, "utf-8") : null;
 
   const hubTmp = tmpSibling(hubPath);
   const localTmp = tmpSibling(localPath);

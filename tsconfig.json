@@ -8,7 +8,9 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": false,
     "strict": true,
-    "noEmit": true
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
   },
-  "include": ["cli/**/*.ts", "scripts/**/*.ts", "core/**/*.ts", "adapters/**/*.ts"]
+  "include": ["cli/**/*.ts", "scripts/**/*.ts", "core/**/*.ts", "adapters/**/*.ts", "application/**/*.ts"]
 }

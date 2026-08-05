@@ -22,6 +22,7 @@ import {
   type IngestFileOps,
   type IngestPlan,
 } from "./journal.ts";
+import type { IngestJournalV1 } from "../../core/contracts/ingest.ts";
 
 let root: string;
 let inbox: string;
@@ -125,7 +126,7 @@ test("duplicate ingest (same content+relPath, committed) is skipped idempotently
 test("re-begin of an in-progress file resumes (no re-copy)", () => {
   const src = sourceFile();
   const t = track();
-  const first = beginIngest(root, plan(src), t.ops) as { kind: "created"; journal: { id: string } };
+  beginIngest(root, plan(src), t.ops);
   t.copied.length = 0;
   const again = beginIngest(root, plan(src), t.ops);
   expect(again.kind).toBe("resume");
@@ -292,9 +293,14 @@ test("begin on a cleanup-pending source does not create a second journal", () =>
 test("a hand-written v1 cleanup-pending journal decodes and recovers", () => {
   const src = sourceFile();
   const t = track();
-  const { journal } = beginIngest(root, plan(src), t.ops) as { kind: "created"; journal: { id: string } };
+  const { journal } = beginIngest(root, plan(src), t.ops) as { kind: "created"; journal: IngestJournalV1 };
   // write the raw v1 shape directly (what an older release / crash leaves on disk)
-  const pendingRaw = { ...journal, status: "failed", failedStep: "committed", failureReason: "source cleanup pending" };
+  const pendingRaw: IngestJournalV1 = {
+    ...journal,
+    status: "failed",
+    failedStep: "committed",
+    failureReason: "source cleanup pending",
+  };
   writeJournal(root, pendingRaw);
   expect(isCleanupPending(readJournal(root, journal.id))).toBe(true);
   const res = completeIngest(root, journal.id, t.ops);

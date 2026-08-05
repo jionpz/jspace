@@ -2,10 +2,12 @@
 // (.jspace/state/incidents/). A failed/suspect run opens or updates an incident
 // keyed by cron + failure class; a successful retry resolves it; `cron ack`
 // records acknowledgment (evidence retained) so it stops alerting.
-import { mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
+import { localStamp } from "../time.ts";
+import { readJsonRecords } from "../fs.ts";
 
 const INCIDENTS_DIR = join(CONFIG_DIR, "state", "incidents");
 
@@ -27,29 +29,15 @@ function dir(root: string): string {
   return join(root, INCIDENTS_DIR);
 }
 
-function localStamp(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}${String(d.getSeconds()).padStart(2, "0")}`;
-}
-
 export function readIncidents(root: string): Incident[] {
-  let names: string[];
-  try {
-    names = readdirSync(dir(root));
-  } catch {
-    return [];
-  }
-  const out: Incident[] = [];
-  for (const n of names) {
-    if (!n.endsWith(".json")) continue;
-    try {
-      const inc = JSON.parse(readFileSync(join(dir(root), n), "utf-8")) as Incident;
-      if (inc && typeof inc.status === "string") out.push(inc);
-    } catch {
-      /* skip corrupt incident */
-    }
-  }
-  return out.sort((a, b) => a.openedAt.localeCompare(b.openedAt));
+  return readJsonRecords(dir(root), {
+    ext: ".json",
+    decode: (raw) => {
+      const inc = raw as Incident;
+      return inc && typeof inc.status === "string" ? inc : null;
+    },
+    sort: (a, b) => a.openedAt.localeCompare(b.openedAt),
+  });
 }
 
 function writeIncident(root: string, inc: Incident): void {

@@ -5,6 +5,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fail } from "../errors.ts";
+import { localDate } from "../time.ts";
 import type { CmdResult } from "../commands/command.ts";
 import { MARKER_FILE } from "../../core/contracts/files.ts";
 import {
@@ -28,12 +29,6 @@ export interface InitDeps {
   materialize: (target: string, devRootStr: string) => void;
   /** Bundle manifest, used to seed the materialization journal. */
   manifest: DistributionManifestV1;
-}
-
-/** Local calendar date YYYY-MM-DD (Python date.today().isoformat(); toISOString is UTC). */
-function localDate(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export function initWorkbench(

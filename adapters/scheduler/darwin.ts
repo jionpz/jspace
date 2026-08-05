@@ -107,7 +107,7 @@ export const darwinAdapter: SchedulerAdapter = {
     return [`jspace: ok: removed ${op.taskId}.plist`];
   },
 
-  uninstallAll(tag: string, root: string, env: SchedulerEnv): string[] {
+  uninstallAll(tag: string, _root: string, env: SchedulerEnv): string[] {
     const lines: string[] = [];
     for (const name of listPlists(env.home)) {
       if (!plistBelongsToTag(name, tag)) continue;

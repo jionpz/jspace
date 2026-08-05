@@ -7,10 +7,6 @@ import { parseSchedule } from "./schedule.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 import { workbenchTag, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerOp } from "./types.ts";
 
-function taskName(tag: string, id: string): string {
-  return `JSpaceCron_${tag}_${id}`;
-}
-
 function queryTasks(tag: string): string[] {
   const res = spawnSync("schtasks", ["/query", "/fo", "csv", "/nh"], { encoding: "utf-8" });
   const out = res.status === 0 ? (res.stdout ?? "") : "";
@@ -113,7 +109,7 @@ export const win32Adapter: SchedulerAdapter = {
     });
   },
 
-  apply(op: SchedulerOp, tag: string, root: string, env: SchedulerEnv): string[] {
+  apply(op: SchedulerOp, _tag: string, _root: string, _env: SchedulerEnv): string[] {
     if (op.action === "delete") {
       const res = spawnSync("schtasks", ["/delete", "/tn", op.taskId, "/f"], { encoding: "utf-8" });
       if (res.status !== 0) fail(`schtasks delete failed for ${op.taskId}: ${(res.stderr ?? "").trim()}`);

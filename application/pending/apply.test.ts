@@ -6,7 +6,6 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { PendingWriteEnvelopeV1 } from "../../core/contracts/pending.ts";
 import { readEnvelopes, stageEnvelope, writeEnvelope } from "./envelope.ts";
 import { applyPending, type GbrainDeps } from "./apply.ts";
 

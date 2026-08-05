@@ -24,6 +24,7 @@ import { writeRun } from "./runs.ts";
 import { openOrUpdate, resolveIncidents } from "./incidents.ts";
 import { harnessArgv } from "../../adapters/harness/argv.ts";
 import { isFile } from "../fs.ts";
+import { localDate, localStamp } from "../time.ts";
 
 export interface ExecuteDeps {
   platform: string;
@@ -47,15 +48,6 @@ export interface CronRunOptions {
   dryRun: boolean;
   timeoutSec: number;
   force: boolean;
-}
-
-function localDate(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-function localStamp(): string {
-  const d = new Date();
-  return `${localDate()}T${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}${String(d.getSeconds()).padStart(2, "0")}`;
 }
 
 function todaySuccess(root: string, cronId: string, logDir: (r: string, c: string) => string): boolean {

@@ -10,7 +10,7 @@
 // crash or unlink failure therefore leaves a visible, retryable residue instead
 // of a committed journal whose source removal silently failed (P1).
 import { createHash } from "node:crypto";
-import { closeSync, mkdirSync, openSync, readSync, readdirSync, readFileSync, existsSync } from "node:fs";
+import { closeSync, openSync, readSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
@@ -21,7 +21,8 @@ import {
   type IngestStep,
   type IngestStatus,
 } from "../../core/contracts/ingest.ts";
-import { sha256Of } from "../workspace/manifest.ts";
+import { localStamp } from "../time.ts";
+import { readJsonRecords } from "../fs.ts";
 
 export const INGEST_STATE_DIR = join(CONFIG_DIR, "state", "ingest");
 
@@ -81,11 +82,6 @@ function dir(root: string): string {
   return join(root, INGEST_STATE_DIR);
 }
 
-function now(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}${String(d.getSeconds()).padStart(2, "0")}`;
-}
-
 export function writeJournal(root: string, j: IngestJournalV1): void {
   // atomic (temp+rename) so a crash mid-write never leaves a truncated .json
   // that readJournals would silently skip (machine-truth invariant).
@@ -93,23 +89,14 @@ export function writeJournal(root: string, j: IngestJournalV1): void {
 }
 
 export function readJournals(root: string): IngestJournalV1[] {
-  let names: string[];
-  try {
-    names = readdirSync(dir(root));
-  } catch {
-    return [];
-  }
-  const out: IngestJournalV1[] = [];
-  for (const n of names) {
-    if (!n.endsWith(".json")) continue;
-    try {
-      const decoded = decodeIngestJournal(JSON.parse(readFileSync(join(dir(root), n), "utf-8")));
-      if (decoded.ok) out.push(decoded.value);
-    } catch {
-      /* skip corrupt journal */
-    }
-  }
-  return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return readJsonRecords(dir(root), {
+    ext: ".json",
+    decode: (raw) => {
+      const d = decodeIngestJournal(raw);
+      return d.ok ? d.value : null;
+    },
+    sort: (a, b) => a.createdAt.localeCompare(b.createdAt),
+  });
 }
 
 export function readJournal(root: string, id: string): IngestJournalV1 {
@@ -133,7 +120,7 @@ export function completeRetryCommand(id: string): string {
 }
 
 function withStamp(j: IngestJournalV1): IngestJournalV1 {
-  return { ...j, updatedAt: now() };
+  return { ...j, updatedAt: localStamp() };
 }
 
 /** Start an ingest: hash source for idempotency, stage a target copy (source
@@ -181,8 +168,8 @@ export function beginIngest(root: string, plan: IngestPlan, ops: IngestFileOps):
     contentHash,
     status: "staged",
     ...(plan.indexEntry !== undefined ? { indexEntry: plan.indexEntry } : {}),
-    createdAt: now(),
-    updatedAt: now(),
+    createdAt: localStamp(),
+    updatedAt: localStamp(),
   };
   try {
     writeJournal(root, journal);
@@ -204,7 +191,7 @@ export function beginIngest(root: string, plan: IngestPlan, ops: IngestFileOps):
  *  failed source removal stays visible and retryable instead of a fake success.
  *  A cleanup-pending journal (failed/failedStep=committed) can only move forward
  *  via completeIngest(); other failed states stay illegal. */
-export function advanceIngest(root: string, id: string, step: IngestStep, ops: IngestFileOps): IngestJournalV1 {
+export function advanceIngest(root: string, id: string, step: IngestStep, _ops: IngestFileOps): IngestJournalV1 {
   const j = readJournal(root, id);
   if (j.status === "failed") {
     if (isCleanupPending(j)) {

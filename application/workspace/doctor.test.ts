@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { doctorWorkbench, type CronHealthDeps } from "./doctor.ts";
 import { loadCrons, parseSchedule } from "../automation/definitions.ts";
+import type { CmdResult } from "../commands/command.ts";
 
 let root: string;
 beforeEach(() => {
@@ -45,8 +46,9 @@ const stubDeps = (over: Partial<CronHealthDeps> = {}): CronHealthDeps => ({
   ...over,
 });
 
-function codes(result: { data: { diagnostics: { code: string }[] } }): string[] {
-  return result.data.diagnostics.map((d) => d.code);
+function codes(result: CmdResult): string[] {
+  const data = result.data as { diagnostics: { code: string }[] };
+  return data.diagnostics.map((d) => d.code);
 }
 
 test("healthy empty workbench -> exit ok; only structural warnings (local/filehub), no cron diagnostics", () => {

@@ -259,9 +259,10 @@ test("hub schema migration writes the migrated document, user data preserved, ma
   expect(hub.version).toBe("5");
   expect(hub.domains).toEqual([{ id: "d", path: "workspace/d" }]); // user data preserved
   expect(hub.migrated_by).toBe("v5"); // transform applied
-  expect(readMarker(root).status).toBe("ok");
-  if (readMarker(root).status === "ok") {
-    expect(readMarker(root).value.template_version).toBe("2.0.0");
+  const m = readMarker(root);
+  expect(m.status).toBe("ok");
+  if (m.status === "ok") {
+    expect(m.value.template_version).toBe("2.0.0");
   }
   rmSync(root, { recursive: true, force: true });
 });
@@ -280,9 +281,10 @@ test("old fixture (no journal) -> upgrade creates missing files, seed content pr
   // user-owned content untouched
   expect(readFileSync(join(root, "user-note.md"), "utf-8")).toBe("keep me");
   // marker bumped to the bundle version
-  expect(readMarker(root).status).toBe("ok");
-  if (readMarker(root).status === "ok") {
-    expect(readMarker(root).value.template_version).toBe(BUNDLE_MANIFEST.bundle_version);
+  const m = readMarker(root);
+  expect(m.status).toBe("ok");
+  if (m.status === "ok") {
+    expect(m.value.template_version).toBe(BUNDLE_MANIFEST.bundle_version);
   }
   // second run is a no-op
   const again = workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps);
@@ -331,7 +333,7 @@ test("failed apply leaves a journal that --rollback restores", () => {
   const ids = existsSync(dir) ? readdirSync(dir) : [];
   expect(ids.length).toBe(1);
   // rollback with normal deps restores the original content
-  workspaceUpgrade(root, { rollbackId: ids[0] }, upgradeDeps);
+  workspaceUpgrade(root, { rollbackId: ids[0], dryRun: false, acceptConflicts: true }, upgradeDeps);
   expect(readFileSync(join(root, "AGENTS.md"), "utf-8")).toBe(before);
   const journal = JSON.parse(readFileSync(join(dir, ids[0], "journal.json"), "utf-8"));
   expect(journal.status).toBe("rolled_back");

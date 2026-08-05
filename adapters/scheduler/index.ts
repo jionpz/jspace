@@ -1,5 +1,5 @@
 // adapters/scheduler/index.ts — platform scheduler adapter selection.
-import type { SchedulerAdapter, SchedulerEnv } from "./types.ts";
+import type { SchedulerAdapter } from "./types.ts";
 import { darwinAdapter } from "./darwin.ts";
 import { linuxAdapter } from "./linux.ts";
 import { win32Adapter } from "./win32.ts";
