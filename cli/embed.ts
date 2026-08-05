@@ -69,9 +69,9 @@ function jsonEscape(s: string): string {
 /**
  * Write the embedded tree into `target`, replacing __DEV_ROOT__ placeholders.
  * JSON assets escape the replacement (Windows paths contain backslashes that
- * would otherwise produce invalid JSON). Mirrors Python:
- * shutil.copytree(template, target, dirs_exist_ok=True) + copy of skills/
- * {jspace-bootstrap,asset-ingest} + _materialize_placeholders.
+ * would otherwise produce invalid JSON). Official skills materialize into the
+ * hidden .space/skills/ (root `skills/` is reserved for user-created skills);
+ * filehub is created on demand by `filehub init`.
  */
 export function materializeTree(target: string, devRootStr: string): void {
   if (!hasAssets("templates/workbench/")) {
@@ -89,7 +89,7 @@ export function materializeTree(target: string, devRootStr: string): void {
     if (key.startsWith("templates/workbench/")) {
       rel = key.slice("templates/workbench/".length);
     } else if (key.startsWith("skills/")) {
-      rel = key; // keep skills/<name>/...
+      rel = `.space/skills/${key.slice("skills/".length)}`; // 官方 skill → 隐藏 .space/skills/
     } else if (key.startsWith("templates/filehub/")) {
       continue; // filehub skeleton is materialized on demand by `filehub init`
     } else {

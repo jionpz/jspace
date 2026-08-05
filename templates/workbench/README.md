@@ -12,10 +12,8 @@
 - `.jspace/state/` - 运行时状态槽(升级 journal / 材料化记录;git 忽略)
 - `AGENTS.md` - 工作模式操作规则
 - `workspace/` - 域目录（初始不预建；按 AGENTS.md 的 Domain Governance 从真实使用涌现，首个域创建时生成）
-- `skills/jspace-bootstrap/` - 首次配置技能
-- `skills/asset-ingest/` - 资料转知识资产技能
-- `skills/memory-recall/` - 精准召回技能
-- `skills/memory-writeback/` - 会话记忆写回技能
+- `.space/skills/` - 官方打包技能（`jspace init` 物化；升级刷新未改动副本、保留本地修改）
+- `skills/` - 用户自建技能保留地（需用户确认；官方技能不在根目录）
 - `.gitignore` - 忽略 `.jspace/logs/`、`.jspace/local.json`、`.jspace/state/`
 
 ## 目录边界与升级范围
@@ -33,7 +31,7 @@
 ## 使用
 
 1. 先读 `AGENTS.md`。
-2. 首次使用按 `skills/jspace-bootstrap/SKILL.md` 配置 gbrain 与所选 AI harness。
+2. 首次使用按 `.space/skills/jspace-bootstrap/SKILL.md` 配置 gbrain 与所选 AI harness。
 3. 用 JSpace CLI 校验本目录（`jspace` 为编译二进制，需在 PATH 上；源码检出则运行 `bun run cli/main.ts`）：
 
 ```bash
@@ -46,7 +44,7 @@ jspace doctor --dir .
 
 ## 资产管理(跟踪新项目)
 
-重资产(pdf/ppt/excel/md)归位在**文件中心(filehub)**——独立目录,由 `jspace filehub init` 生成并注册(`type: filehub` resource),可作 Obsidian vault 打开;内容走网盘/Obsidian Sync,不进本工作台 git。协议见 filehub 根 `README.md` 与 `skills/asset-ingest/`。
+重资产(pdf/ppt/excel/md)归位在**文件中心(filehub)**——独立目录,由 `jspace filehub init` 生成并注册(`type: filehub` resource),可作 Obsidian vault 打开;内容走网盘/Obsidian Sync,不进本工作台 git。协议见 filehub 根 `README.md` 与 `.space/skills/asset-ingest/`。
 
 **跟踪一个新项目 = 三步**:
 

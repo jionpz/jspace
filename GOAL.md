@@ -54,7 +54,7 @@
 - 会话开始：按域/项目检索注入；会话结束：把持久事实带归属（domain/project 标签、统一的实体 slug）写回。
 - 资产入脑只入三样：**这是什么、关键事实、指针**；原文件永远留在资产层。指针 = `Pointer`（绝对路径，本机真理）+ `rel_path`（相对 filehub 根，机器无关，M5 起）；换机按「目标机 filehub 根 + rel_path」重解析。
 - 精准 = 一致的实体命名 + 归属标签 + 写回纪律。三者由工作台规则与 bootstrap skill 保障，不靠人自觉。
-- 各 harness 的会话能力分级（session-start / session-end / 显式 fallback / crash recovery 的 automated/best-effort/manual/unsupported）见工作台 `skills/jspace-bootstrap/references/harnesses.md`「Lifecycle 能力矩阵」；本段为愿景措辞，实际能力以矩阵为准（不虚报自动化）。
+- 各 harness 的会话能力分级（session-start / session-end / 显式 fallback / crash recovery 的 automated/best-effort/manual/unsupported）见工作台 `.space/skills/jspace-bootstrap/references/harnesses.md`「Lifecycle 能力矩阵」；本段为愿景措辞，实际能力以矩阵为准（不虚报自动化）。
 
 ## 定时自动化（cron）
 

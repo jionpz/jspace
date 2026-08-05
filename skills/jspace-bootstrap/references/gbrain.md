@@ -75,7 +75,7 @@ A `note` page with a **date slug** is a periodic snapshot of a topic's memory (e
 - Embedding is a **default-required config** — Chinese recall depends on it (tsvector does not tokenize CJK). **默认:本地 Ollama bge-m3(零外部账号)**;可选提升:SiliconFlow bge-m3(在线,需 API key)。
 - If embedding is unreachable: writes must still succeed with `embed_skip: true`; retrieval falls back to keyword search (`gbrain search`) or `gbrain query` (auto-degrades to keyword), with a clear notice — never silent, never a failed write.
 - Never fail a write because embedding is unavailable.
-- Ingest-side policy (reference page writing + degradation notice): see `skills/asset-ingest/references/gbrain-write.md`.
+- Ingest-side policy (reference page writing + degradation notice): see `../asset-ingest/references/gbrain-write.md`.
 
 ## Recommended AI configuration (ask the user first; never forced)
 

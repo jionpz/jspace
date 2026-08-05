@@ -1,6 +1,6 @@
 # Golden run — memory-writeback 收工写回(三类事实:状态/知识/决策)
 
-> 端到端范例:一次会话收工,把 3 类持久事实按纪律写回 gbrain。真值来源:`references/writeback.md` 分类表 + `skills/jspace-bootstrap/references/gbrain.md` 写回纪律。gbrain 二进制当前不在本机 PATH,**输出为示意**(格式按命令契约构造,具体值随库)。
+> 端到端范例:一次会话收工,把 3 类持久事实按纪律写回 gbrain。真值来源:`references/writeback.md` 分类表 + `../jspace-bootstrap/references/gbrain.md` 写回纪律。gbrain 二进制当前不在本机 PATH,**输出为示意**(格式按命令契约构造,具体值随库)。
 
 ## 场景
 

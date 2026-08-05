@@ -71,7 +71,7 @@
 
 验证「excel/ppt 经深度抽取后,关键数字/表格内容可召回」(asset-ingest 深入路径 + 伴生 `.extract.md`)。
 
-**前置**:JWorkspace 的 `skills/asset-ingest/scripts/office-extract.py` 为待验收版本(与源 REPO diff 无差异);待验收文件为**真实 excel/pptx**(含数值事实)。
+**前置**:JWorkspace 的 `.space/skills/asset-ingest/scripts/office-extract.py` 为待验收版本(与源 REPO diff 无差异);待验收文件为**真实 excel/pptx**(含数值事实)。
 
 **用例**:
 

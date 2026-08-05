@@ -9,7 +9,7 @@ excel / ppt 在「摘要 + 指针」之外的**可选深入路径**：把文件�
 
 ## 工具
 
-- 统一入口：`skills/asset-ingest/scripts/extract.py`（随技能分发，已嵌入 jspace 二进制、物化进工作台）。分层路由：
+- 统一入口：`.space/skills/asset-ingest/scripts/extract.py`（随技能分发，已嵌入 jspace 二进制、物化进工作台 `.space/skills/`）。分层路由：
   - **markitdown 可用**（`command -v markitdown` / python 模块探测）→ 全格式走 markitdown：PDF/HTML/DOCX/XLSX/PPTX/MD。
   - **markitdown 不可用** → xlsx/pptx 回退 `office-extract.py`（零依赖，行为不变）；pdf/html/docx/md 明确报错并提示安装，不静默失败。
 - `office-extract.py`（零依赖，zipfile + ElementTree）作为**回退路径**保留，无头 cron 场景（无 markitdown）仍可靠。
@@ -36,7 +36,7 @@ pip install 'markitdown[pdf]'
 ## 命令
 
 ```bash
-python3 skills/asset-ingest/scripts/extract.py <文件> --out <伴生文件>
+python3 .space/skills/asset-ingest/scripts/extract.py <文件> --out <伴生文件>
 ```
 
 - 输出：markdown。有 markitdown → 全格式（PDF/HTML/DOCX/XLSX/PPTX/MD）；无 markitdown → xlsx/pptx 走 office-extract（零依赖回退），pdf/html/docx/md 报错并提示安装。

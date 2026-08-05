@@ -41,7 +41,7 @@
 ## 6. embedding 降级
 
 - 不可达 → `gbrain search` 关键词降级，**固定提示**「embedding 不可用，当前为关键词检索，中文命中率可能偏低」（不得静默）。
-- 写侧纪律（不可达时 `embed_skip: true` 保写入成功）见 `skills/asset-ingest/references/gbrain-write.md`。
+- 写侧纪律（不可达时 `embed_skip: true` 保写入成功）见 `../asset-ingest/references/gbrain-write.md`。
 - 每次校准/重跑前重查可达性并留痕。
 
 ## 7. 与相关文档的关系
@@ -49,8 +49,8 @@
 | 文档 | 角色 |
 |---|---|
 | `references/memory-acceptance.md` | 可复跑验收协议（回归基准，本 skill 引用） |
-| `skills/memory-recall/SKILL.md` | 日常流程（触发面 + 步骤） |
-| `skills/asset-ingest/` | 写侧（入库 + 归位后自检）；读侧触发时如发现「页不存在/指针断」回写侧补 |
+| `../SKILL.md` | 日常流程（触发面 + 步骤） |
+| `../asset-ingest/` | 写侧（入库 + 归位后自检）；读侧触发时如发现「页不存在/指针断」回写侧补 |
 
 ## 8. 换机解析（M5：指针可移植）
 

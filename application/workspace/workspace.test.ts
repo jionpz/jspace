@@ -306,13 +306,42 @@ test("dry-run reports the plan without mutating", () => {
 test("modified workbench skill is never overwritten (seed, skip preserved)", () => {
   const root = tmp();
   initWorkbench(root, false, initDeps);
-  const skillRel = "skills/jspace-bootstrap/SKILL.md";
+  const skillRel = ".space/skills/jspace-bootstrap/SKILL.md";
   writeFileSync(join(root, skillRel), "USER SKILL", "utf-8");
   const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true);
   const e = (data as { entries: { rel: string; action: string }[] }).entries.find((x) => x.rel === skillRel);
   expect(e?.action).toBe("skip"); // seed: preserved, non-blocking
   workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps);
   expect(readFileSync(join(root, skillRel), "utf-8")).toBe("USER SKILL");
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("legacy workbench: root skills/ becomes stale, upgrade creates .space/skills/ and never deletes", () => {
+  const root = tmp();
+  oldWorkbench(root);
+  // simulate a pre-move workbench that materialized official skills to root skills/
+  mkdirSync(join(root, "skills", "jspace-bootstrap"), { recursive: true });
+  writeFileSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"), "OLD SKILL", "utf-8");
+  // seed its materialized journal recording the legacy rel
+  mkdirSync(join(root, ".jspace", "state"), { recursive: true });
+  writeBytesAtomic(
+    join(root, ".jspace", "state", "materialized.json"),
+    JSON.stringify({
+      version: 1,
+      asset_version: "1.0.6",
+      applied_at: "2026-08-05",
+      files: { "skills/jspace-bootstrap/SKILL.md": { sha256: sha256Of("OLD SKILL") } },
+    }) + "\n",
+  );
+  // diff: new rel -> create, legacy rel -> stale
+  const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true);
+  const entries = (data as { entries: { rel: string; action: string }[] }).entries;
+  expect(entries.find((x) => x.rel === ".space/skills/jspace-bootstrap/SKILL.md")?.action).toBe("create");
+  expect(entries.find((x) => x.rel === "skills/jspace-bootstrap/SKILL.md")?.action).toBe("stale");
+  // upgrade: .space/skills/ lands, legacy skills/ is reported-stale but NOT deleted
+  workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps);
+  expect(existsSync(join(root, ".space", "skills", "jspace-bootstrap", "SKILL.md"))).toBe(true);
+  expect(existsSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"))).toBe(true); // never auto-deleted
   rmSync(root, { recursive: true, force: true });
 });
 

@@ -8,8 +8,8 @@
 
 - `cli/`：JSpace CLI（TypeScript/bun 源码，`bun run cli/main.ts` 运行；`bun run build` 产出 `bin/jspace` 编译二进制），提供 `init`（生成工作台）和 `doctor`（校验工作台）。
 - `templates/workbench/`：工作台模板，包含 `.jspace/hub.json`、工作台 `AGENTS.md`、初始 domains。
-- `skills/jspace-bootstrap/`：生成时复制进工作台的首次配置技能（gbrain + harness 接线）。
-- `skills/asset-ingest/`：生成时复制进工作台的资料转知识资产技能（归位 + gbrain reference + 中文语义召回）。
+- `skills/jspace-bootstrap/`：首次配置技能（源码；`jspace init` 物化进工作台 `.space/skills/jspace-bootstrap/`，gbrain + harness 接线）。
+- `skills/asset-ingest/`：资料转知识资产技能（源码；物化进工作台 `.space/skills/asset-ingest/`，归位 + gbrain reference + 中文语义召回）。
 
 本仓库根目录**不维护** `hub.json` / `workspace/` 日常注册表；这些只存在于 `templates/workbench/`，由 `jspace init` 实例化。模板中用占位符 `__DEV_ROOT__` 记录本仓库绝对路径，初始化时由 CLI 替换。
 

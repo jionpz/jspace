@@ -1,6 +1,6 @@
 # memory-writeback — 写回纪律细则
 
-纪律源 = `skills/jspace-bootstrap/references/gbrain.md`（引用不复制）。本文件把 gbrain.md 的写回纪律固化为收工场景的细则。
+纪律源 = `../jspace-bootstrap/references/gbrain.md`（引用不复制）。本文件把 gbrain.md 的写回纪律固化为收工场景的细则。
 
 ## 1. 分类表与写语义
 
@@ -45,7 +45,7 @@
 
 | 文档 | 角色 |
 |---|---|
-| `skills/jspace-bootstrap/references/gbrain.md` | 纪律源（state 覆盖 vs 知识追加 / 晋升） |
-| `skills/memory-writeback/SKILL.md` | 日常流程（触发 + 6 步） |
-| `skills/asset-ingest/SKILL.md` | 资产写侧（文件归位 / reference 页，转引用） |
+| `../jspace-bootstrap/references/gbrain.md` | 纪律源（state 覆盖 vs 知识追加 / 晋升） |
+| `../SKILL.md` | 日常流程（触发 + 6 步） |
+| `../asset-ingest/SKILL.md` | 资产写侧（文件归位 / reference 页，转引用） |
 | `templates/workbench/AGENTS.md` End-of-Work Capture | 何时触发的提示（引用本 skill，不双写纪律） |

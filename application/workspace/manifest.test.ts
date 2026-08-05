@@ -49,9 +49,9 @@ test("recreateOnMissing: hub.json recovers, cron.json deletion respected", () =>
   expect(recreateOnMissing("AGENTS.md")).toBe(true);
 });
 
-test("materializedRel maps workbench + skills, skips filehub", () => {
+test("materializedRel maps workbench + skills to .space/skills, skips filehub", () => {
   expect(materializedRel("templates/workbench/AGENTS.md")).toBe("AGENTS.md");
-  expect(materializedRel("skills/jspace-bootstrap/SKILL.md")).toBe("skills/jspace-bootstrap/SKILL.md");
+  expect(materializedRel("skills/jspace-bootstrap/SKILL.md")).toBe(".space/skills/jspace-bootstrap/SKILL.md");
   expect(materializedRel("templates/filehub/README.md")).toBeNull(); // on-demand, not in workbench
 });
 
@@ -62,7 +62,7 @@ test("freshness: matching -> no-op; missing -> create; filehub skipped", () => {
     deps({
       "AGENTS.md": "new-agents",
       "README.md": "new-readme",
-      "skills/jspace-bootstrap/SKILL.md": "new-skill",
+      ".space/skills/jspace-bootstrap/SKILL.md": "new-skill",
       ".jspace/hub.json": "new-hub",
       ".jspace/cron.json": "new-cron",
     }),
@@ -70,7 +70,7 @@ test("freshness: matching -> no-op; missing -> create; filehub skipped", () => {
   const map = byRel(entries);
   expect(map["AGENTS.md"]).toBe("no-op");
   expect(map["README.md"]).toBe("no-op");
-  expect(map["skills/jspace-bootstrap/SKILL.md"]).toBe("no-op");
+  expect(map[".space/skills/jspace-bootstrap/SKILL.md"]).toBe("no-op");
   expect(map[".jspace/hub.json"]).toBe("no-op");
   expect(map[".jspace/cron.json"]).toBe("no-op");
   expect(entries.some((e) => e.rel === "templates/filehub/README.md")).toBe(false);
@@ -81,27 +81,27 @@ test("recorded base + bundle forward -> seed refreshes (update)", () => {
     "/wb",
     manifest,
     deps(
-      { "AGENTS.md": "old-agents", "skills/jspace-bootstrap/SKILL.md": "old-skill" },
+      { "AGENTS.md": "old-agents", ".space/skills/jspace-bootstrap/SKILL.md": "old-skill" },
       {
         "AGENTS.md": { sha256: sha256Of("old-agents") },
-        "skills/jspace-bootstrap/SKILL.md": { sha256: sha256Of("old-skill") },
+        ".space/skills/jspace-bootstrap/SKILL.md": { sha256: sha256Of("old-skill") },
       },
     ),
   );
   const map = byRel(entries);
   expect(map["AGENTS.md"]).toBe("update"); // seed: unmodified -> refreshed
-  expect(map["skills/jspace-bootstrap/SKILL.md"]).toBe("update");
+  expect(map[".space/skills/jspace-bootstrap/SKILL.md"]).toBe("update");
 });
 
 test("unrecorded modification -> seed skip (preserved), managed conflict", () => {
   const entries = diffBundle(
     "/wb",
     manifest,
-    deps({ "AGENTS.md": "user-edit", "skills/jspace-bootstrap/SKILL.md": "user-edit-skill" }, {}),
+    deps({ "AGENTS.md": "user-edit", ".space/skills/jspace-bootstrap/SKILL.md": "user-edit-skill" }, {}),
   );
   const map = byRel(entries);
   expect(map["AGENTS.md"]).toBe("skip"); // seed: local content kept, non-blocking
-  expect(map["skills/jspace-bootstrap/SKILL.md"]).toBe("skip");
+  expect(map[".space/skills/jspace-bootstrap/SKILL.md"]).toBe("skip");
 
   // the reserved managed class still surfaces edits as conflict
   const managedManifest: DistributionManifestV1 = {

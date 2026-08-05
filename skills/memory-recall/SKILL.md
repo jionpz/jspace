@@ -55,7 +55,7 @@ gbrain models doctor --json        # 确认 embedding_reachability(仅确认,不
 - 断言链/变体负对照/诊断终止/降级提示/canonical 面约束细则 → `references/discipline.md`
 - 换机/导入后指针解析(rel_path 重解析)→ `references/discipline.md` §8
 - 可复跑验收协议(基线/重跑)→ `references/memory-acceptance.md`
-- 写侧 embedding 降级细节 → `skills/asset-ingest/references/gbrain-write.md`
+- 写侧 embedding 降级细节 → `../asset-ingest/references/gbrain-write.md`
 
 ## Golden run
 
@@ -74,4 +74,4 @@ gbrain query "<问题>"       # top-1 == 目标 slug
 - `references/discipline.md` — 断言链/变体负对照/诊断终止/降级/换机解析
 - `references/memory-acceptance.md` — 可复跑验收协议(基线 2026-08-03 通过)
 - `references/example-recall.md` — golden run(S5 产出)
-- `skills/asset-ingest/references/gbrain-write.md` — 写侧纪律(读侧触发时参考)
+- `../asset-ingest/references/gbrain-write.md` — 写侧纪律(读侧触发时参考)
