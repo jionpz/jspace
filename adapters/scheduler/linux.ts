@@ -10,7 +10,7 @@ import { spawnSync } from "node:child_process";
 import { fail } from "../../application/errors.ts";
 import { parseSchedule } from "./schedule.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
-import { taskIdFor, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerOp } from "./types.ts";
+import { taskIdFor, posixIdentity, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerIdentity, type SchedulerOp } from "./types.ts";
 
 /** Tag-scoped managed-block markers: two workbenches never share one block. */
 export const CRON_BLOCK_START = (tag: string): string => `# jspace crons ${tag} (managed) DO NOT EDIT`;
@@ -128,6 +128,10 @@ export function parseManagedLine(line: string, tag: string): InstalledTask | nul
 
 export const linuxAdapter: SchedulerAdapter = {
   platform: "linux",
+
+  identity(tag: string, cronId: string): SchedulerIdentity {
+    return posixIdentity(tag, cronId);
+  },
 
   inspect(tag: string): InstalledTask[] {
     const out: InstalledTask[] = [];

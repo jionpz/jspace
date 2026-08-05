@@ -26,7 +26,8 @@ import { readFileSync } from "node:fs";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
 import { ASSETS } from "../assets.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
-import { cronAck, cronAdd, cronInstall, cronList, cronRemove, cronSetEnabled } from "../../application/automation/use-cases.ts";
+import { cronAck, cronAdd, cronList, cronRemove, cronSetEnabled } from "../../application/automation/use-cases.ts";
+import { cronInstall } from "../../application/automation/scheduler-service.ts";
 import { cronRun } from "../../application/automation/execute.ts";
 import { compileSkillTarget, loadCrons, parseSchedule, type SkillTargetContext } from "../../application/automation/definitions.ts";
 import { readMaterializedJournal } from "../../application/workspace/journal.ts";
@@ -43,14 +44,8 @@ import type { CronDefinition } from "../../core/contracts/cron.ts";
 import { pendingAck, pendingApply, pendingList, pendingStage } from "../../application/pending/use-cases.ts";
 import {
   schedulerAdapter,
-  taskIdFor,
 } from "../../adapters/scheduler/index.ts";
-import type { DesiredTask } from "../../application/automation/scheduler.ts";
-import { buildPlist } from "../../adapters/scheduler/types.ts";
-import { crontabBlock } from "../../adapters/scheduler/linux.ts";
-import { schtasksArgs } from "../../adapters/scheduler/win32.ts";
 import { cronFailures, cronLogDir, cronStatus, filehubRoot } from "../../application/automation/status.ts";
-import { invocationArgv } from "../../application/automation/invocation.ts";
 import { cronIsInstalledForRoot, installedCronIdsForRoot, schedulerEnv, workbenchTagFor } from "../scheduler.ts";
 import { cmdUpdate } from "../update.ts";
 
@@ -318,21 +313,13 @@ const cronInstallSpec: CommandSpec = {
   summary: "reconcile enabled crons into the platform scheduler",
   features: { dir: true, dryRun: true },
   handler: (ctx, args) => {
-    // single engine for both dry-run and real install: automation layer plans,
-    // scheduler adapter inspects/ applies; taskId is workbench-scoped.
+    // single engine for both dry-run and real install: the scheduler service
+    // owns desired compilation + platform batching; this handler only composes
+    // adapter + env and validates skill targets.
     const tag = workbenchTagFor(ctx.root);
     const adapter = schedulerAdapter(process.platform);
     if (!adapter) fail(`unsupported platform: ${process.platform}`);
-    const data = loadCrons(ctx.root);
     const env = schedulerEnv();
-    const buildDesired = (enabled: CronDefinition[]): DesiredTask[] =>
-      enabled.map((c) => ({
-        taskId: taskIdFor(tag, c.id),
-        cronId: c.id,
-        schedule: c.schedule,
-        argv: invocationArgv({ cronId: c.id, workbench: ctx.root }).join(" "),
-        content: c.id, // adapter-specific content built per-platform below
-      }));
     const validateSkillTargets = (enabled: CronDefinition[]): string | null => {
       const skillCtx: SkillTargetContext = {
         skillsManifest: SKILLS_MANIFEST,
@@ -347,43 +334,7 @@ const cronInstallSpec: CommandSpec = {
       }
       return null;
     };
-    const contentFor = (c: CronDefinition, tag: string): string => {
-      if (adapter.platform === "darwin") {
-        return buildPlist(c.id, tag, parseSchedule(c.schedule), ctx.root, env.jspaceBinary, env.home, env.path);
-      }
-      if (adapter.platform === "linux") {
-        // content carries the full block; single-cron blocks are rebuilt by the
-        // adapter on update — here we pass the per-cron line set via a minimal block
-        return c.id;
-      }
-      // win32: args array JSON-encoded (schtasks; paths may contain spaces)
-      const tn = `JSpaceCron_${tag}_${c.id}`;
-      const args = schtasksArgs(c, env.jspaceBinary, ctx.root, tn);
-      if (!args) fail(`cron ${c.id}: schedule "${c.schedule}" not supported on Windows (MVP: DAILY/WEEKLY with month=*)`);
-      return JSON.stringify(args);
-    };
-    return cronInstall(ctx.root, b(args.dryRun), {
-      tag,
-      buildDesired: (enabled) => {
-        const desired = buildDesired(enabled);
-        return desired.map((d) => ({ ...d, content: contentFor(enabled.find((e) => e.id === d.cronId)!, tag) }));
-      },
-      validateSkillTargets,
-      inspect: () => adapter.inspect(tag, env),
-      apply: (ops) => {
-        // batch by platform: darwin/win32 one op per cron; linux rebuilds block once
-        if (adapter.platform === "linux") {
-          // linux applies as a whole block: rebuild from the FULL desired set
-          // (all enabled crons in cron.json), never from ops — a delete-only op
-          // set must not wipe still-enabled crons. Empty desired → empty block
-          // removes the managed block (all-disabled uninstalls).
-          const enabled = data.crons.filter((c) => c.enabled);
-          const block = enabled.length === 0 ? "" : crontabBlock(enabled, tag, ctx.root, env.jspaceBinary, env.path, env.home);
-          return adapter.apply({ action: "create", taskId: taskIdFor(tag, enabled[0]?.id ?? "block"), content: block }, tag, ctx.root, env);
-        }
-        return ops.flatMap((o) => adapter.apply(o, tag, ctx.root, env));
-      },
-    });
+    return cronInstall(ctx.root, b(args.dryRun), { tag, adapter, env, validateSkillTargets });
   },
 };
 

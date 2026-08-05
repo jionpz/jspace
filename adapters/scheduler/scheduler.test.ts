@@ -3,9 +3,10 @@
 // Run: bun test adapters/scheduler/scheduler.test.ts
 import { expect, test } from "bun:test";
 import { taskIdFor, workbenchTag } from "./types.ts";
-import { crontabBlock, replaceManagedBlock, parseManagedLine, extractTagBlock, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
-import { schtasksArgs, isWindowsInstallable, parseOpContent, parseSchtasksXml } from "./win32.ts";
-import { plistPath, parsePlistName, plistBelongsToTag } from "./darwin.ts";
+import { linuxAdapter, crontabBlock, replaceManagedBlock, parseManagedLine, extractTagBlock, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
+import { darwinAdapter, plistPath, parsePlistName, plistBelongsToTag } from "./darwin.ts";
+import { schtasksArgs, isWindowsInstallable, parseOpContent, parseSchtasksXml, win32Adapter } from "./win32.ts";
+import { planReconciliation } from "../../application/automation/scheduler.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 
 test("workbenchTag is stable + distinct across workbench ids", () => {
@@ -243,4 +244,48 @@ test("P0: B uninstall preserves A's block", () => {
   expect(removed).toContain("cron run --dir '/wb/a'"); // A's crons survive
   expect(removed).not.toContain("cron run --dir '/wb/b'");
   expect(removed).toContain("/usr/bin/tick");
+});
+
+// ---- P0: canonical identity + reconciliation convergence ----
+// Desired and Installed taskId must come from the SAME adapter identity, so
+// planReconciliation converges (create -> no-op -> update -> delete) instead of
+// emitting a create followed by a delete for one real task.
+
+test("P0: identity single source — POSIX dotted for darwin/linux, schtasks handle for win32", () => {
+  expect(darwinAdapter.identity("tagA", "inbox").taskId).toBe("com.jspace.cron.tagA.inbox");
+  expect(linuxAdapter.identity("tagA", "inbox").taskId).toBe("com.jspace.cron.tagA.inbox");
+  const win = win32Adapter.identity("tagA", "inbox");
+  expect(win.logicalId).toBe("com.jspace.cron.tagA.inbox"); // stable cross-platform logical id
+  expect(win.taskId).toBe("JSpaceCron_tagA_inbox"); // real schtasks task-name handle
+});
+
+test("P0: win32 reconciliation converges — desired identity == inspect handle (no create+delete)", () => {
+  const tag = "tagA";
+  const cron = mkCron("inbox", "0 21 * * *");
+  const taskId = win32Adapter.identity(tag, cron.id).taskId;
+  const content = JSON.stringify(schtasksArgs(cron, "C:\\bin\\jspace.exe", "C:\\wb", taskId)!);
+  const desired = [{ taskId, cronId: cron.id, schedule: cron.schedule, argv: "cron run --id inbox --dir C:\\wb", content }];
+  const installed = [{ taskId: "JSpaceCron_tagA_inbox", cronId: "inbox", schedule: "0 21 * * *", argv: "cron run --id inbox --dir C:\\wb" }];
+  expect(planReconciliation(desired, installed)).toEqual([]); // identical -> no-op, NOT create+delete
+  const changed = [{ ...desired[0], schedule: "0 22 * * *" }];
+  expect(planReconciliation(changed, installed)).toEqual([{ action: "update", taskId, content }]); // changed -> update
+  expect(planReconciliation([], installed)).toEqual([{ action: "delete", taskId }]); // removed -> delete
+  expect(planReconciliation(desired, [])).toEqual([{ action: "create", taskId, content }]); // new -> create
+});
+
+test("P0: linux full convergence — two workbenches converge independently", () => {
+  const blockFor = (cron: CronDefinition, tag: string, root: string) => crontabBlock([cron], tag, root, "/bin/jspace", "/bin", "/home/u");
+  const install = (existing: string, cron: CronDefinition, tag: string, root: string) => replaceManagedBlock(existing, blockFor(cron, tag, root), tag);
+  let crontab = install(USER_CRONTAB, mkCron("a", "0 1 * * *"), "tagA", "/wb/a");
+  expect(crontab).toContain("cron run --dir '/wb/a'");
+  expect(install(crontab, mkCron("a", "0 1 * * *"), "tagA", "/wb/a")).toBe(crontab); // re-install identical -> no-op
+  crontab = install(crontab, mkCron("b", "0 2 * * *"), "tagB", "/wb/b");
+  expect(crontab).toContain("cron run --dir '/wb/a'");
+  expect(crontab).toContain("cron run --dir '/wb/b'"); // both coexist
+  crontab = install(crontab, mkCron("a", "0 9 * * *"), "tagA", "/wb/a"); // A updates schedule
+  expect(crontab).toContain("0 9 * * *");
+  expect(crontab).toContain("cron run --dir '/wb/b'"); // B untouched
+  crontab = replaceManagedBlock(crontab, "", "tagB"); // B uninstalls
+  expect(crontab).not.toContain("cron run --dir '/wb/b'");
+  expect(crontab).toContain("cron run --dir '/wb/a'"); // A survives
 });

@@ -5,11 +5,10 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cronAck, cronAdd, cronInstall, cronRemove, cronSetEnabled } from "./use-cases.ts";
+import { cronAck, cronAdd, cronRemove, cronSetEnabled } from "./use-cases.ts";
+import { cronInstall } from "./scheduler-service.ts";
 import { loadCrons } from "./definitions.ts";
-import { taskIdFor } from "../../adapters/scheduler/types.ts";
-import type { DesiredTask, SchedulerOp } from "./scheduler.ts";
-import type { CronDefinition } from "../../core/contracts/cron.ts";
+import { taskIdFor, posixIdentity, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerOp } from "../../adapters/scheduler/types.ts";
 
 function makeWorkbench(crons: { id: string; enabled: boolean }[]): string {
   const wb = mkdtempSync(join(tmpdir(), "jspace-cron-"));
@@ -24,63 +23,70 @@ function makeWorkbench(crons: { id: string; enabled: boolean }[]): string {
   return wb;
 }
 
-const buildDesired = (tag: string) => (enabled: CronDefinition[]): DesiredTask[] =>
-  enabled.map((c) => ({
-    taskId: taskIdFor(tag, c.id),
-    cronId: c.id,
-    schedule: "0 21 * * *",
-    argv: `cron run --id ${c.id} --dir /wb`,
-    content: "plist",
-  }));
+const env: SchedulerEnv = { jspaceBinary: "/bin/jspace", home: "/home/u", path: "/bin", resolvePath: (p) => p };
+
+const fakeAdapter = (opts: {
+  platform: SchedulerAdapter["platform"];
+  inspect: () => InstalledTask[];
+  onApply?: (op: SchedulerOp) => void;
+}): SchedulerAdapter => ({
+  platform: opts.platform,
+  identity: (tag, cronId) =>
+    opts.platform === "win32"
+      ? { logicalId: taskIdFor(tag, cronId), taskId: `JSpaceCron_${tag}_${cronId}` }
+      : posixIdentity(tag, cronId),
+  inspect: () => opts.inspect(),
+  apply: (op) => {
+    opts.onApply?.(op);
+    return [`applied ${op.taskId}`];
+  },
+  uninstallAll: () => [],
+});
 
 test("cronInstall: all-disabled -> reconciles to delete ops (no early return)", () => {
   const wb = makeWorkbench([{ id: "a", enabled: false }]);
   const tag = "abc123";
   const installed = [{ taskId: taskIdFor(tag, "old"), cronId: "old", schedule: "0 21 * * *", argv: "cron run --id old --dir /wb" }];
-  let applied: SchedulerOp[] | null = null;
+  let applied: SchedulerOp | null = null;
   const res = cronInstall(wb, false, {
     tag,
-    buildDesired: buildDesired(tag),
-    inspect: () => installed,
-    apply: (ops) => {
-      applied = ops;
-      return [];
-    },
+    adapter: fakeAdapter({ platform: "darwin", inspect: () => installed, onApply: (op) => { applied = op; } }),
+    env,
   });
-  expect(applied!).toEqual([{ action: "delete", taskId: taskIdFor(tag, "old") }]);
+  expect(applied!.action).toBe("delete");
+  expect(applied!.taskId).toBe(taskIdFor(tag, "old"));
   expect(res.lines.some((l) => l.includes("applied 1 change"))).toBe(true);
   rmSync(wb, { recursive: true, force: true });
 });
 
-test("cronInstall: enabled cron not installed -> create op", () => {
+test("cronInstall: enabled cron not installed -> create op (darwin content)", () => {
   const wb = makeWorkbench([{ id: "a", enabled: true }]);
   const tag = "abc123";
-  let applied: SchedulerOp[] | null = null;
+  let applied: SchedulerOp | null = null;
   cronInstall(wb, false, {
     tag,
-    buildDesired: buildDesired(tag),
-    inspect: () => [],
-    apply: (ops) => {
-      applied = ops;
-      return [];
-    },
+    adapter: fakeAdapter({ platform: "darwin", inspect: () => [], onApply: (op) => { applied = op; } }),
+    env,
   });
-  expect(applied!).toEqual([{ action: "create", taskId: taskIdFor(tag, "a"), content: "plist" }]);
+  const op = applied!;
+  expect(op.action).toBe("create");
+  expect(op.taskId).toBe(taskIdFor(tag, "a"));
+  if (op.action === "create") expect(op.content).toContain("<plist"); // darwin content is a real plist body
   rmSync(wb, { recursive: true, force: true });
 });
 
 test("cronInstall: identical installed state -> up to date, no apply", () => {
   const wb = makeWorkbench([{ id: "a", enabled: true }]);
   const tag = "abc123";
-  let applied: SchedulerOp[] | null = null;
+  let applied: SchedulerOp | null = null;
   const res = cronInstall(wb, false, {
     tag,
-    buildDesired: buildDesired(tag),
-    inspect: () => [{ taskId: taskIdFor(tag, "a"), cronId: "a", schedule: "0 21 * * *", argv: "cron run --id a --dir /wb" }],
-    apply: (ops) => {
-      applied = ops;
-      return [];
-    },
+    adapter: fakeAdapter({
+      platform: "darwin",
+      inspect: () => [{ taskId: taskIdFor(tag, "a"), cronId: "a", schedule: "0 21 * * *", argv: `cron run --id a --dir ${wb}` }],
+      onApply: (op) => { applied = op; },
+    }),
+    env,
   });
   expect(res.lines.some((l) => l.includes("up to date"))).toBe(true);
   expect(applied).toBeNull();
@@ -90,18 +96,34 @@ test("cronInstall: identical installed state -> up to date, no apply", () => {
 test("cronInstall: dry-run reports pending changes without applying", () => {
   const wb = makeWorkbench([{ id: "a", enabled: true }]);
   const tag = "abc123";
-  let applied: SchedulerOp[] | null = null;
+  let applied: SchedulerOp | null = null;
   const res = cronInstall(wb, true, {
     tag,
-    buildDesired: buildDesired(tag),
-    inspect: () => [],
-    apply: (ops) => {
-      applied = ops;
-      return [];
-    },
+    adapter: fakeAdapter({ platform: "darwin", inspect: () => [], onApply: (op) => { applied = op; } }),
+    env,
   });
   expect(res.lines.some((l) => l.includes("would apply 1 change"))).toBe(true);
   expect(applied).toBeNull();
+  rmSync(wb, { recursive: true, force: true });
+});
+
+test("cronInstall: linux applies one whole-block write for all enabled crons", () => {
+  const wb = makeWorkbench([{ id: "a", enabled: true }, { id: "b", enabled: true }]);
+  const tag = "abc123";
+  const applied: SchedulerOp[] = [];
+  cronInstall(wb, false, {
+    tag,
+    adapter: fakeAdapter({ platform: "linux", inspect: () => [], onApply: (op) => { applied.push(op); } }),
+    env,
+  });
+  expect(applied).toHaveLength(1); // one create op, not per-cron
+  const [op] = applied;
+  expect(op.action).toBe("create");
+  if (op.action === "create") {
+    expect(op.content).toContain("cron run --dir '");
+    expect(op.content).toContain(taskIdFor(tag, "a"));
+    expect(op.content).toContain(taskIdFor(tag, "b"));
+  }
   rmSync(wb, { recursive: true, force: true });
 });
 

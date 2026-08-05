@@ -31,8 +31,21 @@ export interface SchedulerEnv {
   resolvePath: (p: string) => string;
 }
 
+/** Canonical identity for one cron. Single source of truth for the platform
+ *  handle: desired, inspect and apply must all use `taskId` from the SAME
+ *  adapter identity (the CLI must never build task names itself). */
+export interface SchedulerIdentity {
+  /** stable logical identity (workbenchTag + cronId), platform-independent */
+  logicalId: string;
+  /** platform inspect/apply handle (plist Label / schtasks task name) */
+  taskId: string;
+}
+
 export interface SchedulerAdapter {
   readonly platform: PlatformName;
+  /** canonical platform identity for a cron (single source — never assembled
+   *  outside the adapter). */
+  identity(tag: string, cronId: string): SchedulerIdentity;
   /** tasks installed for this workbench tag (never other tags — cross-workbench safety). */
   inspect(tag: string, env: SchedulerEnv): InstalledTask[];
   /** apply one op; returns a human line for the report. */
@@ -54,6 +67,12 @@ export function workbenchTag(workbenchId: string): string {
 /** Build the platform identity for a cron. */
 export function taskIdFor(tag: string, id: string): string {
   return `com.jspace.cron.${tag}.${id}`;
+}
+
+/** POSIX identity: logicalId and platform taskId are the same dotted name
+ *  (plist Label / linux managed-block comment). */
+export function posixIdentity(tag: string, cronId: string): SchedulerIdentity {
+  return { logicalId: taskIdFor(tag, cronId), taskId: taskIdFor(tag, cronId) };
 }
 
 function xmlEscape(s: string): string {

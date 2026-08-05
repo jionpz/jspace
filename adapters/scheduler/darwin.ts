@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from "n
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fail } from "../../application/errors.ts";
-import { taskIdFor, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerOp } from "./types.ts";
+import { taskIdFor, posixIdentity, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerOp, type SchedulerIdentity } from "./types.ts";
 
 export function plistPath(tag: string, id: string, home: string): string {
   return join(home, "Library", "LaunchAgents", `${taskIdFor(tag, id)}.plist`);
@@ -71,6 +71,10 @@ function plistArgv(name: string, home: string): string {
 
 export const darwinAdapter: SchedulerAdapter = {
   platform: "darwin",
+
+  identity(tag: string, cronId: string): SchedulerIdentity {
+    return posixIdentity(tag, cronId);
+  },
 
   inspect(tag: string, env: SchedulerEnv): InstalledTask[] {
     const out: InstalledTask[] = [];

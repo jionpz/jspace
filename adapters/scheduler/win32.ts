@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { fail } from "../../application/errors.ts";
 import { parseSchedule } from "./schedule.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
-import { workbenchTag, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerOp } from "./types.ts";
+import { taskIdFor, workbenchTag, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerIdentity, type SchedulerOp } from "./types.ts";
 
 function queryTasks(tag: string): string[] {
   const res = spawnSync("schtasks", ["/query", "/fo", "csv", "/nh"], { encoding: "utf-8" });
@@ -95,6 +95,12 @@ export function parseOpContent(content: string): string[] {
 
 export const win32Adapter: SchedulerAdapter = {
   platform: "win32",
+
+  identity(tag: string, cronId: string): SchedulerIdentity {
+    // schtasks real task-name handle (matches inspect() / queryTasks()); the
+    // logical id keeps the POSIX dotted form for stable cross-platform identity.
+    return { logicalId: taskIdFor(tag, cronId), taskId: `JSpaceCron_${tag}_${cronId}` };
+  },
 
   inspect(tag: string): InstalledTask[] {
     return queryTasks(tag).map((n) => {
