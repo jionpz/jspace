@@ -12,7 +12,7 @@ export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   { path: "templates/workbench/AGENTS.md", sha256: "c28c6794a62b8531848901aa8b3dcf172940bcdca4076b1c4b4181d2d6811fbb", ownership: "seed" },
   { path: "templates/workbench/README.md", sha256: "509d53fa8057c09b598156ad5249e47d181271e8bddfc25eb2eaa3bdd079b7dd", ownership: "seed" },
   { path: "templates/filehub/README.md", sha256: "c2718edc9f96d2f4a589256dd423b688d12ffd66ab6574ae2345bb16f489a730", ownership: "managed" },
-  { path: "skills/jspace-bootstrap/SKILL.md", sha256: "b135def4a4bf8b2e4961d40fe59ef821e7755640d3993f6e482169f322f4d5f0", ownership: "seed" },
+  { path: "skills/jspace-bootstrap/SKILL.md", sha256: "fc338f3cd6ca53e0e426f424cd915696bc7d6f0e465034b0e0f6fc769e97407e", ownership: "seed" },
   { path: "skills/jspace-bootstrap/agents/openai.yaml", sha256: "d6fb2598ad72ff41a22e59ebe0f2ccc644791a816065176b3115bc0e2ee9e371", ownership: "seed" },
   { path: "skills/jspace-bootstrap/references/example-bootstrap.md", sha256: "a7e9b0b0644d1fb17402c4b0b570f7daecd1b877e77552732ca9f64ff4d9e9df", ownership: "seed" },
   { path: "skills/jspace-bootstrap/references/gbrain.md", sha256: "2a101c539486add4d5e0ccde14347dbab76c95526d7f413f43bbadeb888b0c33", ownership: "seed" },
