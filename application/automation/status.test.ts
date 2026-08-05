@@ -38,6 +38,7 @@ function makeWorkbench(opts: {
     writeFileSync(
       join(dir, `${inc.cron}-${inc.failureClass}.json`),
       JSON.stringify({
+        version: 1,
         id: `${inc.cron}-${inc.failureClass}`,
         cronId: inc.cron,
         failureClass: inc.failureClass,
@@ -54,6 +55,7 @@ function makeWorkbench(opts: {
     writeFileSync(
       join(dir, "run-1.json"),
       JSON.stringify({
+        version: 1,
         id: "run-1",
         cronId: id,
         startedAt: "2026-08-03T12:00:00",
@@ -161,5 +163,18 @@ test("cronStatus: per-cron last run and never run", () => {
 test("cronStatus: no crons -> ok line", () => {
   const wb = makeWorkbench({});
   expect(cronStatus(wb).lines).toEqual(["jspace: ok: no crons defined"]);
+  rmSync(wb, { recursive: true, force: true });
+});
+
+test("cronFailures: damaged run record -> damaged_state diagnostics, warnings, exit 1", () => {
+  const wb = makeWorkbench({ crons: ["a"], runs: { a: "ok" } });
+  writeFileSync(join(wb, ".jspace", "state", "runs", "a", "run-1.json"), "{ corrupt");
+  const r = cronFailures(wb);
+  expect(r.exitCode).toBe(1); // damaged state is attention-worthy
+  expect(r.warnings?.some((w) => w.includes("run-1.json"))).toBe(true);
+  expect(r.lines.join("\n")).toContain("damaged state records: (1)");
+  const data = r.data as FailureData & { damaged_state: unknown[]; summary: { damaged_state: number } };
+  expect(data.damaged_state).toHaveLength(1);
+  expect(data.summary.damaged_state).toBe(1);
   rmSync(wb, { recursive: true, force: true });
 });

@@ -1,0 +1,76 @@
+// core/contracts/upgrade.ts — typed workspace upgrade journal contract
+// (.jspace/state/upgrades/<id>/journal.json). Recovery-critical: drives
+// `workspace upgrade --rollback <id>`. An invalid/missing journal must fail
+// loud, never read as a no-op rollback.
+import {
+  checkNoUnknownFields,
+  failure,
+  isRecord,
+  IssueCollector,
+  readRequiredString,
+  success,
+  type DecodeResult,
+} from "./diagnostics.ts";
+
+export const UPGRADE_STATUSES = ["pending", "applied", "failed", "rolled_back"] as const;
+export type UpgradeStatus = (typeof UPGRADE_STATUSES)[number];
+
+/** Plan actions recorded in the journal (subset of diffBundle actions). */
+export const UPGRADE_ACTIONS = ["create", "update", "delete", "migrate", "conflict"] as const;
+
+export interface UpgradePlanStep {
+  action: string;
+  rel: string;
+}
+
+export interface UpgradeJournalV1 {
+  version: 1;
+  id: string;
+  from_version: string;
+  to_version: string;
+  plan: UpgradePlanStep[];
+  status: UpgradeStatus;
+}
+
+export function decodeUpgradeJournal(input: unknown): DecodeResult<UpgradeJournalV1> {
+  const issues = new IssueCollector();
+  if (!isRecord(input)) {
+    issues.add("upgrade.root.type", "upgrade", "upgrade journal must be an object");
+    return failure(issues.issues);
+  }
+  const FIELDS = ["version", "id", "from_version", "to_version", "plan", "status"] as const;
+  checkNoUnknownFields(input, FIELDS, "upgrade", "upgrade.unknown-field", issues);
+  if (input.version !== 1) {
+    issues.add("upgrade.version.unsupported", "upgrade.version", "version must be 1");
+  }
+  readRequiredString(input, "id", "upgrade", "upgrade.id.invalid", issues);
+  readRequiredString(input, "from_version", "upgrade", "upgrade.from_version.invalid", issues);
+  readRequiredString(input, "to_version", "upgrade", "upgrade.to_version.invalid", issues);
+  const status = readRequiredString(input, "status", "upgrade", "upgrade.status.invalid", issues);
+  if (status !== undefined && !(UPGRADE_STATUSES as readonly string[]).includes(status)) {
+    issues.add("upgrade.status.invalid", "upgrade.status", `status must be one of ${UPGRADE_STATUSES.join(", ")}`);
+  }
+  if (!Array.isArray(input.plan)) {
+    issues.add("upgrade.plan.invalid", "upgrade.plan", "plan must be an array of {action, rel}");
+  } else {
+    for (let i = 0; i < input.plan.length; i++) {
+      const step = input.plan[i];
+      if (!isRecord(step) || typeof step.rel !== "string" || typeof step.action !== "string") {
+        issues.add("upgrade.plan.invalid", `upgrade.plan.${i}`, `plan[${i}] must be { action: string; rel: string }`);
+        continue;
+      }
+      if (!(UPGRADE_ACTIONS as readonly string[]).includes(step.action)) {
+        issues.add("upgrade.plan.invalid", `upgrade.plan.${i}.action`, `plan[${i}].action must be one of ${UPGRADE_ACTIONS.join(", ")}`);
+      }
+    }
+  }
+  if (!issues.ok) return failure(issues.issues);
+  return success({
+    version: 1,
+    id: input.id as string,
+    from_version: input.from_version as string,
+    to_version: input.to_version as string,
+    plan: input.plan as UpgradePlanStep[],
+    status: status as UpgradeStatus,
+  });
+}

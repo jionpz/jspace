@@ -5,9 +5,10 @@
 import { join } from "node:path";
 import type { CmdResult } from "../commands/command.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
+import type { ContractIssue } from "../../core/contracts/diagnostics.ts";
 import { resolveFilehubRoot } from "../registry/filehub-lookup.ts";
 import { loadCrons } from "./definitions.ts";
-import { lastRun } from "./runs.ts";
+import { lastRun, readRuns } from "./runs.ts";
 import { readIncidents } from "./incidents.ts";
 import { readEnvelopes, envelopePath } from "../pending/envelope.ts";
 
@@ -50,19 +51,25 @@ export function cronStatus(root: string, id?: string): CmdResult {
 export function cronFailures(root: string): CmdResult {
   const ids = loadCrons(root).crons.map((c) => c.id);
 
-  const incidents = readIncidents(root);
+  const { records: incidents, issues: incidentIssues } = readIncidents(root);
   const open = incidents.filter((i) => i.status === "open");
   const acknowledged = incidents.filter((i) => i.status === "acknowledged");
   const pending = findPendingApplies(root);
+  const runIssues: ContractIssue[] = [];
   const crons = ids.map((id) => {
-    const last = lastRun(root, id);
-    return { id, status: last?.status ?? "never run" };
+    const runs = readRuns(root, id);
+    runIssues.push(...runs.issues);
+    const last = runs.records.length > 0 ? runs.records[runs.records.length - 1] : null;
+    return { id, status: last === null ? "never run" : last.status };
   });
   const failed = crons.filter((c) => c.status === "failed").length;
   const suspect = crons.filter((c) => c.status === "suspect").length;
   const neverRun = crons.filter((c) => c.status === "never run").length;
-  // alert only on open (unacknowledged) incidents or actionable pending writes
-  const needsAttention = open.length + pending.paths.length;
+  // damaged state records are attention-worthy, never silently dropped
+  const stateIssues = [...runIssues, ...incidentIssues];
+  // alert only on open (unacknowledged) incidents, actionable pending writes,
+  // or damaged machine-state records
+  const needsAttention = open.length + pending.paths.length + stateIssues.length;
 
   const data = {
     incidents: incidents.map((i) => ({
@@ -77,6 +84,7 @@ export function cronFailures(root: string): CmdResult {
     open_incidents: open.length,
     acknowledged_incidents: acknowledged.length,
     pending_applies: pending.paths,
+    damaged_state: stateIssues.map((s) => ({ code: s.code, file: s.path, message: s.message })),
     crons,
     summary: {
       failures: failed,
@@ -84,6 +92,7 @@ export function cronFailures(root: string): CmdResult {
       never_run: neverRun,
       pending_applies: pending.paths.length,
       open_incidents: open.length,
+      damaged_state: stateIssues.length,
       needs_attention: needsAttention,
     },
   };
@@ -93,9 +102,17 @@ export function cronFailures(root: string): CmdResult {
     ...open.map((i) => `  ${i.cronId} [${i.failureClass}] ${i.openedAt} evidence: ${i.evidence.join(", ")}`),
     `pending gbrain writes (APPLY.json): (${pending.paths.length})`,
     ...pending.paths.map((p) => `  ${p}`),
+    ...(stateIssues.length > 0
+      ? [`damaged state records: (${stateIssues.length})`, ...stateIssues.map((s) => `  ${s.path}: ${s.message}`)]
+      : []),
     "cron status:",
     ...crons.map((c) => `  ${c.id}: ${c.status}`),
     `needs_attention: ${needsAttention}`,
   ];
-  return { exitCode: needsAttention > 0 ? 1 : undefined, lines, data };
+  return {
+    exitCode: needsAttention > 0 ? 1 : undefined,
+    lines,
+    data,
+    warnings: stateIssues.map((s) => `${s.path}: ${s.message}`),
+  };
 }

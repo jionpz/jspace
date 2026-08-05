@@ -88,7 +88,7 @@ test("open incident -> cron.open_incidents", () => {
   mkdirSync(join(root, ".jspace", "state", "incidents"), { recursive: true });
   writeFileSync(
     join(root, ".jspace", "state", "incidents", "x-failed.json"),
-    JSON.stringify({ id: "x-failed", cronId: "x", failureClass: "failed", status: "open", openedAt: "2026-08-03T12:00:00", evidence: [] }),
+    JSON.stringify({ version: 1, id: "x-failed", cronId: "x", failureClass: "failed", status: "open", openedAt: "2026-08-03T12:00:00", evidence: [] }),
   );
   const r = doctorWorkbench(root, stubDeps());
   expect(codes(r)).toContain("cron.open_incidents");

@@ -1,6 +1,7 @@
 // application/fs.ts — tiny shared filesystem predicates used by use cases.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import type { ContractIssue, DecodeResult } from "../core/contracts/diagnostics.ts";
 
 /** Mirrors pathlib Path.is_file(): false for directories/missing paths. */
 export function isFile(p: string): boolean {
@@ -11,27 +12,41 @@ export function isFile(p: string): boolean {
   }
 }
 
-/** readdir + parse JSON + skip-corrupt repository loop, parameterized by ext,
- *  decode and sort. A corrupt/undecodable file is skipped, never fatal. */
+/** readdir + parse JSON + decode record repository loop, parameterized by ext,
+ *  decode and sort. A corrupt/undecodable file is reported as an issue (code +
+ *  filename) but never blocks reading the rest — historical collections surface
+ *  damaged records instead of silently dropping them. */
 export function readJsonRecords<T>(
   dir: string,
-  opts: { ext: string; decode: (raw: unknown) => T | null; sort?: (a: T, b: T) => number },
-): T[] {
+  opts: { ext: string; decode: (raw: unknown) => DecodeResult<T>; sort?: (a: T, b: T) => number },
+): { records: T[]; issues: ContractIssue[] } {
   let names: string[];
   try {
     names = readdirSync(dir);
   } catch {
-    return [];
+    return { records: [], issues: [] };
   }
-  const out: T[] = [];
+  const records: T[] = [];
+  const issues: ContractIssue[] = [];
   for (const n of names) {
     if (!n.endsWith(opts.ext)) continue;
+    let raw: unknown;
     try {
-      const v = opts.decode(JSON.parse(readFileSync(join(dir, n), "utf-8")));
-      if (v !== null) out.push(v);
+      raw = JSON.parse(readFileSync(join(dir, n), "utf-8"));
     } catch {
-      /* skip corrupt record */
+      issues.push({ code: `${opts.ext.replace(/^\./, "")}.json.parse`, path: n, message: `${n} is not valid JSON` });
+      continue;
+    }
+    const d = opts.decode(raw);
+    if (d.ok) {
+      records.push(d.value);
+    } else {
+      issues.push({
+        code: `${opts.ext.replace(/^\./, "")}.decode.invalid`,
+        path: n,
+        message: `${n} failed to decode: ${d.issues.map((i) => i.message).join("; ")}`,
+      });
     }
   }
-  return opts.sort ? out.sort(opts.sort) : out;
+  return { records: opts.sort ? records.sort(opts.sort) : records, issues };
 }

@@ -30,12 +30,9 @@ export function readEnvelopes(fhRoot: string): PendingWriteEnvelopeV1[] {
   // filesystem-dependent (CI caught a flaky order in cron.test.ts).
   return readJsonRecords(envelopesDir(fhRoot), {
     ext: ENVELOPE_EXT,
-    decode: (raw) => {
-      const d = decodePendingEnvelope(raw);
-      return d.ok ? d.value : null;
-    },
+    decode: decodePendingEnvelope,
     sort: (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
-  });
+  }).records;
 }
 
 export function readEnvelope(fhRoot: string, id: string): PendingWriteEnvelopeV1 {

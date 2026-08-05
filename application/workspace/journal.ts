@@ -2,22 +2,21 @@
 // materialized.json, gitignored). Records the last-applied actual file hashes
 // so workspace diff can distinguish "bundle updated" from "user modified".
 // Written by init and refreshed by upgrade/rollback; absence (old workbench /
-// fresh clone) means "no known base".
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+// fresh clone) means "no known base". Recovery-critical: a damaged journal
+// fails loud with a fix direction — never read as "no base".
+import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
+import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
+import { decodeMaterializedJournal, type MaterializedJournalV1 } from "../../core/contracts/materialized.ts";
 import { materializedRel, sha256Of } from "./manifest.ts";
 import { localDate } from "../time.ts";
+import { fail } from "../errors.ts";
 
 export const MATERIALIZED_FILE = join(CONFIG_DIR, "state", "materialized.json");
 
-export interface MaterializedJournal {
-  version: 1;
-  asset_version: string;
-  applied_at: string;
-  files: Record<string, { sha256: string }>;
-}
+export type MaterializedJournal = MaterializedJournalV1;
 
 function safeReadFile(p: string): string | null {
   try {
@@ -28,15 +27,20 @@ function safeReadFile(p: string): string | null {
 }
 
 export function readMaterializedJournal(root: string): MaterializedJournal | null {
-  const raw = safeReadFile(join(root, MATERIALIZED_FILE));
-  if (raw === null) return null;
+  const p = join(root, MATERIALIZED_FILE);
+  const raw = safeReadFile(p);
+  if (raw === null) return null; // absent = no known base (old workbench / fresh clone)
+  let parsed: unknown;
   try {
-    const j = JSON.parse(raw) as MaterializedJournal;
-    if (j.version === 1 && j.files && typeof j.files === "object") return j;
-    return null;
-  } catch {
-    return null;
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    fail(`materialized journal ${p} is not valid JSON (${(e as Error).message}); repair it or run "jspace workspace upgrade" to restore`);
   }
+  const d = decodeMaterializedJournal(parsed);
+  if (!d.ok) {
+    fail(`materialized journal ${p} is damaged: ${d.issues.map((i) => i.message).join("; ")}; repair it or run "jspace workspace upgrade" to restore`);
+  }
+  return d.value;
 }
 
 function writeJournal(root: string, bundleVersion: string, files: Record<string, { sha256: string }>): void {
@@ -48,7 +52,7 @@ function writeJournal(root: string, bundleVersion: string, files: Record<string,
   };
   const p = join(root, MATERIALIZED_FILE);
   mkdirSync(dirname(p), { recursive: true });
-  writeFileSync(p, JSON.stringify(j, null, 2) + "\n", "utf-8");
+  writeBytesAtomic(p, JSON.stringify(j, null, 2) + "\n");
 }
 
 /** Record the actual on-disk hashes of every materialized manifest file. This is

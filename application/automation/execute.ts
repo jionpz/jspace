@@ -196,6 +196,7 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   pruneLogs(root, opts.cronId, 30, deps.logDir);
 
   writeRun(root, opts.cronId, {
+    version: 1,
     id: runId,
     cronId: opts.cronId,
     startedAt: localStamp(),

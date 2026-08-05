@@ -7,8 +7,9 @@ import { dirname, join } from "node:path";
 import { fail } from "../errors.ts";
 import type { CmdResult } from "../commands/command.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
-import { readMarker, writeMarkerAtomic } from "../../adapters/fs/workbench-state.ts";
+import { readMarker, writeMarkerAtomic, writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
+import { decodeUpgradeJournal, type UpgradeJournalV1 } from "../../core/contracts/upgrade.ts";
 import { diffBundle, materializedRel } from "./manifest.ts";
 import { readMaterializedJournal, writeUpdatedMaterializedJournal } from "./journal.ts";
 import { migrateHubSchema, type HubTransform, type MigrationOutcome } from "../../core/registry/migrations.ts";
@@ -101,13 +102,7 @@ export interface UpgradeOptions {
   rollbackId?: string;
 }
 
-interface UpgradeJournal {
-  id: string;
-  from_version: string;
-  to_version: string;
-  plan: { action: string; rel: string }[];
-  status: "pending" | "applied" | "failed" | "rolled_back";
-}
+type UpgradeJournal = UpgradeJournalV1;
 
 function upgradeJournalPath(root: string, id: string): string {
   return join(root, CONFIG_DIR, "state", "upgrades", id, "journal.json");
@@ -116,13 +111,34 @@ function upgradeJournalPath(root: string, id: string): string {
 function writeUpgradeJournal(root: string, id: string, journal: UpgradeJournal): void {
   const p = upgradeJournalPath(root, id);
   mkdirSync(dirname(p), { recursive: true });
-  writeFileSync(p, JSON.stringify(journal, null, 2) + "\n", "utf-8");
+  writeBytesAtomic(p, JSON.stringify({ ...journal, version: 1 }, null, 2) + "\n");
+}
+
+/** Read an upgrade journal; fail loud on a damaged journal — a rollback must
+ *  never silently treat an unreadable journal as "nothing to do". */
+function readUpgradeJournal(root: string, id: string): UpgradeJournal {
+  const journalPath = upgradeJournalPath(root, id);
+  let raw: string;
+  try {
+    raw = readFileSync(journalPath, "utf-8");
+  } catch {
+    fail(`no upgrade journal: ${id} (${journalPath})`);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    fail(`upgrade journal ${journalPath} is not valid JSON (${(e as Error).message}); fix it before rolling back`);
+  }
+  const d = decodeUpgradeJournal(parsed);
+  if (!d.ok) {
+    fail(`upgrade journal ${journalPath} is damaged: ${d.issues.map((i) => i.message).join("; ")}; fix it before rolling back`);
+  }
+  return d.value;
 }
 
 function rollbackUpgrade(root: string, id: string, deps: UpgradeDeps): CmdResult {
-  const journalPath = upgradeJournalPath(root, id);
-  if (!existsSync(journalPath)) fail(`no upgrade journal: ${id}`);
-  const journal = JSON.parse(readFileSync(journalPath, "utf-8")) as UpgradeJournal;
+  const journal = readUpgradeJournal(root, id);
   const backupDir = join(root, CONFIG_DIR, "state", "upgrades", id);
   for (const step of journal.plan) {
     const beforePath = join(backupDir, "before", step.rel);
@@ -211,6 +227,7 @@ export function workspaceUpgrade(
   const id = crypto.randomUUID();
   const backupDir = join(root, CONFIG_DIR, "state", "upgrades", id);
   const journal: UpgradeJournal = {
+    version: 1,
     id,
     from_version: marker.value.template_version,
     to_version: deps.manifest.bundle_version,

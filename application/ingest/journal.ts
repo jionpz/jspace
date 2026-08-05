@@ -91,12 +91,9 @@ export function writeJournal(root: string, j: IngestJournalV1): void {
 export function readJournals(root: string): IngestJournalV1[] {
   return readJsonRecords(dir(root), {
     ext: ".json",
-    decode: (raw) => {
-      const d = decodeIngestJournal(raw);
-      return d.ok ? d.value : null;
-    },
+    decode: decodeIngestJournal,
     sort: (a, b) => a.createdAt.localeCompare(b.createdAt),
-  });
+  }).records;
 }
 
 export function readJournal(root: string, id: string): IngestJournalV1 {

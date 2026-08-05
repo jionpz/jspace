@@ -10,7 +10,7 @@ import type { RegistryDiagnostic } from "../../core/contracts/diagnostics.ts";
 import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
 import { inspectWorkbench, type InspectEnv } from "../../core/registry/inspect.ts";
 import { primaryPathForResourceType, resolveEffectiveRegistry } from "../../core/registry/effective.ts";
-import { openIncidents } from "../automation/incidents.ts";
+import { readIncidents } from "../automation/incidents.ts";
 import { readEnvelopes } from "../pending/envelope.ts";
 import { isFile } from "../fs.ts";
 
@@ -110,13 +110,22 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
       }
     }
   }
-  const openCron = openIncidents(root);
+  const incRead = readIncidents(root);
+  const openCron = incRead.records.filter((i) => i.status === "open");
   if (openCron.length > 0) {
     diags.push({
       severity: "warning",
       code: "cron.open_incidents",
       path: "cron",
       message: `${openCron.length} open cron incident(s): ${openCron.map((i) => `${i.cronId}[${i.failureClass}]`).join(", ")} (check with jspace cron failures)`,
+    });
+  }
+  for (const issue of incRead.issues) {
+    diags.push({
+      severity: "warning",
+      code: "cron.incident_decode",
+      path: `incidents.${issue.path}`,
+      message: `incident record unreadable: ${issue.message}`,
     });
   }
 

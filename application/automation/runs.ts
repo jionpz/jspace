@@ -5,23 +5,14 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
+import { decodeRunRecord, type RunRecordV1 } from "../../core/contracts/run-record.ts";
 import { readJsonRecords } from "../fs.ts";
+import type { ContractIssue } from "../../core/contracts/diagnostics.ts";
 
 const RUNS_DIR = join(CONFIG_DIR, "state", "runs");
 
-export type RunStatus = "ok" | "suspect" | "failed";
-
-export interface RunRecord {
-  id: string;
-  cronId: string;
-  startedAt: string;
-  exit: number | null;
-  status: RunStatus;
-  timedOut: boolean;
-  /** prose log path (human payload) */
-  outputLog: string;
-  batchChanged: boolean;
-}
+export type { RunStatus } from "../../core/contracts/run-record.ts";
+export type RunRecord = RunRecordV1;
 
 function runsDir(root: string, cronId: string): string {
   return join(root, RUNS_DIR, cronId);
@@ -30,21 +21,24 @@ function runsDir(root: string, cronId: string): string {
 export function writeRun(root: string, cronId: string, record: RunRecord): void {
   const dir = runsDir(root, cronId);
   mkdirSync(dir, { recursive: true });
-  writeBytesAtomic(join(dir, `${record.id}.json`), JSON.stringify(record, null, 2) + "\n");
+  writeBytesAtomic(join(dir, `${record.id}.json`), JSON.stringify({ ...record, version: 1 }, null, 2) + "\n");
 }
 
-export function readRuns(root: string, cronId: string): RunRecord[] {
+export interface RunCollection {
+  records: RunRecord[];
+  /** damaged/corrupt run files in this cron's runs dir (never silently dropped). */
+  issues: ContractIssue[];
+}
+
+export function readRuns(root: string, cronId: string): RunCollection {
   return readJsonRecords(runsDir(root, cronId), {
     ext: ".json",
-    decode: (raw) => {
-      const r = raw as RunRecord;
-      return r && typeof r.status === "string" ? r : null;
-    },
+    decode: decodeRunRecord,
     sort: (a, b) => a.startedAt.localeCompare(b.startedAt),
   });
 }
 
 export function lastRun(root: string, cronId: string): RunRecord | null {
-  const runs = readRuns(root, cronId);
-  return runs.length > 0 ? runs[runs.length - 1] : null;
+  const { records } = readRuns(root, cronId);
+  return records.length > 0 ? records[records.length - 1] : null;
 }
