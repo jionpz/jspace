@@ -215,7 +215,7 @@ const projectAddSpec: CommandSpec = {
   features: { dir: true, dryRun: true },
   options: [
     { name: "--domain", takesValue: true, help: "owning domain id (default: files)" },
-    { name: "--asset-rel-path", takesValue: true, help: "asset root rel path under filehub (default: projects/<id>)" },
+    { name: "--asset-rel-path", dest: "assetRelPath", takesValue: true, help: "asset root rel path under filehub (default: projects/<id>)" },
   ],
   handler: (ctx, args) =>
     projectAdd(

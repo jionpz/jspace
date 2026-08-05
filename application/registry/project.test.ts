@@ -13,8 +13,12 @@ import { domainAdd } from "./domain.ts";
 import { resourceAdd } from "./resource.ts";
 import { projectAdd, projectList } from "./project.ts";
 import { ingestBegin } from "../ingest/use-cases.ts";
+import { parse, type CmdContext, type CommandSpec } from "../commands/command.ts";
+import { COMMANDS } from "../../cli/commands/registry.ts";
 
 const initDeps = { resolvePath, expandTilde, isCompiled, devRoot, materialize: materializeTree, manifest: BUNDLE_MANIFEST };
+
+const ROOT: CommandSpec = { name: "", summary: "", children: COMMANDS };
 
 let root: string;
 beforeEach(() => {
@@ -96,4 +100,27 @@ test("registered project removes the ingest not-registered warning", () => {
     project: "books",
   });
   expect(registered.lines.some((l) => l.includes("not registered"))).toBe(false);
+});
+
+test("--asset-rel-path argv binds to args.assetRelPath via dest (regression)", () => {
+  const out = parse(["project", "add", "books", "--asset-rel-path", "projects/books/docs"], ROOT);
+  expect(out.kind).toBe("run");
+  const r = out as { args: Record<string, unknown> };
+  expect(r.args.assetRelPath).toBe("projects/books/docs");
+  expect(r.args.domain).toBeUndefined();
+});
+
+test("project add --asset-rel-path via real parser writes the override", () => {
+  domainAdd(root, "files", undefined, undefined, undefined, false);
+  const out = parse(["project", "add", "books", "--asset-rel-path", "projects/books/docs"], ROOT);
+  expect(out.kind).toBe("run");
+  const r = out as { args: Record<string, unknown>; spec: CommandSpec };
+  const ctx: CmdContext = { root, json: false, dryRun: false, dir: undefined, cwd: root };
+  r.spec.handler?.(ctx, r.args);
+  expect(loadHub(root).projects[0].asset_rel_path).toBe("projects/books/docs");
+});
+
+test("project add rejects non-portable asset_rel_path (.. segment)", () => {
+  domainAdd(root, "files", undefined, undefined, undefined, false);
+  expect(() => projectAdd(root, "books", "files", "projects/../x", false)).toThrow();
 });

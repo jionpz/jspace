@@ -22,7 +22,7 @@ export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   { path: "skills/asset-ingest/SKILL.md", sha256: "c70f259e2bef364c415dec427067f8664711edc1d05a1136f979d072cec8b00a", ownership: "managed" },
   { path: "skills/asset-ingest/references/batch.md", sha256: "8e98250cf8f14779fbb4627a22f61051fae487c19d1eccb561f0f909dd0d8744", ownership: "managed" },
   { path: "skills/asset-ingest/references/deep-extract.md", sha256: "7617b5779c71cf7190d2a33b9f34c6114c7dfe86dd5ac5ee3d13ce94b54641dd", ownership: "managed" },
-  { path: "skills/asset-ingest/references/example-ingest.md", sha256: "bc7a4bff21e13279c74cc44017f934720f5cfbaa24f36e1871bc47fbceca568d", ownership: "managed" },
+  { path: "skills/asset-ingest/references/example-ingest.md", sha256: "867f2a4fa5542a7c083e39626ae0637293580420f4f6a12d9b2d4c44ffafad29", ownership: "managed" },
   { path: "skills/asset-ingest/references/filing.md", sha256: "b29859f0761ecc43d4c0d8948062dd6e9d0624c611ab5c45937dc7aa9e3e819b", ownership: "managed" },
   { path: "skills/asset-ingest/references/gbrain-write.md", sha256: "d96cd8ecee502f5d57d2a8edc2d0d64c4b5f945fd68d2c040a7d52f21e7a4b78", ownership: "managed" },
   { path: "skills/asset-ingest/references/migration.md", sha256: "760de2fb0f4e5bdd66ec0c9037b2b57b2ea7f54ae3d74a52e09beea32da5baf0", ownership: "managed" },
