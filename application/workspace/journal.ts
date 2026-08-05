@@ -68,3 +68,31 @@ export function writeActualMaterializedJournal(root: string, manifest: Distribut
   }
   writeJournal(root, manifest.bundle_version, files);
 }
+
+/** Write an updated journal after an upgrade/rollback. Only files the upgrade
+ *  actually wrote (create/update/migrate) refresh their recorded base to the
+ *  on-disk hash. Preserved files (skipped because the user modified them, or of
+ *  unknown origin with no prior record) keep their prior recorded base — a
+ *  preserved edit is never promoted to the applied base, so a later upgrade
+ *  cannot mistake it for "unmodified since last apply" and refresh it away.
+ *  A file with no prior record stays unrecorded (unknown origin, preserved on
+ *  every upgrade). */
+export function writeUpdatedMaterializedJournal(
+  root: string,
+  manifest: DistributionManifestV1,
+  appliedRels: ReadonlySet<string>,
+): void {
+  const prior = readMaterializedJournal(root)?.files ?? {};
+  const files: Record<string, { sha256: string }> = {};
+  for (const f of manifest.files) {
+    const rel = materializedRel(f.path);
+    if (rel === null) continue;
+    if (appliedRels.has(rel)) {
+      const content = safeReadFile(join(root, rel));
+      if (content !== null) files[rel] = { sha256: sha256Of(content) };
+      continue;
+    }
+    if (prior[rel] !== undefined) files[rel] = prior[rel];
+  }
+  writeJournal(root, manifest.bundle_version, files);
+}

@@ -2,15 +2,17 @@
 // Run: bun test application/workspace/manifest.test.ts
 import { expect, test } from "bun:test";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
-import { diffBundle, materializedRel, ownershipFor, sha256Of } from "./manifest.ts";
+import { diffBundle, materializedRel, ownershipFor, recreateOnMissing, sha256Of } from "./manifest.ts";
 
 const manifest: DistributionManifestV1 = {
   version: 1,
   bundle_version: "1.0.2",
   files: [
-    { path: "templates/workbench/AGENTS.md", sha256: sha256Of("new-agents"), ownership: "managed" },
-    { path: "templates/workbench/README.md", sha256: sha256Of("new-readme"), ownership: "managed" },
-    { path: "skills/jspace-bootstrap/SKILL.md", sha256: sha256Of("new-skill"), ownership: "managed" },
+    { path: "templates/workbench/AGENTS.md", sha256: sha256Of("new-agents"), ownership: "seed" },
+    { path: "templates/workbench/README.md", sha256: sha256Of("new-readme"), ownership: "seed" },
+    { path: "templates/workbench/.jspace/hub.json", sha256: sha256Of("new-hub"), ownership: "user" },
+    { path: "templates/workbench/.jspace/cron.json", sha256: sha256Of("new-cron"), ownership: "user" },
+    { path: "skills/jspace-bootstrap/SKILL.md", sha256: sha256Of("new-skill"), ownership: "seed" },
     { path: "templates/filehub/README.md", sha256: sha256Of("fh"), ownership: "managed" },
   ],
 };
@@ -30,9 +32,24 @@ function byRel(entries: ReturnType<typeof diffBundle>): Record<string, string> {
   return Object.fromEntries(entries.map((e) => [e.rel, e.action]));
 }
 
-test("ownershipFor and materializedRel map bundle keys", () => {
-  expect(ownershipFor("skills/x/SKILL.md")).toBe("managed"); // skills revised seed->managed (Child D)
-  expect(ownershipFor("templates/workbench/AGENTS.md")).toBe("managed");
+test("ownershipFor maps bundle keys to the three ownership tiers", () => {
+  expect(ownershipFor("templates/workbench/AGENTS.md")).toBe("seed");
+  expect(ownershipFor("templates/workbench/README.md")).toBe("seed");
+  expect(ownershipFor("templates/workbench/.gitignore")).toBe("seed");
+  expect(ownershipFor("templates/workbench/.claude/settings.json")).toBe("seed");
+  expect(ownershipFor("templates/workbench/.jspace/hub.json")).toBe("user");
+  expect(ownershipFor("templates/workbench/.jspace/cron.json")).toBe("user");
+  expect(ownershipFor("skills/jspace-bootstrap/SKILL.md")).toBe("seed");
+  expect(ownershipFor("templates/filehub/README.md")).toBe("managed"); // not materialized, reserved class
+});
+
+test("recreateOnMissing: hub.json recovers, cron.json deletion respected", () => {
+  expect(recreateOnMissing(".jspace/hub.json")).toBe(true);
+  expect(recreateOnMissing(".jspace/cron.json")).toBe(false);
+  expect(recreateOnMissing("AGENTS.md")).toBe(true);
+});
+
+test("materializedRel maps workbench + skills, skips filehub", () => {
   expect(materializedRel("templates/workbench/AGENTS.md")).toBe("AGENTS.md");
   expect(materializedRel("skills/jspace-bootstrap/SKILL.md")).toBe("skills/jspace-bootstrap/SKILL.md");
   expect(materializedRel("templates/filehub/README.md")).toBeNull(); // on-demand, not in workbench
@@ -46,16 +63,20 @@ test("freshness: matching -> no-op; missing -> create; filehub skipped", () => {
       "AGENTS.md": "new-agents",
       "README.md": "new-readme",
       "skills/jspace-bootstrap/SKILL.md": "new-skill",
+      ".jspace/hub.json": "new-hub",
+      ".jspace/cron.json": "new-cron",
     }),
   );
   const map = byRel(entries);
   expect(map["AGENTS.md"]).toBe("no-op");
   expect(map["README.md"]).toBe("no-op");
   expect(map["skills/jspace-bootstrap/SKILL.md"]).toBe("no-op");
+  expect(map[".jspace/hub.json"]).toBe("no-op");
+  expect(map[".jspace/cron.json"]).toBe("no-op");
   expect(entries.some((e) => e.rel === "templates/filehub/README.md")).toBe(false);
 });
 
-test("recorded base -> update (managed)", () => {
+test("recorded base + bundle forward -> seed refreshes (update)", () => {
   const entries = diffBundle(
     "/wb",
     manifest,
@@ -68,19 +89,56 @@ test("recorded base -> update (managed)", () => {
     ),
   );
   const map = byRel(entries);
-  expect(map["AGENTS.md"]).toBe("update");
-  expect(map["skills/jspace-bootstrap/SKILL.md"]).toBe("update"); // managed: refreshed on upgrade
+  expect(map["AGENTS.md"]).toBe("update"); // seed: unmodified -> refreshed
+  expect(map["skills/jspace-bootstrap/SKILL.md"]).toBe("update");
 });
 
-test("unrecorded modification -> conflict (managed)", () => {
+test("unrecorded modification -> seed skip (preserved), managed conflict", () => {
   const entries = diffBundle(
     "/wb",
     manifest,
     deps({ "AGENTS.md": "user-edit", "skills/jspace-bootstrap/SKILL.md": "user-edit-skill" }, {}),
   );
   const map = byRel(entries);
-  expect(map["AGENTS.md"]).toBe("conflict");
-  expect(map["skills/jspace-bootstrap/SKILL.md"]).toBe("conflict"); // local edit protected
+  expect(map["AGENTS.md"]).toBe("skip"); // seed: local content kept, non-blocking
+  expect(map["skills/jspace-bootstrap/SKILL.md"]).toBe("skip");
+
+  // the reserved managed class still surfaces edits as conflict
+  const managedManifest: DistributionManifestV1 = {
+    version: 1,
+    bundle_version: "1",
+    files: [{ path: "templates/workbench/.gitignore", sha256: sha256Of("new"), ownership: "managed" }],
+  };
+  const managed = byRel(diffBundle("/wb", managedManifest, deps({ ".gitignore": "user-edit" }, {})));
+  expect(managed[".gitignore"]).toBe("conflict");
+});
+
+test("user data: edits and bundle drift are preserved (skip), never refreshed", () => {
+  const entries = diffBundle(
+    "/wb",
+    manifest,
+    deps(
+      {
+        ".jspace/hub.json": "user-hub-data", // edit (differs from bundle + recorded)
+        ".jspace/cron.json": "old-cron-data", // matches recorded -> bundle moved forward
+      },
+      {
+        ".jspace/hub.json": { sha256: sha256Of("new-hub") },
+        ".jspace/cron.json": { sha256: sha256Of("old-cron-data") },
+      },
+    ),
+  );
+  const map = byRel(entries);
+  expect(map[".jspace/hub.json"]).toBe("skip"); // user: local content kept
+  expect(map[".jspace/cron.json"]).toBe("skip"); // user: never refresh
+});
+
+test("user data deletion: hub.json recreated (recovery), cron.json respected", () => {
+  const entries = diffBundle("/wb", manifest, deps({}, {}));
+  const map = byRel(entries);
+  expect(map[".jspace/hub.json"]).toBe("create"); // empty registry recovery
+  expect(map[".jspace/cron.json"]).toBe("skip"); // deliberate "no cron" stays deleted
+  expect(map["AGENTS.md"]).toBe("create"); // seed template re-created when missing
 });
 
 test("recorded but no longer in bundle -> stale", () => {

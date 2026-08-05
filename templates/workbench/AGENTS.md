@@ -137,6 +137,10 @@ When the user says "开发模式" and wants to maintain the JSpace CLI/templates
 2. Go to the JSpace development repository the user maintains (register it first via `jspace domain add` / `jspace resource add` if not already registered); read its `AGENTS.md` and follow its own workflow for non-trivial changes.
 3. After template/CLI changes, re-run `jspace init --force .` or reinitialize a fresh workbench, then run `jspace doctor --dir .`.
 
+## Workspace Upgrade & Ownership
+
+`jspace workspace upgrade` 只动材料化清单内的文件。模板文件(README/AGENTS/.gitignore/.claude 设置/打包技能)未修改则随升级刷新,本地修改过的一律保留(显示 `skip`,不阻断);`.jspace/hub.json` 与 `.jspace/cron.json` 是用户数据,升级永不覆盖,`workspace/`、`filehub/` 等用户预留区永不触碰。边界与判断方法见 README「目录边界与升级范围」。
+
 ## Confirmation Rules
 
 Ask before:

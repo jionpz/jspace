@@ -11,13 +11,27 @@ export function sha256Of(content: string): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
-/** Ownership by bundle-key prefix. All bundled content is managed: upgrade
- *  refreshes an unmodified file and reports conflict for a locally modified
- *  one. skills were previously seed (created once, never overwritten); revised
- *  to managed in Child D so bundled skills refresh on upgrade (F2 closure for
- *  existing workbenches) while local edits stay protected via conflict. */
-export function ownershipFor(_rel: string): AssetOwnership {
+/** Ownership by bundle-key prefix. Three tiers drive diff/upgrade:
+ *  - seed: user-customizable templates (README/AGENTS/.gitignore/.claude
+ *    settings + bundled skills). Upgrade refreshes an unmodified file and
+ *    preserves a locally modified one (skip, non-blocking).
+ *  - user: user data under .jspace/ (hub.json registry, cron.json definitions).
+ *    Upgrade never overwrites them; schema evolution goes through migration.
+ *  - managed: reserved force-replace class (currently unused). Upgrade
+ *    refreshes and --accept-conflicts force-overwrites a local edit. */
+export function ownershipFor(key: string): AssetOwnership {
+  if (key.startsWith("skills/")) return "seed";
+  if (key.startsWith("templates/workbench/.jspace/")) return "user";
+  if (key.startsWith("templates/workbench/")) return "seed";
   return "managed";
+}
+
+/** User data files are recreated by upgrade when missing AND this returns true.
+ *  hub.json missing = broken registry (doctor errors) -> recreate an empty one
+ *  for recovery. cron.json missing = deliberate "no cron" state (the user
+ *  deleted the file) -> respect the deletion and never recreate it. */
+export function recreateOnMissing(rel: string): boolean {
+  return rel !== ".jspace/cron.json";
 }
 
 /** Map a bundle manifest key to the workbench-relative path it materializes to,
@@ -55,7 +69,15 @@ export function diffBundle(root: string, manifest: DistributionManifestV1, deps:
     if (rel === null) continue; // filehub skeleton is checked by filehub init
     const current = deps.readFile(join(root, rel));
     if (current === null) {
-      out.push({ rel, ownership: f.ownership, action: "create", reason: "missing" });
+      // user data: hub.json missing -> recreate empty for recovery; cron.json
+      // missing -> a deliberate "no cron" state, keep it deleted.
+      const keepDeleted = f.ownership === "user" && !recreateOnMissing(rel);
+      out.push({
+        rel,
+        ownership: f.ownership,
+        action: keepDeleted ? "skip" : "create",
+        reason: keepDeleted ? "user: deletion respected" : "missing",
+      });
       continue;
     }
     const currentSha = sha256Of(current);
@@ -63,21 +85,26 @@ export function diffBundle(root: string, manifest: DistributionManifestV1, deps:
     if (currentSha === f.sha256) {
       out.push({ rel, ownership: f.ownership, action: "no-op", reason: "up to date", currentSha });
     } else if (recorded !== undefined && currentSha === recorded) {
-      // matches the last applied state -> the bundle moved forward; safe to update
+      // matches the last applied state -> the bundle moved forward. seed and
+      // managed refresh; user never refreshes (data stays on disk).
+      const skip = f.ownership === "user";
       out.push({
         rel,
         ownership: f.ownership,
-        action: f.ownership === "seed" ? "skip" : "update",
-        reason: f.ownership === "seed" ? "seed: never overwrite" : "bundle updated",
+        action: skip ? "skip" : "update",
+        reason: skip ? "user: never refresh" : "bundle updated",
         currentSha,
       });
     } else {
-      // neither the expected nor the recorded hash -> user modified it
+      // neither the expected nor the recorded hash -> user modified it. seed
+      // and user edits are preserved (skip, non-blocking); only managed edits
+      // surface as conflict (force-overwritable via --accept-conflicts).
+      const conflict = f.ownership === "managed";
       out.push({
         rel,
         ownership: f.ownership,
-        action: f.ownership === "seed" ? "skip" : "conflict",
-        reason: f.ownership === "seed" ? "seed: local content kept" : "locally modified",
+        action: conflict ? "conflict" : "skip",
+        reason: conflict ? "locally modified" : `${f.ownership}: local content kept`,
         currentSha,
       });
     }
