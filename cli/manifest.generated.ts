@@ -9,7 +9,7 @@ export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   { path: "templates/workbench/.gitignore", sha256: "0f2e16c43f69d5da1cbffb1ff533c71f45eebe132b475471f0c014f6d204fd55", ownership: "seed" },
   { path: "templates/workbench/.jspace/cron.json", sha256: "c21a4fa6e95af86c485a3226871541f720c78179b381ddeb0dc7241ecb3ae3b2", ownership: "user" },
   { path: "templates/workbench/.jspace/hub.json", sha256: "d30ccf5cbcfd59ef4e5d2d21ef989d59c831587614a6ec66cb2d91c4441b55e7", ownership: "user" },
-  { path: "templates/workbench/AGENTS.md", sha256: "a2348aef6820ee6ed04abf79f50cefbe2fc2c19f0143311f845f809ffcbd9e3f", ownership: "seed" },
+  { path: "templates/workbench/AGENTS.md", sha256: "c536305071db4150bdeb18fcdc95f8cc093fcbc875974d440a6839d2c5ea55ce", ownership: "seed" },
   { path: "templates/workbench/README.md", sha256: "355e635098d93d2484777935fee5707d6b0eeed2cf87e04bfa326c39e7f25bad", ownership: "seed" },
   { path: "templates/filehub/README.md", sha256: "c2718edc9f96d2f4a589256dd423b688d12ffd66ab6574ae2345bb16f489a730", ownership: "managed" },
   { path: "skills/jspace-bootstrap/SKILL.md", sha256: "fe6655d0ee2f520de7b3c3f8265c2c72e2b6124aafcc3ad7b5bdd2e3b219a904", ownership: "seed" },

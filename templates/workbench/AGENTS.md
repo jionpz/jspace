@@ -141,6 +141,24 @@ When the user says "开发模式" and wants to maintain the JSpace CLI/templates
 
 `jspace workspace upgrade` 只动材料化清单内的文件。模板文件(README/AGENTS/.gitignore/.claude 设置/打包技能)未修改则随升级刷新,本地修改过的一律保留(显示 `skip`,不阻断);`.jspace/hub.json` 与 `.jspace/cron.json` 是用户数据,升级永不覆盖,`workspace/`、`filehub/` 等用户预留区永不触碰。边界与判断方法见 README「目录边界与升级范围」。
 
+## Agents
+
+Agent 定义是**声明式**的:作为上下文读取、按描述扮演,不物化成各 harness 的 agent 文件(`~/.claude/agents/` 等仍归各 harness 系统 agent 所有)。归属按"覆盖面最小的那一层",上层被引用、不复制:
+
+| 适用范围 | 归属 |
+| --- | --- |
+| 用户个人 agents(跨机器 / 所有项目) | 全局 `~/.agents/agents.md` 的 `# agents` 段(用户定义,对象标签格式见下) |
+| 工作台能力 agents(本工作台) | 本文件 `## Agents` 段(工作台能力见下方「Approved workbench skills」) |
+| 项目专属 agents(单项目) | 项目根 `AGENTS.md` |
+
+本工作台以 agent 形态提供的能力 = 下方「Approved workbench skills」的 4 个 skill(**skill 即 agent 形态**):`jspace-bootstrap` / `asset-ingest` / `memory-recall` / `memory-writeback`——按需读取对应 SKILL.md,不在此重复。
+
+**项目级继承**:在项目根 `AGENTS.md` 顶部加一行——
+> Agents:读 `~/.agents/agents.md`(用户级)+ 工作台 `AGENTS.md`(如在此工作台下);本项目只定义项目专属 agents。
+
+**对象标签格式**(用户写个人 agents 时参考,模仿 Trellis agent frontmatter):`name` 唯一短名;`description` 一句"做什么 / 何时用 / 不用什么";`labels` 触发关键词;正文 = 扮演说明(可选)。例:
+- **`jspace-bootstrap`**:首次配置工作台(gbrain 记忆库 + 注册表 + harness 接线)。Use when 初始化/配置 jspace。Do NOT use for 资料入库(→asset-ingest)。
+
 ## Confirmation Rules
 
 Ask before:
