@@ -1,3 +1,8 @@
+# Cross-platform line-ending normalization: every checkout (incl. Windows git
+# autocrlf) uses LF so embedded-asset sha256 hashes and frontmatter parsing are
+# byte-identical on every platform (CRLF checkouts broke gen-assets on Windows CI).
+* text=auto eol=lf
+
 # Trellis: append-only developer journals should merge cleanly across
 # parallel sessions/worktrees — each session only appends a new block, so
 # there is nothing to actually conflict on.

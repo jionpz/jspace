@@ -27,10 +27,13 @@ const GOV_END = "<!-- TRELLIS-SKILL-GOV:END -->";
  * all other keys are ignored. Returns null when the file has no frontmatter.
  */
 export function parseSkillFrontmatter(raw: string): SkillFrontmatter | null {
-  if (!raw.startsWith("---\n")) return null;
-  const end = raw.indexOf("\n---", 4);
+  // Normalize CRLF checkouts (Windows git autocrlf) before parsing — frontmatter
+  // fences must be recognized identically on every platform, not just LF.
+  const text = raw.replace(/\r\n/g, "\n");
+  if (!text.startsWith("---\n")) return null;
+  const end = text.indexOf("\n---", 4);
   if (end < 0) return null;
-  const fm = raw.slice(4, end);
+  const fm = text.slice(4, end);
   let name = "";
   let description = "";
   const triggers: string[] = [];
