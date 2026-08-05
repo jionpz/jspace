@@ -25,6 +25,13 @@ export function parsePlistName(name: string): { taskId: string; tag: string; cro
   return { taskId: m[1] + m[2] + "." + m[3], tag: m[2], cronId: m[3] };
 }
 
+/** Pure: is this plist file name an installed task of the given workbench tag?
+ *  Cross-workbench safety: a mismatched (or legacy untagged) plist is never ours. */
+export function plistBelongsToTag(name: string, tag: string): boolean {
+  const parsed = parsePlistName(name);
+  return parsed !== null && parsed.tag === tag;
+}
+
 /** Extract the StartCalendarInterval dict keys as a canonical schedule string
  *  (matches the cron.json `0 3 * * *` shape when mapped back). We only need
  *  enough to detect drift vs cron.json, not a full round-trip. */
@@ -68,9 +75,8 @@ export const darwinAdapter: SchedulerAdapter = {
   inspect(tag: string, env: SchedulerEnv): InstalledTask[] {
     const out: InstalledTask[] = [];
     for (const name of listPlists(env.home)) {
-      const parsed = parsePlistName(name);
-      if (!parsed) continue; // not ours (malformed — leave alone)
-      if (parsed.tag !== tag) continue; // another workbench's agent — never touch
+      if (!plistBelongsToTag(name, tag)) continue; // other workbench / legacy untagged — never touch
+      const parsed = parsePlistName(name)!;
       out.push({
         taskId: parsed.taskId,
         cronId: parsed.cronId,
@@ -104,8 +110,7 @@ export const darwinAdapter: SchedulerAdapter = {
   uninstallAll(tag: string, root: string, env: SchedulerEnv): string[] {
     const lines: string[] = [];
     for (const name of listPlists(env.home)) {
-      const parsed = parsePlistName(name);
-      if (!parsed || parsed.tag !== tag) continue;
+      if (!plistBelongsToTag(name, tag)) continue;
       const p = join(env.home, "Library", "LaunchAgents", name);
       spawnSync("launchctl", ["unload", p]); // tolerate not-loaded
       if (existsSync(p)) unlinkSync(p);

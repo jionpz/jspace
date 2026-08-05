@@ -2,10 +2,11 @@
 // Covers the cron-convergence change: all-disabled no longer early-returns but
 // reconciles to delete ops; enabled-but-uninstalled creates; matching is a no-op.
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cronInstall } from "./use-cases.ts";
+import { cronAck, cronAdd, cronInstall, cronRemove, cronSetEnabled } from "./use-cases.ts";
+import { loadCrons } from "./definitions.ts";
 import { taskIdFor } from "../../adapters/scheduler/types.ts";
 import type { DesiredTask, SchedulerOp } from "./scheduler.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
@@ -101,5 +102,50 @@ test("cronInstall: dry-run reports pending changes without applying", () => {
   });
   expect(res.lines.some((l) => l.includes("would apply 1 change"))).toBe(true);
   expect(applied).toBeNull();
+  rmSync(wb, { recursive: true, force: true });
+});
+
+test("cronAdd validates + persists; duplicate/invalid rejected", () => {
+  const wb = makeWorkbench([]);
+  const deps = { isInstalled: () => false };
+  const r = cronAdd(wb, "inbox-tidy", "0 21 * * *", "claude", "tidy", false, deps);
+  expect(r.lines[0]).toContain("added cron: inbox-tidy");
+  const data = JSON.parse(readFileSync(join(wb, ".jspace", "cron.json"), "utf-8"));
+  expect(data.crons).toHaveLength(1);
+  expect(() => cronAdd(wb, "inbox-tidy", "0 21 * * *", "claude", "x", false, deps)).toThrow(/duplicate cron id/);
+  expect(() => cronAdd(wb, "BAD ID", "0 21 * * *", "claude", "x", false, deps)).toThrow(/invalid cron id/);
+  expect(() => cronAdd(wb, "a", "*/5 * * * *", "claude", "x", false, deps)).toThrow(/invalid.*schedule/);
+  rmSync(wb, { recursive: true, force: true });
+});
+
+test("cronAdd isInstalled hint fires when the cron id is installed", () => {
+  const wb = makeWorkbench([]);
+  const r = cronAdd(wb, "inbox-tidy", "0 21 * * *", "claude", "tidy", false, { isInstalled: () => true });
+  expect(r.lines.some((l) => l.includes("is installed; re-run"))).toBe(true);
+  rmSync(wb, { recursive: true, force: true });
+});
+
+test("cronRemove deletes + hints; unknown id throws", () => {
+  const wb = makeWorkbench([{ id: "a", enabled: true }]);
+  const r = cronRemove(wb, "a", { isInstalled: () => true });
+  expect(r.lines[0]).toContain("removed cron: a");
+  expect(r.lines.some((l) => l.includes("re-run"))).toBe(true);
+  expect(() => cronRemove(wb, "nope", { isInstalled: () => false })).toThrow(/no such cron/);
+  rmSync(wb, { recursive: true, force: true });
+});
+
+test("cronSetEnabled toggles persisted enabled flag", () => {
+  const wb = makeWorkbench([{ id: "a", enabled: true }]);
+  cronSetEnabled(wb, "a", false);
+  expect(loadCrons(wb).crons[0].enabled).toBe(false);
+  cronSetEnabled(wb, "a", true);
+  expect(loadCrons(wb).crons[0].enabled).toBe(true);
+  rmSync(wb, { recursive: true, force: true });
+});
+
+test("cronAck with no incidents -> acknowledged 0", () => {
+  const wb = makeWorkbench([]);
+  const r = cronAck(wb, undefined);
+  expect(r.lines[0]).toContain("acknowledged 0 incident");
   rmSync(wb, { recursive: true, force: true });
 });

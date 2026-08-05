@@ -5,7 +5,7 @@ import { expect, test } from "bun:test";
 import { taskIdFor, workbenchTag } from "./types.ts";
 import { crontabBlock, replaceManagedBlock, parseManagedLine } from "./linux.ts";
 import { schtasksArgs, isWindowsInstallable, parseOpContent, parseSchtasksXml } from "./win32.ts";
-import { plistPath, parsePlistName } from "./darwin.ts";
+import { plistPath, parsePlistName, plistBelongsToTag } from "./darwin.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 
 test("workbenchTag is stable + distinct across workbench ids", () => {
@@ -191,4 +191,11 @@ test("darwin plistPath + parsePlistName use injected home + tagged identity", ()
   expect(parsePlistName("com.jspace.cron.abc123.inbox-tidy.plist")).toEqual({ taskId: "com.jspace.cron.abc123.inbox-tidy", tag: "abc123", cronId: "inbox-tidy" });
   expect(parsePlistName("com.jspace.cron.inbox-tidy.plist")).toBeNull(); // legacy untagged — not ours
   expect(parsePlistName("random.txt")).toBeNull();
+});
+
+test("plistBelongsToTag: same tag yes, other tag no, legacy untagged no (cross-workbench safety)", () => {
+  expect(plistBelongsToTag("com.jspace.cron.abc123.inbox-tidy.plist", "abc123")).toBe(true);
+  expect(plistBelongsToTag("com.jspace.cron.xyz789.inbox-tidy.plist", "abc123")).toBe(false);
+  expect(plistBelongsToTag("com.jspace.cron.inbox-tidy.plist", "abc123")).toBe(false); // legacy untagged
+  expect(plistBelongsToTag("random.txt", "abc123")).toBe(false);
 });
