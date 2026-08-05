@@ -194,7 +194,7 @@ export function workspaceUpgrade(
     return { lines: ["jspace: ok: workspace is up to date"] };
   }
   if (hubMigration !== null && hubMigration.outcome.status === "migrated") {
-    plan.push({ action: "migrate", rel: hubMigration.rel, ownership: "user" });
+    plan.push({ action: "migrate", rel: hubMigration.rel, ownership: "user", reason: "hub schema migration" });
   }
 
   // backup + journal before any mutation

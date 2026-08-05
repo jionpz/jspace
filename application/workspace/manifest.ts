@@ -43,7 +43,7 @@ export function materializedRel(key: string): string | null {
   return null;
 }
 
-export type DiffAction = "create" | "no-op" | "update" | "conflict" | "skip" | "stale";
+export type DiffAction = "create" | "no-op" | "update" | "conflict" | "skip" | "stale" | "migrate";
 
 export interface DiffEntry {
   rel: string;
