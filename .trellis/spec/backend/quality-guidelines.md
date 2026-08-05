@@ -4,7 +4,7 @@
 
 ## Overview
 
-- No linter configured; the enforced gates are `bunx tsc --noEmit`, `bun test`, and generated-asset freshness (`gen-assets` must be a no-op vs committed).
+- No linter configured; the enforced gates are `bunx tsc --noEmit`, `bun test`, the `import-boundary.test.ts` layer-direction gate (runs inside `bun test`), and generated-asset freshness (`gen-assets` must be a no-op vs committed).
 - Conventions here are the project's actual patterns (CommandSpec single source, diagnostics decoders, DI injection, ownership model, security red lines).
 
 ## Forbidden Patterns
@@ -35,7 +35,7 @@
 
 ## Testing Requirements
 
-- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 297 tests across 38 files).
+- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 339 tests across 45 files).
 - New function → unit test; bug fix → regression test; changed behavior → update existing tests.
 - Fault-injection via injected deps (ingest journal fs ops, pending envelope gbrain stub).
 - Contract round-trip + decode-issue tests for every decoder.

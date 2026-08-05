@@ -1,31 +1,18 @@
 // application/automation/scheduler.ts — scheduler reconciliation (pure).
 // planReconciliation compares desired tasks against what's installed for this
 // workbench and returns create/update/delete ops. Adapters own platform details;
-// this module owns the decision table. workbenchTag lives in adapters/scheduler
-// (single source); this re-exports for existing application tests.
-export { workbenchTag } from "../../adapters/scheduler/types.ts";
-export interface DesiredTask {
-  /** platform identity including the workbench tag (e.g. com.jspace.cron.<tag>.<id>) */
-  taskId: string;
-  cronId: string;
-  schedule: string;
-  /** installed command line; used for change detection */
-  argv: string;
-  /** adapter-specific install content (plist / crontab line / schtasks args) */
-  content: string;
-}
+// this module owns the decision table. The scheduler task model (DesiredTask /
+// InstalledTask / SchedulerOp) + workbenchTag live in adapters/scheduler/types.ts
+// (single source — no duplicate definitions across layers); re-exported here for
+// existing application consumers.
+import {
+  workbenchTag,
+  type DesiredTask,
+  type InstalledTask,
+  type SchedulerOp,
+} from "../../adapters/scheduler/types.ts";
 
-export interface InstalledTask {
-  taskId: string;
-  cronId: string;
-  schedule: string;
-  argv: string;
-}
-
-export type SchedulerOp =
-  | { action: "create"; taskId: string; content: string }
-  | { action: "update"; taskId: string; content: string }
-  | { action: "delete"; taskId: string };
+export { workbenchTag, type DesiredTask, type InstalledTask, type SchedulerOp };
 
 /** Pure: desired vs installed → ops. Match by taskId (already workbench-tagged);
  *  identical schedule+argv is a no-op; changed → update; desired-only → create;

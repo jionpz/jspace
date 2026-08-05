@@ -17,6 +17,18 @@ export interface InstalledTask {
   argv: string;
 }
 
+/** Desired task for one cron (what the scheduler service wants installed). */
+export interface DesiredTask {
+  /** platform identity including the workbench tag (e.g. com.jspace.cron.<tag>.<id>) */
+  taskId: string;
+  cronId: string;
+  schedule: string;
+  /** installed command line; used for change detection */
+  argv: string;
+  /** adapter-specific install content (plist / crontab block / schtasks args) */
+  content: string;
+}
+
 export type SchedulerOp =
   | { action: "create"; taskId: string; content: string }
   | { action: "update"; taskId: string; content: string }
