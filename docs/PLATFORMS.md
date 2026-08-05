@@ -6,8 +6,8 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 
 | 平台 | `jspace cron install` 后端 | 补跑语义 | 运行上下文 |
 |---|---|---|---|
-| macOS | launchd(一 cron 一 plist,`~/Library/LaunchAgents/com.jspace.cron.<id>.plist`) | 睡眠错过 → **下次唤醒补跑一次**(多次合并一次);整夜关机不唤醒则跳过 | 仅用户已登录会话 |
-| Linux | crontab(注释块 `# jspace crons (managed)`…`# end jspace`) | **无补跑**(错过即跳过) | 登录用户,环境最小(PATH/HOME 由 install 烘焙) |
+| macOS | launchd(一 cron 一 plist,`~/Library/LaunchAgents/com.jspace.cron.<tag>.<id>.plist`) | 睡眠错过 → **下次唤醒补跑一次**(多次合并一次);整夜关机不唤醒则跳过 | 仅用户已登录会话 |
+| Linux | crontab(注释块 `# jspace crons (managed) DO NOT EDIT`…`# end jspace`) | **无补跑**(错过即跳过) | 登录用户,环境最小(PATH/HOME 由 install 烘焙) |
 | Windows | Task Scheduler(`schtasks`,任务名 `JSpaceCron_<wb-id>_<id>`) | **无补跑** | **默认仅登录时运行**(登出不触发);`/it` 交互令牌 |
 
 > **调度语义差异诚实声明**:三个平台对「错过的时间点」行为不同——macOS 会唤醒补跑,Linux/Windows 直接跳过。这是各系统调度器的固有差异,cron 定义(`.jspace/cron.json`)是平台无关的,同一份定义在三平台行为可能不同。失败都会打开结构化 incident(`.jspace/state/incidents/`),`cron failures` 在下个会话可见;成功 retry 自动 resolve,`cron ack` 保留证据但停止告警。
@@ -36,7 +36,7 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 
 ## Scheduler 任务隔离（M5）
 
-reconciliation（`cron install --dry-run` 可预演）用 `workbenchTag(marker.workbench_id)` 派生稳定短 tag 隔离各工作台任务，避免两工作台同名 cron 互覆盖。已知遗留：launchd plist 名/crontab 标记/schtasks 任务名的 tag 注入与按 tag 卸载尚未在真实 apply 落地（见任务 implement.md M5 遗留），真机验证时按本矩阵人工复核。
+reconciliation（`cron install --dry-run` 可预演）用 `workbenchTag(marker.workbench_id)` 派生稳定短 tag 隔离各工作台任务，避免两工作台同名 cron 互覆盖。launchd plist 名 / crontab 标记 / schtasks 任务名的 tag 注入与按 tag 卸载已在 scheduler adapters 落地（2026-08-05 cron 收敛，`adapters/scheduler/{darwin,linux,win32}.ts`）；doctor 的已装任务判定亦走 tag-scoped inspect。真机调度行为仍按本矩阵人工复核。
 
 ## Windows 支持的调度子集
 
@@ -90,7 +90,7 @@ bin/jspace cron uninstall              # 期望:任务移除
 | 已 install | macOS | 无「enabled but not installed」warning;无 stale 告警 |
 | 已 install | Linux | 无「enabled but not installed」;无 stale;crontab/cron 服务存在 → 无服务 warning |
 | 已 install | Windows | 无「enabled but not installed」;无 stale;`schtasks /query` 存在 |
-| cron 已删但调度器残留 | 全部 | warning `stale scheduled task com.jspace.cron.<id>` |
+| cron 已删但调度器残留 | 全部 | warning `stale scheduled task <id>` |
 | 存在 open cron incident | 全部 | warning `cron.open_incidents`（`N open cron incident(s)`） |
 | Linux 无 crontab/无 crond | Linux | warning `crontab command not found` / `cron daemon not running` |
 | 非法 schedule | 全部 | warning `cron <id>: invalid schedule` |

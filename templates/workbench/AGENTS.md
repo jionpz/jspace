@@ -135,7 +135,7 @@ When the user says "开发模式" and wants to maintain the JSpace CLI/templates
 
 1. This workbench is generated output. Do not edit template sources here.
 2. Go to the JSpace development repository the user maintains (register it first via `jspace domain add` / `jspace resource add` if not already registered); read its `AGENTS.md` and follow its own workflow for non-trivial changes.
-3. After template/CLI changes, re-run `jspace init --force .` or reinitialize a fresh workbench, then run `jspace doctor --dir .`.
+3. After template/CLI changes, preview with `jspace workspace upgrade --dry-run` then `jspace workspace upgrade`, and run `jspace doctor --dir .`. (`jspace init` refuses to re-initialize an existing workbench; refresh goes through `workspace upgrade`, which refreshes unmodified seed/skill files and preserves local edits.)
 
 ## Workspace Upgrade & Ownership
 

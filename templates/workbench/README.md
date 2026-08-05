@@ -14,6 +14,8 @@
 - `workspace/` - 域目录（初始不预建；按 AGENTS.md 的 Domain Governance 从真实使用涌现，首个域创建时生成）
 - `skills/jspace-bootstrap/` - 首次配置技能
 - `skills/asset-ingest/` - 资料转知识资产技能
+- `skills/memory-recall/` - 精准召回技能
+- `skills/memory-writeback/` - 会话记忆写回技能
 - `.gitignore` - 忽略 `.jspace/logs/`、`.jspace/local.json`、`.jspace/state/`
 
 ## 目录边界与升级范围

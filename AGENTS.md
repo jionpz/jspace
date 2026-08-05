@@ -50,7 +50,7 @@
 4. `hub.json` schema 见 `templates/workbench/.jspace/hub.json` 和 `skills/jspace-bootstrap/references/registry.md`：资源主路径必须是绝对路径，且恰好一个 `primary: true`。
 5. 命名统一：项目、CLI、技能、模板、文档、domain 统一使用 `jspace`。
 6. 首次开发、未上线：**无兼容性负担**——schema/CLI/模板可直接演进，不做迁移/弃用通道；版本化承诺推迟到分发（R7）。
-7. 真实工作台升级约定（未分发、本地自用）：每次模板/CLI 更新后，如需让真实工作台（如 `~/jworkspace`）拿到最新状态，**清空后重 init**——`rm -rf <workbench>` 再 `jspace init <workbench>`（或清掉旧残留 `hub.json`/`.jspace.json` 后 `init --force`）。不原地叠加；`init` 遇旧布局残留会 fail 提示清除。
+7. 真实工作台升级约定（未分发、本地自用）：模板/CLI 更新后，既有工作台优先 `jspace workspace upgrade`（非破坏——未修改的 seed/skill 随升级刷新、本地编辑保留为 `skip`）；仅在需要完全重建时才清空重 init（`rm -rf <workbench>` 再 `jspace init <workbench>`，或清掉旧残留 `hub.json`/`.jspace.json` 后 `init --force`）。`init` 对已有工作台会拒绝（用 upgrade）；遇旧布局残留 init 会 fail 提示清除。
 
 ## Confirmation Rules
 

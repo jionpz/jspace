@@ -83,4 +83,4 @@ jq .jspace/hub.json           # 合法 JSON
 - `references/headless-ops.md` — 无头运维(账号/配额/失败可见性)
 - `references/example-bootstrap.md` — golden run(S5 产出)
 
-> **Note**:新工作台 skill 只随 `jspace init` 复制,既有工作台不自动回填;要拿到新 skill 需 `jspace init --force .` 或手动复制。
+> **Note**:新工作台 skill 只随 `jspace init` 复制,既有工作台经 `jspace workspace upgrade` 刷新(未修改的模板/skill 随升级更新,本地改动保留为 `skip`);`jspace init --force .` 对已有工作台会拒绝(用 upgrade,不用 init)。
