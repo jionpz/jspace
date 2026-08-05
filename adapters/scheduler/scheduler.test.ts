@@ -2,7 +2,8 @@
 // cross-workbench tag isolation (AC1) + reconciliation identity.
 // Run: bun test adapters/scheduler/scheduler.test.ts
 import { expect, test } from "bun:test";
-import { taskIdFor, workbenchTag } from "./types.ts";
+import { taskIdFor, workbenchTag, buildPlist } from "./types.ts";
+import { parseSchedule } from "./schedule.ts";
 import { linuxAdapter, crontabBlock, replaceManagedBlock, parseManagedLine, extractTagBlock, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
 import { darwinAdapter, plistPath, parsePlistName, plistBelongsToTag } from "./darwin.ts";
 import { schtasksArgs, isWindowsInstallable, parseOpContent, parseSchtasksXml, win32Adapter } from "./win32.ts";
@@ -271,6 +272,20 @@ test("P0: win32 reconciliation converges — desired identity == inspect handle 
   expect(planReconciliation(changed, installed)).toEqual([{ action: "update", taskId, content }]); // changed -> update
   expect(planReconciliation([], installed)).toEqual([{ action: "delete", taskId }]); // removed -> delete
   expect(planReconciliation(desired, [])).toEqual([{ action: "create", taskId, content }]); // new -> create
+});
+
+test("P0: darwin reconciliation converges — plist identity == inspect parse", () => {
+  const tag = "tagA";
+  const cron = mkCron("inbox", "0 21 * * *");
+  const id = darwinAdapter.identity(tag, cron.id); // posix dotted
+  const content = buildPlist(cron.id, tag, parseSchedule(cron.schedule), "/wb", "/bin/jspace", "/Users/u", "/bin");
+  const desired = [{ taskId: id.taskId, cronId: cron.id, schedule: cron.schedule, argv: "cron run --id inbox --dir /wb", content }];
+  // what inspect() would parse back from the installed plist file name
+  const installed = [{ taskId: parsePlistName(`${id.taskId}.plist`)!.taskId, cronId: "inbox", schedule: "0 21 * * *", argv: "cron run --id inbox --dir /wb" }];
+  expect(planReconciliation(desired, installed)).toEqual([]); // identical -> no-op
+  const changed = [{ ...desired[0], schedule: "0 9 * * *" }];
+  expect(planReconciliation(changed, installed)).toEqual([{ action: "update", taskId: id.taskId, content }]); // changed -> update
+  expect(planReconciliation([], installed)).toEqual([{ action: "delete", taskId: id.taskId }]); // removed -> delete
 });
 
 test("P0: linux full convergence — two workbenches converge independently", () => {
