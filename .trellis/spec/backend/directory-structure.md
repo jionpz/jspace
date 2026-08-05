@@ -21,6 +21,10 @@ skills/ + skills-manifest.json   # workbench skills (manifest is the packaging s
 templates/           # workbench / filehub templates (embedded into the binary)
 ```
 
+## Workbench Layout (generated)
+
+`jspace init` generates the workbench with a **placement principle: entry faces live at the root, everything else under `.jspace/`**. Root holds only the files harnesses/humans auto-discover — `AGENTS.md` (a JSpace-managed block inside the user's file: `<!-- JSPACE:START -->…<!-- JSPACE:END -->`, block managed by init/upgrade, everything outside owned by the user), `README.md`, `.gitignore`, `.claude/settings.json`. All other official assets live under `.jspace/`: official skills at `.jspace/skills/` (root `skills/` is user-owned), user data (`hub.json`, `cron.json`), machine state (`marker.json`, `local.json`, `logs/`, `state/`). The directory position encodes ownership, so upgrade behavior is readable from the tree without per-file explanations.
+
 ## Module Organization
 
 | Layer | Responsibility | May import | Must NOT import |

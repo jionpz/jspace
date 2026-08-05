@@ -32,7 +32,7 @@
 | Development | 默认；用户说 "开发模式" | 修改 CLI、模板、技能和本仓库文档 |
 | Workbench | 在生成的工作台目录 | 见该目录 `AGENTS.md` |
 
-**模式边界（开发 vs 工作）**：本仓库 AGENTS.md 属开发侧，包含 Product Vision、开发模式、Trellis 工作流等；这些内容**不会**随 `jspace init` 复制进生成的工作台。工作台模板（`templates/workbench/AGENTS.md`）只含工作模式的规则（域路由、资源治理、首次配置指引）。会话级工作流（harness 记忆注入/写回）由首次配置 skill 指导的 harness 接线提供，不属于任何 AGENTS.md 的内容，也不随 init 生成。
+**模式边界（开发 vs 工作）**：本仓库 AGENTS.md 属开发侧，包含 Product Vision、开发模式、Trellis 工作流等；这些内容**不会**随 `jspace init` 复制进生成的工作台。工作台模板（`templates/workbench/AGENTS.md`）只含工作模式的规则（域路由、资源治理、首次配置指引）；它是 **JSpace 受管块模板**——`jspace init` 将 `<!-- JSPACE:START -->…<!-- JSPACE:END -->` 块嵌入工作台的 `AGENTS.md`，块内由 upgrade 维护、块外归用户。**工作台放置原则：入口面在根（AGENTS/README/.gitignore/.claude 设置），其余官方资产一律在 `.jspace/`**（官方 skill 落 `.jspace/skills/`，根 `skills/` 归用户自建）。会话级工作流（harness 记忆注入/写回）由首次配置 skill 指导的 harness 接线提供，不属于任何 AGENTS.md 的内容，也不随 init 生成。
 
 ## Language
 
