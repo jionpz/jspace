@@ -20,11 +20,23 @@ triggers:
 
 | 判断 | 取值 | 动作 |
 |---|---|---|
-| 归属 | 项目产出 / 领域资料(书籍) | `projects/<项目>/` / `areas/<领域>/` |
+| 归属 | 项目产出 / 领域资料(书籍) | 见下方「归属映射」:区分 `--project`(归属 id)与 target 路径 |
 | 类型 | pdf·txt·md·book / excel·ppt / video·audio | 摘要+指针 / +需深度抽取(可选) / 路由 media-ingest(MVP 外) |
 | 查重(`gbrain get assets/<id>/<语义名>`) | 已存在 / 不存在 | 询问用户:跳过·修复(覆盖错页)·升版本`-vN`(新页) / 继续 |
 | gbrain serve 持锁 | 是 / 否 | `jspace pending stage`(暂存,不失败) / 直接写页 |
 | embedding 不可达 | 是 / 否 | `embed_skip: true` 重写(写入必成功)+固定提示 / 正常写 |
+
+### 归属映射(`--project` vs target)
+
+CLI `ingest begin` 强制 `--project <id>`;`areas/`/`projects/` 是 **target 路径组织**,不是 CLI 的 project 参数:
+
+| 资料类型 | `--project`(CLI 强制) | `--target` | `--slug` |
+|---|---|---|---|
+| 项目产出 | `<项目id>`(registered 首选) | `projects/<项目>/<文件名>` | `assets/<项目>/<语义名>` |
+| 领域资料 | `<领域名>`(如 `books`;CLI 派生 id + warning,可忽略) | `areas/<领域>/<文件名>` | `assets/<领域>/<语义名>` |
+
+- 领域资料用 `--project <领域名>` 时,CLI 报 `warn: project ... is not registered` 但**不阻塞**,派生 id 稳定、功能正常。
+- 消除 warning(可选):`jspace project add <id>` 注册 project 后 warning 消失、slug 更稳定;常用领域(如 `books`/`papers`)建议注册。
 
 ## 命令速查
 
@@ -57,7 +69,7 @@ gbrain query <关键词>
 ## 按需深入(条件读指针)
 
 - 要做**批量整理** inbox(`整理一下 inbox` / cron 无头)→ 先读 `references/batch.md`(两遍式·幂等·日志·无头只跑第一遍;执行日志落 `<filehub>/.jspace-logs/inbox-batch.md`)
-- 要做 **office 深度抽取**(excel/ppt 把数字/表格也收)→ 先读 `references/deep-extract.md`(`scripts/office-extract.py` + 伴生 `.extract.md` + 策展)
+- 要做 **office 深度抽取**(excel/ppt 把数字/表格也收)→ 先读 `references/deep-extract.md`(`scripts/extract.py` 统一入口 + 伴生 `.extract.md` + 策展)
 - 存量旧资料按需收编 → 先读 `references/migration.md`
 - 归位/命名/类型细则、降级暂存区定位 → `references/filing.md`
 - 写页模板/slug 派生/embedding 降级/type 纪律 → `references/gbrain-write.md`
@@ -78,7 +90,7 @@ jspace ingest list                          # 无 in-progress(已 committed 或�
 - `references/filing.md` — 归位/命名/类型/文件中心定位/降级
 - `references/gbrain-write.md` — 写页模板/slug/embedding 降级/type 纪律
 - `references/batch.md` — 批量模式(两遍式/幂等/日志/无头)
-- `references/deep-extract.md` — excel/ppt 深度抽取
+- `references/deep-extract.md` — 深度抽取(markitdown + office-extract 回退)
 - `references/migration.md` — 存量收编 runbook
 - `references/example-ingest.md` — golden run(S5 产出)
-- `scripts/office-extract.py` — 零依赖抽取器;`scripts/office-extract.test.py` 自测
+- `scripts/extract.py` — 统一抽取入口(markitdown 增强 + office-extract 回退);`scripts/office-extract.py` — 零依赖回退器;各带自测脚本

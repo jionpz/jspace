@@ -17,6 +17,7 @@ import {
 } from "../../application/registry/resource.ts";
 import { filehubInit } from "../../application/registry/filehub.ts";
 import { inboxStatus } from "../../application/registry/inbox.ts";
+import { projectAdd, projectList } from "../../application/registry/project.ts";
 import { expandTilde, filehubReadme, isCompiled, devRoot, materializeTree } from "../embed.ts";
 import { resolvePath } from "../paths.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
@@ -198,6 +199,39 @@ const resourceSpec: CommandSpec = {
   summary: "manage workbench resources",
   commandArgName: "resource_command",
   children: [resourceListSpec, resourceAddSpec, resourceRemoveSpec],
+};
+
+const projectListSpec: CommandSpec = {
+  name: "list",
+  summary: "list projects",
+  features: { json: true, dir: true },
+  handler: (ctx, args) => projectList(ctx.root, b(args.json)),
+};
+
+const projectAddSpec: CommandSpec = {
+  name: "add",
+  summary: "add a project (register an owning id for ingest --project)",
+  positionals: [{ name: "id", required: true, help: "project id (lowercase letters, digits, and hyphens)" }],
+  features: { dir: true, dryRun: true },
+  options: [
+    { name: "--domain", takesValue: true, help: "owning domain id (default: files)" },
+    { name: "--asset-rel-path", takesValue: true, help: "asset root rel path under filehub (default: projects/<id>)" },
+  ],
+  handler: (ctx, args) =>
+    projectAdd(
+      ctx.root,
+      s(args.id),
+      args.domain === undefined ? undefined : s(args.domain),
+      args.assetRelPath === undefined ? undefined : s(args.assetRelPath),
+      b(args.dryRun),
+    ),
+};
+
+const projectSpec: CommandSpec = {
+  name: "project",
+  summary: "manage workbench projects",
+  commandArgName: "project_command",
+  children: [projectListSpec, projectAddSpec],
 };
 
 const filehubInitSpec: CommandSpec = {
@@ -662,6 +696,7 @@ export const COMMANDS: CommandSpec[] = [
   doctorSpec,
   domainSpec,
   resourceSpec,
+  projectSpec,
   filehubSpec,
   inboxSpec,
   cronSpec,

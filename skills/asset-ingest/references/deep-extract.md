@@ -9,17 +9,37 @@ excel / ppt 在「摘要 + 指针」之外的**可选深入路径**：把文件�
 
 ## 工具
 
-- 抽取器：`skills/asset-ingest/scripts/office-extract.py`（随技能分发，已嵌入 jspace 二进制、物化进工作台）。
-- 仅依赖 python3 stdlib（zipfile + ElementTree），零第三方库。
+- 统一入口：`skills/asset-ingest/scripts/extract.py`（随技能分发，已嵌入 jspace 二进制、物化进工作台）。分层路由：
+  - **markitdown 可用**（`command -v markitdown` / python 模块探测）→ 全格式走 markitdown：PDF/HTML/DOCX/XLSX/PPTX/MD。
+  - **markitdown 不可用** → xlsx/pptx 回退 `office-extract.py`（零依赖，行为不变）；pdf/html/docx/md 明确报错并提示安装，不静默失败。
+- `office-extract.py`（零依赖，zipfile + ElementTree）作为**回退路径**保留，无头 cron 场景（无 markitdown）仍可靠。
 - 本机缺 python3 → 明确提示、回退「摘要 + 指针」，不阻塞入库。
+
+## markitdown 安装（按需）
+
+本技能**不自动安装** pip 包（保持无头 cron 纯净）；遇 pdf/html/docx 报错提示时按需装：
+
+```bash
+pip install markitdown          # html/docx/xlsx/pptx/md
+pip install 'markitdown[pdf]'   # PDF 另需 pdfminer 等（最常见重资产）
+```
+
+macOS 系统 python 受 PEP 668 保护（externally-managed），用 venv：
+
+```bash
+python3 -m venv ~/.venvs/jspace && source ~/.venvs/jspace/bin/activate
+pip install 'markitdown[pdf]'
+```
+
+装好后 `markitdown` 在 PATH 中，`extract.py` 自动走增强路径。
 
 ## 命令
 
 ```bash
-python3 skills/asset-ingest/scripts/office-extract.py <文件.xlsx|.pptx> --out <伴生文件>
+python3 skills/asset-ingest/scripts/extract.py <文件> --out <伴生文件>
 ```
 
-- 输出：markdown。xlsx 逐 sheet（行\列 + 单元格引用 + 值，共享字符串/内联/数字/布尔全覆盖）；pptx 逐页（按展示顺序）。
+- 输出：markdown。有 markitdown → 全格式（PDF/HTML/DOCX/XLSX/PPTX/MD）；无 markitdown → xlsx/pptx 走 office-extract（零依赖回退），pdf/html/docx/md 报错并提示安装。
 - 无 `--out` → markdown 到 stdout（先看内容再决定怎么策展）。
 
 ## 流程（对接 asset-ingest 主流程的「入脑」步）
@@ -40,17 +60,27 @@ python3 skills/asset-ingest/scripts/office-extract.py <文件.xlsx|.pptx> --out 
 
 ## 输出契约（抽取器）
 
-- **xlsx**：每 sheet 一个 markdown 表；表头首列 `行\列`，其后为列字母；单元格值保留引用定位。空 sheet → `(空)`。文件级注记：日期为 Excel 序列值未转、公式为缓存值。
+- **格式支持矩阵**：
+
+  | 格式 | 依赖 | 说明 |
+  |---|---|---|
+  | xlsx / pptx | 无 | office-extract（零依赖，逐 sheet 表 / 逐页列表）；有 markitdown 也可走它 |
+  | pdf | markitdown[pdf] | filehub 最常见重资产；无 markitdown 则明确报错提示安装 |
+  | html / docx / md | markitdown | 无 markitdown 则明确报错提示安装 |
+
+- **xlsx（office-extract 路径）**：每 sheet 一个 markdown 表；表头首列 `行\列`，其后为列字母；单元格值保留引用定位。空 sheet → `(空)`。文件级注记：日期为 Excel 序列值未转、公式为缓存值。
 - **幻影行过滤**：Excel 常见「巨大 used range」（如 1048574 行、实际仅前几百行有内容）——全空 `<row>` 一律不输出，避免伴生文件被空行撑爆（真实样例 132MB → 265KB）。
 - **每 sheet 行数上限** `ROWS_LIMIT=1000`：超出的非空行截断，并注记 `> (截断: 本 sheet 共 N 行非空数据,仅展示前 1000 行;全量在本体文件)`。超大表全量仍在本体文件，页内 Key Facts 策展关键聚合即可。
-- **pptx**：`## Slide N`（按展示顺序，非文件编号）+ 每页段落列表。
+- **pptx（office-extract 路径）**：`## Slide N`（按展示顺序，非文件编号）+ 每页段落列表。
+- **markitdown 路径**（pdf/html/docx/xlsx/pptx/md）：输出为 markitdown 转出的 markdown（含标题/表格/链接），策展 Key Facts 时**内容导向**，不强求与 office-extract 格式一致。
 - 退出码：0 成功；非 0 失败（stderr 原因）。失败 → 失败即停，不写半成品页 / 伴生文件。
 
 ## 已知限制（评估是否够用时对照）
 
 - 日期/时间：输出为 Excel 序列值（如 `45658`），不做日期转换。
 - 公式：输出缓存值，不求值。
-- 图片/图表内容、合并单元格语义、.xls/.ppt 旧格式、docx：不支持。
+- 图片/图表内容、合并单元格语义、.xls/.ppt 旧格式：不支持。
+- **docx/pdf/html 需 markitdown**：未装时抽取明确报错并提示安装（不自动安装，见上「markitdown 安装」）。
 - 需要这些 → 在会话内按需处理（如打开原件人工核对），或按使用涌现加深。
 
 ## 纪律
