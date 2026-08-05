@@ -21,7 +21,7 @@ import { projectAdd, projectList } from "../../application/registry/project.ts";
 import { expandTilde, filehubReadme, isCompiled, devRoot, materializeTree } from "../embed.ts";
 import { resolvePath } from "../paths.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
-import { fail } from "../../application/errors.ts";
+import { fail } from "../../core/shared/errors.ts";
 import { readFileSync } from "node:fs";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
 import { ASSETS } from "../assets.generated.ts";

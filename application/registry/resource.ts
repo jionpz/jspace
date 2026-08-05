@@ -1,7 +1,7 @@
 // application/registry/resource.ts — resource use cases (moved from cli/cmds.ts).
 import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
-import { fail } from "../errors.ts";
+import { fail } from "../../core/shared/errors.ts";
 import type { CmdResult } from "../commands/command.ts";
 import { isId } from "../../core/contracts/ids.ts";
 import type { HubV4, PathEntrypoint, Resource, UrlEntrypoint } from "../../core/contracts/hub.ts";

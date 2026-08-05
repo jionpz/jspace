@@ -2,7 +2,7 @@
 // cli/cron.ts). claude/codex/pi shapes are stable and CI-verified; the
 // capability matrix in docs/PLATFORMS.md labels each as automated/best-effort.
 import { spawnSync } from "node:child_process";
-import { fail } from "../../application/errors.ts";
+import { fail } from "../../core/shared/errors.ts";
 
 /** Resolve a harness binary on PATH (win32 uses `where`, else `which`). */
 export function resolveHarnessBin(harness: string, platform: string): string {

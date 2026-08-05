@@ -1,4 +1,6 @@
-// application/errors.ts — shared error/exit contract (mirrors Python fail()/_reject_errors).
+// core/shared/errors.ts — shared error/exit contract (mirrors Python
+// fail()/_reject_errors). Lives in the shared kernel so adapters, application
+// and cli all use the same primitives without a layer depending on a higher one.
 export class CliError extends Error {
   exitCode: number;
   printed: boolean;

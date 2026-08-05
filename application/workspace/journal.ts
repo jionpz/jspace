@@ -12,7 +12,7 @@ import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { decodeMaterializedJournal, type MaterializedJournalV1 } from "../../core/contracts/materialized.ts";
 import { materializedRel, sha256Of } from "./manifest.ts";
 import { localDate } from "../time.ts";
-import { fail } from "../errors.ts";
+import { fail } from "../../core/shared/errors.ts";
 
 export const MATERIALIZED_FILE = join(CONFIG_DIR, "state", "materialized.json");
 

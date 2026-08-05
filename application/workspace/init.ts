@@ -4,7 +4,7 @@
 // layer stays free of cli/env coupling.
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { fail } from "../errors.ts";
+import { fail } from "../../core/shared/errors.ts";
 import { localDate } from "../time.ts";
 import type { CmdResult } from "../commands/command.ts";
 import { MARKER_FILE } from "../../core/contracts/files.ts";

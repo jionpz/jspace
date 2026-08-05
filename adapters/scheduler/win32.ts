@@ -2,8 +2,8 @@
 // Task name carries the workbench tag: JSpaceCron_<tag>_<id>. inspect()
 // filters by the tag so two workbenches never collide on scheduled tasks.
 import { spawnSync } from "node:child_process";
-import { fail } from "../../application/errors.ts";
-import { parseSchedule } from "./schedule.ts";
+import { fail } from "../../core/shared/errors.ts";
+import { parseSchedule } from "../../core/shared/schedule.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 import { taskIdFor, workbenchTag, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerIdentity, type SchedulerOp } from "./types.ts";
 

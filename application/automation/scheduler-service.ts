@@ -3,7 +3,7 @@
 // identity + content compilation), inspects the platform scheduler, plans
 // reconciliation, and applies. The CLI layer only composes adapter + env and
 // validates skill targets; this service owns scheduler decisions.
-import { fail } from "../errors.ts";
+import { fail } from "../../core/shared/errors.ts";
 import type { CmdResult } from "../commands/command.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 import { loadCrons } from "./definitions.ts";
@@ -12,7 +12,7 @@ import { planReconciliation, type DesiredTask } from "./scheduler.ts";
 import { buildPlist, type SchedulerAdapter, type SchedulerEnv, type SchedulerOp } from "../../adapters/scheduler/types.ts";
 import { crontabBlock } from "../../adapters/scheduler/linux.ts";
 import { schtasksArgs } from "../../adapters/scheduler/win32.ts";
-import { parseSchedule } from "../../adapters/scheduler/schedule.ts";
+import { parseSchedule } from "../../core/shared/schedule.ts";
 
 export interface SchedulerInstallDeps {
   tag: string; // workbench tag from marker workbench_id

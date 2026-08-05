@@ -3,7 +3,7 @@
 // Run: bun test adapters/scheduler/scheduler.test.ts
 import { expect, test } from "bun:test";
 import { taskIdFor, workbenchTag, buildPlist } from "./types.ts";
-import { parseSchedule } from "./schedule.ts";
+import { parseSchedule } from "../../core/shared/schedule.ts";
 import { linuxAdapter, crontabBlock, replaceManagedBlock, parseManagedLine, extractTagBlock, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
 import { darwinAdapter, plistPath, parsePlistName, plistBelongsToTag } from "./darwin.ts";
 import { schtasksArgs, isWindowsInstallable, parseOpContent, parseSchtasksXml, win32Adapter } from "./win32.ts";

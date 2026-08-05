@@ -1,16 +1,10 @@
-// application/fs.ts — tiny shared filesystem predicates used by use cases.
-import { readdirSync, readFileSync, statSync } from "node:fs";
+// application/fs.ts — repository-read helper used by use cases.
+// isFile moved to core/shared/fs.ts (shared kernel: adapters also consume it).
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ContractIssue, DecodeResult } from "../core/contracts/diagnostics.ts";
 
-/** Mirrors pathlib Path.is_file(): false for directories/missing paths. */
-export function isFile(p: string): boolean {
-  try {
-    return statSync(p).isFile();
-  } catch {
-    return false;
-  }
-}
+export { isFile } from "../core/shared/fs.ts";
 
 /** readdir + parse JSON + decode record repository loop, parameterized by ext,
  *  decode and sort. A corrupt/undecodable file is reported as an issue (code +

@@ -1,7 +1,7 @@
 // application/registry/filehub.ts — `jspace filehub init` use case (moved from cli/cmds.ts).
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { fail } from "../errors.ts";
+import { fail } from "../../core/shared/errors.ts";
 import type { CmdResult } from "../commands/command.ts";
 import { isId } from "../../core/contracts/ids.ts";
 import { PairedWriteError, writeHubAndLocal } from "../../adapters/fs/workbench-state.ts";

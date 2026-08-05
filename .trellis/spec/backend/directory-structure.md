@@ -27,15 +27,16 @@ templates/           # workbench / filehub templates (embedded into the binary)
 |---|---|---|---|
 | `core/contracts` | typed schemas + decoders (diagnostics pattern) | `core/*` only | application, adapters, cli |
 | `core/registry` | merge portable+local, classify invalid/unbound/missing/drift | `core/*` | application, adapters, cli |
-| `adapters` | platform/tool specifics (atomic fs writes, harness argv) | `core`, `application/errors` | cli |
+| `core/shared` | shared kernel: `errors` (CliError/fail), `fs` (isFile), `schedule` (parseSchedule) | `core/*` (no app/adapter/cli logic) | application, adapters, cli |
+| `adapters` | platform/tool specifics (atomic fs writes, harness argv, scheduler) | `core/*` (incl. `core/shared`) | application, cli |
 | `application` | use cases, CommandSpec, CmdResult | `core`, `adapters`, `application` | `cli` (non-test) |
 | `cli` | declarative CommandSpec tree, entry, generated assets, legacy cron/update | everything | — |
 
-`adapters/` is a **base tool layer** consumed by both `application` and `cli` — it is not "on top of cli". The only reverse edge allowed is `application/errors` (for `fail`), used by `adapters/harness/argv.ts` and the scheduler adapters (`adapters/scheduler/*`, incl. `schedule.ts`).
+`adapters/` is a **base tool layer** consumed by both `application` and `cli` — it is not "on top of cli". The primitives both layers need (`fail`/`CliError`, `isFile`, `parseSchedule`) live in the shared kernel `core/shared/`; there are **no reverse edges** from adapters/core into application. The layer directions are enforced by the automated `import-boundary.test.ts` gate (runs with `bun test`).
 
 ### Transition state (accurate, not idealised)
 
-- Platform scheduler install (launchd / crontab / schtasks) is implemented in `adapters/scheduler/{darwin,linux,win32}.ts` with workbench-tagged task identity (`com.jspace.cron.<tag>.<id>` / `JSpaceCron_<tag>_<id>`), orchestrated by `cli/commands/registry.ts` (cronInstallSpec) through `application/automation/scheduler.ts` (`planReconciliation`) + `use-cases.ts` (`cronInstall`). Schedule parsing (`parseSchedule`/`ScheduleDict`) lives in `adapters/scheduler/schedule.ts`, shared by the adapters and re-exported by `application/automation/definitions.ts` (no application→adapters cycle). The cron status/failures/check surface lives in `application/automation/status.ts` (returns `CmdResult`, exit 1 when anything needs attention); `cli/cron.ts` keeps only `jspaceBinary` (binary/path resolution). `update` still lives in `cli/update.ts`.
+- Platform scheduler install (launchd / crontab / schtasks) is implemented in `adapters/scheduler/{darwin,linux,win32}.ts` with workbench-tagged task identity (`com.jspace.cron.<tag>.<id>` / `JSpaceCron_<tag>_<id>`). `application/automation/scheduler-service.ts` is the single cron installer (desired compilation + Linux whole-block batching + reconciliation); `cli/commands/registry.ts` only composes adapter + env and validates skill targets. Schedule parsing (`parseSchedule`/`ScheduleDict`) lives in `core/shared/schedule.ts`, shared by the adapters and re-exported by `application/automation/definitions.ts`. The cron status/failures/check surface lives in `application/automation/status.ts` (returns `CmdResult`, exit 1 when anything needs attention, incl. damaged state records); `cli/cron.ts` keeps only `jspaceBinary` (binary/path resolution). `update` still lives in `cli/update.ts`.
 
 ## Naming Conventions
 

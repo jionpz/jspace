@@ -8,7 +8,7 @@ import {
   type CommandSpec,
 } from "../application/commands/command.ts";
 import { COMMANDS } from "./commands/registry.ts";
-import { CliError } from "../application/errors.ts";
+import { CliError } from "../core/shared/errors.ts";
 import { VERSION } from "./version.generated.ts";
 import { expandTilde } from "./embed.ts";
 import { resolvePath } from "./paths.ts";

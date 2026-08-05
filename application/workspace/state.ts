@@ -2,7 +2,7 @@
 // Moved out of the cli compatibility facade (cli/registry.ts). Use cases consume
 // core contracts + adapters here; the cli facade is deleted after migration.
 import { join } from "node:path";
-import { fail, rejectErrors } from "../errors.ts";
+import { fail, rejectErrors } from "../../core/shared/errors.ts";
 import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
 import { REGISTRY_FILE } from "../../core/contracts/files.ts";
 import { decodeHub, type HubV4 } from "../../core/contracts/hub.ts";

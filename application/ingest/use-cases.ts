@@ -6,7 +6,7 @@
 import { copyFileSync, unlinkSync } from "node:fs";
 import { isAbsolute, relative, join } from "node:path";
 import type { CmdResult } from "../commands/command.ts";
-import { fail } from "../errors.ts";
+import { fail } from "../../core/shared/errors.ts";
 import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
 import { resolveFilehubRoot } from "../registry/filehub-lookup.ts";
 import type { IngestStep } from "../../core/contracts/ingest.ts";

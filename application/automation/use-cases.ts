@@ -1,7 +1,7 @@
 // application/automation/use-cases.ts — cron definition management use cases
 // (moved from cli/cron.ts cmdCronAdd/List/Remove). Installed-task checks are
 // injected (launchd plist inspection lands with the scheduler adapters in M5).
-import { fail } from "../errors.ts";
+import { fail } from "../../core/shared/errors.ts";
 import type { CmdResult } from "../commands/command.ts";
 import { HARNESSES, type Harness } from "../../core/contracts/cron.ts";
 import { isId } from "../../core/contracts/ids.ts";

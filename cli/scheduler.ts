@@ -3,7 +3,7 @@
 // detection. Single assembly point so install, uninstall, and health checks
 // agree on identity (tag-scoped com.jspace.cron.<tag>.<id> everywhere).
 import { homedir } from "node:os";
-import { fail } from "../application/errors.ts";
+import { fail } from "../core/shared/errors.ts";
 import { readMarker } from "../adapters/fs/workbench-state.ts";
 import { schedulerAdapter, workbenchTag, type SchedulerEnv } from "../adapters/scheduler/index.ts";
 import { jspaceBinary } from "./cron.ts";

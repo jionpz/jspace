@@ -5,7 +5,7 @@
 import { basename, dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { fail } from "../application/errors.ts";
+import { fail } from "../core/shared/errors.ts";
 import { ASSETS } from "./assets.generated.ts";
 import { SKILLS_MANIFEST } from "./skills.generated.ts";
 

@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { VERSION } from "./version.generated.ts";
-import { fail } from "../application/errors.ts";
+import { fail } from "../core/shared/errors.ts";
 
 const REPO = "jionpz/jspace";
 const DEFAULT_BASE = `https://github.com/${REPO}/releases`;

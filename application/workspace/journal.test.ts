@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readMaterializedJournal, writeActualMaterializedJournal, MATERIALIZED_FILE } from "./journal.ts";
 import { workspaceUpgrade } from "./workspace.ts";
-import { CliError } from "../errors.ts";
+import { CliError } from "../../core/shared/errors.ts";
 import { sha256Of } from "./manifest.ts";
 
 function wb(): string {

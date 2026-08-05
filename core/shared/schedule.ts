@@ -1,9 +1,8 @@
-// adapters/scheduler/schedule.ts — restricted 5-field cron expression parser.
-// Shared by the scheduler adapters (linux/win32/types) and the automation layer
-// (application/automation/definitions.ts re-exports it). Pure — no fs/env.
-// Lives in adapters so the adapters never import application business logic
-// (the former definitions.ts location created an application<->adapters cycle).
-import { fail } from "../../application/errors.ts";
+// core/shared/schedule.ts — restricted 5-field cron expression parser (pure,
+// no fs/env). Lives in the shared kernel because BOTH the scheduler adapters
+// (linux/win32/types) and the automation layer consume it — a higher-layer home
+// created an application<->adapters cycle.
+import { fail } from "./errors.ts";
 
 /** launchd-dict-shaped schedule (restricted subset): Minute/Hour required;
  *  Day/Month/Weekday optional (*). Keys match the plist StartCalendarInterval. */

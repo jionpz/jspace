@@ -19,7 +19,7 @@ import { HUB_FILE, LOCAL_FILE, MARKER_FILE } from "../../core/contracts/files.ts
 import { decodeHub, type HubV4 } from "../../core/contracts/hub.ts";
 import { decodeLocal, type LocalStateV1 } from "../../core/contracts/local.ts";
 import { decodeMarker, type WorkbenchMarkerV1 } from "../../core/contracts/workbench.ts";
-import { isFile } from "../../application/fs.ts";
+import { isFile } from "../../core/shared/fs.ts";
 
 function parseJsonFile(file: string, code: string, pathLabel: string): { data: unknown } | { issue: ContractIssue } {
   try {

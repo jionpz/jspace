@@ -10,7 +10,7 @@
 
 ## Error Types
 
-- `fail(msg)` — `application/errors.ts`; throws; the CLI layer catches and prints `jspace: error: <msg>`, exits 1. Used for fatal, user-actionable errors; the message should include the **fix action** where possible (`run "jspace workspace upgrade" to restore`).
+- `fail(msg)` — `core/shared/errors.ts`; throws; the CLI layer catches and prints `jspace: error: <msg>`, exits 1. Used for fatal, user-actionable errors; the message should include the **fix action** where possible (`run "jspace workspace upgrade" to restore`).
 - `CmdResult` — the normal return channel:
 
 ```ts

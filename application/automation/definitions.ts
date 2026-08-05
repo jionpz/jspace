@@ -3,7 +3,7 @@
 // hosts skill-target compilation/validation for cron definitions (Child D).
 import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { fail } from "../errors.ts";
+import { fail } from "../../core/shared/errors.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { decodeCrons, type CronDefinition, type CronSkillTarget, type CronsFile } from "../../core/contracts/cron.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
@@ -11,10 +11,10 @@ import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
 import { diffBundle } from "../workspace/manifest.ts";
 import { isFile } from "../fs.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
-import { parseSchedule, type ScheduleDict } from "../../adapters/scheduler/schedule.ts";
+import { parseSchedule, type ScheduleDict } from "../../core/shared/schedule.ts";
 
-// Re-export schedule parsing (moved to adapters/scheduler/schedule.ts to break
-// the adapters->application cycle). Existing consumers import from here.
+// Re-export schedule parsing (shared kernel — core/shared/schedule.ts).
+// Existing consumers import from here.
 export { parseSchedule };
 export type { ScheduleDict };
 

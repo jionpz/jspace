@@ -5,7 +5,7 @@
 // (darwin plist Label, linux managed-block lines, win32 schtasks task names),
 // so two workbenches never collide on the same platform scheduler.
 import { join } from "node:path";
-import type { ScheduleDict } from "./schedule.ts";
+import type { ScheduleDict } from "../../core/shared/schedule.ts";
 
 export type PlatformName = "darwin" | "linux" | "win32";
 

@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { fail } from "../../application/errors.ts";
+import { fail } from "../../core/shared/errors.ts";
 import { taskIdFor, posixIdentity, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerOp, type SchedulerIdentity } from "./types.ts";
 
 export function plistPath(tag: string, id: string, home: string): string {

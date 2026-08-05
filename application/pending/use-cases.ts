@@ -4,7 +4,7 @@
 // when a gbrain write conflicts with the serve lock.
 import { existsSync, readFileSync } from "node:fs";
 import type { CmdResult } from "../commands/command.ts";
-import { fail } from "../errors.ts";
+import { fail } from "../../core/shared/errors.ts";
 import { resolveFilehubRoot } from "../registry/filehub-lookup.ts";
 import { readEnvelopes, readEnvelope, stageEnvelope, writeEnvelope } from "./envelope.ts";
 import { applyPending, realGbrain, type GbrainDeps } from "./apply.ts";

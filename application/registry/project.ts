@@ -2,7 +2,7 @@
 // Registers projects in the hub `projects` array. Projects are the logical
 // owning ids that `ingest begin --project` resolves against; registering one
 // removes the "not registered" warning and keeps derived slugs stable.
-import { fail } from "../errors.ts";
+import { fail } from "../../core/shared/errors.ts";
 import type { CmdResult } from "../commands/command.ts";
 import { isId } from "../../core/contracts/ids.ts";
 import { normalizePortablePath } from "../../core/contracts/paths.ts";
