@@ -5,7 +5,7 @@
 // behavior is genuine; harnessBin routes the argv to it.
 // Run: bun test application/automation/execute.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cronRun, type ExecuteDeps } from "./execute.ts";
@@ -88,4 +88,15 @@ test("timeout: harness that sleeps longer than timeout -> failed", async () => {
   chmodSync(slow, 0o755);
   const res = await run({ cronId: "weekly", timeoutSec: 1 }, deps({ harnessBin: slow }));
   expect(res.lines[0]).toContain("failed");
+});
+
+test("lock is released after success AND failure (no stale lock left)", async () => {
+  const lock = join(root, ".jspace", "logs", "cron", "weekly.lock");
+  await run({ cronId: "weekly" }, deps({ harnessBin: fakeHarness }));
+  expect(existsSync(lock)).toBe(false); // success path releases
+  const slow = join(root, "slow-harness");
+  writeFileSync(slow, "#!/bin/sh\nsleep 30\nexit 0\n");
+  chmodSync(slow, 0o755);
+  await run({ cronId: "weekly", timeoutSec: 1 }, deps({ harnessBin: slow }));
+  expect(existsSync(lock)).toBe(false); // failure/timeout path releases via finally
 });

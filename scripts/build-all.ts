@@ -1,5 +1,8 @@
 // scripts/build-all.ts — build all 6 platform binaries (3 OS x x64/arm64) into
-// bin/. Mirrors the GitHub Actions matrix (x64 uses -baseline for AVX-less CPUs).
+// bin/. Mirrors the GitHub Actions matrix. x64 uses `-baseline` (AVX-less) EXCEPT
+// Windows: the baseline bun runtime download is blocked on GH Windows runners, so
+// the released windows-x64 binary is the non-baseline `bun-windows-x64` target —
+// build-all must produce the SAME target as CI (single authority, AC9).
 // Run after `bun run scripts/gen-assets.ts`, or use `bun run build:all`.
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
@@ -33,7 +36,7 @@ const MATRIX: Array<[string, string]> = [
   ["bun-linux-arm64", "bin/jspace-linux-arm64"],
   ["bun-darwin-arm64", "bin/jspace-macos-arm64"],
   ["bun-darwin-x64-baseline", "bin/jspace-macos-x64"],
-  ["bun-windows-x64-baseline", "bin/jspace-windows-x64.exe"],
+  ["bun-windows-x64", "bin/jspace-windows-x64.exe"],
   ["bun-windows-arm64", "bin/jspace-windows-arm64.exe"],
 ];
 

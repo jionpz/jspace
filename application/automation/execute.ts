@@ -22,6 +22,8 @@ import { loadCrons, resolveCronPrompt, type SkillTargetContext } from "./definit
 import { readMaterializedJournal } from "../workspace/journal.ts";
 import { writeRun } from "./runs.ts";
 import { openOrUpdate, resolveIncidents } from "./incidents.ts";
+import { acquireLock } from "./lock.ts";
+import { win32SpawnTarget } from "./win32-spawn.ts";
 import { harnessArgv } from "../../adapters/harness/argv.ts";
 import { isFile } from "../fs.ts";
 import { localDate, localStamp } from "../time.ts";
@@ -98,17 +100,18 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
     return { lines: [`jspace: ok: cron ${opts.cronId} already succeeded today, skipping`] };
   }
 
-  // Best-effort single-instance lock (stale after timeout*2).
-  const lock = join(root, ".jspace", "logs", "cron", `${opts.cronId}.lock`);
-  mkdirSync(join(lock, ".."), { recursive: true });
-  if (existsSync(lock)) {
-    const age = deps.now() - statSync(lock).mtimeMs;
-    if (age < opts.timeoutSec * 2000) {
-      return { lines: [`jspace: skip: cron ${opts.cronId} already running (lock ${lock})`] };
-    }
-    unlinkSync(lock);
+  // Exclusive single-instance lock (stale after timeout*2). The whole run body
+  // sits in one try/finally so every exit path (incl. thrown guards) releases
+  // the lock, and release() only removes OUR ownership token.
+  const lockPath = join(root, ".jspace", "logs", "cron", `${opts.cronId}.lock`);
+  mkdirSync(join(lockPath, ".."), { recursive: true });
+  const token = `${process.pid}:${crypto.randomUUID()}`;
+  const lock = acquireLock(lockPath, token, opts.timeoutSec * 2000);
+  if (lock === null) {
+    return { lines: [`jspace: skip: cron ${opts.cronId} already running (lock ${lockPath})`] };
   }
-  writeFileSync(lock, String(process.pid), "utf-8");
+  try {
+    return await (async () => {
 
   // inbox-tidy guard: skills/asset-ingest must exist; batch log must change.
   // F3: the batch log lives at <filehub>/.jspace-logs/inbox-batch.md — the same
@@ -122,7 +125,6 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   let batchBefore = { mtime: 0, size: -1 };
   if (isInboxTask) {
     if (!existsSync(join(root, "skills", "asset-ingest"))) {
-      unlinkSync(lock);
       openOrUpdate(root, opts.cronId, "batch-stale", crypto.randomUUID());
       fail(`cron ${opts.cronId}: skills/asset-ingest not found in ${root}; refusing to run`);
     }
@@ -135,17 +137,30 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   const defaultPath = deps.platform === "win32" ? "C:\\Windows\\system32;C:\\Windows" : "/usr/local/bin:/usr/bin:/bin";
   const env = { ...process.env, PATH: process.env.PATH ?? defaultPath };
   const out: Buffer[] = [];
+  let outBytes = 0;
+  const MAX_OUT = 1_000_000;
+  const pushOutput = (d: Buffer): void => {
+    if (outBytes >= MAX_OUT) return;
+    const take = Math.min(d.length, MAX_OUT - outBytes);
+    out.push(d.subarray(0, take));
+    outBytes += take;
+  };
   const started = deps.now();
-  const needsShell = deps.platform === "win32" && /\.(cmd|exe|bat)$/i.test(argv[0]);
-  const child = spawn(argv[0], argv.slice(1), {
+  // win32: .cmd/.bat can't spawn directly -> route through cmd.exe via the
+  // testable builder; .exe/.com (and every non-win32 binary) spawn directly,
+  // so no shell:true is ever needed (shell quoting would mangle spaced args).
+  const spawnTarget = deps.platform === "win32"
+    ? win32SpawnTarget(argv)
+    : { command: argv[0], args: argv.slice(1), verbatim: false };
+  const child = spawn(spawnTarget.command, spawnTarget.args, {
     cwd: root,
     env,
     detached: deps.platform !== "win32",
-    shell: needsShell,
+    windowsVerbatimArguments: spawnTarget.verbatim,
     stdio: ["ignore", "pipe", "pipe"],
   });
-  child.stdout?.on("data", (d: Buffer) => { if (out.join("").length < 1_000_000) out.push(d); });
-  child.stderr?.on("data", (d: Buffer) => { if (out.join("").length < 1_000_000) out.push(d); });
+  child.stdout?.on("data", pushOutput);
+  child.stderr?.on("data", pushOutput);
   const timer = setTimeout(() => {
     if (deps.platform === "win32") {
       try {
@@ -211,10 +226,12 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   if (failed) {
     const failureClass = status === "failed" ? "failed" : isInboxTask && !batchChanged ? "batch-stale" : "suspect";
     openOrUpdate(root, opts.cronId, failureClass, runId);
-    unlinkSync(lock);
     return { exitCode: status === "failed" ? 1 : 0, lines: [`jspace: ${status}: cron ${opts.cronId} (exit ${exited}); log ${logPath}`] };
   }
   resolveIncidents(root, opts.cronId);
-  unlinkSync(lock);
   return { lines: [`jspace: ok: cron ${opts.cronId} (exit ${exited}); log ${logPath}`] };
+  })();
+  } finally {
+    lock.release();
+  }
 }

@@ -54,6 +54,13 @@ MVP 只支持能映射到 Task Scheduler 的 **DAILY / WEEKLY**:
 
 > 构建/发布与一键安装已在 CI 自动验证(`.github/workflows/build.yml`:三平台矩阵构建 + `verify-install` 作业)。本矩阵用于本地开发期人工冒烟与 CI 断言口径;真机调度行为(macOS launchd / Linux crontab / Windows schtasks)仍按本矩阵人工复核。
 
+### 构建 target 兼容性(发布二进制与本地构建一致)
+
+- x64 目标使用 `-baseline`(不要求 AVX 的兼容构建):`bun-linux-x64-baseline`、`bun-darwin-x64-baseline`。
+- **Windows x64 例外**:GitHub Windows runner 上 baseline bun runtime 下载被持续阻断,因此发布/CI 的 Windows x64 二进制用**非 baseline** `bun-windows-x64`(需 AVX2)。`scripts/build-all.ts`、`package.json build:win` 与 CI 矩阵保持一致(单一权威,AC9),本地 `bun run build:all` 产出的 `bin/jspace-windows-x64.exe` 与 Release 资产同 target。
+- arm64 目标(`bun-*-arm64`)无需 baseline 区分。
+
+
 ```bash
 # 0. 构建当前平台二进制
 bun run build            # -> bin/jspace (win: bin/jspace.exe)

@@ -13,7 +13,7 @@
     "gen-version": "bun run scripts/gen-version.ts",
     "build": "bun run scripts/clean-bun-build.ts && bun run scripts/gen-version.ts && bun run scripts/gen-assets.ts && bun build --compile ./cli/main.ts --minify --outfile bin/jspace && bun run scripts/clean-bun-build.ts",
     "build:all": "bun run scripts/gen-version.ts && bun run scripts/gen-assets.ts && bun run scripts/build-all.ts",
-    "build:win": "bun run scripts/clean-bun-build.ts && bun run scripts/gen-version.ts && bun run scripts/gen-assets.ts && bun build --compile ./cli/main.ts --minify --target=bun-windows-x64-baseline --outfile bin/jspace-windows-x64.exe && bun run scripts/clean-bun-build.ts",
+    "build:win": "bun run scripts/clean-bun-build.ts && bun run scripts/gen-version.ts && bun run scripts/gen-assets.ts && bun build --compile ./cli/main.ts --minify --target=bun-windows-x64 --outfile bin/jspace-windows-x64.exe && bun run scripts/clean-bun-build.ts",
     "build:linux": "bun run scripts/clean-bun-build.ts && bun run scripts/gen-version.ts && bun run scripts/gen-assets.ts && bun build --compile ./cli/main.ts --minify --target=bun-linux-x64-baseline --outfile bin/jspace-linux-x64 && bun run scripts/clean-bun-build.ts"
   },
   "devDependencies": {
