@@ -3,7 +3,7 @@
 // filters by the tag so two workbenches never collide on scheduled tasks.
 import { spawnSync } from "node:child_process";
 import { fail } from "../../application/errors.ts";
-import { parseSchedule } from "../../application/automation/definitions.ts";
+import { parseSchedule } from "./schedule.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 import { workbenchTag, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerOp } from "./types.ts";
 
@@ -19,6 +19,48 @@ function queryTasks(tag: string): string[] {
     .split(/\r?\n/)
     .map((l) => l.split(",")[0].replace(/^"|"$/g, ""))
     .filter((n) => n.startsWith(prefix));
+}
+
+/** schtasks XML <DaysOfWeek> child element names -> cron weekday (0=Sunday). */
+const SCHTASKS_DAYS: Record<string, number> = {
+  Sunday: 0,
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 3,
+  Thursday: 4,
+  Friday: 5,
+  Saturday: 6,
+};
+
+/** Parse `schtasks /query /tn <task> /xml` output into the canonical schedule
+ *  string + argv used by planReconciliation change detection. Returns null when
+ *  unparseable — the caller then falls back to empty schedule/argv (→ update op),
+ *  which is safe: it never produces a false "no-op". */
+export function parseSchtasksXml(xml: string): { schedule: string; argv: string } | null {
+  const boundary = xml.match(/<StartBoundary>([^<]+)<\/StartBoundary>/);
+  if (!boundary) return null;
+  const time = boundary[1].match(/T(\d{2}):(\d{2})/);
+  if (!time) return null;
+  const minute = String(Number(time[2])); // "00" -> "0" (canonical cron format)
+  const hour = String(Number(time[1])); // "09" -> "9"
+  let dow: number | null = null;
+  if (/<ScheduleByDay>/.test(xml)) {
+    // DAILY — schedule `min hour * * *`
+  } else if (/<ScheduleByWeek>/.test(xml)) {
+    const day = xml.match(/<DaysOfWeek>\s*<(\w+)\/>/);
+    if (!day || !(day[1] in SCHTASKS_DAYS)) return null;
+    dow = SCHTASKS_DAYS[day[1]];
+  } else {
+    return null; // not a calendar trigger we installed
+  }
+  const argsEl = xml.match(/<Arguments[^>]*>([^<]*)<\/Arguments>/);
+  if (!argsEl) return null;
+  const args = argsEl[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+  const root = args.match(/--dir\s+"([^"]+)"/);
+  const id = args.match(/--id\s+(\S+)/);
+  if (!root || !id) return null;
+  const schedule = dow === null ? `${minute} ${hour} * * *` : `${minute} ${hour} * * ${dow}`;
+  return { schedule, argv: `cron run --id ${id[1]} --dir ${root[1]}` };
 }
 
 /** Windows-only installable: DAILY (dom=* dow=*) or WEEKLY (dom=*, dow fixed); month=* and dom=*. */
@@ -41,16 +83,34 @@ export function schtasksArgs(cron: CronDefinition, jspaceBin: string, root: stri
   return [...base, "/sc", "WEEKLY", "/d", days[d.Weekday % 7]]; // 0/7 -> SUN
 }
 
+/** Content channel for create/update ops is a JSON-encoded argv array (the
+ *  caller serializes it — never space-joined, which destroys args containing
+ *  spaces like the /tr task-run command). Parsed back here without loss. */
+export function parseOpContent(content: string): string[] {
+  try {
+    const v: unknown = JSON.parse(content);
+    if (Array.isArray(v) && v.every((x) => typeof x === "string")) return v as string[];
+    fail(`invalid schtasks args payload: ${content}`);
+  } catch {
+    fail(`invalid schtasks args payload: ${content}`);
+  }
+  return [];
+}
+
 export const win32Adapter: SchedulerAdapter = {
   platform: "win32",
 
   inspect(tag: string): InstalledTask[] {
-    return queryTasks(tag).map((n) => ({
-      taskId: n,
-      cronId: n.slice(`JSpaceCron_${tag}_`.length),
-      schedule: "",
-      argv: "",
-    }));
+    return queryTasks(tag).map((n) => {
+      const res = spawnSync("schtasks", ["/query", "/tn", n, "/xml"], { encoding: "utf-8" });
+      const parsed = res.status === 0 ? parseSchtasksXml(res.stdout ?? "") : null;
+      return {
+        taskId: n,
+        cronId: n.slice(`JSpaceCron_${tag}_`.length),
+        schedule: parsed?.schedule ?? "",
+        argv: parsed?.argv ?? "",
+      };
+    });
   },
 
   apply(op: SchedulerOp, tag: string, root: string, env: SchedulerEnv): string[] {
@@ -59,8 +119,8 @@ export const win32Adapter: SchedulerAdapter = {
       if (res.status !== 0) fail(`schtasks delete failed for ${op.taskId}: ${(res.stderr ?? "").trim()}`);
       return [`jspace: ok: removed ${op.taskId}`];
     }
-    // create/update: op.content is the args array (space-joined) built by caller
-    const args = op.content.split(" ");
+    // create/update: op.content is the JSON-encoded argv array built by the caller
+    const args = parseOpContent(op.content);
     const res = spawnSync("schtasks", args, { encoding: "utf-8" });
     if (res.status !== 0) fail(`schtasks create failed for ${op.taskId}: ${(res.stderr ?? "").trim()}`);
     return [`jspace: ok: installed cron ${op.taskId.split("_").pop()} -> ${op.taskId}`];

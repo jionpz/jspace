@@ -23,7 +23,6 @@ import { resolvePath } from "../paths.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { fail } from "../../application/errors.ts";
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
 import { ASSETS } from "../assets.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
@@ -42,12 +41,9 @@ import {
 import type { IngestStep } from "../../core/contracts/ingest.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 import { pendingAck, pendingApply, pendingList, pendingStage } from "../../application/pending/use-cases.ts";
-import { readMarker } from "../../adapters/fs/workbench-state.ts";
 import {
   schedulerAdapter,
   taskIdFor,
-  workbenchTag,
-  type SchedulerEnv,
 } from "../../adapters/scheduler/index.ts";
 import type { DesiredTask } from "../../application/automation/scheduler.ts";
 import { buildPlist } from "../../adapters/scheduler/types.ts";
@@ -58,17 +54,15 @@ import {
   cmdCronStatus,
   cronLogDir,
   filehubRoot,
-  installedCronIds,
-  jspaceBinary,
   linuxCronHealth,
-  plistExists,
 } from "../cron.ts";
+import { cronIsInstalledForRoot, installedCronIdsForRoot, schedulerEnv, workbenchTagFor } from "../scheduler.ts";
 import { cmdUpdate } from "../update.ts";
 
 const s = (v: unknown): string => (typeof v === "string" ? v : "");
 const b = (v: unknown): boolean => v === true;
 
-const cronDeps = { loadCrons, parseSchedule, installedCronIds, linuxCronHealth };
+const cronDeps = { loadCrons, parseSchedule, installedCronIds: installedCronIdsForRoot, linuxCronHealth };
 const readFileOrNull = (p: string): string | null => {
   try {
     return readFileSync(p, "utf-8");
@@ -285,7 +279,7 @@ const cronAddSpec: CommandSpec = {
     { name: "--prompt", takesValue: true, required: true, help: "instruction for the headless harness" },
     { name: "--disabled", takesValue: false, help: "add the cron disabled" },
   ],
-  handler: (ctx, args) => cronAdd(ctx.root, s(args.id), s(args.schedule), s(args.harness), s(args.prompt), b(args.disabled), { isInstalled: plistExists }),
+  handler: (ctx, args) => cronAdd(ctx.root, s(args.id), s(args.schedule), s(args.harness), s(args.prompt), b(args.disabled), { isInstalled: (id) => cronIsInstalledForRoot(ctx.root, id) }),
 };
 
 const cronListSpec: CommandSpec = {
@@ -300,7 +294,7 @@ const cronRemoveSpec: CommandSpec = {
   summary: "remove a cron definition",
   positionals: [{ name: "id", required: true, help: "cron id" }],
   features: { dir: true },
-  handler: (ctx, args) => cronRemove(ctx.root, s(args.id), { isInstalled: plistExists }),
+  handler: (ctx, args) => cronRemove(ctx.root, s(args.id), { isInstalled: (id) => cronIsInstalledForRoot(ctx.root, id) }),
 };
 
 const cronEnableSpec: CommandSpec = {
@@ -326,17 +320,11 @@ const cronInstallSpec: CommandSpec = {
   handler: (ctx, args) => {
     // single engine for both dry-run and real install: automation layer plans,
     // scheduler adapter inspects/ applies; taskId is workbench-scoped.
-    const marker = readMarker(ctx.root);
-    const tag = marker.status === "ok" ? workbenchTag(marker.value.workbench_id) : "unknown";
+    const tag = workbenchTagFor(ctx.root);
     const adapter = schedulerAdapter(process.platform);
     if (!adapter) fail(`unsupported platform: ${process.platform}`);
     const data = loadCrons(ctx.root);
-    const env: SchedulerEnv = {
-      jspaceBinary: jspaceBinary(),
-      home: homedir(),
-      path: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
-      resolvePath,
-    };
+    const env = schedulerEnv();
     const buildDesired = (enabled: CronDefinition[]): DesiredTask[] =>
       enabled.map((c) => ({
         taskId: taskIdFor(tag, c.id),
@@ -368,11 +356,11 @@ const cronInstallSpec: CommandSpec = {
         // adapter on update — here we pass the per-cron line set via a minimal block
         return c.id;
       }
-      // win32: args array space-joined (schtasks)
+      // win32: args array JSON-encoded (schtasks; paths may contain spaces)
       const tn = `JSpaceCron_${tag}_${c.id}`;
       const args = schtasksArgs(c, env.jspaceBinary, ctx.root, tn);
       if (!args) fail(`cron ${c.id}: schedule "${c.schedule}" not supported on Windows (MVP: DAILY/WEEKLY with month=*)`);
-      return args.join(" ");
+      return JSON.stringify(args);
     };
     return cronInstall(ctx.root, b(args.dryRun), {
       tag,
@@ -385,12 +373,12 @@ const cronInstallSpec: CommandSpec = {
       apply: (ops) => {
         // batch by platform: darwin/win32 one op per cron; linux rebuilds block once
         if (adapter.platform === "linux") {
-          // rebuild full managed block from desired set
-          const enabled = ops
-            .filter((o) => o.action !== "delete")
-            .map((o) => o.taskId.split(".").pop()!)
-            .map((id) => data.crons.find((c) => c.id === id)!);
-          const block = crontabBlock(enabled, tag, ctx.root, env.jspaceBinary, env.path, env.home);
+          // linux applies as a whole block: rebuild from the FULL desired set
+          // (all enabled crons in cron.json), never from ops — a delete-only op
+          // set must not wipe still-enabled crons. Empty desired → empty block
+          // removes the managed block (all-disabled uninstalls).
+          const enabled = data.crons.filter((c) => c.enabled);
+          const block = enabled.length === 0 ? "" : crontabBlock(enabled, tag, ctx.root, env.jspaceBinary, env.path, env.home);
           return adapter.apply({ action: "create", taskId: taskIdFor(tag, enabled[0]?.id ?? "block"), content: block }, tag, ctx.root, env);
         }
         return ops.flatMap((o) => adapter.apply(o, tag, ctx.root, env));
@@ -404,16 +392,10 @@ const cronUninstallSpec: CommandSpec = {
   summary: "remove installed launchd agents for this workbench",
   features: { dir: true },
   handler: (ctx) => {
-    const marker = readMarker(ctx.root);
-    const tag = marker.status === "ok" ? workbenchTag(marker.value.workbench_id) : "unknown";
+    const tag = workbenchTagFor(ctx.root);
     const adapter = schedulerAdapter(process.platform);
     if (!adapter) fail(`unsupported platform: ${process.platform}`);
-    const env: SchedulerEnv = {
-      jspaceBinary: jspaceBinary(),
-      home: homedir(),
-      path: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
-      resolvePath,
-    };
+    const env = schedulerEnv();
     const lines = adapter.uninstallAll(tag, ctx.root, env);
     return { lines: lines.length > 0 ? lines : ["jspace: ok: no jspace cron tasks to remove"] };
   },

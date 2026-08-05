@@ -6,7 +6,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fail } from "../../application/errors.ts";
-import { parseSchedule } from "../../application/automation/definitions.ts";
+import { parseSchedule } from "./schedule.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 import { taskIdFor, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerOp } from "./types.ts";
 
@@ -81,18 +81,35 @@ function writeCrontab(content: string): void {
   if (r.status !== 0) fail(`crontab write failed: ${(r.stderr ?? "").trim()}`);
 }
 
+/** Parse one managed-block crontab line into an InstalledTask, or null when it
+ *  belongs to another workbench (tag mismatch) or is unparseable. Extracts the
+ *  real schedule (first 5 fields) and reconstructs argv in buildDesired's
+ *  canonical form (`cron run --id <id> --dir <root>`) so planReconciliation
+ *  can no-op on identical state. Tag is parsed correctly from
+ *  `com.jspace.cron.<tag>.<id>` (index 3, not 2 — segment 2 is the literal
+ *  "cron"; the old split(".")[2] never matched and killed change detection). */
+export function parseManagedLine(line: string, tag: string): InstalledTask | null {
+  const m = line.match(
+    /^(\S+ \S+ \S+ \S+ \S+)  cd '([^']*)' .*? cron run (?:--dir '([^']*)' --id '([^']+)'|--id '([^']+)' --dir '([^']*)').*? # (com\.jspace\.cron\.\S+)$/,
+  );
+  if (!m) return null;
+  const id = m[4] ?? m[5];
+  const dir = m[3] ?? m[6];
+  const taskId = m[7];
+  const parsedTag = taskId.replace(/^com\.jspace\.cron\./, "").split(".")[0];
+  if (parsedTag !== tag) return null; // another workbench's crons — never touch
+  return { taskId, cronId: id, schedule: m[1], argv: `cron run --id ${id} --dir ${dir}` };
+}
+
 export const linuxAdapter: SchedulerAdapter = {
   platform: "linux",
 
   inspect(tag: string): InstalledTask[] {
     const out: InstalledTask[] = [];
     const existing = readCrontab();
-    // managed-block lines carry the workbench tag suffix: com.jspace.cron.<tag>.<id>
-    for (const m of existing.matchAll(/cron run --dir '([^']*)' --id '([^']+)'.*?# (com\.jspace\.cron\.[^ ]+)/g)) {
-      const [, , id, taskId] = m;
-      const parsedTag = taskId.split(".")[2];
-      if (parsedTag !== tag) continue; // another workbench's crons — never touch
-      out.push({ taskId, cronId: id, schedule: "", argv: "" });
+    for (const line of existing.split("\n")) {
+      const parsed = parseManagedLine(line, tag);
+      if (parsed) out.push(parsed);
     }
     return out;
   },

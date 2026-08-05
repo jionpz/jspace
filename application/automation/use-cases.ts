@@ -103,9 +103,9 @@ export function cronInstall(root: string, dryRun: boolean, deps: CronInstallDeps
   const data = loadCrons(root);
   if (data.crons.length === 0) fail(`no crons defined (${root}/.jspace/cron.json empty/missing)`);
   const enabled = data.crons.filter((c) => c.enabled);
-  if (enabled.length === 0) {
-    return { lines: ["jspace: ok: no enabled crons to install (all disabled)"] };
-  }
+  // NOTE: no early-return when `enabled` is empty — reconciliation with an
+  // empty desired set deliberately produces delete ops for anything installed,
+  // so disabling every cron uninstalls the platform tasks (was: left stale).
   if (deps.validateSkillTargets) {
     const fix = deps.validateSkillTargets(enabled);
     if (fix !== null) fail(fix);

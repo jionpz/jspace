@@ -3,8 +3,9 @@
 // Run: bun test adapters/scheduler/scheduler.test.ts
 import { expect, test } from "bun:test";
 import { taskIdFor, workbenchTag } from "./types.ts";
-import { crontabBlock, replaceManagedBlock } from "./linux.ts";
-import { schtasksArgs, isWindowsInstallable } from "./win32.ts";
+import { crontabBlock, replaceManagedBlock, parseManagedLine } from "./linux.ts";
+import { schtasksArgs, isWindowsInstallable, parseOpContent, parseSchtasksXml } from "./win32.ts";
+import { plistPath, parsePlistName } from "./darwin.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 
 test("workbenchTag is stable + distinct across workbench ids", () => {
@@ -144,4 +145,50 @@ test("isWindowsInstallable", () => {
   expect(isWindowsInstallable("0 21 * * 0")).toBe(true);
   expect(isWindowsInstallable("0 0 1 * *")).toBe(false);
   expect(isWindowsInstallable("0 0 1 6 *")).toBe(false);
+});
+
+// ---- cron-convergence regression tests ----
+
+test("parseOpContent: JSON argv round-trip survives spaces/quotes (win32 /tr fix)", () => {
+  const args = [
+    "/create", "/tn", "JSpaceCron_abc_inbox",
+    "/tr", `"C:\\bin\\jspace.exe" cron run --dir "C:\\Users\\John Doe\\wb" --id inbox-tidy`,
+    "/st", "21:00", "/f", "/it", "/sc", "DAILY",
+  ];
+  expect(parseOpContent(JSON.stringify(args))).toEqual(args);
+  expect(() => parseOpContent("/create /tn x")).toThrow(); // not JSON
+});
+
+test("parseManagedLine: extracts schedule/argv + correct tag (was split(\".\")[2])", () => {
+  const line = `0 21 * * *  cd '/wb/a' && PATH='/usr/bin:/bin' HOME='/home/u' '/bin/jspace' cron run --dir '/wb/a' --id 'inbox-tidy' >> '/wb/a/.jspace/logs/cron/crontab-inbox-tidy.log' 2>&1  # com.jspace.cron.abc123.inbox-tidy`;
+  const parsed = parseManagedLine(line, "abc123");
+  expect(parsed).toEqual({
+    taskId: "com.jspace.cron.abc123.inbox-tidy",
+    cronId: "inbox-tidy",
+    schedule: "0 21 * * *",
+    argv: "cron run --id inbox-tidy --dir /wb/a",
+  });
+  // other workbench's tag -> null (cross-workbench isolation)
+  expect(parseManagedLine(line, "xyz789")).toBeNull();
+  // reverse arg order (--id then --dir) still parses
+  const reverse = `0 9 * * 0  cd '/wb/b' && PATH='/bin' HOME='/h' '/bin/jspace' cron run --id 'weekly' --dir '/wb/b' >> '/wb/b/log' 2>&1  # com.jspace.cron.zzz.weekly`;
+  expect(parseManagedLine(reverse, "zzz")).toMatchObject({ cronId: "weekly", schedule: "0 9 * * 0", argv: "cron run --id weekly --dir /wb/b" });
+  // garbage -> null
+  expect(parseManagedLine("not a cron line", "abc123")).toBeNull();
+});
+
+test("parseSchtasksXml: DAILY + WEEKLY + spaces root + unparseable", () => {
+  const daily = `<Task xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger></Triggers><Actions><Exec><Command>C:\\bin\\jspace.exe</Command><Arguments>&quot;C:\\bin\\jspace.exe&quot; cron run --dir &quot;C:\\Users\\John Doe\\wb&quot; --id inbox-tidy</Arguments></Exec></Actions></Task>`;
+  expect(parseSchtasksXml(daily)).toEqual({ schedule: "0 21 * * *", argv: "cron run --id inbox-tidy --dir C:\\Users\\John Doe\\wb" });
+  const weekly = `<Task xmlns="x"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T09:30:00</StartBoundary><ScheduleByWeek><WeeksInterval>1</WeeksInterval><DaysOfWeek><Sunday/></DaysOfWeek></ScheduleByWeek></CalendarTrigger></Triggers><Actions><Exec><Arguments>cron run --dir "C:\\wb" --id weekly</Arguments></Exec></Actions></Task>`;
+  expect(parseSchtasksXml(weekly)).toEqual({ schedule: "30 9 * * 0", argv: "cron run --id weekly --dir C:\\wb" });
+  expect(parseSchtasksXml("<Task/>")).toBeNull();
+  expect(parseSchtasksXml(`<Task><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary><ScheduleByDay/></CalendarTrigger></Triggers><Actions><Exec><Arguments>no --dir here</Arguments></Exec></Actions></Task>`)).toBeNull();
+});
+
+test("darwin plistPath + parsePlistName use injected home + tagged identity", () => {
+  expect(plistPath("abc123", "inbox-tidy", "/Users/u")).toBe("/Users/u/Library/LaunchAgents/com.jspace.cron.abc123.inbox-tidy.plist");
+  expect(parsePlistName("com.jspace.cron.abc123.inbox-tidy.plist")).toEqual({ taskId: "com.jspace.cron.abc123.inbox-tidy", tag: "abc123", cronId: "inbox-tidy" });
+  expect(parsePlistName("com.jspace.cron.inbox-tidy.plist")).toBeNull(); // legacy untagged — not ours
+  expect(parsePlistName("random.txt")).toBeNull();
 });

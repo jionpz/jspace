@@ -1,21 +1,16 @@
 // cli/cron.ts — declarative cron definitions (.jspace/cron.json) + macOS launchd
 // install + headless harness execution. Follows the registry.ts / cmds.ts idioms.
-import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { fail } from "../application/errors.ts";
 import { devRoot, isCompiled } from "./embed.ts";
-import { isFile, resolvePath } from "./paths.ts";
 import { CONFIG_DIR } from "../core/contracts/files.ts";
-import { readWorkbenchState, workbenchRoot } from "./registry.ts";
+import { workbenchRoot } from "./registry.ts";
 import { resolveFilehubRoot } from "../application/registry/filehub-lookup.ts";
 import { loadCrons, parseSchedule, type ScheduleDict } from "../application/automation/definitions.ts";
-import { harnessArgv } from "../adapters/harness/argv.ts";
 import { lastRun } from "../application/automation/runs.ts";
-import { openIncidents, readIncidents } from "../application/automation/incidents.ts";
+import { readIncidents } from "../application/automation/incidents.ts";
 import { readEnvelopes, envelopePath } from "../application/pending/envelope.ts";
-import type { CronDefinition } from "../core/contracts/cron.ts";
 export { parseSchedule };
 export type { ScheduleDict };
 
@@ -29,13 +24,6 @@ function shq(s: string): string {
   return "'" + s.replace(/'/g, `'\\''`) + "'";
 }
 
-/** Stable short identity for a workbench root (used in Windows task names). */
-function shortHash(s: string): string {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return h.toString(36);
-}
-
 /** Local calendar date YYYY-MM-DD (no UTC shift). */
 function localDate(): string {
   const d = new Date();
@@ -43,19 +31,6 @@ function localDate(): string {
 }
 function localStamp(): string {
   return `${localDate()}T${String(new Date().getHours()).padStart(2, "0")}${String(new Date().getMinutes()).padStart(2, "0")}${String(new Date().getSeconds()).padStart(2, "0")}`;
-}
-
-// ---- launchd install / uninstall ----
-function plistPath(id: string): string {
-  return join(homedir(), "Library", "LaunchAgents", `com.jspace.cron.${id}.plist`);
-}
-export function plistExists(id: string): boolean {
-  return isFile(plistPath(id));
-}
-export function installedPlists(): string[] {
-  const dir = join(homedir(), "Library", "LaunchAgents");
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir).filter((n) => n.startsWith("com.jspace.cron.") && n.endsWith(".plist"));
 }
 
 /** Absolute jspace binary for scheduling. Compiled: process.execPath; source
@@ -69,39 +44,13 @@ export function jspaceBinary(plat: Platform = platform): string {
   return join(devRoot(), "bin", "jspace");
 }
 
-/** IDs currently installed in the platform scheduler for this workbench. */
-export function installedCronIds(root: string): string[] {
-  if (platform === "darwin") {
-    return installedPlists().map((n) => n.replace(/^com\.jspace\.cron\./, "").replace(/\.plist$/, ""));
-  }
-  if (platform === "linux") {
-    const res = spawnSync("crontab", ["-l"], { encoding: "utf-8" });
-    const out = res.status === 0 ? (res.stdout ?? "") : "";
-    const ids: string[] = [];
-    for (const m of out.matchAll(/cron run --dir '([^']*)' --id '([^']+)'/g)) {
-      const dir = m[1];
-      if (resolvePath(dir) === root) ids.push(m[2]);
-    }
-    return ids;
-  }
-  if (platform === "win32") {
-    const wbId = shortHash(root);
-    const res = spawnSync("schtasks", ["/query", "/fo", "csv", "/nh"], { encoding: "utf-8" });
-    const out = res.status === 0 ? (res.stdout ?? "") : "";
-    const prefix = `JSpaceCron_${wbId}_`;
-    return out.split(/\r?\n/).map((l) => l.split(",")[0].replace(/^"|"$/g, ""))
-      .filter((n) => n.startsWith(prefix))
-      .map((n) => n.slice(prefix.length));
-  }
-  return [];
-}
-
 /** Linux cron health for doctor: crontab command present + cron daemon running. */
 export function linuxCronHealth(): { crontab: boolean; service: boolean } {
   const c = spawnSync("sh", ["-c", "command -v crontab"], { encoding: "utf-8" });
   const s = spawnSync("sh", ["-c", "pgrep -x crond >/dev/null 2>&1 || pgrep -x cron >/dev/null 2>&1"], { encoding: "utf-8" });
   return { crontab: (c.stdout ?? "").trim() !== "", service: s.status === 0 };
 }
+
 // ---- cron run / status ----
 export function cronLogDir(root: string, id: string): string {
   return join(root, ".jspace", "logs", "cron", id);

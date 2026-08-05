@@ -8,18 +8,18 @@ import { spawnSync } from "node:child_process";
 import { fail } from "../../application/errors.ts";
 import { taskIdFor, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerOp } from "./types.ts";
 
-export function plistPath(tag: string, id: string): string {
-  return join(process.env.HOME ?? "", "Library", "LaunchAgents", `${taskIdFor(tag, id)}.plist`);
+export function plistPath(tag: string, id: string, home: string): string {
+  return join(home, "Library", "LaunchAgents", `${taskIdFor(tag, id)}.plist`);
 }
 
-function listPlists(): string[] {
-  const dir = join(process.env.HOME ?? "", "Library", "LaunchAgents");
+function listPlists(home: string): string[] {
+  const dir = join(home, "Library", "LaunchAgents");
   if (!existsSync(dir)) return [];
   return readdirSync(dir).filter((n) => n.startsWith("com.jspace.cron.") && n.endsWith(".plist"));
 }
 
 /** Parse a plist file name into (taskId, tag, cronId); null when unparseable. */
-function parsePlistName(name: string): { taskId: string; tag: string; cronId: string } | null {
+export function parsePlistName(name: string): { taskId: string; tag: string; cronId: string } | null {
   const m = name.match(/^(com\.jspace\.cron\.)([^.]+)\.([^.]+)\.plist$/);
   if (!m) return null;
   return { taskId: m[1] + m[2] + "." + m[3], tag: m[2], cronId: m[3] };
@@ -28,8 +28,8 @@ function parsePlistName(name: string): { taskId: string; tag: string; cronId: st
 /** Extract the StartCalendarInterval dict keys as a canonical schedule string
  *  (matches the cron.json `0 3 * * *` shape when mapped back). We only need
  *  enough to detect drift vs cron.json, not a full round-trip. */
-function plistSchedule(name: string): string {
-  const p = join(process.env.HOME ?? "", "Library", "LaunchAgents", name);
+function plistSchedule(name: string, home: string): string {
+  const p = join(home, "Library", "LaunchAgents", name);
   if (!existsSync(p)) return "";
   const res = spawnSync("plutil", ["-extract", "StartCalendarInterval", "json", "-o", "-", p], { encoding: "utf-8" });
   if (res.status !== 0) return "";
@@ -48,8 +48,8 @@ function plistSchedule(name: string): string {
 
 /** Extract the WorkingDirectory from an installed plist (the workbench root the
  *  cron runs against; matches buildDesired's argv intent). */
-function plistArgv(name: string): string {
-  const p = join(process.env.HOME ?? "", "Library", "LaunchAgents", name);
+function plistArgv(name: string, home: string): string {
+  const p = join(home, "Library", "LaunchAgents", name);
   if (!existsSync(p)) return "";
   // plutil -extract WorkingDirectory json fails on bare strings; use -p and grep
   const res = spawnSync("plutil", ["-p", p], { encoding: "utf-8" });
@@ -65,17 +65,17 @@ function plistArgv(name: string): string {
 export const darwinAdapter: SchedulerAdapter = {
   platform: "darwin",
 
-  inspect(tag: string): InstalledTask[] {
+  inspect(tag: string, env: SchedulerEnv): InstalledTask[] {
     const out: InstalledTask[] = [];
-    for (const name of listPlists()) {
+    for (const name of listPlists(env.home)) {
       const parsed = parsePlistName(name);
       if (!parsed) continue; // not ours (malformed — leave alone)
       if (parsed.tag !== tag) continue; // another workbench's agent — never touch
       out.push({
         taskId: parsed.taskId,
         cronId: parsed.cronId,
-        schedule: plistSchedule(name),
-        argv: plistArgv(name),
+        schedule: plistSchedule(name, env.home),
+        argv: plistArgv(name, env.home),
       });
     }
     return out;
@@ -83,7 +83,7 @@ export const darwinAdapter: SchedulerAdapter = {
 
   apply(op: SchedulerOp, tag: string, root: string, env: SchedulerEnv): string[] {
     const cronId = op.taskId.split(".").pop() ?? op.taskId;
-    const p = plistPath(tag, cronId);
+    const p = plistPath(tag, cronId, env.home);
     if (op.action === "create" || op.action === "update") {
       mkdirSync(join(root, ".jspace", "logs", "cron"), { recursive: true });
       if (existsSync(p)) unlinkSync(p); // idempotent: replace
@@ -101,12 +101,12 @@ export const darwinAdapter: SchedulerAdapter = {
     return [`jspace: ok: removed ${op.taskId}.plist`];
   },
 
-  uninstallAll(tag: string): string[] {
+  uninstallAll(tag: string, root: string, env: SchedulerEnv): string[] {
     const lines: string[] = [];
-    for (const name of listPlists()) {
+    for (const name of listPlists(env.home)) {
       const parsed = parsePlistName(name);
       if (!parsed || parsed.tag !== tag) continue;
-      const p = join(process.env.HOME ?? "", "Library", "LaunchAgents", name);
+      const p = join(env.home, "Library", "LaunchAgents", name);
       spawnSync("launchctl", ["unload", p]); // tolerate not-loaded
       if (existsSync(p)) unlinkSync(p);
       lines.push(`jspace: ok: removed ${name}`);

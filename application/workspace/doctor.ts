@@ -106,7 +106,7 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
     }
     for (const id of installedIds) {
       if (!crons.some((c) => c.id === id)) {
-        diags.push({ severity: "warning", code: "cron.stale_task", path: `cron.${id}`, message: `stale scheduled task com.jspace.cron.${id} (cron removed; run jspace cron uninstall)` });
+        diags.push({ severity: "warning", code: "cron.stale_task", path: `cron.${id}`, message: `stale scheduled task ${id} (cron removed; run jspace cron uninstall)` });
       }
     }
   }
