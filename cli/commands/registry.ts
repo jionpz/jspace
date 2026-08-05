@@ -49,20 +49,20 @@ import type { DesiredTask } from "../../application/automation/scheduler.ts";
 import { buildPlist } from "../../adapters/scheduler/types.ts";
 import { crontabBlock } from "../../adapters/scheduler/linux.ts";
 import { schtasksArgs } from "../../adapters/scheduler/win32.ts";
-import {
-  cmdCronFailures,
-  cmdCronStatus,
-  cronLogDir,
-  filehubRoot,
-  linuxCronHealth,
-} from "../cron.ts";
+import { cronFailures, cronLogDir, cronStatus, filehubRoot } from "../../application/automation/status.ts";
+import { invocationArgv } from "../../application/automation/invocation.ts";
 import { cronIsInstalledForRoot, installedCronIdsForRoot, schedulerEnv, workbenchTagFor } from "../scheduler.ts";
 import { cmdUpdate } from "../update.ts";
 
 const s = (v: unknown): string => (typeof v === "string" ? v : "");
 const b = (v: unknown): boolean => v === true;
 
-const cronDeps = { loadCrons, parseSchedule, installedCronIds: installedCronIdsForRoot, linuxCronHealth };
+const cronDeps = {
+  loadCrons,
+  parseSchedule,
+  installedCronIds: installedCronIdsForRoot,
+  linuxCronHealth: () => schedulerAdapter(process.platform)?.health?.(schedulerEnv()) ?? { crontab: false, service: false },
+};
 const readFileOrNull = (p: string): string | null => {
   try {
     return readFileSync(p, "utf-8");
@@ -330,7 +330,7 @@ const cronInstallSpec: CommandSpec = {
         taskId: taskIdFor(tag, c.id),
         cronId: c.id,
         schedule: c.schedule,
-        argv: `cron run --id ${c.id} --dir ${ctx.root}`,
+        argv: invocationArgv({ cronId: c.id, workbench: ctx.root }).join(" "),
         content: c.id, // adapter-specific content built per-platform below
       }));
     const validateSkillTargets = (enabled: CronDefinition[]): string | null => {
@@ -445,10 +445,7 @@ const cronStatusSpec: CommandSpec = {
   name: "status",
   summary: "show last run result",
   positionals: [{ name: "id", help: "cron id (default: all)" }],
-  handler: (_ctx, args) => {
-    cmdCronStatus(args.id === undefined ? undefined : s(args.id));
-    return { lines: [] };
-  },
+  handler: (ctx, args) => cronStatus(ctx.root, args.id === undefined ? undefined : s(args.id)),
 };
 
 const cronFailuresSpec: CommandSpec = {
@@ -458,10 +455,7 @@ const cronFailuresSpec: CommandSpec = {
   description:
     "One-place session-start surface: recent failures + pending staged gbrain writes (APPLY.json) + per-cron status. Exit 1 when anything needs attention.",
   features: { dir: true, json: true },
-  handler: (ctx, args) => {
-    cmdCronFailures(b(args.json), ctx.root);
-    return { lines: [] };
-  },
+  handler: (ctx) => cronFailures(ctx.root),
 };
 
 const cronAckSpec: CommandSpec = {

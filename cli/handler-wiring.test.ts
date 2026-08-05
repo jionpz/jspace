@@ -5,7 +5,7 @@
 // this layer as almost entirely unexercised.
 // Run: bun test cli/handler-wiring.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initWorkbench } from "../application/workspace/init.ts";
@@ -15,6 +15,7 @@ import { resolvePath } from "./paths.ts";
 import { BUNDLE_MANIFEST } from "./manifest.generated.ts";
 import { parse, type CmdContext, type CmdResult, type CommandSpec } from "../application/commands/command.ts";
 import { COMMANDS } from "./commands/registry.ts";
+import { invocationArgv } from "../application/automation/invocation.ts";
 
 const initDeps = { resolvePath, expandTilde, isCompiled, devRoot, materialize: materializeTree, manifest: BUNDLE_MANIFEST };
 const ROOT: CommandSpec = { name: "", summary: "", children: COMMANDS };
@@ -35,13 +36,13 @@ function seedCrons(enabled: boolean): void {
   );
 }
 
-function run(argv: string[]): { lines: string[]; data?: unknown } {
+function run(argv: string[]): { lines: string[]; data?: unknown; exitCode?: number } {
   const out = parse(argv, ROOT);
   if (out.kind !== "run") throw new Error(`expected run, got ${JSON.stringify(out)}`);
   const r = out as { args: Record<string, unknown>; spec: CommandSpec };
-  const ctx: CmdContext = { root: wb, json: false, dryRun: false, dir: undefined, cwd: wb };
+  const ctx: CmdContext = { root: wb, json: r.args.json === true, dryRun: false, dir: undefined, cwd: wb };
   const res = r.spec.handler?.(ctx, r.args) as CmdResult | undefined;
-  return { lines: res?.lines ?? [], data: res?.data };
+  return { lines: res?.lines ?? [], data: res?.data, exitCode: res?.exitCode };
 }
 
 test("cron enable/disable wire through the parser to cronSetEnabled", () => {
@@ -67,4 +68,46 @@ test("ingest list --json on a fresh workbench is a stable empty shape", () => {
   const shape = data as { journals: unknown[] };
   expect(Array.isArray(shape.journals)).toBe(true);
   expect(shape.journals).toHaveLength(0);
+});
+
+test("cron failures via the parser: needs attention -> exitCode 1 + data", () => {
+  seedCrons(true);
+  mkdirSync(join(wb, ".jspace", "state", "incidents"), { recursive: true });
+  writeFileSync(
+    join(wb, ".jspace", "state", "incidents", "a-failed.json"),
+    JSON.stringify({ id: "a-failed", cronId: "a", failureClass: "failed", status: "open", openedAt: "2026-08-03T12:00:00", evidence: [] }),
+  );
+  const { exitCode, data } = run(["cron", "failures"]);
+  expect(exitCode).toBe(1); // SessionStart hook contract
+  const summary = (data as { summary: { needs_attention: number } }).summary;
+  expect(summary.needs_attention).toBe(1);
+});
+
+test("cron check (alias) mirrors failures; clean -> no exitCode", () => {
+  seedCrons(true);
+  const { exitCode } = run(["cron", "check"]);
+  expect(exitCode).toBeUndefined();
+});
+
+test("cron status via the parser returns per-cron lines", () => {
+  seedCrons(true);
+  const { lines } = run(["cron", "status"]);
+  expect(lines.join("\n")).toContain("a: never run");
+});
+
+test("invocationArgv round-trips through the real cron run parser (audit F1)", () => {
+  const cases = [
+    { workbench: "/some/wb", cronId: "nightly" },
+    { workbench: "/some wb with spaces", cronId: "a", force: true, timeoutSec: 900 },
+  ];
+  for (const inv of cases) {
+    const out = parse(invocationArgv(inv), ROOT);
+    if (out.kind !== "run") throw new Error(`expected run, got ${JSON.stringify(out)}`);
+    const r = out as { spec: CommandSpec; args: Record<string, unknown> };
+    expect(r.spec.name).toBe("run");
+    expect(r.args.id).toBe(inv.cronId);
+    expect(r.args.dir).toBe(inv.workbench);
+    expect(r.args.force).toBe(inv.force ?? false);
+    expect(r.args.timeout).toBe(inv.timeoutSec === undefined ? undefined : String(inv.timeoutSec));
+  }
 });
