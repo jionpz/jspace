@@ -6,6 +6,17 @@ import { resolve } from "node:path";
 
 const repoRoot = resolve(import.meta.dir, "..");
 
+// Remove stale root-level .*.bun-build residue before compiling (same step the
+// single-platform build scripts run).
+const clean = spawnSync(process.execPath, ["run", "scripts/clean-bun-build.ts"], {
+  cwd: repoRoot,
+  stdio: ["ignore", "inherit", "inherit"],
+});
+if (clean.status !== 0) {
+  console.error("FAIL clean-bun-build");
+  process.exit(1);
+}
+
 // Ensure version.generated.ts is fresh (binary must report the current tag).
 const gen = spawnSync(process.execPath, ["run", "scripts/gen-version.ts"], {
   cwd: repoRoot,
@@ -45,4 +56,15 @@ for (const [target, out] of MATRIX) {
   } else {
     console.log(`ok ${out}`);
   }
+}
+
+// bun build --compile leaves one staging .bun-build per build; remove residue so
+// a successful build leaves the repo root clean.
+const after = spawnSync(process.execPath, ["run", "scripts/clean-bun-build.ts"], {
+  cwd: repoRoot,
+  stdio: ["ignore", "inherit", "inherit"],
+});
+if (after.status !== 0) {
+  console.error("FAIL clean-bun-build (post)");
+  process.exitCode = 1;
 }
