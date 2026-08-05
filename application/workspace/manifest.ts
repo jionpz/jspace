@@ -39,7 +39,7 @@ export function recreateOnMissing(rel: string): boolean {
  *  created on demand by `filehub init`, not by init/upgrade). */
 export function materializedRel(key: string): string | null {
   if (key.startsWith("templates/workbench/")) return key.slice("templates/workbench/".length);
-  if (key.startsWith("skills/")) return `.space/skills/${key.slice("skills/".length)}`; // 官方 skill → 隐藏 .space/skills/
+  if (key.startsWith("skills/")) return `.jspace/skills/${key.slice("skills/".length)}`; // 官方 skill → .jspace/skills/
   return null;
 }
 

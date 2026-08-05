@@ -93,7 +93,7 @@ Validation uses the JSpace CLI: `jspace doctor --dir .` (`jspace` is the compile
 
 ## Skill Governance
 
-Project-local skills are future reusable AI capabilities. Root `skills/` is reserved for **user-created** skills — create one only with user approval. Official bundled skills live under `.space/skills/` (machine-managed by `jspace init`/upgrade: unmodified copies are refreshed on upgrade, local edits are preserved as `skip`); do not hand-edit them here.
+Project-local skills are future reusable AI capabilities. Root `skills/` is reserved for **user-created** skills — create one only with user approval. Official bundled skills live under `.jspace/skills/` (machine-managed by `jspace init`/upgrade: unmodified copies are refreshed on upgrade, local edits are preserved as `skip`); do not hand-edit them here.
 
 Propose a skill when at least two signals apply:
 
@@ -106,7 +106,7 @@ Propose a skill when at least two signals apply:
 
 Do not create a skill for one-off notes, simple domain metadata, coding conventions that belong in `AGENTS.md`, large content dumps, or rules that fit clearly in `AGENTS.md` / a domain README.
 
-Approved workbench skills (official; materialized by `jspace init` into `.space/skills/`):
+Approved workbench skills (official; materialized by `jspace init` into `.jspace/skills/`):
 <!-- TRELLIS-SKILL-GOV:BEGIN -->
 - `jspace-bootstrap` - **首次配置** JSpace 工作台(需已装至少一个 harness):装 gbrain 统一记忆库(PGLite+知识图谱+本地 embedding)、校验注册表、接线所选 harness(MCP/CLI + 会话注入/写回)。Use when 初始化/配置 jspace、registry broken、gbrain missing、fresh environment。Do NOT use for 机器级多-harness 全局治理接线(→harness-config)或日常资料入库(→asset-ingest)。
 - `asset-ingest` - 把一份工作资料(书籍/pdf/ppt/excel/报告)变成可召回的知识资产:本体归位文件中心 + 要点写进 gbrain reference 页。Use when 资料入库/整理 inbox/归位资料。Do NOT use for 会话进度写回(→memory-writeback)或用户主动问句召回(→memory-recall)。
@@ -120,11 +120,11 @@ Approved workbench skills (official; materialized by `jspace init` into `.space/
 | Knowledge | Destination |
 | --- | --- |
 | Daily operating rule for all agents | Root `AGENTS.md` |
-| Persistent facts and asset pointers | gbrain（bootstrap 后接线；见 `.space/skills/jspace-bootstrap/references/gbrain.md`） |
+| Persistent facts and asset pointers | gbrain（bootstrap 后接线；见 `.jspace/skills/jspace-bootstrap/references/gbrain.md`） |
 | Domain entry point/resource/workflow | `workspace/<domain>/README.md` or `domain.json` |
 | Domain-specific AI boundary | `workspace/<domain>/AGENTS.md` |
 | Repeatable domain procedure | `workspace/<domain>/runbook.md` |
-| Reusable AI capability | `.space/skills/<jspace-skill>/`（官方）/ 根 `skills/<name>/`（用户自建，经确认） |
+| Reusable AI capability | `.jspace/skills/<jspace-skill>/`（官方）/ 根 `skills/<name>/`（用户自建，经确认） |
 | Domain/resource discovery index | `.jspace/hub.json` |
 
 Only write durable records when they will help future sessions. Root `AGENTS.md` should contain long-lived operating rules, not temporary preferences or one-off task notes.
@@ -139,7 +139,7 @@ When the user says "开发模式" and wants to maintain the JSpace CLI/templates
 
 ## Workspace Upgrade & Ownership
 
-`jspace workspace upgrade` 只动材料化清单内的文件。模板文件(README/AGENTS/.gitignore/.claude 设置/打包技能)未修改则随升级刷新,本地修改过的一律保留(显示 `skip`,不阻断);`.jspace/hub.json` 与 `.jspace/cron.json` 是用户数据,升级永不覆盖,`workspace/`、`filehub/` 等用户预留区永不触碰。边界与判断方法见 README「目录边界与升级范围」。
+`jspace workspace upgrade` 只动材料化清单内的文件。模板文件(README/AGENTS/.gitignore/.claude 设置/官方 skill)未修改则随升级刷新,本地修改过的一律保留(显示 `skip`,不阻断);`.jspace/hub.json` 与 `.jspace/cron.json` 是用户数据,升级永不覆盖;`.jspace/skills/` 是官方 skill 的 seed 落位(与用户数据同目录但所有权不同:未改动刷新、改过保留),`workspace/`、`filehub/` 等用户预留区永不触碰。边界与判断方法见 README「目录边界与升级范围」。
 
 ## Agents
 
@@ -181,7 +181,7 @@ Before finishing a work session, quietly check whether anything should be preser
 
 ## Scheduled Tasks (cron)
 
-Cron definitions live in `.jspace/cron.json` (declarative: schedule + harness + prompt) and install into macOS launchd via `jspace cron install` (one LaunchAgent per cron). **At session start, run `jspace cron check`** (Claude Code best-effort: its SessionStart hook usually runs it, but the hook must actually fire; other harnesses — pi/codex/cursor — run it manually; lifecycle 分级见 `.space/skills/jspace-bootstrap/references/harnesses.md`) and report any failures / pending staged gbrain writes (`.jspace-logs/*.APPLY.json`) to the user.** Cron definitions are treated as code (git-synced) — review changes before applying. `weekly-report` / `memory-consolidate` ship `enabled: true` with self-contained output contracts in their prompts (weekly-report → `<filehub>/areas/周报/<YYYY-MM-DD>-周报.md` + gbrain `assets/周报/<YYYY-MM-DD>`; memory-consolidate → gbrain `memory/consolidate/<YYYY-MM-DD>` + state-page write-back). Before the machine-side `jspace cron install`, run each task once via `jspace cron run` to verify the contract (rehearsal gate). **Headless runs go through the cc-switch local proxy with failover; account/quota model & exhaustion handling live with the jspace distribution (`.space/skills/jspace-bootstrap/references/headless-ops.md`) — if a cron fails from rate-limit/quota, failover → retry → downgrade, then let `jspace cron check` surface it.**
+Cron definitions live in `.jspace/cron.json` (declarative: schedule + harness + prompt) and install into macOS launchd via `jspace cron install` (one LaunchAgent per cron). **At session start, run `jspace cron check`** (Claude Code best-effort: its SessionStart hook usually runs it, but the hook must actually fire; other harnesses — pi/codex/cursor — run it manually; lifecycle 分级见 `.jspace/skills/jspace-bootstrap/references/harnesses.md`) and report any failures / pending staged gbrain writes (`.jspace-logs/*.APPLY.json`) to the user.** Cron definitions are treated as code (git-synced) — review changes before applying. `weekly-report` / `memory-consolidate` ship `enabled: true` with self-contained output contracts in their prompts (weekly-report → `<filehub>/areas/周报/<YYYY-MM-DD>-周报.md` + gbrain `assets/周报/<YYYY-MM-DD>`; memory-consolidate → gbrain `memory/consolidate/<YYYY-MM-DD>` + state-page write-back). Before the machine-side `jspace cron install`, run each task once via `jspace cron run` to verify the contract (rehearsal gate). **Headless runs go through the cc-switch local proxy with failover; account/quota model & exhaustion handling live with the jspace distribution (`.jspace/skills/jspace-bootstrap/references/headless-ops.md`) — if a cron fails from rate-limit/quota, failover → retry → downgrade, then let `jspace cron check` surface it.**
 
 ## Brain operations
 

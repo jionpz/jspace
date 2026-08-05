@@ -10,9 +10,9 @@
 - `.jspace/local.json` - 本机状态(安装实例 id + 路径绑定;git 忽略,init 生成)
 - `.jspace/logs/` - 执行日志(cron / 无头批量;git 忽略)
 - `.jspace/state/` - 运行时状态槽(升级 journal / 材料化记录;git 忽略)
+- `.jspace/skills/` - 官方打包技能(`jspace init` 物化;升级刷新未改动副本、保留本地修改)
 - `AGENTS.md` - 工作模式操作规则
 - `workspace/` - 域目录（初始不预建；按 AGENTS.md 的 Domain Governance 从真实使用涌现，首个域创建时生成）
-- `.space/skills/` - 官方打包技能（`jspace init` 物化；升级刷新未改动副本、保留本地修改）
 - `skills/` - 用户自建技能保留地（需用户确认；官方技能不在根目录）
 - `.gitignore` - 忽略 `.jspace/logs/`、`.jspace/local.json`、`.jspace/state/`
 
@@ -22,7 +22,7 @@
 
 | 类别 | 含义 | 升级行为 |
 | --- | --- | --- |
-| `seed`(模板) | 可定制的模板文件:README/AGENTS/.gitignore/.claude 设置、打包技能 | **未修改**随升级刷新到新模板;**本地修改过**的一律保留(显示 `skip`,不阻断) |
+| `seed`(模板) | 可定制的模板文件:README/AGENTS/.gitignore/.claude 设置、官方 skill(`.jspace/skills/`) | **未修改**随升级刷新到新模板;**本地修改过**的一律保留(显示 `skip`,不阻断) |
 | `user`(数据) | 用户数据:`.jspace/hub.json`、`.jspace/cron.json` | **永不覆盖**;schema 演进走迁移。hub.json 缺失时升级重建空注册表;cron.json 删除即视为停用,升级不复活 |
 | machine(状态) | `.jspace/marker.json`/`local.json`/`logs/`/`state/` | 机器生成/重写,不进替换范围 |
 
@@ -31,7 +31,7 @@
 ## 使用
 
 1. 先读 `AGENTS.md`。
-2. 首次使用按 `.space/skills/jspace-bootstrap/SKILL.md` 配置 gbrain 与所选 AI harness。
+2. 首次使用按 `.jspace/skills/jspace-bootstrap/SKILL.md` 配置 gbrain 与所选 AI harness。
 3. 用 JSpace CLI 校验本目录（`jspace` 为编译二进制，需在 PATH 上；源码检出则运行 `bun run cli/main.ts`）：
 
 ```bash
@@ -44,7 +44,7 @@ jspace doctor --dir .
 
 ## 资产管理(跟踪新项目)
 
-重资产(pdf/ppt/excel/md)归位在**文件中心(filehub)**——独立目录,由 `jspace filehub init` 生成并注册(`type: filehub` resource),可作 Obsidian vault 打开;内容走网盘/Obsidian Sync,不进本工作台 git。协议见 filehub 根 `README.md` 与 `.space/skills/asset-ingest/`。
+重资产(pdf/ppt/excel/md)归位在**文件中心(filehub)**——独立目录,由 `jspace filehub init` 生成并注册(`type: filehub` resource),可作 Obsidian vault 打开;内容走网盘/Obsidian Sync,不进本工作台 git。协议见 filehub 根 `README.md` 与 `.jspace/skills/asset-ingest/`。
 
 **跟踪一个新项目 = 三步**:
 

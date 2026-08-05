@@ -306,7 +306,7 @@ test("dry-run reports the plan without mutating", () => {
 test("modified workbench skill is never overwritten (seed, skip preserved)", () => {
   const root = tmp();
   initWorkbench(root, false, initDeps);
-  const skillRel = ".space/skills/jspace-bootstrap/SKILL.md";
+  const skillRel = ".jspace/skills/jspace-bootstrap/SKILL.md";
   writeFileSync(join(root, skillRel), "USER SKILL", "utf-8");
   const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true);
   const e = (data as { entries: { rel: string; action: string }[] }).entries.find((x) => x.rel === skillRel);
@@ -316,7 +316,7 @@ test("modified workbench skill is never overwritten (seed, skip preserved)", () 
   rmSync(root, { recursive: true, force: true });
 });
 
-test("legacy workbench: root skills/ becomes stale, upgrade creates .space/skills/ and never deletes", () => {
+test("legacy workbench: root skills/ becomes stale, upgrade creates .jspace/skills/ and never deletes", () => {
   const root = tmp();
   oldWorkbench(root);
   // simulate a pre-move workbench that materialized official skills to root skills/
@@ -336,11 +336,11 @@ test("legacy workbench: root skills/ becomes stale, upgrade creates .space/skill
   // diff: new rel -> create, legacy rel -> stale
   const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true);
   const entries = (data as { entries: { rel: string; action: string }[] }).entries;
-  expect(entries.find((x) => x.rel === ".space/skills/jspace-bootstrap/SKILL.md")?.action).toBe("create");
+  expect(entries.find((x) => x.rel === ".jspace/skills/jspace-bootstrap/SKILL.md")?.action).toBe("create");
   expect(entries.find((x) => x.rel === "skills/jspace-bootstrap/SKILL.md")?.action).toBe("stale");
-  // upgrade: .space/skills/ lands, legacy skills/ is reported-stale but NOT deleted
+  // upgrade: .jspace/skills/ lands, legacy skills/ is reported-stale but NOT deleted
   workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps);
-  expect(existsSync(join(root, ".space", "skills", "jspace-bootstrap", "SKILL.md"))).toBe(true);
+  expect(existsSync(join(root, ".jspace", "skills", "jspace-bootstrap", "SKILL.md"))).toBe(true);
   expect(existsSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"))).toBe(true); // never auto-deleted
   rmSync(root, { recursive: true, force: true });
 });

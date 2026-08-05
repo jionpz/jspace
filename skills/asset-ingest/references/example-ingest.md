@@ -34,7 +34,7 @@ staged: <journal-id>   (source 留 _inbox/,副本已复制到 target)
 
 ### 3.(可选深入)深度抽取
 ```bash
-python3 .space/skills/asset-ingest/scripts/extract.py \
+python3 .jspace/skills/asset-ingest/scripts/extract.py \
   projects/acme/2026-08-03-供应商报价明细-v1.xlsx \
   --out projects/acme/2026-08-03-供应商报价明细.extract.md
 ```

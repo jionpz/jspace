@@ -17,7 +17,7 @@ application/         # use cases: business logic, CommandSpec framework, CmdResu
   workspace/  automation/  registry/  ingest/  pending/
 cli/                 # CommandSpec tree + main entry + generated assets + legacy cron/update
 scripts/             # build-time: gen-assets / gen-version / build-all
-skills/ + skills-manifest.json   # workbench skills (manifest is the packaging source of truth; jspace init materializes them into the workbench's .space/skills/)
+skills/ + skills-manifest.json   # workbench skills (manifest is the packaging source of truth; jspace init materializes them into the workbench's .jspace/skills/)
 templates/           # workbench / filehub templates (embedded into the binary)
 ```
 
