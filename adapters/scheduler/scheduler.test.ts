@@ -3,7 +3,7 @@
 // Run: bun test adapters/scheduler/scheduler.test.ts
 import { expect, test } from "bun:test";
 import { taskIdFor, workbenchTag } from "./types.ts";
-import { crontabBlock, replaceManagedBlock, parseManagedLine } from "./linux.ts";
+import { crontabBlock, replaceManagedBlock, parseManagedLine, extractTagBlock, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
 import { schtasksArgs, isWindowsInstallable, parseOpContent, parseSchtasksXml } from "./win32.ts";
 import { plistPath, parsePlistName, plistBelongsToTag } from "./darwin.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
@@ -39,12 +39,12 @@ test("crontabBlock embeds the workbench tag (cross-workbench safety)", () => {
 
 test("replaceManagedBlock preserves user lines and removes block", () => {
   const user = "# my manual cron\n* * * * * echo hi\n";
-  const block = "# jspace crons (managed) DO NOT EDIT\nX\n# end jspace\n";
-  const merged = replaceManagedBlock(user + block, "# jspace crons (managed) DO NOT EDIT\nY\n# end jspace\n");
+  const block = `${CRON_BLOCK_START("tagA")}\nX\n${CRON_BLOCK_END("tagA")}\n`;
+  const merged = replaceManagedBlock(user + block, `${CRON_BLOCK_START("tagA")}\nY\n${CRON_BLOCK_END("tagA")}\n`, "tagA");
   expect(merged).toContain("# my manual cron");
   expect(merged).toContain("Y");
   expect(merged).not.toContain("X");
-  const removed = replaceManagedBlock(merged, "");
+  const removed = replaceManagedBlock(merged, "", "tagA");
   expect(removed).toContain("# my manual cron");
   expect(removed).not.toContain("jspace crons");
 });
@@ -83,14 +83,14 @@ test("crontabBlock rejects lines over 1000 chars", () => {
 });
 
 test("replaceManagedBlock: empty input -> block", () => {
-  const block = "# jspace crons (managed) DO NOT EDIT\n0 21 * * *  cmd\n# end jspace\n";
-  expect(replaceManagedBlock("", block)).toBe(block);
+  const block = `${CRON_BLOCK_START("tagA")}\n0 21 * * *  cmd\n${CRON_BLOCK_END("tagA")}\n`;
+  expect(replaceManagedBlock("", block, "tagA")).toBe(block);
 });
 
 test("replaceManagedBlock: replaces old block, keeps user lines", () => {
-  const existing = "0 6 * * *  /usr/bin/backup\n# jspace crons (managed) DO NOT EDIT\n0 21 * * *  old\n# end jspace\n0 7 * * *  /usr/bin/other\n";
-  const block = "# jspace crons (managed) DO NOT EDIT\n0 22 * * *  new\n# end jspace\n";
-  const out = replaceManagedBlock(existing, block);
+  const existing = "0 6 * * *  /usr/bin/backup\n" + `${CRON_BLOCK_START("tagA")}\n0 21 * * *  old\n${CRON_BLOCK_END("tagA")}\n` + "0 7 * * *  /usr/bin/other\n";
+  const block = `${CRON_BLOCK_START("tagA")}\n0 22 * * *  new\n${CRON_BLOCK_END("tagA")}\n`;
+  const out = replaceManagedBlock(existing, block, "tagA");
   expect(out).toContain("0 6 * * *  /usr/bin/backup");
   expect(out).toContain("0 22 * * *  new");
   expect(out).not.toContain("0 21 * * *  old");
@@ -99,26 +99,43 @@ test("replaceManagedBlock: replaces old block, keeps user lines", () => {
 
 test("replaceManagedBlock: no existing block -> appended", () => {
   const existing = "0 6 * * *  /usr/bin/backup\n";
-  const block = "# jspace crons (managed) DO NOT EDIT\n0 21 * * *  new\n# end jspace\n";
-  const out = replaceManagedBlock(existing, block);
+  const block = `${CRON_BLOCK_START("tagA")}\n0 21 * * *  new\n${CRON_BLOCK_END("tagA")}\n`;
+  const out = replaceManagedBlock(existing, block, "tagA");
   expect(out.startsWith("0 6 * * *  /usr/bin/backup"));
   expect(out).toContain(block.trim());
 });
 
 test("replaceManagedBlock: empty block removes the jspace block", () => {
-  const existing = "0 6 * * *  /usr/bin/backup\n# jspace crons (managed) DO NOT EDIT\n0 21 * * *  old\n# end jspace\n0 7 * * *  /usr/bin/other\n";
-  const out = replaceManagedBlock(existing, "");
+  const existing = "0 6 * * *  /usr/bin/backup\n" + `${CRON_BLOCK_START("tagA")}\n0 21 * * *  old\n${CRON_BLOCK_END("tagA")}\n` + "0 7 * * *  /usr/bin/other\n";
+  const out = replaceManagedBlock(existing, "", "tagA");
   expect(out).toContain("0 6 * * *  /usr/bin/backup");
   expect(out).toContain("0 7 * * *  /usr/bin/other");
   expect(out).not.toContain("jspace crons");
   expect(out).not.toContain("0 21 * * *  old");
 });
 
-test("replaceManagedBlock: malformed markers throw", () => {
-  const block = "# jspace crons (managed) DO NOT EDIT\nx\n# end jspace\n";
-  expect(() => replaceManagedBlock("# jspace crons (managed) DO NOT EDIT\nx\n", block)).toThrow();
-  expect(() => replaceManagedBlock("# end jspace\n", block)).toThrow();
-  expect(() => replaceManagedBlock("# jspace crons (managed) DO NOT EDIT\nx\n# end jspace\n# jspace crons (managed) DO NOT EDIT\ny\n# end jspace\n", block)).toThrow();
+test("replaceManagedBlock: malformed + legacy markers throw loud", () => {
+  const B = (t: string, body = "x") => `${CRON_BLOCK_START(t)}\n${body}\n${CRON_BLOCK_END(t)}\n`;
+  expect(() => replaceManagedBlock(`${CRON_BLOCK_START("tagA")}\nx\n`, B("tagA"), "tagA")).toThrow(); // unterminated
+  expect(() => replaceManagedBlock(`${CRON_BLOCK_END("tagA")}\n`, B("tagA"), "tagA")).toThrow(); // stray end
+  expect(() => replaceManagedBlock(B("tagA") + B("tagA"), B("tagA"), "tagA")).toThrow(); // duplicate tag block
+  expect(() => replaceManagedBlock(B("tagA") + `${CRON_BLOCK_END("tagA")}\n`, B("tagA"), "tagA")).toThrow(); // out of order
+  expect(() => replaceManagedBlock("# jspace crons (managed) DO NOT EDIT\nx\n# end jspace\n", B("tagA"), "tagA")).toThrow(/legacy/);
+});
+
+test("replaceManagedBlock: other workbench's block preserved, not claimed", () => {
+  const B = (t: string) => `${CRON_BLOCK_START(t)}\nx\n${CRON_BLOCK_END(t)}\n`;
+  const mixed = B("tagB") + B("tagA");
+  expect(replaceManagedBlock(mixed, "", "tagA")).toBe(B("tagB")); // only tagA removed
+  expect(replaceManagedBlock(mixed, B("tagA2"), "tagA")).toContain(B("tagB")); // tagA updated, tagB untouched
+});
+
+test("extractTagBlock returns this workbench's block or empty", () => {
+  const blockA = `${CRON_BLOCK_START("tagA")}\na\n${CRON_BLOCK_END("tagA")}\n`;
+  const blockB = `${CRON_BLOCK_START("tagB")}\nb\n${CRON_BLOCK_END("tagB")}\n`;
+  expect(extractTagBlock(blockA + blockB, "tagA")).toBe(blockA.trim());
+  expect(extractTagBlock(blockA + blockB, "tagB")).toBe(blockB.trim());
+  expect(extractTagBlock(blockA, "tagC")).toBe("");
 });
 
 test("schtasksArgs: DAILY and WEEKLY mapping", () => {
@@ -198,4 +215,32 @@ test("plistBelongsToTag: same tag yes, other tag no, legacy untagged no (cross-w
   expect(plistBelongsToTag("com.jspace.cron.xyz789.inbox-tidy.plist", "abc123")).toBe(false);
   expect(plistBelongsToTag("com.jspace.cron.inbox-tidy.plist", "abc123")).toBe(false); // legacy untagged
   expect(plistBelongsToTag("random.txt", "abc123")).toBe(false);
+});
+
+// ---- P0: two workbenches on one crontab (tag-scoped block ownership) ----
+// A second workbench's install/update/uninstall must never touch the first
+// workbench's block or the user's own crontab lines.
+
+const mkCron = (id: string, schedule: string): CronDefinition => ({ id, schedule, harness: "claude", prompt: "x", enabled: true });
+const USER_CRONTAB = "# manual cron\n* * * * * /usr/bin/tick\n";
+
+test("P0: two workbench installs coexist — B install/update preserves A's block", () => {
+  const afterA = replaceManagedBlock(USER_CRONTAB, crontabBlock([mkCron("task-a", "0 1 * * *")], "tagA", "/wb/a", "/bin/jspace", "/bin", "/home/u"), "tagA");
+  const afterB = replaceManagedBlock(afterA, crontabBlock([mkCron("task-b", "0 2 * * *")], "tagB", "/wb/b", "/bin/jspace", "/bin", "/home/u"), "tagB");
+  expect(afterB).toContain("cron run --dir '/wb/b'"); // B installed
+  expect(afterB).toContain("cron run --dir '/wb/a'"); // A's line survives
+  expect(afterB).toContain("/usr/bin/tick"); // user line survives
+  // A later updates its schedule; B's block stays untouched
+  const afterA2 = replaceManagedBlock(afterB, crontabBlock([mkCron("task-a", "0 3 * * *")], "tagA", "/wb/a", "/bin/jspace", "/bin", "/home/u"), "tagA");
+  expect(afterA2).toContain("0 3 * * *"); // A updated
+  expect(afterA2).toContain("cron run --dir '/wb/b'"); // B untouched
+});
+
+test("P0: B uninstall preserves A's block", () => {
+  const afterA = replaceManagedBlock(USER_CRONTAB, crontabBlock([mkCron("task-a", "0 1 * * *")], "tagA", "/wb/a", "/bin/jspace", "/bin", "/home/u"), "tagA");
+  const afterB = replaceManagedBlock(afterA, crontabBlock([mkCron("task-b", "0 2 * * *")], "tagB", "/wb/b", "/bin/jspace", "/bin", "/home/u"), "tagB");
+  const removed = replaceManagedBlock(afterB, "", "tagB"); // B uninstalls
+  expect(removed).toContain("cron run --dir '/wb/a'"); // A's crons survive
+  expect(removed).not.toContain("cron run --dir '/wb/b'");
+  expect(removed).toContain("/usr/bin/tick");
 });

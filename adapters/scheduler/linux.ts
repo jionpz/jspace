@@ -1,7 +1,9 @@
 // adapters/scheduler/linux.ts — crontab adapter (managed block, tag-scoped).
 // Task identity: com.jspace.cron.<tag>.<id> appears inside the managed-block
 // comment lines; inspect() only matches this workbench root (env.resolvePath)
-// so another workbench's crons are never touched.
+// so another workbench's crons are never touched. The managed-block markers
+// carry the workbench tag so two workbenches' blocks coexist on one crontab
+// and install/update/uninstall only touch the current workbench's block.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -10,14 +12,18 @@ import { parseSchedule } from "./schedule.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 import { taskIdFor, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerOp } from "./types.ts";
 
-export const CRON_BLOCK_START = "# jspace crons (managed) DO NOT EDIT";
-export const CRON_BLOCK_END = "# end jspace";
+/** Tag-scoped managed-block markers: two workbenches never share one block. */
+export const CRON_BLOCK_START = (tag: string): string => `# jspace crons ${tag} (managed) DO NOT EDIT`;
+export const CRON_BLOCK_END = (tag: string): string => `# end jspace ${tag}`;
+/** Pre-tag markers from unreleased builds — never silently claimed; fail loud. */
+const LEGACY_BLOCK_START = "# jspace crons (managed) DO NOT EDIT";
+const LEGACY_BLOCK_END = "# end jspace";
 
 function shq(s: string): string {
   return "'" + s.replace(/'/g, `'\\''`) + "'";
 }
 
-/** Managed crontab block; every path is POSIX single-quoted, `%` escaped. */
+/** Managed crontab block for one workbench; every path is POSIX single-quoted, `%` escaped. */
 export function crontabBlock(
   crons: CronDefinition[],
   tag: string,
@@ -41,21 +47,30 @@ export function crontabBlock(
       if (line.length > 1000) fail(`crontab line for ${c.id} exceeds 1000 characters`);
       return line.replace(/%/g, "\\%");
     });
-  return `${CRON_BLOCK_START}\n${lines.join("\n")}\n${CRON_BLOCK_END}\n`;
+  return `${CRON_BLOCK_START(tag)}\n${lines.join("\n")}\n${CRON_BLOCK_END(tag)}\n`;
 }
 
-/** Replace the managed block in an existing crontab, preserving user lines. */
-export function replaceManagedBlock(existing: string, block: string): string {
+/** Replace only THIS workbench's managed block in an existing crontab, preserving
+ *  user lines and every other workbench's block. Fail loud on a legacy untagged
+ *  block (never claimed), or on duplicate/stray/unterminated/out-of-order
+ *  markers for this tag. */
+export function replaceManagedBlock(existing: string, block: string, tag: string): string {
   const lines = existing.split("\n");
-  const starts = lines.map((l, i) => (l.trim() === CRON_BLOCK_START ? i : -1)).filter((i) => i !== -1);
-  const ends = lines.map((l, i) => (l.trim() === CRON_BLOCK_END ? i : -1)).filter((i) => i !== -1);
-  if (starts.length > 1 || ends.length > 1) fail("crontab has multiple jspace blocks; clean manually");
-  if (starts.length === 1 && ends.length === 0) fail("crontab has unterminated jspace block");
-  if (starts.length === 0 && ends.length === 1) fail("crontab has a stray jspace end marker");
-  if (starts.length === 1 && ends.length === 1 && ends[0] < starts[0]) fail("crontab jspace markers out of order");
+  const startMark = CRON_BLOCK_START(tag);
+  const endMark = CRON_BLOCK_END(tag);
+  const starts = lines.map((l, i) => (l.trim() === startMark ? i : -1)).filter((i) => i !== -1);
+  const ends = lines.map((l, i) => (l.trim() === endMark ? i : -1)).filter((i) => i !== -1);
+  if (lines.some((l) => l.trim() === LEGACY_BLOCK_START) || lines.some((l) => l.trim() === LEGACY_BLOCK_END)) {
+    fail("crontab has a legacy untagged jspace block; remove it manually before reinstalling (old \"# jspace crons (managed)\" markers)");
+  }
+  if (starts.length > 1) fail(`crontab has multiple jspace blocks for workbench ${tag}; clean manually`);
+  if (ends.length > 1) fail(`crontab has multiple jspace end markers for workbench ${tag}; clean manually`);
+  if (starts.length === 1 && ends.length === 0) fail(`crontab has an unterminated jspace block for workbench ${tag}`);
+  if (starts.length === 0 && ends.length === 1) fail(`crontab has a stray jspace end marker for workbench ${tag}`);
+  if (starts.length === 1 && ends.length === 1 && ends[0] < starts[0]) fail(`crontab jspace markers out of order for workbench ${tag}`);
   const removing = block.trim() === "";
   if (starts.length === 0) {
-    if (removing) return existing; // nothing to remove
+    if (removing) return existing; // nothing to remove for this tag
     const base = existing.replace(/\s+$/, "");
     return base ? `${base}\n${block}` : block;
   }
@@ -66,6 +81,16 @@ export function replaceManagedBlock(existing: string, block: string): string {
   result = result.replace(/\n{3,}/g, "\n\n");
   if (!result.endsWith("\n")) result += "\n";
   return result;
+}
+
+/** Return THIS workbench's managed block (markers included), or "" when absent. */
+export function extractTagBlock(existing: string, tag: string): string {
+  const lines = existing.split("\n");
+  const s = lines.findIndex((l) => l.trim() === CRON_BLOCK_START(tag));
+  if (s === -1) return "";
+  const e = lines.findIndex((l, i) => i > s && l.trim() === CRON_BLOCK_END(tag));
+  if (e === -1) return "";
+  return lines.slice(s, e + 1).join("\n");
 }
 
 function readCrontab(): string {
@@ -114,16 +139,17 @@ export const linuxAdapter: SchedulerAdapter = {
     return out;
   },
 
-  apply(op: SchedulerOp, _tag: string, root: string, _env: SchedulerEnv): string[] {
+  apply(op: SchedulerOp, tag: string, root: string, _env: SchedulerEnv): string[] {
     const existing = readCrontab();
     if (op.action === "delete") {
-      // rebuild block without this cron: parse existing, drop the taskId line
-      const kept = existing
+      // remove just this cron's line from the current workbench block, keeping
+      // sibling crons of the same tag and all other workbenches' blocks.
+      const current = extractTagBlock(existing, tag);
+      const keep = current
         .split("\n")
-        .filter((l) => !l.includes(`# ${op.taskId}`))
-        .join("\n");
-      const merged = replaceManagedBlock(kept, "");
-      writeCrontab(merged);
+        .filter((l) => !l.includes(`# ${op.taskId}`) && l.trim() !== "" && l.trim() !== CRON_BLOCK_START(tag) && l.trim() !== CRON_BLOCK_END(tag));
+      const rest = keep.length === 0 ? "" : `${CRON_BLOCK_START(tag)}\n${keep.join("\n")}\n${CRON_BLOCK_END(tag)}\n`;
+      writeCrontab(replaceManagedBlock(existing, rest, tag));
       return [`jspace: ok: removed ${op.taskId}`];
     }
     // create/update: rebuild full block from desired set — but apply() gets one
@@ -132,14 +158,14 @@ export const linuxAdapter: SchedulerAdapter = {
     const backup = join(root, ".jspace", "logs", "cron", "crontab.backup");
     mkdirSync(dirname(backup), { recursive: true });
     writeFileSync(backup, existing, "utf-8");
-    const merged = replaceManagedBlock(existing, op.content);
+    const merged = replaceManagedBlock(existing, op.content, tag);
     writeCrontab(merged);
     return [`jspace: ok: installed cron block (${op.taskId})`];
   },
 
-  uninstallAll(_tag: string, root: string, _env: SchedulerEnv): string[] {
+  uninstallAll(tag: string, root: string, _env: SchedulerEnv): string[] {
     const existing = readCrontab();
-    const merged = replaceManagedBlock(existing, "");
+    const merged = replaceManagedBlock(existing, "", tag);
     const backup = join(root, ".jspace", "logs", "cron", "crontab.backup");
     mkdirSync(dirname(backup), { recursive: true });
     writeFileSync(backup, existing, "utf-8");
