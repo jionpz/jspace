@@ -216,7 +216,7 @@ def warn_if_parallel_worktree(repo_root: Path) -> None:
             "journal-*.md files auto-merge via .gitattributes, but index.md "
             "conflicts across parallel worktrees/branches are expected and safe "
             "to resolve by picking either side (task state lives in task.json, "
-            "not index.md). See .trellis/spec/cli/backend/directory-structure.md "
+            "not index.md). See .trellis/spec/backend/directory-structure.md "
             '("Workspace Journal Merge Behavior").',
             Colors.YELLOW,
         ),

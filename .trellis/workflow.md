@@ -138,7 +138,7 @@ python3 ./.trellis/scripts/get_context.py --mode phase --step <X.Y>  # detailed 
     - Run `trellis update` after editing to push the new bodies to
       downstream user projects (block-level managed replacement)
     - Full runtime contract:
-      .trellis/spec/cli/backend/workflow-state-contract.md
+      .trellis/scripts/inject-workflow-state.py (actual parser; no standalone spec)
 -->
 
 ## Phase Index
@@ -705,5 +705,4 @@ Supported events: `after_create / after_start / after_finish / after_archive`. N
 
 For the workflow state machine's runtime contract, the locations of all status writers, pseudo-statuses (`no_task` / `stale_<source_type>`), the hook reachability matrix, and other deep details, see:
 
-- `.trellis/spec/cli/backend/workflow-state-contract.md` — runtime contract + writer table + test invariants
-- `.trellis/scripts/inject-workflow-state.py` — actual parser (reads workflow.md only, no embedded text)
+- `.trellis/scripts/inject-workflow-state.py` — actual parser (reads workflow.md only, no embedded text); no standalone contract spec exists in this repo
