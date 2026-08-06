@@ -89,21 +89,39 @@ function replaceBlock(content: string, begin: string, end: string, body: string)
 }
 
 /**
- * Render the two generated blocks of templates/workbench/AGENTS.md from each
- * workbench skill's SKILL.md frontmatter and write the result back to disk.
- * Returns the rendered AGENTS.md content (caller embeds the same bytes).
+ * Single-source-of-truth guard for skill names (D3). Each workbench skill's
+ * SKILL.md frontmatter `name` must equal its skills-manifest.json entry name;
+ * drift between the two (packing key vs rendered name) is a generation-time
+ * error, never a silent bundle split. gen-assets calls this through
+ * renderAgentsBlocks; check-skills (C3) reuses it so the invariant is enforced
+ * both on regenerate and on demand.
  */
-export function renderAgentsBlocks(repoRoot: string, skillNames: string[]): string {
+export function readWorkbenchSkills(repoRoot: string, skillNames: string[]): SkillFrontmatter[] {
   const skills: SkillFrontmatter[] = [];
   for (const name of skillNames) {
     const raw = readFileSync(join(repoRoot, "skills", name, "SKILL.md"), "utf-8");
     const fm = parseSkillFrontmatter(raw);
     if (!fm) throw new Error(`skills/${name}/SKILL.md has no frontmatter`);
+    if (fm.name !== name) {
+      throw new Error(
+        `skills/${name}/SKILL.md frontmatter name "${fm.name}" does not match skills-manifest.json name "${name}"`,
+      );
+    }
     if (!fm.name || !fm.description) {
       throw new Error(`skills/${name}/SKILL.md frontmatter missing name/description`);
     }
     skills.push(fm);
   }
+  return skills;
+}
+
+/**
+ * Render the two generated blocks of templates/workbench/AGENTS.md from each
+ * workbench skill's SKILL.md frontmatter and write the result back to disk.
+ * Returns the rendered AGENTS.md content (caller embeds the same bytes).
+ */
+export function renderAgentsBlocks(repoRoot: string, skillNames: string[]): string {
+  const skills = readWorkbenchSkills(repoRoot, skillNames);
   const agentsPath = join(repoRoot, "templates", "workbench", "AGENTS.md");
   const agents = readFileSync(agentsPath, "utf-8");
   let rendered = agents;

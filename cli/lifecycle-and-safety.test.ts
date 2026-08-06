@@ -1,5 +1,5 @@
 // cli/lifecycle-and-safety.test.ts — harness lifecycle matrix honesty (AC-D3/D7)
-// and bootstrap pipe-install / gbrain safety checks (AC-D5). These guard the
+// and first-use pipe-install / gbrain safety checks (AC-D5). These guard the
 // materialized skill docs that describe harness capabilities and remote
 // installs; they live apart from reachability (Child D M7/M8).
 // Run: bun test cli/lifecycle-and-safety.test.ts
@@ -16,7 +16,7 @@ function workbenchMds(): Array<[string, string]> {
 }
 
 test("lifecycle matrix is the authoritative single source (AC-D3/D7)", () => {
-  const matrix = ASSETS["skills/jspace-bootstrap/references/harnesses.md"];
+  const matrix = ASSETS["skills/jspace-use/references/harnesses.md"];
   expect(matrix, "lifecycle matrix must be bundled").toBeDefined();
   expect(matrix).toContain("Lifecycle 能力矩阵");
   for (const grade of ["automated", "best_effort", "manual", "unsupported"]) {
@@ -34,8 +34,8 @@ test("no unqualified harness 'automatically' claims in the materialized tree (AC
   }
 });
 
-test("bootstrap pipe installs are guarded, never default-executed (AC-D5)", () => {
-  const skill = ASSETS["skills/jspace-bootstrap/SKILL.md"];
+test("first-use pipe installs are guarded, never default-executed (AC-D5)", () => {
+  const skill = ASSETS["skills/jspace-use/SKILL.md"];
   const lines = skill.split("\n");
   let checked = 0;
   for (let i = 0; i < lines.length; i++) {
@@ -43,13 +43,13 @@ test("bootstrap pipe installs are guarded, never default-executed (AC-D5)", () =
     checked++;
     const window = lines.slice(Math.max(0, i - 8), i + 8).join("\n");
     const guarded = /不默认执行|显式确认|下载到临时文件|核验/.test(window);
-    expect(guarded, `bootstrap line ${i + 1} pipe install not guarded:\n${lines[i]}`).toBe(true);
+    expect(guarded, `first-use line ${i + 1} pipe install not guarded:\n${lines[i]}`).toBe(true);
   }
   expect(checked, "expected at least one pipe install line to guard").toBeGreaterThan(0);
 });
 
 test("gbrain version range + upgrade health check are declared (AC-D5)", () => {
-  const gbrain = ASSETS["skills/jspace-bootstrap/references/gbrain.md"];
+  const gbrain = ASSETS["skills/jspace-use/references/gbrain.md"];
   expect(gbrain, "gbrain reference must be bundled").toBeDefined();
   expect(gbrain).toContain("版本兼容");
   expect(gbrain).toContain("gbrain doctor --json");

@@ -271,10 +271,10 @@
 - **不覆盖非空既有文件**:原内容并入治理文档,或保留原文件 + 附加接线,二选一向用户说明。
 - **跳过**:detect.sh 报 `not_found` 的 harness 不接线,列入报告。
 - **dotfile 管理器**:若入口文件由 chezmoi / stow / mackup 等托管,接线前先处理冲突(排除管理或改用 `@import`/指针方式)。
-- **会话级配置只核对不写入**:gbrain MCP、session 注入逐 harness 报 `wired/missing/n/a`;写入由 bootstrap 或其他流程负责。
+- **会话级配置只核对不写入**:gbrain MCP、session 注入逐 harness 报 `wired/missing/n/a`;写入由首次启用(first-use)或其他流程负责。
 - **MCP 信任(跨 harness)**:stdio MCP server 以你的本地权限运行;只添加信任的 server;远程 `url` server 先核验地址与授权范围。
 
-## 交叉核对说明(与 jspace-bootstrap 底稿的差异)
+## 交叉核对说明(与 jspace-use 底稿的差异)
 
 - **Pi**:底稿假设"Pi 用 stdio MCP wire gbrain"——**修正**:Pi 无内置 MCP,走 CLI 或 `pi-mcp-adapter` 扩展。
 - **Cursor**:底稿假设"用户级 `~/.cursor/mcp.json`"(MCP 部分一致);治理文档接线底稿假设"Cursor 用 .mdc 指针文件"——**修正**:文件式 rules 是项目级,用户级无规则文件,见上文差异说明。

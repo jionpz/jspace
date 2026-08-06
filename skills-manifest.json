@@ -2,7 +2,7 @@
   "version": 1,
   "workbench": [
     {
-      "name": "jspace-bootstrap",
+      "name": "jspace-use",
       "version": "1",
       "scope": "workbench",
       "dependencies": []
@@ -24,7 +24,7 @@
       "name": "memory-writeback",
       "version": "1",
       "scope": "workbench",
-      "dependencies": ["asset-ingest", "jspace-bootstrap"]
+      "dependencies": ["asset-ingest", "jspace-use"]
     }
   ],
   "global": [

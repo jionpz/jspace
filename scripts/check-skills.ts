@@ -12,7 +12,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { decodeSkillsManifest } from "../core/contracts/skills.ts";
-import { parseSkillFrontmatter } from "./skill-frontmatter.ts";
+import { readWorkbenchSkills } from "./skill-frontmatter.ts";
 
 const repoRoot = resolve(import.meta.dir, "..");
 const failures: string[] = [];
@@ -73,15 +73,16 @@ function pass(label: string): void {
     const agents = readFileSync(agentsPath, "utf-8");
 
     // Brain operations rows must equal frontmatter triggers, joined the same way gen-assets joins.
-    const brainRows = new Map<string, string>();
-    for (const name of workbenchNames) {
-      const fm = parseSkillFrontmatter(readFileSync(join(repoRoot, "skills", name, "SKILL.md"), "utf-8"));
-      if (!fm) {
-        fail(`C2 ${name}/SKILL.md has no frontmatter`);
-        continue;
-      }
-      brainRows.set(fm.name, fm.triggers.join(" | "));
+    // readWorkbenchSkills also enforces the D3 single-source invariant: every
+    // workbench SKILL.md frontmatter name must match its manifest entry name.
+    let workbenchFms: ReturnType<typeof readWorkbenchSkills>;
+    try {
+      workbenchFms = readWorkbenchSkills(repoRoot, workbenchNames);
+    } catch (e) {
+      fail(`C2 skill name single-source drift: ${(e as Error).message}`);
+      workbenchFms = [];
     }
+    const brainRows = new Map(workbenchFms.map((fm) => [fm.name, fm.triggers.join(" | ")]));
     const brainMatch = agents.match(/^<!-- TRELLIS-BRAIN-OPS:BEGIN -->\n([\s\S]*?)\n<!-- TRELLIS-BRAIN-OPS:END -->/m);
     if (!brainMatch) {
       fail("C2 no Brain operations marker region found");

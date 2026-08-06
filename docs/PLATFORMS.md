@@ -32,7 +32,7 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 
 ## Harness lifecycle 能力矩阵（M4，会话生命周期）
 
-会话级能力（session-start / session-end / fallback / crash recovery）的**权威矩阵**在 `skills/jspace-bootstrap/references/harnesses.md`「Lifecycle 能力矩阵」节，逐格标注 automated / best-effort / manual / unsupported 并注明验证方法；本文档不复制整表以避免漂移。要点：当前无 automated 格（hook 真实触发是 harness 运行时行为，未在 CI 验证），产品措辞只在 automated 处使用「自动」。
+会话级能力（session-start / session-end / fallback / crash recovery）的**权威矩阵**在 `skills/jspace-use/references/harnesses.md`「Lifecycle 能力矩阵」节，逐格标注 automated / best-effort / manual / unsupported 并注明验证方法；本文档不复制整表以避免漂移。要点：当前无 automated 格（hook 真实触发是 harness 运行时行为，未在 CI 验证），产品措辞只在 automated 处使用「自动」。
 
 ## Scheduler 任务隔离（M5）
 

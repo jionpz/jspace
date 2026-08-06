@@ -13,6 +13,8 @@ import { primaryPathForResourceType, resolveEffectiveRegistry } from "../../core
 import { readIncidents } from "../automation/incidents.ts";
 import { readEnvelopes } from "../pending/envelope.ts";
 import { isFile } from "../fs.ts";
+import { CONFIG_DIR } from "../../core/contracts/files.ts";
+import { readMaterializedJournal } from "./journal.ts";
 
 /** Minimal cron view consumed by doctor; full cron surface lives in Child C. */
 export interface CronLike {
@@ -26,6 +28,9 @@ export interface CronHealthDeps {
   parseSchedule: (schedule: string) => unknown;
   installedCronIds: (root: string) => string[];
   linuxCronHealth: () => { crontab: boolean; service: boolean };
+  /** Official workbench skill names (SKILLS_MANIFEST.workbench). Injected from
+   *  cli so doctor stays free of the embedded-bundle module. */
+  officialSkillNames: () => string[];
 }
 
 function countFiles(dir: string): number {
@@ -79,6 +84,41 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
       const actionable = readEnvelopes(fhRoot).filter((e) => e.status === "staged" || e.status === "terminal_failed");
       if (actionable.length > 0) {
         diags.push({ severity: "warning", code: "filehub.pending_applies", path: `filehub.${fhRoot}/.jspace-logs`, message: `filehub: ${actionable.length} actionable pending gbrain write(s); apply with "jspace pending apply", ack terminal_failed with "jspace pending ack"` });
+      }
+    }
+  }
+
+  // orphan skill dirs under .jspace/skills/ (official managed area). A directory
+  // that is neither an official workbench skill nor recorded in the materialization
+  // journal is a leftover from a removed/renamed skill (e.g. a pre-journal init).
+  // It does not affect the new bundle and upgrade won't touch it (no journal base),
+  // so surface it as a warning for manual removal or ignore. Root skills/
+  // (user-created) is never scanned.
+  {
+    const official = new Set(cron.officialSkillNames());
+    let recorded = new Set<string>();
+    try {
+      const j = readMaterializedJournal(root);
+      if (j) recorded = new Set(Object.keys(j.files));
+    } catch {
+      // damaged journal: orphan detection skipped (workspace diff/upgrade report it)
+    }
+    const skillsDir = join(root, CONFIG_DIR, "skills");
+    if (existsSync(skillsDir) && statSync(skillsDir).isDirectory()) {
+      for (const name of readdirSync(skillsDir)) {
+        if (official.has(name)) continue;
+        if (name.startsWith(".")) continue;
+        const p = join(skillsDir, name);
+        if (!statSync(p).isDirectory()) continue;
+        const rel = `${CONFIG_DIR}/skills/${name}`;
+        const isRecorded = [...recorded].some((r) => r === rel || r.startsWith(`${rel}/`));
+        if (isRecorded) continue;
+        diags.push({
+          severity: "warning",
+          code: "skills.orphan_dir",
+          path: `skills.${name}`,
+          message: `orphan skill dir: .jspace/skills/${name} (not in the current bundle and no journal record; if not user-created, remove it manually)`,
+        });
       }
     }
   }

@@ -8,11 +8,11 @@ import { join } from "node:path";
 import { parseSkillFrontmatter } from "./skill-frontmatter.ts";
 
 const ROOT = join(import.meta.dir, "..");
-const SKILL = join(ROOT, "skills", "jspace-bootstrap", "SKILL.md");
+const SKILL = join(ROOT, "skills", "jspace-use", "SKILL.md");
 
 test("parseSkillFrontmatter parses a real SKILL.md (LF)", () => {
   const fm = parseSkillFrontmatter(readFileSync(SKILL, "utf-8"));
-  expect(fm?.name).toBe("jspace-bootstrap");
+  expect(fm?.name).toBe("jspace-use");
   expect(fm?.description.length).toBeGreaterThan(0);
   expect(fm?.triggers.length).toBeGreaterThan(0);
 });
@@ -22,6 +22,6 @@ test("parseSkillFrontmatter is CRLF-tolerant (Windows autocrlf checkout)", () =>
   const crlf = lf.replace(/\n/g, "\r\n");
   const fm = parseSkillFrontmatter(crlf);
   expect(fm).not.toBeNull(); // was the Windows CI failure
-  expect(fm?.name).toBe("jspace-bootstrap");
+  expect(fm?.name).toBe("jspace-use");
   expect(fm?.triggers.length).toBeGreaterThan(0);
 });

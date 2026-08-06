@@ -5,7 +5,7 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
   "version": 1,
   "workbench": [
     {
-      "name": "jspace-bootstrap",
+      "name": "jspace-use",
       "version": "1",
       "scope": "workbench",
       "dependencies": []
@@ -33,7 +33,7 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
       "scope": "workbench",
       "dependencies": [
         "asset-ingest",
-        "jspace-bootstrap"
+        "jspace-use"
       ]
     }
   ],

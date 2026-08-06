@@ -88,7 +88,7 @@ export function materializeTree(target: string, devRootStr: string): void {
     fail("workbench template assets missing in embedded bundle");
   }
   // Every manifest-declared workbench skill must be embedded (F2: this now
-  // includes memory-recall / memory-writeback, not just bootstrap+asset-ingest).
+  // includes memory-recall / memory-writeback, not just jspace-use+asset-ingest).
   for (const s of SKILLS_MANIFEST.workbench) {
     if (!hasAssets(`skills/${s.name}/`)) {
       fail(`skill assets missing: skills/${s.name}`);

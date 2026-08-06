@@ -114,7 +114,7 @@ export function initWorkbench(
         ? [`  note: backed up ${backedUp.length} pre-existing file(s) to <name>.jspace-bak: ${backedUp.join(", ")}`]
         : []),
       `Validate: ${validateCmd} doctor --dir ${target}`,
-      "Next: read AGENTS.md, then follow .jspace/skills/jspace-bootstrap/SKILL.md",
+      "Next: read AGENTS.md, then follow .jspace/skills/jspace-use/SKILL.md",
     ],
   };
 }

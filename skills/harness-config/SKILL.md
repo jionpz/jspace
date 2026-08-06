@@ -1,6 +1,6 @@
 ---
 name: harness-config
-description: "**机器级**多-harness 全局治理接线:检测已装 harness(Pi/Claude Code/Codex/Cursor)、装自身到用户根、建/维护单源治理文档 ~/.agents/agents.md、把各 harness 全局文件(symlink/@import/.mdc 指针)接到它、只读核对会话级配置(gbrain MCP/注入/hooks)。Use when 配置 harness、统一多-harness 入口、全局治理文档缺失/陈旧。Do NOT use for 单个 JSpace 工作台首配(→jspace-bootstrap)。"
+description: "**机器级**多-harness 全局治理接线:检测已装 harness(Pi/Claude Code/Codex/Cursor)、装自身到用户根、建/维护单源治理文档 ~/.agents/agents.md、把各 harness 全局文件(symlink/@import/.mdc 指针)接到它、只读核对会话级配置(gbrain MCP/注入/hooks)。Use when 配置 harness、统一多-harness 入口、全局治理文档缺失/陈旧。Do NOT use for 单个 JSpace 工作台首配(→jspace-use)。"
 triggers:
   - "configure harness"
   - "harness config"
@@ -19,7 +19,7 @@ triggers:
 
 ## 何时用 / 何时不用
 - ✅ 用:机器级统一多-harness 入口 / 建维护 `~/.agents/agents.md` / 某 harness 全局上下文缺失或陈旧。
-- ❌ 不用:配单个 JSpace 工作台(gbrain 记忆库 + 注册表 + 单 harness 接线)→ `jspace-bootstrap`。本 skill 是**机器级全局**,不随工作台物化(需要时按 Phase 1 自装到 `~/.agents/skills/`)。
+- ❌ 不用:配单个 JSpace 工作台(gbrain 记忆库 + 注册表 + 单 harness 接线)→ `jspace-use`。本 skill 是**机器级全局**,不随工作台物化(需要时按 Phase 1 自装到 `~/.agents/skills/`)。
 
 ## 决策表
 

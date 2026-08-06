@@ -21,7 +21,7 @@ function validManifest(): SkillsManifestV1 {
   return {
     version: 1,
     workbench: [
-      entry("jspace-bootstrap", "workbench"),
+      entry("jspace-use", "workbench"),
       entry("asset-ingest", "workbench"),
       entry("memory-recall", "workbench"),
       entry("memory-writeback", "workbench"),

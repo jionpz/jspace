@@ -27,6 +27,9 @@ jobs:
       - name: Unit tests
         run: bun test
 
+      - name: Cross-skill reference reachability
+        run: bun test cli/assets-reachability.test.ts
+
       - name: Office extraction tests
         run: python3 skills/asset-ingest/scripts/office-extract.test.py
 

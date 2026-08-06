@@ -55,10 +55,10 @@ excel / ppt 走深度抽取(`references/deep-extract.md`)时,reference 页在此
 - 正常写页(不带 `embed_skip`)。
 - **写失败并报 embedding 错误 = embedding 不可达探针** → 以 `embed_skip: true` 重写(写入必须成功)→ 检索降级 `gbrain query`(无 embedding 自动退化为关键词)/ `search` → 输出固定提示。
 - 固定提示文本:`embedding 不可用,当前为关键词检索,中文命中率可能偏低`
-- bootstrap(未 serve)阶段校验:`gbrain models doctor --json` 看 `embedding_config` + `embedding_reachability`;`gbrain doctor --json` 对 embeddings 仅粗粒度健康报告,不含这两个细粒度字段。
+- 首次启用(未 serve)阶段校验:`gbrain models doctor --json` 看 `embedding_config` + `embedding_reachability`;`gbrain doctor --json` 对 embeddings 仅粗粒度健康报告,不含这两个细粒度字段。
 - serve 会话内:doctor 降级为文件系统检查,查不到 embedding → 以"写失败即探针"判断。
 - **重写仍失败**(非 embedding 原因)→ 按"失败即停"处理,不留半成品页。
-- bootstrap 不因 embedding 缺失而失败(离线可移植);"默认必需"≠"缺失即失败"。
+- 首次启用不因 embedding 缺失而失败(离线可移植);"默认必需"≠"缺失即失败"。
 
 ## 版本 / 删除
 

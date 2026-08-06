@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { doctorWorkbench, type CronHealthDeps } from "./doctor.ts";
 import { loadCrons, parseSchedule } from "../automation/definitions.ts";
+import { sha256Of } from "./manifest.ts";
 import type { CmdResult } from "../commands/command.ts";
 
 let root: string;
@@ -43,6 +44,7 @@ const stubDeps = (over: Partial<CronHealthDeps> = {}): CronHealthDeps => ({
   parseSchedule,
   installedCronIds: () => [],
   linuxCronHealth: () => ({ crontab: true, service: true }),
+  officialSkillNames: () => ["jspace-use", "asset-ingest", "memory-recall", "memory-writeback"],
   ...over,
 });
 
@@ -111,4 +113,36 @@ test("filehub registered with unfiled _inbox -> filehub.inbox_unfiled", () => {
   writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
   const r = doctorWorkbench(root, stubDeps());
   expect(codes(r)).toContain("filehub.inbox_unfiled");
+});
+
+test("orphan skill dir without journal record -> skills.orphan_dir", () => {
+  // a pre-journal leftover (e.g. old jspace-bootstrap dir) with no journal base
+  mkdirSync(join(root, ".jspace", "skills", "jspace-bootstrap"), { recursive: true });
+  writeFileSync(join(root, ".jspace", "skills", "jspace-bootstrap", "SKILL.md"), "old skill");
+  const r = doctorWorkbench(root, stubDeps());
+  expect(codes(r)).toContain("skills.orphan_dir");
+});
+
+test("official skill dir -> no skills.orphan_dir", () => {
+  mkdirSync(join(root, ".jspace", "skills", "asset-ingest"), { recursive: true });
+  writeFileSync(join(root, ".jspace", "skills", "asset-ingest", "SKILL.md"), "x");
+  const r = doctorWorkbench(root, stubDeps());
+  expect(codes(r)).not.toContain("skills.orphan_dir");
+});
+
+test("orphan skill dir with a journal record -> no skills.orphan_dir (upgrade owns it)", () => {
+  mkdirSync(join(root, ".jspace", "skills", "jspace-bootstrap"), { recursive: true });
+  writeFileSync(join(root, ".jspace", "skills", "jspace-bootstrap", "SKILL.md"), "old skill");
+  mkdirSync(join(root, ".jspace", "state"), { recursive: true });
+  writeFileSync(
+    join(root, ".jspace", "state", "materialized.json"),
+    JSON.stringify({
+      version: 1,
+      asset_version: "1.0.6",
+      applied_at: "2026-08-05",
+      files: { ".jspace/skills/jspace-bootstrap/SKILL.md": { sha256: sha256Of("old skill") } },
+    }) + "\n",
+  );
+  const r = doctorWorkbench(root, stubDeps());
+  expect(codes(r)).not.toContain("skills.orphan_dir");
 });

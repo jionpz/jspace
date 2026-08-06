@@ -1,5 +1,11 @@
 // application/workspace/workspace.test.ts — workspace diff/upgrade fixtures.
 // Run: bun test application/workspace/workspace.test.ts
+//
+// legacy-migration-test: the legacy tests below deliberately keep old-name
+// `jspace-bootstrap` rels (root skills/ copies and recorded journal paths) to
+// cover real pre-rename workbenches upgrading to the `jspace-use` bundle.
+// This is the approved `git grep jspace-bootstrap` exemption (implement Phase
+// G7); the new-name rels they pair with are `jspace-use`.
 import { expect, test } from "bun:test";
 import {
   existsSync,
@@ -336,7 +342,7 @@ test("dry-run reports the plan without mutating", () => {
 test("modified workbench skill is never overwritten (seed, skip preserved)", () => {
   const root = tmp();
   initWorkbench(root, false, initDeps);
-  const skillRel = ".jspace/skills/jspace-bootstrap/SKILL.md";
+  const skillRel = ".jspace/skills/jspace-use/SKILL.md";
   writeFileSync(join(root, skillRel), "USER SKILL", "utf-8");
   const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true, ASSETS);
   const e = (data as { entries: { rel: string; action: string }[] }).entries.find((x) => x.rel === skillRel);
@@ -346,10 +352,11 @@ test("modified workbench skill is never overwritten (seed, skip preserved)", () 
   rmSync(root, { recursive: true, force: true });
 });
 
-test("legacy workbench: unmodified root skills/ copy is removed, upgrade creates .jspace/skills/", () => {
+test("legacy workbench: unmodified old-name root skills/ copy is removed, upgrade creates jspace-use under .jspace/skills/", () => {
   const root = tmp();
   oldWorkbench(root);
-  // simulate a pre-move workbench that materialized official skills to root skills/
+  // simulate a pre-rename workbench that materialized the old official skill to
+  // root skills/jspace-bootstrap/ (the pre-.jspace/skills layout)
   mkdirSync(join(root, "skills", "jspace-bootstrap"), { recursive: true });
   writeFileSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"), "OLD SKILL", "utf-8");
   // seed its materialized journal recording the legacy rel (unmodified == recorded)
@@ -363,19 +370,19 @@ test("legacy workbench: unmodified root skills/ copy is removed, upgrade creates
       files: { "skills/jspace-bootstrap/SKILL.md": { sha256: sha256Of("OLD SKILL") } },
     }) + "\n",
   );
-  // diff: new rel -> create, legacy unmodified copy -> remove
+  // diff: new-name rel -> create, legacy old-name unmodified copy -> remove
   const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true, ASSETS);
   const entries = (data as { entries: { rel: string; action: string }[] }).entries;
-  expect(entries.find((x) => x.rel === ".jspace/skills/jspace-bootstrap/SKILL.md")?.action).toBe("create");
+  expect(entries.find((x) => x.rel === ".jspace/skills/jspace-use/SKILL.md")?.action).toBe("create");
   expect(entries.find((x) => x.rel === "skills/jspace-bootstrap/SKILL.md")?.action).toBe("remove");
   // upgrade: .jspace/skills/ lands, legacy unmodified copy is cleaned up
   workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps);
-  expect(existsSync(join(root, ".jspace", "skills", "jspace-bootstrap", "SKILL.md"))).toBe(true);
+  expect(existsSync(join(root, ".jspace", "skills", "jspace-use", "SKILL.md"))).toBe(true);
   expect(existsSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"))).toBe(false); // removed on upgrade
   rmSync(root, { recursive: true, force: true });
 });
 
-test("legacy workbench: modified root skills/ copy is kept as stale", () => {
+test("legacy workbench: modified old-name root skills/ copy is kept as stale, jspace-use still lands", () => {
   const root = tmp();
   oldWorkbench(root);
   mkdirSync(join(root, "skills", "jspace-bootstrap"), { recursive: true });
@@ -397,13 +404,14 @@ test("legacy workbench: modified root skills/ copy is kept as stale", () => {
   workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps);
   expect(existsSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"))).toBe(true); // user content kept
   expect(readFileSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"), "utf-8")).toBe("USER MODIFIED SKILL");
-  expect(existsSync(join(root, ".jspace", "skills", "jspace-bootstrap", "SKILL.md"))).toBe(true); // new copy landed
+  expect(existsSync(join(root, ".jspace", "skills", "jspace-use", "SKILL.md"))).toBe(true); // new copy landed
   rmSync(root, { recursive: true, force: true });
 });
 
 test("remove during upgrade is backed up and restored by --rollback", () => {
   const root = tmp();
   oldWorkbench(root);
+  // legacy old-name root copy that the jspace-use bundle will remove
   mkdirSync(join(root, "skills", "jspace-bootstrap"), { recursive: true });
   writeFileSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"), "OLD SKILL", "utf-8");
   mkdirSync(join(root, ".jspace", "state"), { recursive: true });
@@ -418,6 +426,7 @@ test("remove during upgrade is backed up and restored by --rollback", () => {
   );
   workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps);
   expect(existsSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"))).toBe(false);
+  expect(existsSync(join(root, ".jspace", "skills", "jspace-use", "SKILL.md"))).toBe(true); // new name landed
   // rollback restores the removed legacy copy from the upgrade backup
   const dir = join(root, ".jspace", "state", "upgrades");
   const ids = existsSync(dir) ? readdirSync(dir) : [];

@@ -33,7 +33,7 @@
 ## 使用
 
 1. 先读 `AGENTS.md`。
-2. 首次使用按 `.jspace/skills/jspace-bootstrap/SKILL.md` 配置 gbrain 与所选 AI harness。
+2. 首次使用按 `.jspace/skills/jspace-use/SKILL.md` 使用指南配置 gbrain、接线所选 AI harness,并了解日常路由/维护。
 3. 用 JSpace CLI 校验本目录（`jspace` 为编译二进制，需在 PATH 上；源码检出则运行 `bun run cli/main.ts`）：
 
 ```bash

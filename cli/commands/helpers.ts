@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { loadCrons, parseSchedule } from "../../application/automation/definitions.ts";
 import { schedulerAdapter } from "../../adapters/scheduler/index.ts";
 import { installedCronIdsForRoot, schedulerEnv } from "../scheduler.ts";
+import { SKILLS_MANIFEST } from "../skills.generated.ts";
 
 export const s = (v: unknown): string => (typeof v === "string" ? v : "");
 export const b = (v: unknown): boolean => v === true;
@@ -23,4 +24,5 @@ export const cronDeps = {
   parseSchedule,
   installedCronIds: installedCronIdsForRoot,
   linuxCronHealth: () => schedulerAdapter(process.platform)?.health?.(schedulerEnv()) ?? { crontab: false, service: false },
+  officialSkillNames: () => SKILLS_MANIFEST.workbench.map((s) => s.name),
 };

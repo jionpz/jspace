@@ -114,7 +114,7 @@ Do not create a skill for one-off notes, simple domain metadata, coding conventi
 
 Approved workbench skills (official; materialized by `jspace init` into `.jspace/skills/`):
 <!-- TRELLIS-SKILL-GOV:BEGIN -->
-- `jspace-bootstrap` - **首次配置** JSpace 工作台(需已装至少一个 harness):装 gbrain 统一记忆库(PGLite+知识图谱+本地 embedding)、校验注册表、接线所选 harness(MCP/CLI + 会话注入/写回)。Use when 初始化/配置 jspace、registry broken、gbrain missing、fresh environment。Do NOT use for 机器级多-harness 全局治理接线(→harness-config)或日常资料入库(→asset-ingest)。
+- `jspace-use` - **使用与维护** JSpace 工作台(需已装至少一个 harness):理解工作台模型与所有权边界、首次启用(装 gbrain 统一记忆库/PGLite+知识图谱+本地 embedding、校验注册表、接线所选 harness)、日常会话路由、gbrain 记忆(写回/召回/指针/周快照)、资源与资产(hub.json/filehub)、CLI 维护与诊断(doctor/diff/upgrade/cron)。Use when 初始化/配置/使用/维护 jspace、how to use jspace、工作台怎么用、怎么开始、workspace upgrade、jspace doctor、cron check、故障排查、registry broken、gbrain missing、fresh environment。Do NOT use for 机器级多-harness 全局治理接线(→harness-config)、日常资料入库(→asset-ingest)、会话记忆召回(→memory-recall)、收工写回(→memory-writeback)。
 - `asset-ingest` - 把一份工作资料(书籍/pdf/ppt/excel/报告)变成可召回的知识资产:本体归位文件中心 + 要点写进 gbrain reference 页。Use when 资料入库/整理 inbox/归位资料。Do NOT use for 会话进度写回(→memory-writeback)或用户主动问句召回(→memory-recall)。
 - `memory-recall` - **读侧精准召回**:用户「问一句」时,把问题召回为有出处的答案——语义查询 → top-1 校验 → 指针断言链 → 打开文件引用出处。Use when 问一句/找那个文件/那个数/精准召回/recall/find the file。Do NOT use for 资料入库(→asset-ingest 写侧)或会话进度写回(→memory-writeback)。
 - `memory-writeback` - **会话结束收工**时把本次持久事实按纪律写回 gbrain:扫描 → 分类(状态/知识/周快照) → 归属(project+slug) → 写回 → 验证读回。Use when 收工/写回记忆/记一下本次进展/session end/writeback。Do NOT use for 资料文件入库(→asset-ingest)、用户问句召回(→memory-recall)、周快照(→memory-consolidate cron)。
@@ -126,7 +126,7 @@ Approved workbench skills (official; materialized by `jspace init` into `.jspace
 | Knowledge | Destination |
 | --- | --- |
 | Daily operating rule for all agents | Root `AGENTS.md`(本块外是你的内容,块内是 JSpace 规则) |
-| Persistent facts and asset pointers | gbrain（bootstrap 后接线；见 `.jspace/skills/jspace-bootstrap/references/gbrain.md`） |
+| Persistent facts and asset pointers | gbrain（首次启用接线后；见 `.jspace/skills/jspace-use/references/gbrain.md`） |
 | Domain entry point/resource/workflow | `workspace/<domain>/README.md` or `domain.json` |
 | Domain-specific AI boundary | `workspace/<domain>/AGENTS.md` |
 | Repeatable domain procedure | `workspace/<domain>/runbook.md` |
@@ -155,7 +155,7 @@ Agent 定义是**声明式**的:作为上下文读取、按描述扮演,不物�
 | 工作台能力 agents(本工作台) | 本块下方「Approved workbench skills」的 skill(skill 即 agent 形态) |
 | 项目专属 agents(单项目) | 项目根 `AGENTS.md` |
 
-本工作台以 agent 形态提供的能力 = 下方「Approved workbench skills」的 4 个 skill:`jspace-bootstrap` / `asset-ingest` / `memory-recall` / `memory-writeback`——按需读取对应 SKILL.md,不在此重复。
+本工作台以 agent 形态提供的能力 = 下方「Approved workbench skills」的 4 个 skill:`jspace-use` / `asset-ingest` / `memory-recall` / `memory-writeback`——按需读取对应 SKILL.md,不在此重复。
 
 **项目级继承**:在项目根 `AGENTS.md` 顶部加一行——
 > Agents:读 `~/.agents/agents.md`(用户级)+ 工作台 `AGENTS.md`(如在此工作台下);本项目只定义项目专属 agents。
@@ -182,14 +182,14 @@ Before finishing a work session, quietly check whether anything should be preser
 
 ## Scheduled Tasks (cron)
 
-Cron definitions live in `.jspace/cron.json` (declarative: schedule + harness + prompt) and install into macOS launchd via `jspace cron install` (one LaunchAgent per cron). **At session start, run `jspace cron check`** (Claude Code best-effort: its SessionStart hook usually runs it, but the hook must actually fire; other harnesses — pi/codex/cursor — run it manually; lifecycle 分级见 `.jspace/skills/jspace-bootstrap/references/harnesses.md`) and report any failures / pending staged gbrain writes (`.jspace-logs/*.APPLY.json`) to the user. Cron definitions are treated as code (git-synced) — review changes before applying. Before the machine-side `jspace cron install`, run each task once via `jspace cron run` to verify the contract (rehearsal gate). **Headless runs go through the cc-switch local proxy with failover; account/quota model & exhaustion handling live with the jspace distribution (`.jspace/skills/jspace-bootstrap/references/headless-ops.md`) — if a cron fails from rate-limit/quota, failover → retry → downgrade, then let `jspace cron check` surface it.**
+Cron definitions live in `.jspace/cron.json` (declarative: schedule + harness + prompt) and install into macOS launchd via `jspace cron install` (one LaunchAgent per cron). **At session start, run `jspace cron check`** (Claude Code best-effort: its SessionStart hook usually runs it, but the hook must actually fire; other harnesses — pi/codex/cursor — run it manually; lifecycle 分级见 `.jspace/skills/jspace-use/references/harnesses.md`) and report any failures / pending staged gbrain writes (`.jspace-logs/*.APPLY.json`) to the user. Cron definitions are treated as code (git-synced) — review changes before applying. Before the machine-side `jspace cron install`, run each task once via `jspace cron run` to verify the contract (rehearsal gate). **Headless runs go through the cc-switch local proxy with failover; account/quota model & exhaustion handling live with the jspace distribution (`.jspace/skills/jspace-use/references/headless-ops.md`) — if a cron fails from rate-limit/quota, failover → retry → downgrade, then let `jspace cron check` surface it.**
 
 ## Brain operations
 
 gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbrain` for skill routing; keep the format intact.
 
 <!-- TRELLIS-BRAIN-OPS:BEGIN -->
-- **jspace-bootstrap**: initialize jspace | setup jspace | configure jspace | first-use jspace | workbench broken | registry broken | gbrain missing | wire gbrain | fresh environment
+- **jspace-use**: initialize jspace | setup jspace | configure jspace | first-use jspace | how to use jspace | 工作台怎么用 | 怎么开始 | maintain jspace | 维护工作台 | workspace upgrade | jspace doctor | cron check | 故障排查 | workbench broken | registry broken | gbrain missing | wire gbrain | fresh environment
 - **asset-ingest**: 资料入库 | 整理 inbox | 归位资料 | 把这份资料入库
 - **memory-recall**: 问一句 | 找那个文件 | 那个数 | 精准召回 | recall | find the file | 帮我找
 - **memory-writeback**: 收工 | 写回记忆 | 记一下本次进展 | 本次进展 | end of work | session end | writeback

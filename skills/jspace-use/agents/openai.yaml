@@ -1,0 +1,4 @@
+interface:
+  display_name: "jspace use"
+  short_description: "Use and maintain a JSpace workbench (first-use enablement + daily routing/memory/assets/CLI diagnostics)"
+  default_prompt: "Use $jspace-use to understand and maintain this JSpace workbench: first-use enablement, daily routing, gbrain memory, resources/assets, and CLI diagnostics."

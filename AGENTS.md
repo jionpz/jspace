@@ -8,7 +8,7 @@
 
 - `cli/`：JSpace CLI（TypeScript/bun 源码，`bun run cli/main.ts` 运行；`bun run build` 产出 `bin/jspace` 编译二进制），提供 `init`（生成工作台）和 `doctor`（校验工作台）。
 - `templates/workbench/`：工作台模板，包含 `.jspace/hub.json`、工作台 `AGENTS.md`、初始 domains。
-- `skills/jspace-bootstrap/`：首次配置技能（源码；`jspace init` 物化进工作台 `.jspace/skills/jspace-bootstrap/`，gbrain + harness 接线）。
+- `skills/jspace-use/`：使用指南技能（源码；`jspace init` 物化进工作台 `.jspace/skills/jspace-use/`，覆盖首次启用 + 日常使用/路由/记忆/资产/维护诊断）。
 - `skills/asset-ingest/`：资料转知识资产技能（源码；物化进工作台 `.jspace/skills/asset-ingest/`，归位 + gbrain reference + 中文语义召回）。
 
 本仓库根目录**不维护** `hub.json` / `workspace/` 日常注册表；这些只存在于 `templates/workbench/`，由 `jspace init` 实例化。模板中用占位符 `__DEV_ROOT__` 记录本仓库绝对路径，初始化时由 CLI 替换。
@@ -32,7 +32,7 @@
 | Development | 默认；用户说 "开发模式" | 修改 CLI、模板、技能和本仓库文档 |
 | Workbench | 在生成的工作台目录 | 见该目录 `AGENTS.md` |
 
-**模式边界（开发 vs 工作）**：本仓库 AGENTS.md 属开发侧，包含 Product Vision、开发模式、Trellis 工作流等；这些内容**不会**随 `jspace init` 复制进生成的工作台。工作台模板（`templates/workbench/AGENTS.md`）只含工作模式的规则（域路由、资源治理、首次配置指引）；它是 **JSpace 受管块模板**——`jspace init` 将 `<!-- JSPACE:START -->…<!-- JSPACE:END -->` 块嵌入工作台的 `AGENTS.md`，块内由 upgrade 维护、块外归用户。**工作台放置原则：入口面在根（AGENTS/README/.gitignore/.claude 设置），其余官方资产一律在 `.jspace/`**（官方 skill 落 `.jspace/skills/`，根 `skills/` 归用户自建）。会话级工作流（harness 记忆注入/写回）由首次配置 skill 指导的 harness 接线提供，不属于任何 AGENTS.md 的内容，也不随 init 生成。
+**模式边界（开发 vs 工作）**：本仓库 AGENTS.md 属开发侧，包含 Product Vision、开发模式、Trellis 工作流等；这些内容**不会**随 `jspace init` 复制进生成的工作台。工作台模板（`templates/workbench/AGENTS.md`）只含工作模式的规则（域路由、资源治理、首次配置指引）；它是 **JSpace 受管块模板**——`jspace init` 将 `<!-- JSPACE:START -->…<!-- JSPACE:END -->` 块嵌入工作台的 `AGENTS.md`，块内由 upgrade 维护、块外归用户。**工作台放置原则：入口面在根（AGENTS/README/.gitignore/.claude 设置），其余官方资产一律在 `.jspace/`**（官方 skill 落 `.jspace/skills/`，根 `skills/` 归用户自建）。会话级工作流（harness 记忆注入/写回）由 jspace-use 使用指南指导的 harness 接线提供，不属于任何 AGENTS.md 的内容，也不随 init 生成。
 
 ## Language
 
@@ -41,13 +41,13 @@
 ## Development Workflow
 
 1. 非平凡改动先走 Trellis 工作流；用户明确要求不建任务时直接实施。
-2. 模板和技能是生成物来源：改 `templates/workbench/` 和 `skills/jspace-bootstrap/`，不要通过修改已生成的工作台来反推模板。
+2. 模板和技能是生成物来源：改 `templates/workbench/` 和 `skills/jspace-use/`，不要通过修改已生成的工作台来反推模板。
 3. CLI 每次改动后验证：
    - `bunx tsc --noEmit`
    - `bun run cli/main.ts init /tmp/jspace-smoke`
    - `bun run cli/main.ts doctor --dir /tmp/jspace-smoke`
    - 在 `/tmp/jspace-smoke` 内演练 registry 命令（`domain`/`resource` 的 list/add/remove）
-4. `hub.json` schema 见 `templates/workbench/.jspace/hub.json` 和 `skills/jspace-bootstrap/references/registry.md`：资源主路径必须是绝对路径，且恰好一个 `primary: true`。
+4. `hub.json` schema 见 `templates/workbench/.jspace/hub.json` 和 `skills/jspace-use/references/registry.md`：资源主路径必须是绝对路径，且恰好一个 `primary: true`。
 5. 命名统一：项目、CLI、技能、模板、文档、domain 统一使用 `jspace`。
 6. 首次开发、未上线：**无兼容性负担**——schema/CLI/模板可直接演进，不做迁移/弃用通道；版本化承诺推迟到分发（R7）。
 7. 真实工作台升级约定（未分发、本地自用）：模板/CLI 更新后，既有工作台优先 `jspace workspace upgrade`（非破坏——未修改的 seed/skill 随升级刷新、本地编辑保留为 `skip`）；仅在需要完全重建时才清空重 init（`rm -rf <workbench>` 再 `jspace init <workbench>`，或清掉旧残留 `hub.json`/`.jspace.json` 后 `init --force`）。`init` 对已有工作台会拒绝（用 upgrade）；遇旧布局残留 init 会 fail 提示清除。

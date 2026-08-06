@@ -53,8 +53,8 @@
 
 - 会话开始：按域/项目检索注入；会话结束：把持久事实带归属（domain/project 标签、统一的实体 slug）写回。
 - 资产入脑只入三样：**这是什么、关键事实、指针**；原文件永远留在资产层。指针 = `Pointer`（绝对路径，本机真理）+ `rel_path`（相对 filehub 根，机器无关，M5 起）；换机按「目标机 filehub 根 + rel_path」重解析。
-- 精准 = 一致的实体命名 + 归属标签 + 写回纪律。三者由工作台规则与 bootstrap skill 保障，不靠人自觉。
-- 各 harness 的会话能力分级（session-start / session-end / 显式 fallback / crash recovery 的 automated/best-effort/manual/unsupported）见工作台 `.jspace/skills/jspace-bootstrap/references/harnesses.md`「Lifecycle 能力矩阵」；本段为愿景措辞，实际能力以矩阵为准（不虚报自动化）。
+- 精准 = 一致的实体命名 + 归属标签 + 写回纪律。三者由工作台规则与 jspace-use 指南保障，不靠人自觉。
+- 各 harness 的会话能力分级（session-start / session-end / 显式 fallback / crash recovery 的 automated/best-effort/manual/unsupported）见工作台 `.jspace/skills/jspace-use/references/harnesses.md`「Lifecycle 能力矩阵」；本段为愿景措辞，实际能力以矩阵为准（不虚报自动化）。
 
 ## 定时自动化（cron）
 
@@ -80,7 +80,7 @@
 
 - **M0 ✅** 工作台可生成、可校验（`init` / `doctor`）。
 - **M1 ✅** 注册表可维护（R3 domain/resource 增删查 + R8 模板修正）——M2 的地基：文件管理中心经 `jspace resource add` / `filehub init --register` 注册。
-- **M2 ✅** 资产层最小协议：`filehub init` 骨架 + `type: filehub` 注册 + inbox 批量整理 skill（两遍式 / 人工调整 / cron 可驱动）+ 域↔项目挂接规则 + bootstrap 文件中心引导。先定协议，历史才会整齐。
+- **M2 ✅** 资产层最小协议：`filehub init` 骨架 + `type: filehub` 注册 + inbox 批量整理 skill（两遍式 / 人工调整 / cron 可驱动）+ 域↔项目挂接规则 + 首次启用(first-use)文件中心引导。先定协议，历史才会整齐。
   - 待真实环境验证：① 示例资料「入库→gbrain 页→中文召回」端到端（live gbrain）——**已于 M4 验证通过**（2026-08-03，见 M4）；② 双机重建冒烟——**已于 M5 本机模拟验证通过**（2026-08-03，见 M5）。
 - **M3 ✅** cron MVP（R4）：`.jspace/cron.json` 声明式定义 + `jspace cron install` + `cron run` 无头执行（argv 安全 + 权限白名单 + flock 互斥）+ 失败可见性（cron-failed + doctor 摘要 + status）。**跨平台调度后端**：macOS launchd / Linux crontab / Windows schtasks（一 cron 一任务，`--dir` 显式传 root，win 进程树杀）。首批任务：inbox-tidy（旗舰，驱动 M2 无头批量，每日 21:00）。纯函数单测 + 验证矩阵见 `docs/PLATFORMS.md`。
   - 待真实环境验证：`jspace cron run inbox-tidy` 端到端跑通后再依赖；Linux/Windows 真机验证待 CI 解锁。
@@ -93,5 +93,5 @@
 
 1. **gbrain 多机**："同一份记忆"依赖文本规范源假设——**已于 M5 关闭（2026-08-03，本机模拟双机）**：A export → B import 重建 + embedding 重建 + 中文召回 top-1 与 A 一致 + 指针换机解析成立（`rel_path` 相对 filehub 根）。结论：假设成立、双字段指针采用；**真实第二机演练待实际使用**（本机模拟效力有限：同机/同 OS/同 embedding 可达；新机 setup 教训=init 即配 embedding）。图谱边/backlink 保留未验证（本语料无互链，边以正文 wikilink 承载）。
 2. **文件管理中心选址与存量迁移**——**已闭合（2026-08-03）**：根=本机 filehub 目录（如 `~/filehub`，每机一个根，注册进 hub.json 的 `type: filehub` resource primary path）；同步策略=内容走网盘/Obsidian Sync（重资产不进 git），根目录本身可由网盘同步或暂不同步，换机按「目标机根 + rel_path」重解析（M5 已验证）；存量收编=增量（新走 inbox，旧按项目/领域按需），runbook 见 `skills/asset-ingest/references/migration.md`；真实使用时代入 runbook 验证。
-3. **无头执行的运维**——**已闭合（2026-08-03）**：失败可见性硬化——`jspace cron failures`（alias `check`，聚合 cron-failed + pending 暂存写 + 各 cron 状态，需关注退出码 1）+ 工作台 SessionStart hook 自动检查（其他 harness 手动）+ doctor 摘要；账号/配额模型沉淀于 `skills/jspace-bootstrap/references/headless-ops.md`（cc-switch 代理 + failover、耗尽处置、敏感边界）；真实运行验证通过（成功路径 3 任务 real run ok；失败路径真实诱导 → cron-failed → check/doctor 闭环）。真实定时触发（非 rehearsal）待自然观察。
+3. **无头执行的运维**——**已闭合（2026-08-03）**：失败可见性硬化——`jspace cron failures`（alias `check`，聚合 cron-failed + pending 暂存写 + 各 cron 状态，需关注退出码 1）+ 工作台 SessionStart hook 自动检查（其他 harness 手动）+ doctor 摘要；账号/配额模型沉淀于 `skills/jspace-use/references/headless-ops.md`（cc-switch 代理 + failover、耗尽处置、敏感边界）；真实运行验证通过（成功路径 3 任务 real run ok；失败路径真实诱导 → cron-failed → check/doctor 闭环）。真实定时触发（非 rehearsal）待自然观察。
 4. **office 文件解析深度**——**已闭合（2026-08-03，#4 深度抽取交付）**：零依赖抽取器 `skills/asset-ingest/scripts/office-extract.py`（xlsx 逐表 / pptx 逐页，幻影行过滤 + 每 sheet 行数上限），深度路径=伴生 `.extract.md` 落 asset 层 + 页内 Key Facts 策展（含关键数字 + 引文）；示例验收 top-1（关键数字命中）。细则 `references/deep-extract.md`；可复跑协议 `skills/memory-recall/references/memory-acceptance.md`「office 深度抽取扩展(#4)」。

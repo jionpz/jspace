@@ -1,4 +1,4 @@
-# Golden run — jspace-bootstrap 全新工作台首次配置(Phase 0→5)
+# Golden run — jspace-use 全新工作台首次启用(first-use,第 2 章端到端)
 
 > 端到端范例:一个刚 `jspace init` 出来的空工作台,配到「gbrain 可召回 + filehub 闭环 + Claude Code 已接线」。**每 Phase = 关键命令 + 预期输出示意 + 验证断言**,中等模型照此改参即可。
 > 命令输出为**示意**(gbrain 二进制当前不在本机 PATH;jspace 命令输出按契约构造并标注示意);具体值随环境。
@@ -35,12 +35,12 @@ gbrain models doctor --json   # embedding_config / embedding_reachability
 { "resolver": "ok", "pgvector": "ok", "embeddings": "ok" }
 { "embedding_config": "ok", "embedding_reachability": "ok" }
 ```
-- **若 `embedding_reachability` != ok**(Ollama 未起 / 模型没拉):**不失败**。写页一律带 `embed_skip: true` 保底,检索显式降级为关键词(`gbrain search`),给「embedding 不可用,当前关键词检索,中文命中率可能偏低」提示——bootstrap 继续,不因 embedding 中断写入。
+- **若 `embedding_reachability` != ok**(Ollama 未起 / 模型没拉):**不失败**。写页一律带 `embed_skip: true` 保底,检索显式降级为关键词(`gbrain search`),给「embedding 不可用,当前关键词检索,中文命中率可能偏低」提示——首次启用继续,不因 embedding 中断写入。
 
 smoke 后清理(不留探针页):
 ```bash
-printf '---\ntype: smoke\nembed_skip: true\n---\nprobe\n' | gbrain put smoke/bootstrap
-gbrain get smoke/bootstrap && gbrain delete smoke/bootstrap
+printf '---\ntype: smoke\nembed_skip: true\n---\nprobe\n' | gbrain put smoke/first-use
+gbrain get smoke/first-use && gbrain delete smoke/first-use
 ```
 断言:`gbrain doctor --json` resolver/pgvector 全 `ok`;smoke 页 put→get→delete 三步通过。细则 `references/gbrain.md`。
 
@@ -57,13 +57,13 @@ jq .jspace/hub.json >/dev/null   # 合法 JSON
 ```
 断言:`jspace doctor` 退出 0;缺外部路径只报 warning,不视为失败。细则 `references/registry.md`。
 
-## Phase 3 — File center(含首配验收闭环)
+## Phase 3 — File center(含首启验收闭环)
 
 问用户选 filehub 根(此处本地 `~/filehub`):
 ```bash
 jspace filehub init ~/filehub --register   # 建骨架 + 注册 type:filehub(hub+local 一并维护)
 ```
-**首配验收(bootstrap 真正的"能用"证明)**:放一份示例文件进 `_inbox/`,跑一次「整理一下 inbox」,确认 **入库 → gbrain 页 → 中文召回** 闭环:
+**首启验收(首次启用真正的"能用"证明)**:放一份示例文件进 `_inbox/`,跑一次「整理一下 inbox」,确认 **入库 → gbrain 页 → 中文召回** 闭环:
 ```bash
 cp ~/Downloads/某份示例资料.md ~/filehub/_inbox/
 # 触发 asset-ingest:ingest begin → advance --gbrain → --index → --complete(见 asset-ingest skill)
@@ -97,5 +97,5 @@ gbrain doctor --fast      # brain 健康
 - [ ] `jq .jspace/hub.json` 合法 JSON,含 `type:filehub` 资源
 - [ ] Phase 3 「放一份文件跑 inbox 整理」闭环成立(`gbrain query` 命中入库页)
 - [ ] Phase 0 缺失工具走「下载临时文件 → 核验 → 用户确认」,未默认远程管道执行
-- [ ] embedding 不可达时写页 `embed_skip: true` 保底,bootstrap 未因此失败
+- [ ] embedding 不可达时写页 `embed_skip: true` 保底,首次启用未因此失败
 - [ ] Claude Code `mcpServers.gbrain` 已写入 `~/.claude.json`

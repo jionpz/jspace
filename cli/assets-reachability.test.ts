@@ -8,6 +8,7 @@
 // Run: bun test cli/assets-reachability.test.ts
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { posix } from "node:path";
 import { ASSETS } from "./assets.generated.ts";
 import { SKILLS_MANIFEST } from "./skills.generated.ts";
 
@@ -40,6 +41,18 @@ function resolve(key: string, ref: string): string | null {
   if (key.startsWith("skills/")) {
     const skillRoot = key.split("/").slice(0, 2).join("/"); // skills/<name>
     if (clean.startsWith("references/") || clean.startsWith("scripts/")) return `${skillRoot}/${clean}`;
+    // Cross-skill references `../<skill>/...` (references/x.md or SKILL.md) are
+    // relative to the REFERENCING skill's root (matches check-skills C1), so
+    // skills/memory-writeback/references/writeback.md -> `../jspace-use/references/gbrain.md`
+    // resolves to skills/jspace-use/references/gbrain.md. `../SKILL.md` (parent
+    // skill from a references/ file) is a different, file-dir-relative ref and is
+    // intentionally left out of scope here.
+    if (clean.startsWith("../")) {
+      const m = clean.match(/^\.\.\/([\w-]+)(\/.*)?$/);
+      if (!m) return null;
+      const target = posix.normalize(`${skillRoot}/${clean}`);
+      return target.startsWith("skills/") ? target : null; // never escape the skills tree
+    }
   }
   return null; // not a bundle-internal reference
 }

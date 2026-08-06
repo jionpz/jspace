@@ -70,7 +70,7 @@ claude MCP: wired
 codex MCP: missing
 ```
 - **密钥卫生**(纪律③):只报「键在/不在」,不 `cat` 配置全文、不回显 token/auth 值。
-- **不写入**:`missing` 由 bootstrap 或其他流程补,本 skill 只核对报告。
+- **不写入**:`missing` 由首次启用(first-use)或其他流程补,本 skill 只核对报告。
 - 配置核对状态三态:`claude MCP=wired`、`codex MCP=missing`、`pi/cursor=n/a`(未装)。
 
 ### Phase 5 — Verify + report

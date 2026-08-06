@@ -76,7 +76,7 @@ bun run cli/main.ts doctor --dir ~/jworkspace
 - `GOAL.md` - 最终目标（North Star），所有迭代的对齐物
 - `cli/` - CLI 源码（TypeScript/bun；`bin/jspace` 为 `bun run build` 编译产物）
 - `templates/workbench/` - 工作台模板
-- `skills/jspace-bootstrap/` - 首次配置技能（源码；`jspace init` 物化进工作台 `.jspace/skills/`）
+- `skills/jspace-use/` - 使用指南技能（源码；`jspace init` 物化进工作台 `.jspace/skills/`，覆盖首次启用 + 日常使用/维护）
 - `AGENTS.md` - 开发模式操作规则
 
 ## 开发模式
