@@ -52,9 +52,9 @@ function readContract<T>(
     : { status: "invalid", issues: decoded.issues };
 }
 
-export const readHub = (root: string): FileRead<HubV4> =>
+const readHub = (root: string): FileRead<HubV4> =>
   readContract(root, HUB_FILE, "hub.json.parse", "hub", decodeHub);
-export const readLocal = (root: string): FileRead<LocalStateV1> =>
+const readLocal = (root: string): FileRead<LocalStateV1> =>
   readContract(root, LOCAL_FILE, "local.json.parse", "local", decodeLocal);
 export const readMarker = (root: string): FileRead<WorkbenchMarkerV1> =>
   readContract(root, MARKER_FILE, "marker.json.parse", "marker", decodeMarker);

@@ -88,7 +88,9 @@ export function ackIncidents(root: string, cronId?: string): number {
   return n;
 }
 
-/** Incidents that still alert (open, not acknowledged). */
+/** Incidents that still alert (open, not acknowledged).
+ *  Semantic helper: production surfaces inline `readIncidents().records.filter(...)`;
+ *  kept as a named export for tests and clear intent. */
 export function openIncidents(root: string): Incident[] {
   return readIncidents(root).records.filter((i) => i.status === "open");
 }

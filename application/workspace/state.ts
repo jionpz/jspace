@@ -1,10 +1,10 @@
 // application/workspace/state.ts — typed workbench state access for use cases.
-// Moved out of the cli compatibility facade (cli/registry.ts). Use cases consume
-// core contracts + adapters here; the cli facade is deleted after migration.
+// Use cases consume core contracts + adapters here (moved out of the former cli
+// compatibility facade, which has since been removed).
 import { join } from "node:path";
 import { fail, rejectErrors } from "../../core/shared/errors.ts";
 import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
-import { REGISTRY_FILE } from "../../core/contracts/files.ts";
+import { HUB_FILE } from "../../core/contracts/files.ts";
 import { decodeHub, type HubV4 } from "../../core/contracts/hub.ts";
 import type { LocalStateV1 } from "../../core/contracts/local.ts";
 
@@ -13,7 +13,7 @@ export function loadHub(root: string): HubV4 {
   const reads = readWorkbenchState(root);
   switch (reads.hub.status) {
     case "missing":
-      fail(`registry not found: ${join(root, REGISTRY_FILE)}`);
+      fail(`registry not found: ${join(root, HUB_FILE)}`);
       break;
     case "invalid":
       rejectErrors(reads.hub.issues.map((i) => `${i.message} (${i.code})`));

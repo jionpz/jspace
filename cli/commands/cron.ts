@@ -9,7 +9,8 @@ import { cronInstall } from "../../application/automation/scheduler-service.ts";
 import { cronRun } from "../../application/automation/execute.ts";
 import { compileSkillTarget, type SkillTargetContext } from "../../application/automation/definitions.ts";
 import { readMaterializedJournal } from "../../application/workspace/journal.ts";
-import { cronFailures, cronLogDir, cronStatus, filehubRoot } from "../../application/automation/status.ts";
+import { cronFailures, cronLogDir, cronStatus } from "../../application/automation/status.ts";
+import { resolveFilehubRoot } from "../../application/registry/filehub-lookup.ts";
 import { schedulerAdapter } from "../../adapters/scheduler/index.ts";
 import { cronIsInstalledForRoot, schedulerEnv, workbenchTagFor } from "../scheduler.ts";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
@@ -93,7 +94,7 @@ const cronInstallSpec: CommandSpec = {
 
 const cronUninstallSpec: CommandSpec = {
   name: "uninstall",
-  summary: "remove installed launchd agents for this workbench",
+  summary: "remove installed platform scheduler tasks for this workbench",
   features: { dir: true },
   handler: (ctx) => {
     const tag = workbenchTagFor(ctx.root);
@@ -134,7 +135,7 @@ const cronRunSpec: CommandSpec = {
       },
       {
         platform: process.platform,
-        filehubRoot,
+        filehubRoot: resolveFilehubRoot,
         logDir: cronLogDir,
         now: Date.now,
         skillsManifest: SKILLS_MANIFEST,

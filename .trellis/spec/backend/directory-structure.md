@@ -15,7 +15,7 @@ adapters/            # base tool layer: filesystem, harness argv (no CLI, no app
 application/         # use cases: business logic, CommandSpec framework, CmdResult
   commands/command.ts
   workspace/  automation/  registry/  ingest/  pending/
-cli/                 # CommandSpec tree + main entry + generated assets + legacy cron/update
+cli/                 # CommandSpec tree + main entry + generated assets + cron/update
 scripts/             # build-time: gen-assets / gen-version / build-all
 skills/ + skills-manifest.json   # workbench skills (manifest is the packaging source of truth; jspace init materializes them into the workbench's .jspace/skills/)
 templates/           # workbench / filehub templates (embedded into the binary)
@@ -34,7 +34,7 @@ templates/           # workbench / filehub templates (embedded into the binary)
 | `core/shared` | shared kernel: `errors` (CliError/fail), `fs` (isFile), `schedule` (parseSchedule) | `core/*` (no app/adapter/cli logic) | application, adapters, cli |
 | `adapters` | platform/tool specifics (atomic fs writes, harness argv, scheduler) | `core/*` (incl. `core/shared`) | application, cli |
 | `application` | use cases, CommandSpec, CmdResult | `core`, `adapters`, `application` | `cli` (non-test) |
-| `cli` | declarative CommandSpec tree, entry, generated assets, legacy cron/update | everything | — |
+| `cli` | declarative CommandSpec tree, entry, generated assets, cron/update | everything | — |
 
 `adapters/` is a **base tool layer** consumed by both `application` and `cli` — it is not "on top of cli". The primitives both layers need (`fail`/`CliError`, `isFile`, `parseSchedule`) live in the shared kernel `core/shared/`; there are **no reverse edges** from adapters/core into application. The layer directions are enforced by the automated `import-boundary.test.ts` gate (runs with `bun test`).
 

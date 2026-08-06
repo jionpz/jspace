@@ -16,15 +16,11 @@ export function cronLogDir(root: string, id: string): string {
   return join(root, CONFIG_DIR, "logs", "cron", id);
 }
 
-/** Resolve the filehub root via the shared effective registry (type:filehub,
- *  primary path), or null when unregistered/unbound — then pending scan is skipped. */
-export const filehubRoot = resolveFilehubRoot;
-
 /** Find actionable pending gbrain writes: staged (needs apply) or
  *  terminal_failed (needs ack) envelopes in <filehub>/.jspace-logs/*.APPLY.json.
  *  Applied/acked envelopes no longer alert. */
 export function findPendingApplies(root: string): { root: string | null; paths: string[] } {
-  const fh = filehubRoot(root);
+  const fh = resolveFilehubRoot(root);
   if (!fh) return { root: null, paths: [] };
   const actionable = readEnvelopes(fh).filter((e) => e.status === "staged" || e.status === "terminal_failed");
   return { root: fh, paths: actionable.map((e) => envelopePath(fh, e.id)) };

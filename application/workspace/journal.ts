@@ -4,27 +4,20 @@
 // Written by init and refreshed by upgrade/rollback; absence (old workbench /
 // fresh clone) means "no known base". Recovery-critical: a damaged journal
 // fails loud with a fix direction — never read as "no base".
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { decodeMaterializedJournal, type MaterializedJournalV1 } from "../../core/contracts/materialized.ts";
 import { materializedRel, sha256Of } from "./manifest.ts";
+import { safeReadFile } from "./fs-helpers.ts";
 import { localDate } from "../time.ts";
 import { fail } from "../../core/shared/errors.ts";
 
 export const MATERIALIZED_FILE = join(CONFIG_DIR, "state", "materialized.json");
 
 export type MaterializedJournal = MaterializedJournalV1;
-
-function safeReadFile(p: string): string | null {
-  try {
-    return readFileSync(p, "utf-8");
-  } catch {
-    return null;
-  }
-}
 
 export function readMaterializedJournal(root: string): MaterializedJournal | null {
   const p = join(root, MATERIALIZED_FILE);

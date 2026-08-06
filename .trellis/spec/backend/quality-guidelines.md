@@ -22,7 +22,7 @@
 - **CommandSpec single source**: every command's name/aliases/options/positionals/help/handler come from one `CommandSpec` in `cli/commands/registry.ts`; handlers bind to `application/*/use-cases.ts`.
 - **Typed contract first**: any new schema gets `core/contracts/<name>.ts` (decoder, diagnostics pattern) + round-trip tests before use cases consume it.
 - **Contract version discipline**: each contract carries `version`/`schema_version`; unsupported versions fail with `*.version.unsupported`; internal schema changes bump the version with an explicit migration, never silently.
-- **Incremental ownership model** (parent R4/AC5): bundle files carry `AssetOwnership` (currently all `managed`); `diffBundle` produces `create / no-op / update / conflict / skip / stale / remove / block-update` (`remove` = pristine legacy seed copy cleaned up on upgrade; `block-update` = AGENTS.md JSPACE block refreshed, user content outside the block preserved); `materialized.json` is the last-applied base; `workspace upgrade` writes a plan + journal + rollback snapshot under `.jspace/state/upgrades/<id>/`. Locally-modified skills are never force-overwritten (reported as conflict).
+- **Incremental ownership model** (parent R4/AC5): bundle files carry `AssetOwnership` in three tiers — `seed` (user-customizable templates: README/.gitignore/.claude settings + bundled skills), `user` (`.jspace/` data such as hub.json/cron.json; upgrade never overwrites them, schema evolution goes through migration), and `managed` (reserved force-replace class, currently unused). `diffBundle` produces `create / no-op / update / conflict / skip / stale / remove / migrate / block-update` (`remove` = a recorded copy no longer in the bundle, unmodified, cleaned up on upgrade; `migrate` = hub schema migration; `block-update` = AGENTS.md JSPACE block refreshed, user content outside the block preserved); `materialized.json` is the last-applied base; `workspace upgrade` writes a plan + journal + rollback snapshot under `.jspace/state/upgrades/<id>/`. Locally-modified skills are never force-overwritten (reported as conflict).
 - **Mixed DI**: selected ports are injected (generated manifests, journal, readFile, skill context, clock) by the cli layer; filesystem goes through `adapters/fs` directly. `application` stays free of `cli` imports.
 - **Structured diagnostics**: `doctor`/`inspect` classify invalid / unbound / missing / drift with distinct codes and severities — never collapsed.
 
@@ -35,7 +35,7 @@
 
 ## Testing Requirements
 
-- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 339 tests across 45 files).
+- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 356 tests across 46 files).
 - New function → unit test; bug fix → regression test; changed behavior → update existing tests.
 - Fault-injection via injected deps (ingest journal fs ops, pending envelope gbrain stub).
 - Contract round-trip + decode-issue tests for every decoder.

@@ -3,7 +3,6 @@
 // `<!-- TRELLIS:START -->` pattern, jspace manages only the text between
 // `<!-- JSPACE:START -->` and `<!-- JSPACE:END -->`; everything outside that
 // block belongs to the user and is never overwritten or deleted.
-import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const JSPACE_BLOCK_START = "<!-- JSPACE:START -->";
@@ -36,21 +35,8 @@ export function replaceAgentsBlock(content: string, block: string): string {
   return `${content.slice(0, startIdx)}${block}${content.slice(endIdx + JSPACE_BLOCK_END.length)}`;
 }
 
-/** Read + write a workbench AGENTS.md path (unit-test seam). */
-export function readAgentsFile(p: string): string | null {
-  try {
-    return readFileSync(p, "utf-8");
-  } catch {
-    return null;
-  }
-}
-
-export function writeAgentsFile(p: string, content: string): void {
-  writeFileSync(p, content, "utf-8");
-}
-
 /** The workbench-relative AGENTS.md path. */
-export function agentsRel(): string {
+function agentsRel(): string {
   return "AGENTS.md";
 }
 

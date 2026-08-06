@@ -1,6 +1,5 @@
 // cli/update.ts — `jspace update`: self-update from GitHub Releases.
 // Only contacts the network when explicitly invoked (no background phone-home).
-import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -11,6 +10,7 @@ import {
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { VERSION } from "./version.generated.ts";
+import { sha256OfBytes } from "../core/shared/hash.ts";
 import { fail } from "../core/shared/errors.ts";
 
 const REPO = "jionpz/jspace";
@@ -51,10 +51,6 @@ export function assetFor(platform: string, arch: string): string {
   const a = arch === "arm64" ? "arm64" : arch === "x64" ? "x64" : null;
   if (!os || !a) fail(`不支持的平台/架构: ${platform}/${arch}（支持 macOS/Linux/Windows × x64/arm64）`);
   return `jspace-${os}-${a}${platform === "win32" ? ".exe" : ""}`;
-}
-
-export function sha256Of(buf: Uint8Array): string {
-  return createHash("sha256").update(buf).digest("hex");
 }
 
 /** Pull the expected SHA-256 for `asset` from checksums.txt (handles `*` prefix). */
@@ -186,7 +182,7 @@ export async function cmdUpdate(check: boolean, targetVersion?: string): Promise
   if (!ckResp.ok) fail(`下载 checksums.txt 失败（HTTP ${ckResp.status}）`);
   const expect = expectedHash(await ckResp.text(), asset);
   if (!expect) fail(`checksums.txt 中未找到产物 ${asset} 的校验和（发布不完整？）`);
-  const actual = sha256Of(bin);
+  const actual = sha256OfBytes(bin);
   if (actual !== expect) fail(`SHA-256 校验不匹配。期望 ${expect}，实际 ${actual}`);
 
   replaceBinary(process.execPath, bin, process.platform === "win32");

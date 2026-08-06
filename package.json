@@ -1,6 +1,6 @@
 {
   "name": "jspace",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "JSpace CLI - create and validate local workbenches (bun+TypeScript)",
   "private": true,
   "type": "module",

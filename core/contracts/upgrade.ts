@@ -16,7 +16,8 @@ export const UPGRADE_STATUSES = ["pending", "applied", "failed", "rolled_back"] 
 export type UpgradeStatus = (typeof UPGRADE_STATUSES)[number];
 
 /** Plan actions recorded in the journal (subset of diffBundle actions).
- *  `remove` = legacy seed copy cleaned up by upgrade (backed up, rollback restores);
+ *  `remove` = recorded copy no longer in the bundle, unmodified, cleaned up by
+ *  upgrade (backed up, rollback restores);
  *  `block-update` = AGENTS.md JSPACE block refreshed, user content outside preserved;
  *  `delete` = legacy alias, kept for decode compatibility. */
 export const UPGRADE_ACTIONS = ["create", "update", "delete", "remove", "block-update", "migrate", "conflict"] as const;

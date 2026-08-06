@@ -6,7 +6,8 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { filehubRoot, findPendingApplies, cronFailures, cronStatus } from "./status.ts";
+import { findPendingApplies, cronFailures, cronStatus } from "./status.ts";
+import { resolveFilehubRoot } from "../registry/filehub-lookup.ts";
 
 /** Build a temp workbench (and optional unique filehub) for failure-surface tests.
  *  State is structured: incidents (.jspace/state/incidents) + runs (.jspace/state/runs). */
@@ -86,11 +87,11 @@ type FailureData = {
   summary: { failures: number; suspect: number; never_run: number; pending_applies: number; needs_attention: number };
 };
 
-test("filehubRoot: unregistered -> null; registered -> primary path", () => {
+test("filehubRoot resolution: unregistered -> null; registered -> primary path", () => {
   const wb = makeWorkbench({});
-  expect(filehubRoot(wb)).toBeNull();
+  expect(resolveFilehubRoot(wb)).toBeNull();
   const wb2 = makeWorkbench({ filehub: true });
-  expect(filehubRoot(wb2)).toBe(join(wb2, "filehub"));
+  expect(resolveFilehubRoot(wb2)).toBe(join(wb2, "filehub"));
   rmSync(wb, { recursive: true, force: true });
   rmSync(wb2, { recursive: true, force: true });
 });

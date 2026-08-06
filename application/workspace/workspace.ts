@@ -13,15 +13,8 @@ import { decodeUpgradeJournal, type UpgradeJournalV1 } from "../../core/contract
 import { extractAgentsBlock, replaceAgentsBlock } from "./agents-block.ts";
 import { diffBundle, materializedRel } from "./manifest.ts";
 import { readMaterializedJournal, writeUpdatedMaterializedJournal } from "./journal.ts";
+import { safeReadFile } from "./fs-helpers.ts";
 import { migrateHubSchema, type HubTransform, type MigrationOutcome } from "../../core/registry/migrations.ts";
-
-function safeReadFile(p: string): string | null {
-  try {
-    return readFileSync(p, "utf-8");
-  } catch {
-    return null;
-  }
-}
 
 function setTemplateVersion(root: string, version: string): void {
   const marker = readMarker(root);
@@ -285,8 +278,8 @@ export function workspaceUpgrade(
         continue;
       }
       if (e.action === "remove") {
-        // legacy seed copy (unchanged since applied); remove with backup so
-        // rollback can restore it.
+        // recorded copy no longer in bundle (unchanged since applied); remove
+        // with backup so rollback can restore it.
         try {
           unlinkSync(join(root, e.rel));
         } catch {

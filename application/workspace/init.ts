@@ -18,7 +18,6 @@ import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import { writeActualMaterializedJournal } from "./journal.ts";
 import { materializedRel } from "./manifest.ts";
-export { CONFIG_DIR };
 
 export interface InitDeps {
   resolvePath: (p: string) => string;

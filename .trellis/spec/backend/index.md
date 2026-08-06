@@ -4,7 +4,7 @@
 
 ## Overview
 
-JSpace is a single-repo TypeScript/bun CLI that generates and validates JWorkspaces. The backend is organized in strict layers: `core/contracts` (pure typed decoders) → `core/registry` (effective merge + layered inspection) → `adapters` (base fs/harness tools) → `application` (use cases + CommandSpec + CmdResult) → `cli` (CommandSpec tree + generated assets + legacy cron/update). No framework, no monorepo packages.
+JSpace is a single-repo TypeScript/bun CLI that generates and validates JWorkspaces. The backend is organized in strict layers: `core/contracts` (pure typed decoders) → `core/registry` (effective merge + layered inspection) → `adapters` (base fs/harness tools) → `application` (use cases + CommandSpec + CmdResult) → `cli` (CommandSpec tree + generated assets + cron/update). No framework, no monorepo packages.
 
 ## Guidelines Index
 

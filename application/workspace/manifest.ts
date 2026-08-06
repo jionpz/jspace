@@ -1,16 +1,13 @@
 // application/workspace/manifest.ts — bundle manifest ownership rules, path
 // mapping and freshness diff (pure; consumed by gen-assets and workspace diff).
-import { createHash } from "node:crypto";
 import { extractAgentsBlock, JSPACE_BLOCK_START, JSPACE_BLOCK_END } from "./agents-block.ts";
 import { join } from "node:path";
+import { sha256Of } from "../../core/shared/hash.ts";
+export { sha256Of };
 import type {
   AssetOwnership,
   DistributionManifestV1,
 } from "../../core/contracts/distribution.ts";
-
-export function sha256Of(content: string): string {
-  return createHash("sha256").update(content).digest("hex");
-}
 
 /** Ownership by bundle-key prefix. Three tiers drive diff/upgrade:
  *  - seed: user-customizable templates (README/.gitignore/.claude settings +
@@ -170,7 +167,7 @@ export function diffBundle(root: string, manifest: DistributionManifestV1, deps:
         rel,
         ownership: "managed",
         action: unmodified ? "remove" : "stale",
-        reason: unmodified ? "legacy seed copy, unmodified; removed on upgrade" : "locally modified; kept",
+        reason: unmodified ? "recorded copy no longer in bundle, unmodified; removed on upgrade" : "locally modified; kept",
       });
     }
   }

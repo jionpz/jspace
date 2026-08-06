@@ -56,7 +56,7 @@ export function buildDesired(crons: CronDefinition[], tag: string, root: string,
  *  apply one op per cron. Rebuilt from the FULL enabled set — a delete-only op
  *  set must not wipe still-enabled crons. Empty desired -> empty block removes
  *  the workbench's managed block (all-disabled uninstalls). */
-export function applyOps(ops: SchedulerOp[], enabled: CronDefinition[], tag: string, root: string, env: SchedulerEnv, adapter: SchedulerAdapter): string[] {
+function applyOps(ops: SchedulerOp[], enabled: CronDefinition[], tag: string, root: string, env: SchedulerEnv, adapter: SchedulerAdapter): string[] {
   if (adapter.platform === "linux") {
     const block = enabled.length === 0 ? "" : crontabBlock(enabled, tag, root, env.jspaceBinary, env.path, env.home);
     return adapter.apply({ action: "create", taskId: adapter.identity(tag, enabled[0]?.id ?? "block").taskId, content: block }, tag, root, env);

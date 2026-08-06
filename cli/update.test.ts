@@ -6,10 +6,10 @@ import {
   compareVersions,
   isDevVersion,
   assetFor,
-  sha256Of,
   expectedHash,
   resolveTargetVersion,
 } from "./update.ts";
+import { sha256OfBytes } from "../core/shared/hash.ts";
 
 test("compareVersions compares numeric X.Y.Z", () => {
   expect(compareVersions("1.0.0", "1.0.0")).toBe(0);
@@ -66,6 +66,6 @@ test("resolveTargetVersion resolves latest (and default) via the tag source", as
   expect(await resolveTargetVersion(undefined, async () => "v1.0.2")).toBe("v1.0.2");
 });
 
-test("sha256Of produces a 64-hex digest", () => {
-  expect(sha256Of(new TextEncoder().encode("jspace"))).toMatch(/^[0-9a-f]{64}$/);
+test("sha256OfBytes produces a 64-hex digest", () => {
+  expect(sha256OfBytes(new TextEncoder().encode("jspace"))).toMatch(/^[0-9a-f]{64}$/);
 });
