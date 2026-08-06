@@ -7,6 +7,11 @@
 - **CLI user errors** throw via `fail()` (or return a `CmdResult` with an exit code) → `cli/main.ts` prints `jspace: error: <message>` and exits non-zero.
 - **Schema/contract errors** go through the shared diagnostics decoder (typed issue codes), never partial-parse.
 - **Health checks** (`doctor`, `cron check`) return structured diagnostics + exit code 1 when unhealthy; they do not throw for "expected" findings.
+- **Diagnostic severity contract** (`core/contracts/diagnostics.ts` `Severity`): three levels, each with a distinct meaning — pick the level, not "the loudest one":
+  - `error` — blocking; `doctor` exits 1 (missing/invalid machine truth).
+  - `warning` — a real health problem worth acting on, but non-blocking (e.g. `cron.not_installed` when the user explicitly enabled a cron that never got installed; damaged incident record).
+  - `info` — optional capability unconfigured with a designed degraded path, NOT a health problem; never counts as a warning, never sets exit code, surfaced only in `--json` diagnostics (`filehub.unregistered`: asset-ingest falls back to the staging area).
+  - Default state is not a warning: a fresh workbench with the template's `enabled: false` crons and no filehub reports `0 error(s), 0 warning(s)` (the `info` count shows optional capabilities).
 
 ## Error Types
 

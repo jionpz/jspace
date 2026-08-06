@@ -20,6 +20,8 @@
 ## Required Patterns
 
 - **CommandSpec single source**: every command's name/aliases/options/positionals/help/handler come from one `CommandSpec` in `cli/commands/registry.ts`; handlers bind to `application/*/use-cases.ts`.
+- **`--dir` is the workbench root convention** for every command (feature `dir: true`); `init` also accepts a legacy positional target for backward compatibility — both together is an ambiguous error (exit 2). Do not add new positional-path commands.
+- **Version string contract** (`scripts/gen-version.ts`): non-release builds carry the commit delta via `git describe --tags` (e.g. `1.0.9-2-g7cef2bc`) so `--version` distinguishes a tag-point build from leading commits — do NOT re-add `--abbrev=0` (it reintroduces binary/source drift). Release builds are overwritten to the clean tag by `JSPACE_BUILD_VERSION` (CI). `compareVersions` parses `[.+-]`-separated leading numerics, so suffixed versions compare equal to their tag.
 - **Typed contract first**: any new schema gets `core/contracts/<name>.ts` (decoder, diagnostics pattern) + round-trip tests before use cases consume it.
 - **Contract version discipline**: each contract carries `version`/`schema_version`; unsupported versions fail with `*.version.unsupported`; internal schema changes bump the version with an explicit migration, never silently.
 - **Incremental ownership model** (parent R4/AC5): bundle files carry `AssetOwnership` in three tiers — `seed` (user-customizable templates: README/.gitignore/.claude settings + bundled skills), `user` (`.jspace/` data such as hub.json/cron.json; upgrade never overwrites them, schema evolution goes through migration), and `managed` (reserved force-replace class, currently unused). `diffBundle` produces `create / no-op / update / conflict / skip / stale / remove / migrate / block-update` (`remove` = a recorded copy no longer in the bundle, unmodified, cleaned up on upgrade; `migrate` = hub schema migration; `block-update` = AGENTS.md JSPACE block refreshed, user content outside the block preserved); `materialized.json` is the last-applied base; `workspace upgrade` writes a plan + journal + rollback snapshot under `.jspace/state/upgrades/<id>/`. Locally-modified skills are never force-overwritten (reported as conflict).
@@ -35,7 +37,7 @@
 
 ## Testing Requirements
 
-- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 356 tests across 46 files).
+- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 360 tests across 46 files).
 - New function → unit test; bug fix → regression test; changed behavior → update existing tests.
 - Fault-injection via injected deps (ingest journal fs ops, pending envelope gbrain stub).
 - Contract round-trip + decode-issue tests for every decoder.
