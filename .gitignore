@@ -30,6 +30,8 @@ Thumbs.db
 # Harness / platform config (Trellis-managed, regenerable)
 .pi/
 .omp/
+.omc/
+.omo/
 .codex/
 .claude/
 .agents/
