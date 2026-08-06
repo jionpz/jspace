@@ -39,7 +39,7 @@ JSpace 工作台 = 本地工作控制平面:根 `AGENTS.md` 是入口面,其余�
 - **记忆层**:gbrain 统一记忆库(PGLite + 知识图谱 + 本地 embedding),会话开始检索式注入、结束写回持久事实。
 - **资产层**:filehub 文件中心,重资产归位 `filehub/`,要点写进 gbrain reference 页。
 
-**位置即所有权**:`AGENTS.md` 块内 = managed、块外 = user;`.jspace/skills/` = seed(未改随升级刷新,本地改动保留);`.jspace/hub.json` / `cron.json` = user 数据(永不覆盖);`.jspace/marker.json` / `local.json` / `state/` = machine 状态。升级边界与所有权详情见 `AGENTS.md` JSPACE 块与 `README.md`「目录边界与升级范围」——**此处不复制,读那两处**。
+**位置即所有权**:`AGENTS.md` 块内 = managed、块外 = user;`.jspace/skills/` = seed(未改随升级刷新,本地改动保留);`.jspace/hub.json` / `cron.json` = user 数据(永不覆盖);`.jspace/marker.json` / `local.json` / `state/` = machine 状态。升级边界与所有权详情见 `README.md`「目录边界与升级范围」;域/资源/skill 创建规则与 cron 运维等治理细节 → 第 8 章。
 
 ## 2. 首次启用(first-use)
 
@@ -82,7 +82,7 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 
 ## 7. 边界与故障排查
 
-- **本指南 vs 其它事实源**:本指南是「怎么用」的入口;`AGENTS.md` 是路由与所有权规则;CLI `--help` 是命令细节;`docs/PLATFORMS.md` 是跨平台能力矩阵;各 skill `SKILL.md` 是能力边界。**不复制、只指引**。
+- **本指南 vs 其它事实源**:本指南是「怎么用」的入口;`AGENTS.md` 是常驻路由与红线(每会话注入;域/skill/cron 治理细节 → 第 8 章);CLI `--help` 是命令细节;`docs/PLATFORMS.md` 是跨平台能力矩阵;各 skill `SKILL.md` 是能力边界。**不复制、只指引**。
 - **何时用别的 skill**(路由表):
 
 | 场景 | 用 |
@@ -95,8 +95,44 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 
 - **registry broken / gbrain missing / upgrade 异常 / 自检命令**:先跑 `jspace doctor --dir .` 看诊断;`jspace workspace diff --dry-run` 看差异;`jspace workspace upgrade --rollback <id>` 回退已应用升级。无头运维(账号/配额/failover/失败可见性)→ `references/headless-ops.md`;命令级排障 → CLI `--help`。
 
+## 8. 治理细节
+
+治理细节(建域 / 建 skill / cron 运维)按需读;常驻路由与红线在 `AGENTS.md` JSPACE 块,本章只承接细节。
+
+### 8.1 域
+
+- **创建信号**(满足 ≥2 条):跨天/项目/会话复现;有值得跟踪的外部资源;有独立入口/流程/安全规则;需要 AI 专属边界;作为无关资源标签会变吵;用户显式要求从本工作台管理。
+- **禁止创建**:一次性操作、单一代码仓库、模糊主题、无管理面的重内容。
+- **确定度分级**:高置信 → 直接建并简要说明;中置信 → 问一句;低置信 → 保持一次性或挂已有域。
+- **最小形态**:`workspace/<domain>/{README.md, domain.json}`。
+- **何时加 `workspace/<domain>/AGENTS.md` 或 `runbook.md`**:重复流程或安全边界需要时。
+- **建域同步**:在 `.jspace/hub.json` 加索引;细节进 `workspace/<domain>/domain.json` 与 markdown 文件,不塞进 hub.json。
+
+### 8.2 资源
+
+- 资源是域内可发现的入口(项目/仓库/URL/provider/容器/笔记等值得再次找到的对象)。
+- schema(entrypoints/binding/primary)与 drift 规则 → `references/registry.md`,不在此复制。
+
+### 8.3 skill
+
+- **提议信号**(满足 ≥2 条):代理反复需要同一非显然流程;流程跨多文件/工具/域;需要清晰自动触发规则;没有可复用检查清单代价高;太过程式化不适合根 `AGENTS.md`、又太横切不适合单一域 README;用户显式要可复用 AI 能力。
+- **禁区**:一次性笔记、简单域元数据、应进 `AGENTS.md` 的编码约定、大段内容 dump、能清楚放进 `AGENTS.md` 或域 README 的规则。
+- **用户确认前置**:根 `skills/` 只放用户自建 skill,创建前必须用户确认。
+
+### 8.4 cron
+
+- **session start 契约**:跑 `jspace cron check`,把失败与 pending 暂存写(`.jspace-logs/*.APPLY.json`)上报用户。
+- **定义即代码**:定义在 `.jspace/cron.json`(声明式:schedule + harness + prompt),git 同步、应用前 review。
+- **rehearsal gate**:机器侧 `jspace cron install` 前,先 `jspace cron run` 各任务一次验证契约。
+- **运维细节** → `references/headless-ops.md`(无头代理/账号/配额/失败可见性)。
+
+### 8.5 知识路由纪律
+
+只写**有助于未来会话**的持久记录。根 `AGENTS.md` 应含**长期运行规则**,而非临时偏好或一次性任务笔记。
+
 ## 按需深入(条件读指针)
 
+- 治理细节(域/资源/skill 创建规则、cron 运维)→ 第 8 章
 - gbrain 安装/embedding 三方案/frontmatter schema/离线策略 → `references/gbrain.md`
 - registry schema(hub v4 / local / marker)/drift 规则 → `references/registry.md`
 - 逐 harness 接线(Pi/Claude/Codex/Cursor + 跨平台路径 + lifecycle 矩阵)→ `references/harnesses.md`
