@@ -5,7 +5,7 @@
 // this layer as almost entirely unexercised.
 // Run: bun test cli/handler-wiring.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initWorkbench } from "../application/workspace/init.ts";
@@ -16,6 +16,7 @@ import { BUNDLE_MANIFEST } from "./manifest.generated.ts";
 import { parse, type CmdContext, type CmdResult, type CommandSpec } from "../application/commands/command.ts";
 import { COMMANDS } from "./commands/registry.ts";
 import { invocationArgv } from "../application/automation/invocation.ts";
+import { CliError } from "../core/shared/errors.ts";
 
 const initDeps = { resolvePath, expandTilde, isCompiled, devRoot, materialize: materializeTree, manifest: BUNDLE_MANIFEST };
 const ROOT: CommandSpec = { name: "", summary: "", children: COMMANDS };
@@ -110,4 +111,42 @@ test("invocationArgv round-trips through the real cron run parser (audit F1)", (
     expect(r.args.force).toBe(inv.force ?? false);
     expect(r.args.timeout).toBe(inv.timeoutSec === undefined ? undefined : String(inv.timeoutSec));
   }
+});
+
+test("init --dir wires --dir into ctx and the positional target stays legacy-compatible", () => {
+  const viaDir = parse(["init", "--dir", "/some/dir"], ROOT);
+  if (viaDir.kind !== "run") throw new Error("expected run");
+  expect(viaDir.dir).toBe("/some/dir");
+  expect((viaDir.args as { target?: unknown }).target).toBeUndefined();
+
+  const viaPos = parse(["init", "/legacy"], ROOT);
+  if (viaPos.kind !== "run") throw new Error("expected run");
+  expect((viaPos.args as { target: unknown }).target).toBe("/legacy");
+  expect(viaPos.dir).toBeUndefined();
+});
+
+test("init --dir and positional together -> CliError exit 2 (ambiguous)", () => {
+  const out = parse(["init", "--dir", "/x", "/y"], ROOT);
+  if (out.kind !== "run") throw new Error("expected run");
+  const ctx: CmdContext = { root: "/x", json: false, dryRun: false, dir: "/x", cwd: "/" };
+  let caught: CliError | undefined;
+  try {
+    (out.spec.handler as (c: CmdContext, a: Record<string, unknown>) => CmdResult)(ctx, out.args);
+  } catch (e) {
+    caught = e instanceof CliError ? e : undefined;
+  }
+  expect(caught).toBeDefined();
+  expect(caught!.message).toContain("not allowed with argument --dir");
+  expect(caught!.exitCode).toBe(2);
+});
+
+test("init --dir creates a real workbench (marker present)", () => {
+  const target = mkdtempSync(join(tmpdir(), "jspace-init-dir-"));
+  const out = parse(["init", "--dir", target], ROOT);
+  if (out.kind !== "run") throw new Error("expected run");
+  const ctx: CmdContext = { root: target, json: false, dryRun: false, dir: target, cwd: "/" };
+  const res = (out.spec.handler as (c: CmdContext, a: Record<string, unknown>) => CmdResult)(ctx, out.args);
+  expect(res?.errors ?? []).toHaveLength(0);
+  expect(existsSync(join(target, ".jspace", "marker.json"))).toBe(true);
+  rmSync(target, { recursive: true, force: true });
 });

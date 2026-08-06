@@ -12,6 +12,7 @@ import { doctorWorkbench } from "../../application/workspace/doctor.ts";
 import { expandTilde, isCompiled, devRoot, materializeTree } from "../embed.ts";
 import { resolvePath } from "../paths.ts";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
+import { CliError } from "../../core/shared/errors.ts";
 import { b, cronDeps, s } from "./helpers.ts";
 import { domainSpec } from "./domain.ts";
 import { resourceSpec } from "./resource.ts";
@@ -24,17 +25,26 @@ import { updateSpec, workspaceSpec } from "./workspace.ts";
 const initSpec: CommandSpec = {
   name: "init",
   summary: "initialize a new JSpace workbench in a target directory",
+  // --dir aligns init with every other workbench command; the positional target
+  // stays for backward compatibility. Both given -> ambiguous (exit 2).
+  features: { dir: true },
   positionals: [{ name: "target", help: "target directory (default: current directory)" }],
   options: [{ name: "--force", takesValue: false, help: "allow initialization into a non-empty directory" }],
-  handler: (_ctx, args) =>
-    initWorkbench(args.target === undefined ? undefined : s(args.target), b(args.force), {
+  handler: (ctx, args) => {
+    if (ctx.dir !== undefined && args.target !== undefined) {
+      throw new CliError("argument target: not allowed with argument --dir", 2);
+    }
+    // positional wins for legacy scripts; otherwise the resolved --dir / cwd.
+    const target = args.target === undefined ? ctx.root : s(args.target);
+    return initWorkbench(target, b(args.force), {
       resolvePath,
       expandTilde,
       isCompiled,
       devRoot,
       materialize: materializeTree,
       manifest: BUNDLE_MANIFEST,
-    }),
+    });
+  },
 };
 
 const doctorSpec: CommandSpec = {
