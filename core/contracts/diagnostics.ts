@@ -1,7 +1,7 @@
 // core/contracts/diagnostics.ts — shared decode/issue types for all state
 // contracts. Decoders are pure: they take `unknown` and return a typed value
 // or a list of stable issues. No filesystem I/O, no throwing on bad fields.
-export type Severity = "error" | "warning";
+export type Severity = "error" | "warning" | "info";
 
 export interface ContractIssue {
   code: string;

@@ -53,13 +53,23 @@ function codes(result: CmdResult): string[] {
   return data.diagnostics.map((d) => d.code);
 }
 
-test("healthy empty workbench -> exit ok; only structural warnings (local/filehub), no cron diagnostics", () => {
+test("healthy empty workbench -> exit ok; filehub.unregistered is info, local.missing warning, no cron diagnostics", () => {
   const r = doctorWorkbench(root, stubDeps());
   expect(r.exitCode ?? 0).toBe(0);
   const c = codes(r);
   expect(c.some((x) => x.startsWith("cron."))).toBe(false); // no cron diagnostics
   expect(c).toContain("filehub.unregistered");
   expect(c).toContain("local.missing");
+  const diags = (r.data as { diagnostics: { code: string; severity: string }[] }).diagnostics;
+  expect(diags.find((d) => d.code === "filehub.unregistered")?.severity).toBe("info");
+  // info diagnostics never count as warnings (local.missing still is one)
+  expect((r.warnings ?? []).join("\n")).not.toContain("filehub");
+});
+
+test("disabled cron (template default) not installed -> no cron.not_installed", () => {
+  setCrons([{ id: "inbox-tidy", schedule: "0 21 * * *", enabled: false }]);
+  const r = doctorWorkbench(root, stubDeps()); // installedCronIds = []
+  expect(codes(r)).not.toContain("cron.not_installed");
 });
 
 test("enabled cron not installed -> cron.not_installed", () => {

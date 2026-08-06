@@ -57,14 +57,16 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
   };
   const diags: RegistryDiagnostic[] = [...inspectWorkbench(env)];
 
-  // filehub asset-layer checks (warnings only, never blocking).
+  // filehub asset-layer checks (info for unregistered, warnings for broken/inbox).
   if (reads.hub.status === "ok") {
     const local = reads.local.status === "ok" ? reads.local.value : null;
     const effective = resolveEffectiveRegistry(reads.hub.value, local, { pathExists: existsSync });
     const fhRoot = primaryPathForResourceType(effective, "filehub");
     if (!fhRoot) {
+      // unregistered is an unconfigured optional resource (asset-ingest falls
+      // back to the degraded staging area by design), not a health problem.
       diags.push({
-        severity: "warning",
+        severity: "info",
         code: "filehub.unregistered",
         path: "resources",
         message: "no filehub resource registered (type=filehub); asset-ingest falls back to the degraded staging area",
@@ -171,12 +173,13 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
 
   const errors = diags.filter((d) => d.severity === "error").map((d) => d.message);
   const warnings = diags.filter((d) => d.severity === "warning").map((d) => d.message);
+  const infos = diags.filter((d) => d.severity === "info").map((d) => d.message);
   return {
     exitCode: errors.length > 0 ? 1 : undefined,
     lines: [
-      `jspace: doctor ${errors.length > 0 ? "failed" : "ok"}: ${errors.length} error(s), ${warnings.length} warning(s)`,
+      `jspace: doctor ${errors.length > 0 ? "failed" : "ok"}: ${errors.length} error(s), ${warnings.length} warning(s), ${infos.length} info`,
     ],
-    data: { diagnostics: diags, errors, warnings },
+    data: { diagnostics: diags, errors, warnings, infos },
     errors,
     warnings,
   };
