@@ -1,6 +1,10 @@
 // scripts/gen-version.ts — emit cli/version.generated.ts from JSPACE_BUILD_VERSION
 // (CI sets it from the git tag) or a git describe fallback. Run before every
 // build so the compiled binary reports its real release version.
+// Non-release builds carry the commit delta (git describe --tags gives
+// `1.0.9-2-g7cef2bc` when HEAD leads the tag), so `--version` distinguishes a
+// tag-point build from a leading-commits dev build. Release builds (tag) are
+// still overwritten to the clean tag by JSPACE_BUILD_VERSION.
 import { execSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -11,7 +15,7 @@ const out = resolve(repoRoot, "cli/version.generated.ts");
 let version = (process.env.JSPACE_BUILD_VERSION ?? "").trim();
 if (!version) {
   try {
-    version = execSync("git describe --tags --abbrev=0 2>/dev/null", {
+    version = execSync("git describe --tags 2>/dev/null", {
       cwd: repoRoot,
       encoding: "utf-8",
     }).trim();
