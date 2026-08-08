@@ -24,13 +24,15 @@ Four session harnesses are supported: Pi, Claude Code, Codex, Cursor. The user p
 ## Claude Code
 
 - Skill discovery: official workbench skills materialize byte-identical into
-  `.jspace/skills/` (harness-agnostic source) **and** `.claude/skills/`, so
+  `.jspace/skills/` (harness-agnostic source) **and** harness projection dirs
+  `.claude/skills/` **and** `.agents/skills/` (project-level multi-harness), so
   Claude Code's native skill selector (`Skill` tool, `/jspace-use`) can find
   them. Root `CLAUDE.md` imports `@AGENTS.md`, so claude sessions also load the
   workbench routing rules via the official memory channel. After an upgrade that
   creates `.claude/skills/` on a workbench where it did not exist, restart the
   claude session — Claude Code only watches skill directories that existed when
-  the session started.
+  the session started. The user-level `~/.agents/skills/` (multi-harness
+  uniform location) is materialized separately by `jspace skills install`.
 - MCP in `~/.claude.json` -> `mcpServers.gbrain`:
 
 ```json

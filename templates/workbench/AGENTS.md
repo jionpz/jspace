@@ -44,7 +44,7 @@ Before changing files for non-trivial work, classify the request internally (imp
 
 ## Skill Governance
 
-根 `skills/` 归**用户自建**（创建须用户批准）；官方技能在 `.jspace/skills/`（machine-managed，未改随升级刷新、本地改动保留为 skip）与 `.claude/skills/`（Claude Code 同字节投影），勿手工编辑；提议信号 / 禁区 / 用户确认规则 → jspace-use 第 8 章。
+根 `skills/` 归**用户自建**（创建须用户批准）；官方技能在 `.jspace/skills/`（machine-managed，未改随升级刷新、本地改动保留为 skip）、`.claude/skills/`（Claude Code 同字节投影）与 `.agents/skills/`（项目级多 harness 同字节投影），勿手工编辑；提议信号 / 禁区 / 用户确认规则 → jspace-use 第 8 章。
 
 ## Durable Knowledge Routing
 

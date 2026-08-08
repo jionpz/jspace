@@ -48,8 +48,11 @@ export function skillRoot(root: string, name: string): string {
  *  materialize to `.jspace/skills/` (harness-agnostic source of truth) plus one
  *  byte-identical copy per projection dir here — so harnesses that discover
  *  skills only from their own directory (e.g. Claude Code's `.claude/skills/`)
- *  can still see them. Adding a harness = adding its dir. */
-const SKILL_PROJECTIONS = [".claude/skills"] as const;
+ *  can still see them. `.agents/skills/` is the project-level multi-harness
+ *  location (jspace-use §skill layout), complementary to the user-level
+ *  `~/.agents/skills/` materialized by `skills install`. Adding a location =
+ *  adding its dir. */
+export const SKILL_PROJECTIONS = [".claude/skills", ".agents/skills"] as const;
 
 /** Map a bundle manifest key to every workbench-relative path it materializes
  *  to. Empty array = not materialized into the workbench (filehub is created

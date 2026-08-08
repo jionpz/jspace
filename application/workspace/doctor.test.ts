@@ -218,6 +218,21 @@ test("file present only in the projection -> skills.projection_drift", () => {
   expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("skills.projection_drift");
 });
 
+test(".agents/skills projection drift is detected like .claude", () => {
+  // the project-level .agents/skills projection must be health-checked too
+  mkdirSync(join(root, ".jspace", "skills", "asset-ingest", "scripts"), { recursive: true });
+  mkdirSync(join(root, ".agents", "skills", "asset-ingest", "scripts"), { recursive: true });
+  writeFileSync(join(root, ".jspace", "skills", "asset-ingest", "SKILL.md"), "identical");
+  writeFileSync(join(root, ".agents", "skills", "asset-ingest", "SKILL.md"), "identical");
+  writeFileSync(join(root, ".jspace", "skills", "asset-ingest", "scripts", "extract.py"), "v1");
+  writeFileSync(join(root, ".agents", "skills", "asset-ingest", "scripts", "extract.py"), "v2"); // drifted copy
+  expect(codes(doctorWorkbench(root, stubDeps()))).toContain("skills.projection_drift");
+
+  // reconcile -> diagnostic clears
+  writeFileSync(join(root, ".agents", "skills", "asset-ingest", "scripts", "extract.py"), "v1");
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("skills.projection_drift");
+});
+
 test("legacy official copy in root skills/ -> skills.legacy_root_copy; user skills untouched", () => {
   mkdirSync(join(root, "skills", "jspace-use"), { recursive: true });
   mkdirSync(join(root, "skills", "my-user-skill"), { recursive: true });

@@ -15,6 +15,7 @@ import { readEnvelopes } from "../pending/envelope.ts";
 import { isFile } from "../fs.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { readMaterializedJournal } from "./journal.ts";
+import { SKILL_PROJECTIONS } from "./manifest.ts";
 import { gbrainServer, gbrainSkillsDirWired } from "../gbrain/wiring.ts";
 
 /** Minimal cron view consumed by doctor; full cron surface lives in Child C. */
@@ -273,50 +274,56 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
     }
   }
 
-  // Official skills materialize to .jspace/skills/ (source of truth) plus a
-  // byte-identical harness projection under .claude/skills/. Drift means the
-  // harness sees a stale skill while diff/upgrade still treats the source as
-  // current — surface it so the copies can be reconciled. A projection dir that
-  // was never materialized (pre-projection template, upgrade pending) is NOT
-  // drift — workspace diff shows the pending creates. Only a projection that
-  // has a journal record (was materialized once) but is now missing or differs
-  // counts as drift.
+  // Official skills materialize to .jspace/skills/ (source of truth) plus
+  // byte-identical harness projections under each SKILL_PROJECTIONS dir. Drift
+  // means a harness sees a stale skill while diff/upgrade still treats the
+  // source as current — surface it so the copies can be reconciled. A projection
+  // dir that was never materialized (pre-projection template, upgrade pending)
+  // is NOT drift — workspace diff shows the pending creates. Only a projection
+  // that has a journal record (was materialized once) but is now missing or
+  // differs counts as drift.
   {
     // projection dirs recorded in the journal = were materialized at some point
-    let projRecorded = new Set<string>();
+    const projRecorded = new Map<string, Set<string>>();
+    for (const proj of SKILL_PROJECTIONS) projRecorded.set(proj, new Set());
     try {
       const j = readMaterializedJournal(root);
       if (j) {
         for (const rel of Object.keys(j.files)) {
-          const m = /^\.claude\/skills\/([^/]+)(?:\/|$)/.exec(rel);
-          if (m) projRecorded.add(m[1]);
+          for (const proj of SKILL_PROJECTIONS) {
+            const re = new RegExp(`^${proj.replace(/\./g, "\\.")}/([^/]+)(?:/|$)`);
+            const m = re.exec(rel);
+            if (m) projRecorded.get(proj)!.add(m[1]);
+          }
         }
       }
     } catch {
       // damaged journal: nothing recorded as materialized; diff/upgrade report it
     }
-    for (const name of cron.officialSkillNames()) {
-      const sourceDir = join(root, CONFIG_DIR, "skills", name);
-      const projDir = join(root, ".claude", "skills", name);
-      if (!existsSync(sourceDir)) continue; // source gone: diff/upgrade report the create
-      if (!existsSync(projDir)) {
-        if (!projRecorded.has(name)) continue; // never materialized -> not drift
+    for (const proj of SKILL_PROJECTIONS) {
+      for (const name of cron.officialSkillNames()) {
+        const sourceDir = join(root, CONFIG_DIR, "skills", name);
+        const projDir = join(root, proj, name);
+        if (!existsSync(sourceDir)) continue; // source gone: diff/upgrade report the create
+        if (!existsSync(projDir)) {
+          if (!projRecorded.get(proj)!.has(name)) continue; // never materialized -> not drift
+          diags.push({
+            severity: "warning",
+            code: "skills.projection_drift",
+            path: `${proj}.${name}`,
+            message: `skill projection drift: ${proj}/${name} is missing entirely (it was materialized before; run jspace workspace upgrade to re-create it)`,
+          });
+          continue;
+        }
+        const diffs = diffDirs(sourceDir, projDir);
+        if (diffs.length === 0) continue;
         diags.push({
           severity: "warning",
           code: "skills.projection_drift",
-          path: `.claude.skills.${name}`,
-          message: `skill projection drift: .claude/skills/${name} is missing entirely (it was materialized before; run jspace workspace upgrade to re-create it)`,
+          path: `${proj}.${name}`,
+          message: `skill projection drift: ${proj}/${name} differs from .jspace/skills/${name} (${diffs.slice(0, 3).join(", ")}${diffs.length > 3 ? ", …" : ""}); jspace workspace upgrade refreshes unmodified copies, user edits are preserved (check jspace workspace diff)`,
         });
-        continue;
       }
-      const diffs = diffDirs(sourceDir, projDir);
-      if (diffs.length === 0) continue;
-      diags.push({
-        severity: "warning",
-        code: "skills.projection_drift",
-        path: `.claude.skills.${name}`,
-        message: `skill projection drift: .claude/skills/${name} differs from .jspace/skills/${name} (${diffs.slice(0, 3).join(", ")}${diffs.length > 3 ? ", …" : ""}); jspace workspace upgrade refreshes unmodified copies, user edits are preserved (check jspace workspace diff)`,
-      });
     }
   }
 
