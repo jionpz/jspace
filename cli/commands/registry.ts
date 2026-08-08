@@ -21,6 +21,7 @@ import { cronSpec } from "./cron.ts";
 import { ingestSpec } from "./ingest.ts";
 import { pendingSpec } from "./pending.ts";
 import { updateSpec, workspaceSpec } from "./workspace.ts";
+import { contextSpec } from "./context.ts";
 
 const initSpec: CommandSpec = {
   name: "init",
@@ -67,4 +68,5 @@ export const COMMANDS: CommandSpec[] = [
   pendingSpec,
   updateSpec,
   workspaceSpec,
+  contextSpec,
 ];

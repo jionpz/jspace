@@ -208,6 +208,29 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
     }
   }
 
+  // Context hook wiring: the seed .claude/settings.json registers the
+  // `jspace context` SessionStart/UserPromptSubmit hooks. A settings.json that
+  // exists but lacks them means the user edited the seed file — upgrade will
+  // preserve it (skip), so the hooks stay unwired until merged by hand.
+  {
+    const settingsPath = join(root, ".claude", "settings.json");
+    if (existsSync(settingsPath) && statSync(settingsPath).isFile()) {
+      try {
+        const wired = readFileSync(settingsPath, "utf-8").includes("jspace context");
+        if (!wired) {
+          diags.push({
+            severity: "warning",
+            code: "hooks.not_wired",
+            path: ".claude/settings.json",
+            message: ".claude/settings.json exists but lacks the jspace context hooks; upgrade preserves a user-edited seed file (skip) — merge the hooks manually or restore the seed file",
+          });
+        }
+      } catch {
+        // unreadable settings: skip (doctor already surfaces broken configs)
+      }
+    }
+  }
+
   // Official skills materialize to .jspace/skills/ (source of truth) plus a
   // byte-identical harness projection under .claude/skills/. Drift means the
   // harness sees a stale skill while diff/upgrade still treats the source as

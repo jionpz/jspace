@@ -175,6 +175,20 @@ test("missing CLAUDE.md -> claude.pointer_missing; importing CLAUDE.md -> no dia
   expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("claude.pointer_missing");
 });
 
+test("settings.json exists without context hooks -> hooks.not_wired; wired -> none", () => {
+  // seed settings.json registers jspace context hooks
+  mkdirSync(join(root, ".claude"), { recursive: true });
+  writeFileSync(
+    join(root, ".claude", "settings.json"),
+    JSON.stringify({ hooks: { SessionStart: [{ matcher: "startup", hooks: [{ type: "command", command: "jspace context session-start 2>/dev/null || true", timeout: 10 }] }] } }),
+  );
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("hooks.not_wired");
+
+  // a user-edited settings.json without the hooks (upgrade would skip it)
+  writeFileSync(join(root, ".claude", "settings.json"), JSON.stringify({ hooks: {} }));
+  expect(codes(doctorWorkbench(root, stubDeps()))).toContain("hooks.not_wired");
+});
+
 test("harness projection drift -> skills.projection_drift", () => {
   mkdirSync(join(root, ".jspace", "skills", "asset-ingest", "scripts"), { recursive: true });
   mkdirSync(join(root, ".claude", "skills", "asset-ingest", "scripts"), { recursive: true });
