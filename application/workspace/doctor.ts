@@ -44,6 +44,43 @@ function countFiles(dir: string): number {
   return n;
 }
 
+// Retirement thresholds (design §5). Deliberately conservative: mtime is
+// rewritten by git clone / cloud-sync, so a false "stale" would be noise.
+// These are info-level "take a look", never an assertion that something died.
+const DOMAIN_DORMANT_DAYS = 90;
+const PROJECT_STALE_DAYS = 120;
+
+/** Newest mtime (epoch ms) under a directory tree, or 0 when unreadable/empty.
+ *  Missing dir degrades to 0 (never throws — diagnostics are read-only). */
+function lastActivityMs(dir: string): number {
+  let newest = 0;
+  const walk = (d: string): void => {
+    let entries: string[];
+    try {
+      entries = readdirSync(d);
+    } catch {
+      return;
+    }
+    for (const name of entries) {
+      if (name.startsWith(".")) continue;
+      const p = join(d, name);
+      let st;
+      try {
+        st = statSync(p);
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) {
+        walk(p);
+      } else if (st.mtimeMs > newest) {
+        newest = st.mtimeMs;
+      }
+    }
+  };
+  if (existsSync(dir)) walk(dir);
+  return newest;
+}
+
 /** Relative paths of files whose bytes differ between two sibling trees.
  *  Files present in only one tree also count as drift (the copies must be
  *  byte-identical, so a file in either copy but not the other is a divergence).
@@ -300,6 +337,61 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
           path: `skills.${name}`,
           message: `legacy copy of official skill in root skills/: skills/${name} (official skills live under .jspace/skills/; if not user-created, remove it manually)`,
         });
+      }
+    }
+  }
+
+  // Long-term-use health (info level, design §5): dormant domains and stale
+  // filehub projects. These are "take a look" nudges, never assertions — mtime
+  // is rewritten by git clone / cloud-sync, so thresholds stay conservative.
+  {
+    const now = Date.now();
+    // domain.dormant: workspace/<d>/ has no file touched within the window.
+    const workspaceDir = join(root, "workspace");
+    if (existsSync(workspaceDir) && statSync(workspaceDir).isDirectory()) {
+      for (const name of readdirSync(workspaceDir)) {
+        if (name.startsWith(".")) continue;
+        const p = join(workspaceDir, name);
+        if (!statSync(p).isDirectory()) continue;
+        const last = lastActivityMs(p);
+        if (last === 0) continue; // empty/unreadable: nothing to judge
+        const days = (now - last) / 86_400_000;
+        if (days >= DOMAIN_DORMANT_DAYS) {
+          diags.push({
+            severity: "info",
+            code: "domain.dormant",
+            path: `domain.${name}`,
+            message: `domain workspace/${name} has not been touched in ${Math.round(days)}d (≥${DOMAIN_DORMANT_DAYS}d); archive/merge or update it — see jspace-use 8.6`,
+          });
+        }
+      }
+    }
+    // filehub.project_stale: a registered filehub with a projects/<x>/ dir
+    // untouched within the window (candidate for archive/<年>/).
+    if (reads.hub.status === "ok") {
+      const readsLocal = reads.local.status === "ok" ? reads.local.value : null;
+      const effective = resolveEffectiveRegistry(reads.hub.value, readsLocal, { pathExists: existsSync });
+      const fhRoot = primaryPathForResourceType(effective, "filehub");
+      if (fhRoot) {
+        const projectsDir = join(fhRoot, "projects");
+        if (existsSync(projectsDir) && statSync(projectsDir).isDirectory()) {
+          for (const name of readdirSync(projectsDir)) {
+            if (name.startsWith(".")) continue;
+            const p = join(projectsDir, name);
+            if (!statSync(p).isDirectory()) continue;
+            const last = lastActivityMs(p);
+            if (last === 0) continue;
+            const days = (now - last) / 86_400_000;
+            if (days >= PROJECT_STALE_DAYS) {
+              diags.push({
+                severity: "info",
+                code: "filehub.project_stale",
+                path: `filehub.projects.${name}`,
+                message: `filehub project ${name} untouched for ${Math.round(days)}d (≥${PROJECT_STALE_DAYS}d); archive to archive/<年>/ if closed — see jspace-use 8.6`,
+              });
+            }
+          }
+        }
       }
     }
   }

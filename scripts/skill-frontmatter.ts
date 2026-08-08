@@ -1,11 +1,12 @@
 // scripts/skill-frontmatter.ts — parse SKILL.md frontmatter (name/description/triggers)
-// and render the two generated blocks in templates/workbench/AGENTS.md.
+// and render the generated "Brain operations" block in templates/workbench/AGENTS.md.
 //
 // Single source of truth for skill routing: SKILL.md frontmatter. gen-assets
 // calls renderAgentsBlocks() to regenerate:
 //   - "Brain operations" resolver rows  <- frontmatter `triggers`
-//   - "Skill Governance" skill list     <- frontmatter `name` + `description`
-// Markers (TRELLIS-BRAIN-OPS / TRELLIS-SKILL-GOV) delimit the generated regions;
+// The former "Skill Governance" list was removed (harness skill selectors read
+// frontmatter directly).
+// Markers (TRELLIS-BRAIN-OPS) delimit the generated region;
 // everything outside is hand-written prose preserved verbatim.
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -18,8 +19,6 @@ export interface SkillFrontmatter {
 
 const BRAIN_BEGIN = "<!-- TRELLIS-BRAIN-OPS:BEGIN -->";
 const BRAIN_END = "<!-- TRELLIS-BRAIN-OPS:END -->";
-const GOV_BEGIN = "<!-- TRELLIS-SKILL-GOV:BEGIN -->";
-const GOV_END = "<!-- TRELLIS-SKILL-GOV:END -->";
 
 /**
  * Parse the frontmatter block between the two leading `---` fences.
@@ -72,12 +71,6 @@ function renderBrainRows(skills: SkillFrontmatter[]): string {
     .join("\n");
 }
 
-function renderGovRows(skills: SkillFrontmatter[]): string {
-  return skills
-    .map((s) => `- \`${s.name}\` - ${s.description}`)
-    .join("\n");
-}
-
 /** Replace the content between begin/end markers (inclusive of the marker lines). */
 function replaceBlock(content: string, begin: string, end: string, body: string): string {
   const startIdx = content.indexOf(begin);
@@ -116,9 +109,14 @@ export function readWorkbenchSkills(repoRoot: string, skillNames: string[]): Ski
 }
 
 /**
- * Render the two generated blocks of templates/workbench/AGENTS.md from each
+ * Render the generated block of templates/workbench/AGENTS.md from each
  * workbench skill's SKILL.md frontmatter and write the result back to disk.
  * Returns the rendered AGENTS.md content (caller embeds the same bytes).
+ *
+ * Only the "Brain operations" resolver block is rendered — the former
+ * "Skill Governance" block was removed (child C of the workbench context
+ * wiring: harness skill selectors read the .claude/skills SKILL.md frontmatter
+ * directly, so the in-AGENTS.md description list became redundant).
  */
 export function renderAgentsBlocks(repoRoot: string, skillNames: string[]): string {
   const skills = readWorkbenchSkills(repoRoot, skillNames);
@@ -126,7 +124,6 @@ export function renderAgentsBlocks(repoRoot: string, skillNames: string[]): stri
   const agents = readFileSync(agentsPath, "utf-8");
   let rendered = agents;
   rendered = replaceBlock(rendered, BRAIN_BEGIN, BRAIN_END, renderBrainRows(skills));
-  rendered = replaceBlock(rendered, GOV_BEGIN, GOV_END, renderGovRows(skills));
   writeFileSync(agentsPath, rendered, "utf-8");
   return rendered;
 }

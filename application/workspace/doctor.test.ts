@@ -4,7 +4,7 @@
 // is stubbed (the real one spawns the platform scheduler — never in tests).
 // Run: bun test application/workspace/doctor.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { doctorWorkbench, type CronHealthDeps } from "./doctor.ts";
@@ -273,3 +273,62 @@ test("__pycache__ bytecode in one copy -> no skills.projection_drift", () => {
   expect(c).not.toContain("skills.projection_drift");
 });
 
+
+// ---- long-term-use health (info level) ----
+
+function makeFileWithMtime(rel: string, daysAgo: number): void {
+  const p = join(root, rel);
+  writeFileSync(p, "x");
+  const t = new Date(Date.now() - daysAgo * 86_400_000);
+  utimesSync(p, t, t);
+}
+
+test("dormant domain -> domain.dormant (info); fresh domain -> none", () => {
+  // a workspace/<d> whose only file is 120 days old
+  mkdirSync(join(root, "workspace", "old-domain"), { recursive: true });
+  makeFileWithMtime("workspace/old-domain/README.md", 120);
+  // a fresh domain
+  mkdirSync(join(root, "workspace", "fresh-domain"), { recursive: true });
+  makeFileWithMtime("workspace/fresh-domain/README.md", 2);
+
+  const c = codes(doctorWorkbench(root, stubDeps()));
+  expect(c).toContain("domain.dormant");
+  // fresh domain is not reported (only the old one)
+  const dormant = c.filter((x) => x === "domain.dormant");
+  expect(dormant).toHaveLength(1);
+});
+
+test("boundary: domain just under threshold -> no domain.dormant", () => {
+  mkdirSync(join(root, "workspace", "edge-domain"), { recursive: true });
+  makeFileWithMtime("workspace/edge-domain/README.md", 89); // < 90d
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("domain.dormant");
+});
+
+test("stale filehub project -> filehub.project_stale (info); fresh -> none", () => {
+  // register a filehub, put a stale + fresh project under it
+  mkdirSync(join(root, "workspace", "files"), { recursive: true });
+  writeFileSync(
+    join(root, ".jspace", "hub.json"),
+    JSON.stringify({
+      version: "4",
+      domains: [{ id: "files", path: "workspace/files" }],
+      resources: [{ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] }],
+      projects: [],
+    }),
+  );
+  const fh = join(root, "filehub");
+  mkdirSync(join(fh, "projects", "old-project", "docs"), { recursive: true });
+  mkdirSync(join(fh, "projects", "active-project", "docs"), { recursive: true });
+  // mtime must be on a file under the project (dirs alone have no lastActivity scan)
+  const oldP = join(fh, "projects", "old-project", "docs", "index.md");
+  writeFileSync(oldP, "x");
+  const t = new Date(Date.now() - 130 * 86_400_000);
+  utimesSync(oldP, t, t);
+  writeFileSync(join(fh, "projects", "active-project", "docs", "index.md"), "x");
+  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
+
+  const c = codes(doctorWorkbench(root, stubDeps()));
+  expect(c).toContain("filehub.project_stale");
+  const stale = c.filter((x) => x === "filehub.project_stale");
+  expect(stale).toHaveLength(1); // only old-project, not active-project
+});

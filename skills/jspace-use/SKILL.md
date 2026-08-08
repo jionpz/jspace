@@ -56,7 +56,19 @@ JSpace 工作台 = 本地工作控制平面:根 `AGENTS.md` 是入口面,其余�
 
 ## 3. 日常会话路由
 
-进工作台后,按 `AGENTS.md` 路由:读 `workspace/<domain>/README.md` + `domain.json`(域工作)、查 `.jspace/hub.json`(资源)、`整理一下 inbox`(→asset-ingest)、`问一句`(→memory-recall)、收工(→memory-writeback)。记忆注入起点 = gbrain 会话开始检索式注入(memory-recall / gbrain resolver)。**路由规则以 `AGENTS.md` 为准**,本指南不替代、不复制。
+进工作台后,会话 hook 已注入工作台状态(见下);`AGENTS.md` 是路由规则常驻源,本指南只给动线、不复制规则。四个高频场景:
+
+### 进入工作台(每天第一件事)
+SessionStart hook(`.claude/settings.json`)注入 `<current-state>`(域/pending/cron 失败/inbox)与 `<next-action>`(求值后的下一步)。**直接按 `<next-action>` 走**;要看全貌读 `.jspace/hub.json`。状态没出现 → `jspace doctor --dir .` 查 `hooks.not_wired` / `claude.pointer_missing`。
+
+### 进入某个域
+读 `workspace/<domain>/README.md` + `domain.json`(域入口与细节);该域有 `AGENTS.md` / `runbook.md` 则一并读。域该不该建/怎么建 → 第 8 章。
+
+### 收工
+有持久事实(进展/决策/教训)→ `memory-writeback`;有产出文件 → `asset-ingest`(先归位本体,再写 gbrain 指针)。都没有则静默结束。
+
+### 每周体检
+`jspace doctor --dir .` 看 `info` 级体检项(僵尸域 / 待归档项目 / 失效指针,见第 8 章「退役与回收」);`jspace workspace diff` 看升级差异。
 
 ## 4. gbrain 记忆
 
@@ -129,6 +141,19 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 ### 8.5 知识路由纪律
 
 只写**有助于未来会话**的持久记录。根 `AGENTS.md` 应含**长期运行规则**,而非临时偏好或一次性任务笔记。
+
+### 8.6 退役与回收
+
+用久了会变脏:僵尸域、失效指针、结项项目、陈旧 state。**所有处置动作必须先问用户**——删域/移文件是破坏性操作,未经确认不执行。每周体检入口 → 第 3 章「每周体检」。
+
+| 对象 | 退役信号 | 处置 | 确认 |
+|---|---|---|---|
+| 域 | `workspace/<d>/` 长期未更新(≥90 天)且 hub 无活跃资源 | 归档或合并进邻近域;同步从 `.jspace/hub.json` 移除索引 | **必须问** |
+| 资源 | primary 路径不存在,且非"任务本就关于缺失路径" | 修正指针,或从 hub 移除 | **必须问** |
+| 项目(filehub) | `projects/<x>/` 长期未动(≥120 天)、`index.md` 标记结项 | 移入 `filehub/archive/<年>/`,更新域 README 挂接 | **必须问** |
+| gbrain state 页 | 项目结项后 `project/<x>/state` 不再更新 | 保留(历史记录);不自动删 | — |
+
+**`jspace doctor` 的体检诊断**:`domain.dormant` / `filehub.project_stale` 按上表阈值报 `info` 级(非 error——它只是提示"看一眼",mtime 会被 git clone / 网盘同步重写,阈值取保守值防误报)。
 
 ## 按需深入(条件读指针)
 

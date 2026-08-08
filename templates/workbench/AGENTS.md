@@ -3,7 +3,7 @@
      - jspace init 嵌入你的 AGENTS.md(无 AGENTS.md 时创建含本块的最小文件);
      - jspace workspace upgrade 只更新块内文本;
      - 块外内容归你所有,永不覆盖、永不删除。
-     两个生成子块(Brain operations / Skill Governance)由 scripts/gen-assets.ts
+     生成子块(Brain operations)由 scripts/gen-assets.ts
      从 SKILL.md frontmatter 渲染,勿手工编辑。 -->
 
 # JSpace 工作台 - 本地工作控制平面
@@ -40,40 +40,31 @@ Before changing files for non-trivial work, classify the request internally (imp
 
 ## Registry Access
 
-**注册表 = `.jspace/hub.json`。** 用标准工具直接读：`.jspace/hub.json`（domain/resource 索引）、`.jspace/local.json`（机器本地路径，gitignored）、`workspace/<domain>/README.md` + `domain.json`（域入口与细节）。校验用 `jspace doctor --dir .`；注册表是指针而非文件读取器，不复制完整 README/AGENTS/runbook 内容，查找用 `jq .jspace/hub.json`、`find workspace -maxdepth 2 -type f`、`rg`。
+**注册表 = `.jspace/hub.json`。** 用标准工具直接读；校验用 `jspace doctor --dir .`。注册表是指针而非文件读取器，不复制完整 README/AGENTS/runbook 内容；查找用 `jq .jspace/hub.json`、`find workspace -maxdepth 2 -type f`、`rg`。文件细节见 `references/registry.md`。
 
 ## Skill Governance
 
-根 `skills/` 归**用户自建**（创建须用户批准）；官方技能在 `.jspace/skills/`（machine-managed，未改随升级刷新、本地改动保留为 skip），勿手工编辑；提议信号 / 禁区 / 用户确认规则 → jspace-use 第 8 章。Approved workbench skills (official; materialized by `jspace init` into `.jspace/skills/`):
-<!-- TRELLIS-SKILL-GOV:BEGIN -->
-- `jspace-use` - **使用与维护** JSpace 工作台(需已装至少一个 harness):理解工作台模型与所有权边界、首次启用(装 gbrain 统一记忆库/PGLite+知识图谱+本地 embedding、校验注册表、接线所选 harness)、日常会话路由、gbrain 记忆(写回/召回/指针/周快照)、资源与资产(hub.json/filehub)、CLI 维护与诊断(doctor/diff/upgrade/cron)。Use when 初始化/配置/使用/维护 jspace、how to use jspace、工作台怎么用、怎么开始、workspace upgrade、jspace doctor、cron check、故障排查、registry broken、gbrain missing、fresh environment。Do NOT use for 机器级多-harness 全局治理接线(→harness-config)、日常资料入库(→asset-ingest)、会话记忆召回(→memory-recall)、收工写回(→memory-writeback)。
-- `asset-ingest` - 把一份工作资料(书籍/pdf/ppt/excel/报告)变成可召回的知识资产:本体归位文件中心 + 要点写进 gbrain reference 页。Use when 资料入库/整理 inbox/归位资料。Do NOT use for 会话进度写回(→memory-writeback)或用户主动问句召回(→memory-recall)。
-- `memory-recall` - **读侧精准召回**:用户「问一句」时,把问题召回为有出处的答案——语义查询 → top-1 校验 → 指针断言链 → 打开文件引用出处。Use when 问一句/找那个文件/那个数/精准召回/recall/find the file。Do NOT use for 资料入库(→asset-ingest 写侧)或会话进度写回(→memory-writeback)。
-- `memory-writeback` - **会话结束收工**时把本次持久事实按纪律写回 gbrain:扫描 → 分类(状态/知识/周快照) → 归属(project+slug) → 写回 → 验证读回。Use when 收工/写回记忆/记一下本次进展/session end/writeback。Do NOT use for 资料文件入库(→asset-ingest)、用户问句召回(→memory-recall)、周快照(→memory-consolidate cron)。
-<!-- TRELLIS-SKILL-GOV:END -->
-> 区间内由 `scripts/gen-assets.ts` 从 SKILL.md frontmatter 渲染生成,勿手工编辑;改 skill 的 name/description 后重跑 gen-assets。
+根 `skills/` 归**用户自建**（创建须用户批准）；官方技能在 `.jspace/skills/`（machine-managed，未改随升级刷新、本地改动保留为 skip）与 `.claude/skills/`（Claude Code 同字节投影），勿手工编辑；提议信号 / 禁区 / 用户确认规则 → jspace-use 第 8 章。
 
 ## Durable Knowledge Routing
 
 | Knowledge | Destination |
 | --- | --- |
 | Daily operating rule for all agents | Root `AGENTS.md`(本块外是你的内容,块内是 JSpace 规则) |
-| Persistent facts and asset pointers | gbrain（首次启用接线后；见 `.jspace/skills/jspace-use/references/gbrain.md`） |
+| Persistent facts and asset pointers | gbrain（首次启用接线后；见 jspace-use `references/gbrain.md`） |
 | Domain entry point/resource/workflow | `workspace/<domain>/README.md` or `domain.json` |
 | Domain-specific AI boundary | `workspace/<domain>/AGENTS.md` |
 | Repeatable domain procedure | `workspace/<domain>/runbook.md` |
-| Reusable AI capability | `.jspace/skills/<jspace-skill>/`（官方）/ 根 `skills/<name>/`（用户自建，经确认） |
+| Reusable AI capability | 官方 `.jspace/skills/` / 用户自建 根 `skills/`（经确认） |
 | Domain/resource discovery index | `.jspace/hub.json` |
 
 ## Development Mode
 
-1. 本工作台是生成产物，不在此编辑模板源。
-2. 前往 JSpace 开发仓库（未注册先 `jspace domain add` / `jspace resource add`），读其 `AGENTS.md`，非平凡改动走其工作流。
-3. `jspace workspace upgrade --dry-run` 预览 → `jspace workspace upgrade` 应用 → `jspace doctor --dir .`；升级只动材料化清单，所有权边界见 `README.md`「目录边界与升级范围」。
+维护 CLI/模板/技能请前往 JSpace 开发仓库（未注册先 `jspace domain add` / `jspace resource add`），读其 `AGENTS.md`，非平凡改动走其工作流；本工作台是生成产物，不在此编辑模板源。升级：`jspace workspace upgrade --dry-run` 预览 → 应用 → `jspace doctor --dir .`。
 
 ## Agents
 
-Agent 定义是**声明式**的:作为上下文读取、按描述扮演,不物化成各 harness 的 agent 文件(`~/.claude/agents/` 等仍归各 harness 系统 agent 所有)。归属按"覆盖面最小的那一层",上层被引用、不复制:用户个人 agents → 全局 `~/.agents/agents.md`(用户定义);工作台能力 agents → 本块下方「Approved workbench skills」的 skill(skill 即 agent 形态,按需读对应 SKILL.md);项目专属 agents → 项目根 `AGENTS.md`。**项目级继承**:项目根 `AGENTS.md` 顶部加——`> Agents:读 ~/.agents/agents.md(用户级)+ 工作台 AGENTS.md(如在此工作台下);本项目只定义项目专属 agents。`
+Agent 定义是**声明式**的:作为上下文读取、按描述扮演,不物化成各 harness 的 agent 文件(`~/.claude/agents/` 等仍归各 harness 系统 agent 所有)。归属按"覆盖面最小的那一层",上层被引用、不复制:用户个人 agents → 全局 `~/.agents/agents.md`(用户定义);工作台能力 agents → 官方 skill(skill 即 agent 形态,按需读对应 SKILL.md);项目专属 agents → 项目根 `AGENTS.md`。**项目级继承**:项目根 `AGENTS.md` 顶部加——`> Agents:读 ~/.agents/agents.md(用户级)+ 工作台 AGENTS.md(如在此工作台下);本项目只定义项目专属 agents。`
 
 ## Confirmation Rules
 
@@ -85,7 +76,7 @@ Before finishing a work session, quietly check whether anything should be preser
 
 ## Scheduled Tasks (cron)
 
-**Session start 跑 `jspace cron check`**，上报失败与 pending 暂存写（`.jspace-logs/*.APPLY.json`）；定义在 `.jspace/cron.json`。运维细节（failover/quota/rehearsal）→ jspace-use 第 8 章。
+**Session start 跑 `jspace cron check`**，上报失败与 pending 暂存写（`.jspace-logs/*.APPLY.json`）；定义在 `.jspace/cron.json`。运维细节 → jspace-use 第 8 章。
 
 ## Brain operations
 

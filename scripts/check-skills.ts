@@ -107,14 +107,13 @@ function pass(label: string): void {
     }
 
     const govMatch = agents.match(/^<!-- TRELLIS-SKILL-GOV:BEGIN -->\n([\s\S]*?)\n<!-- TRELLIS-SKILL-GOV:END -->/m);
-    if (!govMatch) {
-      fail("C3 no Skill Governance marker region found");
-    } else {
-      const govNames = [...govMatch[1].matchAll(/^- `([\w-]+)` -/g)].map((m) => m[1]);
-      const diff = govNames.filter((n) => !workbenchNames.includes(n));
-      if (diff.length > 0) fail(`C3 Skill Governance lists skills not in manifest: ${diff.join(", ")}`);
-      pass("C3 Skill Governance set matches workbench manifest");
+    if (govMatch) {
+      // The Skill Governance render block was removed (child C of the workbench
+      // context wiring); if a stale copy survives in a template, flag it so it
+      // gets deleted rather than silently re-rendered.
+      fail("C3 stale Skill Governance block still present in AGENTS.md (removed in child C); delete it");
     }
+    pass("C3 Skill Governance block absent (removed in child C)");
   }
 }
 
