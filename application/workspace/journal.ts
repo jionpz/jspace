@@ -10,7 +10,7 @@ import type { DistributionManifestV1 } from "../../core/contracts/distribution.t
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { decodeMaterializedJournal, type MaterializedJournalV1 } from "../../core/contracts/materialized.ts";
-import { materializedRel, sha256Of } from "./manifest.ts";
+import { materializedRels, sha256Of } from "./manifest.ts";
 import { safeReadFile } from "./fs-helpers.ts";
 import { localDate } from "../time.ts";
 import { fail } from "../../core/shared/errors.ts";
@@ -54,10 +54,12 @@ function writeJournal(root: string, bundleVersion: string, files: Record<string,
 export function writeActualMaterializedJournal(root: string, manifest: DistributionManifestV1): void {
   const files: Record<string, { sha256: string }> = {};
   for (const f of manifest.files) {
-    const rel = materializedRel(f.path);
-    if (rel === null) continue;
-    const content = safeReadFile(join(root, rel));
-    if (content !== null) files[rel] = { sha256: sha256Of(content) };
+    // Every projection (official skills also materialize into harness dirs)
+    // is recorded independently so a later upgrade can tell each copy apart.
+    for (const rel of materializedRels(f.path)) {
+      const content = safeReadFile(join(root, rel));
+      if (content !== null) files[rel] = { sha256: sha256Of(content) };
+    }
   }
   writeJournal(root, manifest.bundle_version, files);
 }
@@ -78,14 +80,14 @@ export function writeUpdatedMaterializedJournal(
   const prior = readMaterializedJournal(root)?.files ?? {};
   const files: Record<string, { sha256: string }> = {};
   for (const f of manifest.files) {
-    const rel = materializedRel(f.path);
-    if (rel === null) continue;
-    if (appliedRels.has(rel)) {
-      const content = safeReadFile(join(root, rel));
-      if (content !== null) files[rel] = { sha256: sha256Of(content) };
-      continue;
+    for (const rel of materializedRels(f.path)) {
+      if (appliedRels.has(rel)) {
+        const content = safeReadFile(join(root, rel));
+        if (content !== null) files[rel] = { sha256: sha256Of(content) };
+        continue;
+      }
+      if (prior[rel] !== undefined) files[rel] = prior[rel];
     }
-    if (prior[rel] !== undefined) files[rel] = prior[rel];
   }
   writeJournal(root, manifest.bundle_version, files);
 }

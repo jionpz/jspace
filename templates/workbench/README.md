@@ -8,9 +8,10 @@
 
 - 根目录(入口面 + 用户区):
   - `AGENTS.md` - 你的文件:`<!-- JSPACE:START -->…<!-- JSPACE:END -->` 块内是 JSpace 规则(init 嵌入、upgrade 只更新块内),块外内容归你,永不覆盖
-  - `README.md` / `.gitignore` / `.claude/settings.json` - 入口文件(未修改随升级刷新,本地修改保留)
+  - `CLAUDE.md` / `README.md` / `.gitignore` / `.claude/settings.json` - 入口文件(未修改随升级刷新,本地修改保留)。`CLAUDE.md` 内容为 `@AGENTS.md` 导入,让 Claude Code 通过官方 memory 通道加载工作台路由
   - `workspace/` - 域目录（初始不预建；按 AGENTS.md 的 Domain Governance 从真实使用涌现，首个域创建时生成）
   - `skills/` - 用户自建技能保留地（需用户确认；官方技能不在根目录）
+  - `.claude/skills/` - 官方 skill 的 Claude Code 同字节投影（机器托管；勿手工编辑，改动会产生 `skills.projection_drift` 告警）
 - `.jspace/`(JSpace 管理区):
   - `hub.json` - domain/resource/project 注册表(**用户数据**;升级永不覆盖;缺失时重建空注册表)
   - `cron.json` - 声明式 cron 定义(**用户数据**;升级永不覆盖;删除即停用,不复活)
@@ -24,7 +25,7 @@
 | 位置 | 所有权 | 升级行为 |
 | --- | --- | --- |
 | 根 `AGENTS.md` | 块内 = managed / 块外 = user | 只对比并更新 `<!-- JSPACE:START -->…<!-- JSPACE:END -->` 块内文本(整文件备份 + rollback);块外内容永不触碰。块相同 → `no-op` |
-| 根 `README.md`/`.gitignore`/`.claude/settings.json`、`.jspace/skills/` | seed(模板) | **未修改**随升级刷新;**本地修改过**的一律保留(显示 `skip`,不阻断) |
+| 根 `README.md`/`.gitignore`/`CLAUDE.md`/`.claude/settings.json`、`.jspace/skills/`、`.claude/skills/` | seed(模板) | **未修改**随升级刷新;**本地修改过**的一律保留(显示 `skip`,不阻断) |
 | `.jspace/hub.json`、`.jspace/cron.json` | user(数据) | **永不覆盖**;schema 演进走迁移。hub.json 缺失时升级重建空注册表;cron.json 删除即视为停用,升级不复活 |
 | `.jspace/marker.json`/`local.json`/`logs/`/`state/` | machine(状态) | 机器生成/重写,不进替换范围 |
 

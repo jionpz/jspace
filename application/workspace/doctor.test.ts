@@ -4,7 +4,7 @@
 // is stubbed (the real one spawns the platform scheduler — never in tests).
 // Run: bun test application/workspace/doctor.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { doctorWorkbench, type CronHealthDeps } from "./doctor.ts";
@@ -156,3 +156,106 @@ test("orphan skill dir with a journal record -> no skills.orphan_dir (upgrade ow
   const r = doctorWorkbench(root, stubDeps());
   expect(codes(r)).not.toContain("skills.orphan_dir");
 });
+
+test("missing CLAUDE.md -> claude.pointer_missing; importing CLAUDE.md -> no diagnostic", () => {
+  // no CLAUDE.md on the fresh workbench
+  expect(codes(doctorWorkbench(root, stubDeps()))).toContain("claude.pointer_missing");
+
+  // a CLAUDE.md that imports @AGENTS.md silences it
+  writeFileSync(join(root, "CLAUDE.md"), "@AGENTS.md\n");
+  const r = doctorWorkbench(root, stubDeps());
+  expect(codes(r)).not.toContain("claude.pointer_missing");
+
+  // a CLAUDE.md present but not importing is still broken
+  writeFileSync(join(root, "CLAUDE.md"), "# notes\n");
+  expect(codes(doctorWorkbench(root, stubDeps()))).toContain("claude.pointer_missing");
+
+  // @./AGENTS.md (relative import form) is also a valid pointer
+  writeFileSync(join(root, "CLAUDE.md"), "@./AGENTS.md\n");
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("claude.pointer_missing");
+});
+
+test("harness projection drift -> skills.projection_drift", () => {
+  mkdirSync(join(root, ".jspace", "skills", "asset-ingest", "scripts"), { recursive: true });
+  mkdirSync(join(root, ".claude", "skills", "asset-ingest", "scripts"), { recursive: true });
+  writeFileSync(join(root, ".jspace", "skills", "asset-ingest", "SKILL.md"), "identical");
+  writeFileSync(join(root, ".claude", "skills", "asset-ingest", "SKILL.md"), "identical");
+  writeFileSync(join(root, ".jspace", "skills", "asset-ingest", "scripts", "extract.py"), "v1");
+  writeFileSync(join(root, ".claude", "skills", "asset-ingest", "scripts", "extract.py"), "v2"); // drifted copy
+  const r = doctorWorkbench(root, stubDeps());
+  expect(codes(r)).toContain("skills.projection_drift");
+
+  // reconcile -> diagnostic clears
+  writeFileSync(join(root, ".claude", "skills", "asset-ingest", "scripts", "extract.py"), "v1");
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("skills.projection_drift");
+});
+
+test("file present only in the projection -> skills.projection_drift", () => {
+  mkdirSync(join(root, ".jspace", "skills", "jspace-use"), { recursive: true });
+  mkdirSync(join(root, ".claude", "skills", "jspace-use"), { recursive: true });
+  writeFileSync(join(root, ".jspace", "skills", "jspace-use", "SKILL.md"), "identical");
+  writeFileSync(join(root, ".claude", "skills", "jspace-use", "SKILL.md"), "identical");
+  // a file only in the projection copy is drift too (copies must be identical)
+  writeFileSync(join(root, ".claude", "skills", "jspace-use", "EXTRA.md"), "stale-only-copy");
+  expect(codes(doctorWorkbench(root, stubDeps()))).toContain("skills.projection_drift");
+
+  // removing it reconciles
+  unlinkSync(join(root, ".claude", "skills", "jspace-use", "EXTRA.md"));
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("skills.projection_drift");
+});
+
+test("legacy official copy in root skills/ -> skills.legacy_root_copy; user skills untouched", () => {
+  mkdirSync(join(root, "skills", "jspace-use"), { recursive: true });
+  mkdirSync(join(root, "skills", "my-user-skill"), { recursive: true });
+  writeFileSync(join(root, "skills", "jspace-use", "SKILL.md"), "legacy official");
+  writeFileSync(join(root, "skills", "my-user-skill", "SKILL.md"), "user's own");
+  const c = codes(doctorWorkbench(root, stubDeps()));
+  expect(c).toContain("skills.legacy_root_copy");
+  expect(c).not.toContain("skills.orphan_dir"); // user skill in root is never flagged as orphan
+});
+
+test("pre-rename legacy copy (jspace-bootstrap) -> skills.legacy_root_copy", () => {
+  // jspace-bootstrap was the official name before v1.0.9 renamed it to
+  // jspace-use; a leftover under the old name must still be surfaced.
+  mkdirSync(join(root, "skills", "jspace-bootstrap"), { recursive: true });
+  writeFileSync(join(root, "skills", "jspace-bootstrap", "SKILL.md"), "old skill");
+  const c = codes(doctorWorkbench(root, stubDeps()));
+  expect(c).toContain("skills.legacy_root_copy");
+  expect(c).not.toContain("skills.orphan_dir");
+});
+
+test("projection wholly missing but was materialized -> skills.projection_drift", () => {
+  // source exists, projection dir gone entirely, journal records it was applied
+  mkdirSync(join(root, ".jspace", "skills", "jspace-use"), { recursive: true });
+  writeFileSync(join(root, ".jspace", "skills", "jspace-use", "SKILL.md"), "source");
+  mkdirSync(join(root, ".jspace", "state"), { recursive: true });
+  writeFileSync(
+    join(root, ".jspace", "state", "materialized.json"),
+    JSON.stringify({
+      version: 1,
+      asset_version: "1.0.9",
+      applied_at: "2026-08-06",
+      files: { ".claude/skills/jspace-use/SKILL.md": { sha256: "x" } },
+    }) + "\n",
+  );
+  expect(codes(doctorWorkbench(root, stubDeps()))).toContain("skills.projection_drift");
+});
+
+test("projection never materialized -> no skills.projection_drift (upgrade pending)", () => {
+  // pre-projection template workbench: no journal record, no .claude/skills dir
+  mkdirSync(join(root, ".jspace", "skills", "jspace-use"), { recursive: true });
+  writeFileSync(join(root, ".jspace", "skills", "jspace-use", "SKILL.md"), "source");
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("skills.projection_drift");
+});
+
+test("__pycache__ bytecode in one copy -> no skills.projection_drift", () => {
+  mkdirSync(join(root, ".jspace", "skills", "asset-ingest", "scripts", "__pycache__"), { recursive: true });
+  mkdirSync(join(root, ".claude", "skills", "asset-ingest", "scripts"), { recursive: true });
+  writeFileSync(join(root, ".jspace", "skills", "asset-ingest", "scripts", "extract.py"), "v1");
+  writeFileSync(join(root, ".claude", "skills", "asset-ingest", "scripts", "extract.py"), "v1");
+  // python writes a pyc into only the executed copy at runtime
+  writeFileSync(join(root, ".jspace", "skills", "asset-ingest", "scripts", "__pycache__", "extract.cpython-312.pyc"), "bc");
+  const c = codes(doctorWorkbench(root, stubDeps()));
+  expect(c).not.toContain("skills.projection_drift");
+});
+

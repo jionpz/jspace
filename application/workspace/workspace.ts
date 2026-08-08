@@ -11,7 +11,7 @@ import { readMarker, writeMarkerAtomic, writeBytesAtomic } from "../../adapters/
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { decodeUpgradeJournal, type UpgradeJournalV1 } from "../../core/contracts/upgrade.ts";
 import { extractAgentsBlock, replaceAgentsBlock } from "./agents-block.ts";
-import { diffBundle, materializedRel } from "./manifest.ts";
+import { diffBundle, materializedRels } from "./manifest.ts";
 import { readMaterializedJournal, writeUpdatedMaterializedJournal } from "./journal.ts";
 import { safeReadFile } from "./fs-helpers.ts";
 import { migrateHubSchema, type HubTransform, type MigrationOutcome } from "../../core/registry/migrations.ts";
@@ -44,7 +44,7 @@ function parseHubJson(raw: string | null): Record<string, unknown> | null {
  *  and run the migration chain. Returns null when nothing to migrate (installed
  *  absent/malformed, same version, or installed ahead of the bundle). */
 function planHubMigration(root: string, deps: UpgradeDeps): HubMigrationPlan | null {
-  const hubKey = deps.manifest.files.find((f) => materializedRel(f.path) === ".jspace/hub.json")?.path;
+  const hubKey = deps.manifest.files.find((f) => materializedRels(f.path).includes(".jspace/hub.json"))?.path;
   if (hubKey === undefined) return null;
   const bundleDoc = parseHubJson(deps.assets[hubKey] ?? null);
   const installedDoc = parseHubJson(deps.readFile(join(root, ".jspace/hub.json")));
@@ -251,8 +251,12 @@ export function workspaceUpgrade(
 
   const pathByRel = new Map<string, string>();
   for (const f of deps.manifest.files) {
-    const rel = materializedRel(f.path);
-    if (rel !== null) pathByRel.set(rel, f.path);
+    // Each manifest file may project to several rels (official skills → harness
+    // dirs); every projection maps back to the same bundle key so block-update
+    // and asset lookups resolve regardless of which copy is being written.
+    for (const rel of materializedRels(f.path)) {
+      pathByRel.set(rel, f.path);
+    }
   }
 
   try {

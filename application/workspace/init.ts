@@ -17,7 +17,7 @@ import type { WorkbenchMarkerV1 } from "../../core/contracts/workbench.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import { writeActualMaterializedJournal } from "./journal.ts";
-import { materializedRel } from "./manifest.ts";
+import { materializedRels } from "./manifest.ts";
 
 export interface InitDeps {
   resolvePath: (p: string) => string;
@@ -67,12 +67,12 @@ export function initWorkbench(
   const backedUp: string[] = [];
   if (force) {
     for (const f of deps.manifest.files) {
-      const rel = materializedRel(f.path);
-      if (rel === null) continue;
-      const p = join(target, rel);
-      if (existsSync(p) && statSync(p).isFile()) {
-        writeFileSync(`${p}.jspace-bak`, readFileSync(p));
-        backedUp.push(rel);
+      for (const rel of materializedRels(f.path)) {
+        const p = join(target, rel);
+        if (existsSync(p) && statSync(p).isFile()) {
+          writeFileSync(`${p}.jspace-bak`, readFileSync(p));
+          backedUp.push(rel);
+        }
       }
     }
   }

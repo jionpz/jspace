@@ -44,6 +44,63 @@ function countFiles(dir: string): number {
   return n;
 }
 
+/** Relative paths of files whose bytes differ between two sibling trees.
+ *  Files present in only one tree also count as drift (the copies must be
+ *  byte-identical, so a file in either copy but not the other is a divergence).
+ *  Never throws: unreadable or missing siblings degrade to "differs". */
+function diffDirs(a: string, b: string): string[] {
+  const out: string[] = [];
+  // Collect every file rel under a tree (dotfiles skipped, matching the rest
+  // of doctor's scanning). Missing root degrades to an empty set.
+  const files = (base: string): Set<string> => {
+    const set = new Set<string>();
+    const walk = (dir: string, rel = ""): void => {
+      let entries: string[];
+      try {
+        entries = readdirSync(dir);
+      } catch {
+        return;
+      }
+      for (const name of entries) {
+        if (name.startsWith(".")) continue;
+        if (name === "__pycache__") continue; // python bytecode, written at runtime into only one copy
+        const relPath = rel ? `${rel}/${name}` : name;
+        const p = join(dir, name);
+        let isDir: boolean;
+        try {
+          isDir = statSync(p).isDirectory();
+        } catch {
+          continue;
+        }
+        if (isDir) walk(p, relPath);
+        else set.add(relPath);
+      }
+    };
+    if (existsSync(base)) walk(base);
+    return set;
+  };
+  const relsA = files(a);
+  const relsB = files(b);
+  for (const rel of new Set([...relsA, ...relsB])) {
+    let ba: Buffer;
+    try {
+      ba = readFileSync(join(a, rel));
+    } catch {
+      out.push(rel); // missing on the other side counts as drift
+      continue;
+    }
+    let bb: Buffer;
+    try {
+      bb = readFileSync(join(b, rel));
+    } catch {
+      out.push(rel); // missing on the other side counts as drift
+      continue;
+    }
+    if (!ba.equals(bb)) out.push(rel);
+  }
+  return out;
+}
+
 export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
   const reads = readWorkbenchState(root);
   const env: InspectEnv = {
@@ -120,6 +177,105 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
           code: "skills.orphan_dir",
           path: `skills.${name}`,
           message: `orphan skill dir: .jspace/skills/${name} (not in the current bundle and no journal record; if not user-created, remove it manually)`,
+        });
+      }
+    }
+  }
+
+  // Claude Code discovers the workbench context only via a CLAUDE.md that
+  // imports @AGENTS.md (it reads CLAUDE.md, not AGENTS.md natively). A missing
+  // or non-importing pointer keeps the whole routing layer invisible to claude
+  // sessions. Warning: the fix is a workspace upgrade re-creating the seed file.
+  {
+    const claudeMd = join(root, "CLAUDE.md");
+    let pointerOk = existsSync(claudeMd) && statSync(claudeMd).isFile();
+    if (pointerOk) {
+      try {
+        // @AGENTS.md import (official syntax); @./AGENTS.md is the same path
+        // written relative, also legal.
+        pointerOk = /@(?:\.\/)?AGENTS\.md/.test(readFileSync(claudeMd, "utf-8"));
+      } catch {
+        pointerOk = false;
+      }
+    }
+    if (!pointerOk) {
+      diags.push({
+        severity: "warning",
+        code: "claude.pointer_missing",
+        path: "CLAUDE.md",
+        message: "CLAUDE.md missing or does not import @AGENTS.md; Claude Code cannot see the workbench context (run jspace workspace upgrade to re-create the seed file; irrelevant if you use a non-Claude harness)",
+      });
+    }
+  }
+
+  // Official skills materialize to .jspace/skills/ (source of truth) plus a
+  // byte-identical harness projection under .claude/skills/. Drift means the
+  // harness sees a stale skill while diff/upgrade still treats the source as
+  // current — surface it so the copies can be reconciled. A projection dir that
+  // was never materialized (pre-projection template, upgrade pending) is NOT
+  // drift — workspace diff shows the pending creates. Only a projection that
+  // has a journal record (was materialized once) but is now missing or differs
+  // counts as drift.
+  {
+    // projection dirs recorded in the journal = were materialized at some point
+    let projRecorded = new Set<string>();
+    try {
+      const j = readMaterializedJournal(root);
+      if (j) {
+        for (const rel of Object.keys(j.files)) {
+          const m = /^\.claude\/skills\/([^/]+)(?:\/|$)/.exec(rel);
+          if (m) projRecorded.add(m[1]);
+        }
+      }
+    } catch {
+      // damaged journal: nothing recorded as materialized; diff/upgrade report it
+    }
+    for (const name of cron.officialSkillNames()) {
+      const sourceDir = join(root, CONFIG_DIR, "skills", name);
+      const projDir = join(root, ".claude", "skills", name);
+      if (!existsSync(sourceDir)) continue; // source gone: diff/upgrade report the create
+      if (!existsSync(projDir)) {
+        if (!projRecorded.has(name)) continue; // never materialized -> not drift
+        diags.push({
+          severity: "warning",
+          code: "skills.projection_drift",
+          path: `.claude.skills.${name}`,
+          message: `skill projection drift: .claude/skills/${name} is missing entirely (it was materialized before; run jspace workspace upgrade to re-create it)`,
+        });
+        continue;
+      }
+      const diffs = diffDirs(sourceDir, projDir);
+      if (diffs.length === 0) continue;
+      diags.push({
+        severity: "warning",
+        code: "skills.projection_drift",
+        path: `.claude.skills.${name}`,
+        message: `skill projection drift: .claude/skills/${name} differs from .jspace/skills/${name} (${diffs.slice(0, 3).join(", ")}${diffs.length > 3 ? ", …" : ""}); jspace workspace upgrade refreshes unmodified copies, user edits are preserved (check jspace workspace diff)`,
+      });
+    }
+  }
+
+  // Legacy layout check: before official skills moved under .jspace/skills/,
+  // init also materialized them into root skills/. Those stale copies are
+  // invisible to diff/upgrade (no journal record) and shadow the current tree.
+  // Matched against current official names plus known historical names (e.g.
+  // jspace-bootstrap, renamed to jspace-use in v1.0.9) — a pre-rename leftover
+  // would otherwise be invisible forever. User-created root skills (any other
+  // name) are untouched, per the "root skills/ is user-created" contract.
+  {
+    const official = new Set([...cron.officialSkillNames(), "jspace-bootstrap"]);
+    const rootSkills = join(root, "skills");
+    if (existsSync(rootSkills) && statSync(rootSkills).isDirectory()) {
+      for (const name of readdirSync(rootSkills)) {
+        if (name.startsWith(".")) continue;
+        if (!official.has(name)) continue;
+        const p = join(rootSkills, name);
+        if (!statSync(p).isDirectory()) continue;
+        diags.push({
+          severity: "warning",
+          code: "skills.legacy_root_copy",
+          path: `skills.${name}`,
+          message: `legacy copy of official skill in root skills/: skills/${name} (official skills live under .jspace/skills/; if not user-created, remove it manually)`,
         });
       }
     }

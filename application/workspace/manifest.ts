@@ -44,13 +44,25 @@ export function skillRoot(root: string, name: string): string {
   return join(root, skillRel(name));
 }
 
-/** Map a bundle manifest key to the workbench-relative path it materializes to,
- *  or null when the key is not materialized into the workbench (filehub is
- *  created on demand by `filehub init`, not by init/upgrade). */
-export function materializedRel(key: string): string | null {
-  if (key.startsWith("templates/workbench/")) return key.slice("templates/workbench/".length);
-  if (key.startsWith("skills/")) return skillRel(key.slice("skills/".length)); // 官方 skill → .jspace/skills/
-  return null;
+/** Harness-specific skill projection dirs (workbench-relative). Official skills
+ *  materialize to `.jspace/skills/` (harness-agnostic source of truth) plus one
+ *  byte-identical copy per projection dir here — so harnesses that discover
+ *  skills only from their own directory (e.g. Claude Code's `.claude/skills/`)
+ *  can still see them. Adding a harness = adding its dir. */
+const SKILL_PROJECTIONS = [".claude/skills"] as const;
+
+/** Map a bundle manifest key to every workbench-relative path it materializes
+ *  to. Empty array = not materialized into the workbench (filehub is created
+ *  on demand by `filehub init`, not by init/upgrade). Projection copies are
+ *  byte-identical to the source by construction — they come from the same
+ *  ASSETS entry, so their sha256 matches and upgrade keeps them in lockstep. */
+export function materializedRels(key: string): string[] {
+  if (key.startsWith("templates/workbench/")) return [key.slice("templates/workbench/".length)];
+  if (key.startsWith("skills/")) {
+    const name = key.slice("skills/".length);
+    return [skillRel(name), ...SKILL_PROJECTIONS.map((p) => `${p}/${name}`)];
+  }
+  return [];
 }
 
 export type DiffAction = "create" | "no-op" | "update" | "conflict" | "skip" | "stale" | "remove" | "block-update" | "migrate";
@@ -79,88 +91,92 @@ export interface DiffDeps {
 export function diffBundle(root: string, manifest: DistributionManifestV1, deps: DiffDeps): DiffEntry[] {
   const out: DiffEntry[] = [];
   for (const f of manifest.files) {
-    const rel = materializedRel(f.path);
-    if (rel === null) continue; // filehub skeleton is checked by filehub init
-    const current = deps.readFile(join(root, rel));
-    if (current === null) {
-      // user data: hub.json missing -> recreate empty for recovery; cron.json
-      // missing -> a deliberate "no cron" state, keep it deleted.
-      const keepDeleted = f.ownership === "user" && !recreateOnMissing(rel);
-      out.push({
-        rel,
-        ownership: f.ownership,
-        action: keepDeleted ? "skip" : "create",
-        reason: keepDeleted ? "user: deletion respected" : "missing",
-      });
-      continue;
-    }
-    const currentSha = sha256Of(current);
-    const recorded = deps.recorded[rel]?.sha256;
-    if (rel === "AGENTS.md") {
-      // JSpace owns only the JSPACE block inside AGENTS.md; everything outside
-      // belongs to the user. Compare the embedded block against the bundle
-      // block and plan a block-only refresh — never a whole-file rewrite.
-      const bundleContent = deps.bundleContent?.(f.path) ?? null;
-      if (bundleContent === null) {
-        out.push({ rel, ownership: f.ownership, action: "skip", reason: "AGENTS.md: block compare unavailable; left untouched", currentSha });
-      } else {
-        const bundleBlock = extractAgentsBlock(bundleContent);
-        if (bundleBlock === null) {
-          out.push({ rel, ownership: f.ownership, action: "skip", reason: "bundle AGENTS.md has no JSPACE block", currentSha });
+    // Each manifest file may materialize to several paths (official skills also
+    // project into harness dirs); every projection diffed independently so an
+    // edit to one copy never hides drift in another. An empty rel list (e.g.
+    // filehub, materialized on demand) skips the file entirely.
+    for (const rel of materializedRels(f.path)) {
+      const current = deps.readFile(join(root, rel));
+      if (current === null) {
+        // user data: hub.json missing -> recreate empty for recovery; cron.json
+        // missing -> a deliberate "no cron" state, keep it deleted.
+        const keepDeleted = f.ownership === "user" && !recreateOnMissing(rel);
+        out.push({
+          rel,
+          ownership: f.ownership,
+          action: keepDeleted ? "skip" : "create",
+          reason: keepDeleted ? "user: deletion respected" : "missing",
+        });
+        continue;
+      }
+      const currentSha = sha256Of(current);
+      const recorded = deps.recorded[rel]?.sha256;
+      if (rel === "AGENTS.md") {
+        // JSpace owns only the JSPACE block inside AGENTS.md; everything outside
+        // belongs to the user. Compare the embedded block against the bundle
+        // block and plan a block-only refresh — never a whole-file rewrite.
+        const bundleContent = deps.bundleContent?.(f.path) ?? null;
+        if (bundleContent === null) {
+          out.push({ rel, ownership: f.ownership, action: "skip", reason: "AGENTS.md: block compare unavailable; left untouched", currentSha });
         } else {
-          const currentBlock = extractAgentsBlock(current);
-          const hasStart = current.includes(JSPACE_BLOCK_START);
-          const hasEnd = current.includes(JSPACE_BLOCK_END);
-          if (currentBlock === null && (hasStart || hasEnd)) {
-            // only one marker present: damaged user file — never mutate it.
-            out.push({ rel, ownership: f.ownership, action: "skip", reason: "AGENTS.md: malformed JSPACE block; left untouched", currentSha });
-          } else if (currentBlock === bundleBlock) {
-            out.push({ rel, ownership: f.ownership, action: "no-op", reason: "up to date (block)", currentSha });
+          const bundleBlock = extractAgentsBlock(bundleContent);
+          if (bundleBlock === null) {
+            out.push({ rel, ownership: f.ownership, action: "skip", reason: "bundle AGENTS.md has no JSPACE block", currentSha });
           } else {
-            out.push({
-              rel,
-              ownership: f.ownership,
-              action: "block-update",
-              reason: currentBlock === null ? "no JSPACE block; embedded on upgrade" : "JSPACE block updated",
-              currentSha,
-            });
+            const currentBlock = extractAgentsBlock(current);
+            const hasStart = current.includes(JSPACE_BLOCK_START);
+            const hasEnd = current.includes(JSPACE_BLOCK_END);
+            if (currentBlock === null && (hasStart || hasEnd)) {
+              // only one marker present: damaged user file — never mutate it.
+              out.push({ rel, ownership: f.ownership, action: "skip", reason: "AGENTS.md: malformed JSPACE block; left untouched", currentSha });
+            } else if (currentBlock === bundleBlock) {
+              out.push({ rel, ownership: f.ownership, action: "no-op", reason: "up to date (block)", currentSha });
+            } else {
+              out.push({
+                rel,
+                ownership: f.ownership,
+                action: "block-update",
+                reason: currentBlock === null ? "no JSPACE block; embedded on upgrade" : "JSPACE block updated",
+                currentSha,
+              });
+            }
           }
         }
+        continue;
       }
-      continue;
-    }
-    if (currentSha === f.sha256) {
-      out.push({ rel, ownership: f.ownership, action: "no-op", reason: "up to date", currentSha });
-    } else if (recorded !== undefined && currentSha === recorded) {
-      // matches the last applied state -> the bundle moved forward. seed and
-      // managed refresh; user never refreshes (data stays on disk).
-      const skip = f.ownership === "user";
-      out.push({
-        rel,
-        ownership: f.ownership,
-        action: skip ? "skip" : "update",
-        reason: skip ? "user: never refresh" : "bundle updated",
-        currentSha,
-      });
-    } else {
-      // neither the expected nor the recorded hash -> user modified it. seed
-      // and user edits are preserved (skip, non-blocking); only managed edits
-      // surface as conflict (force-overwritable via --accept-conflicts).
-      const conflict = f.ownership === "managed";
-      out.push({
-        rel,
-        ownership: f.ownership,
-        action: conflict ? "conflict" : "skip",
-        reason: conflict ? "locally modified" : `${f.ownership}: local content kept`,
-        currentSha,
-      });
+      if (currentSha === f.sha256) {
+        out.push({ rel, ownership: f.ownership, action: "no-op", reason: "up to date", currentSha });
+      } else if (recorded !== undefined && currentSha === recorded) {
+        // matches the last applied state -> the bundle moved forward. seed and
+        // managed refresh; user never refreshes (data stays on disk).
+        const skip = f.ownership === "user";
+        out.push({
+          rel,
+          ownership: f.ownership,
+          action: skip ? "skip" : "update",
+          reason: skip ? "user: never refresh" : "bundle updated",
+          currentSha,
+        });
+      } else {
+        // neither the expected nor the recorded hash -> user modified it. seed
+        // and user edits are preserved (skip, non-blocking); only managed edits
+        // surface as conflict (force-overwritable via --accept-conflicts).
+        const conflict = f.ownership === "managed";
+        out.push({
+          rel,
+          ownership: f.ownership,
+          action: conflict ? "conflict" : "skip",
+          reason: conflict ? "locally modified" : `${f.ownership}: local content kept`,
+          currentSha,
+        });
+      }
     }
   }
   // recorded but no longer in the bundle: an old seed copy that is unchanged
   // since it was applied can be cleaned up by upgrade (remove); a locally
   // modified one is preserved (stale, reported, never auto-deleted).
   for (const rel of Object.keys(deps.recorded)) {
-    if (!manifest.files.some((f) => materializedRel(f.path) === rel)) {
+    if (!manifest.files.some((f) => materializedRels(f.path).includes(rel))) {
       const cur = deps.readFile(join(root, rel));
       const unmodified = cur !== null && sha256Of(cur) === deps.recorded[rel]?.sha256;
       out.push({

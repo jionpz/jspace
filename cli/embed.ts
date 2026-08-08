@@ -9,6 +9,7 @@ import { fail } from "../core/shared/errors.ts";
 import { ASSETS } from "./assets.generated.ts";
 import { SKILLS_MANIFEST } from "./skills.generated.ts";
 import { replaceAgentsBlock } from "../application/workspace/agents-block.ts";
+import { materializedRels } from "../application/workspace/manifest.ts";
 
 export const PLACEHOLDER = "__DEV_ROOT__";
 
@@ -95,28 +96,30 @@ export function materializeTree(target: string, devRootStr: string): void {
     }
   }
   for (const [key, content] of Object.entries(ASSETS)) {
-    let rel: string;
-    if (key.startsWith("templates/workbench/")) {
-      rel = key.slice("templates/workbench/".length);
-    } else if (key.startsWith("skills/")) {
-      rel = `.jspace/skills/${key.slice("skills/".length)}`; // 官方 skill → .jspace/skills/
-    } else if (key.startsWith("templates/filehub/")) {
+    if (key.startsWith("templates/filehub/")) {
       continue; // filehub skeleton is materialized on demand by `filehub init`
-    } else {
+    }
+    // One manifest key may materialize to several paths (official skills also
+    // project into harness dirs, e.g. .claude/skills/); the rel mapping lives
+    // in materializedRels so embed and diff/upgrade can never drift apart.
+    const rels = materializedRels(key);
+    if (rels.length === 0) {
       throw new Error(`unexpected asset key: ${key}`);
     }
     const replacement = key.endsWith(".json") ? jsonEscape(devRootStr) : devRootStr;
-    const out = join(target, rel);
-    mkdirSync(dirname(out), { recursive: true });
-    let bytes = content.replaceAll(PLACEHOLDER, replacement);
-    if (rel === "AGENTS.md") {
-      // JSpace owns only the JSPACE block inside AGENTS.md, never the whole file.
-      // When a user file already exists (e.g. --force into a non-empty dir),
-      // embed/replace the block and preserve everything outside it.
-      const existing = readExisting(target, rel);
-      if (existing !== null) bytes = replaceAgentsBlock(existing, bytes);
+    for (const rel of rels) {
+      const out = join(target, rel);
+      mkdirSync(dirname(out), { recursive: true });
+      let bytes = content.replaceAll(PLACEHOLDER, replacement);
+      if (rel === "AGENTS.md") {
+        // JSpace owns only the JSPACE block inside AGENTS.md, never the whole file.
+        // When a user file already exists (e.g. --force into a non-empty dir),
+        // embed/replace the block and preserve everything outside it.
+        const existing = readExisting(target, rel);
+        if (existing !== null) bytes = replaceAgentsBlock(existing, bytes);
+      }
+      writeFileSync(out, bytes, "utf-8");
     }
-    writeFileSync(out, bytes, "utf-8");
   }
 }
 
