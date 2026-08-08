@@ -13,6 +13,7 @@ function stubDeps(over: Partial<CollectDeps> = {}): CollectDeps {
     readEnvelopes: () => [],
     readIncidents: () => ({ records: [], issues: [] }),
     readInboxCount: () => 0,
+    readDomainSummary: () => null,
     ...over,
   };
 }
@@ -58,6 +59,7 @@ test("3 domains + 2 pending + 1 open incident + inbox -> all populated", () => {
           { id: "research", path: "workspace/research" },
           { id: "ops", path: "workspace/ops" },
         ]),
+      readDomainSummary: (_r, p) => (p === "workspace/acme" ? "客户交付" : p === "workspace/research" ? "论文跟读" : null),
       resolveFilehubRoot: () => "/fh",
       readEnvelopes: () => [
         env({ id: "e1", status: "staged", producer: "asset-ingest" }),
@@ -76,6 +78,8 @@ test("3 domains + 2 pending + 1 open incident + inbox -> all populated", () => {
   );
   expect(s.domains).toEqual(["acme", "research", "ops"]);
   expect(s.domainsDetail).toHaveLength(3);
+  expect(s.domainsDetail[0]).toEqual({ id: "acme", path: "workspace/acme", summary: "客户交付" });
+  expect(s.domainsDetail[2]).toEqual({ id: "ops", path: "workspace/ops", summary: "" });
   expect(s.pendingCount).toBe(2);
   expect(s.pendingProducers.sort()).toEqual(["asset-ingest", "memory-writeback"]);
   expect(s.cronIncidents).toEqual([{ cronId: "inbox-tidy", failureClass: "failed" }]);

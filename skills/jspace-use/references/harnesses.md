@@ -85,7 +85,7 @@ args = ["serve"]
 | harness | session-start retrieval | session-end write-back | 显式 fallback | crash recovery |
 |---|---|---|---|---|
 | Pi | best_effort（context 文件 / SYSTEM.md，加载依赖 `/reload` 或会话条件） | best_effort（AGENTS End-of-Work Capture + 显式「收工」；无原生 session-end hook） | manual（用户显式调用 skill/命令） | best_effort（下次会话 context 重载可见 pending/incident） |
-| Claude Code | best_effort（`jspace context session-start` hook，交互式 SessionStart 触发；**无头 `claude -p` 不触发 hook**，需显式 `jspace context session-start --plain` 取状态——cron prompt 已内置该命令） | best_effort（End-of-Work Capture + 显式「收工」；无原生 session-end hook） | manual | best_effort（SessionStart 跑 `cron check` 暴露未确认 incident） |
+| Claude Code | best_effort（`jspace context session-start` hook，交互式与无头 `claude -p` 均触发——实测确认；cron prompt 另内置显式 `jspace context session-start --plain` 作确定性兜底，hook 触发依赖版本/环境，双份是可接受权衡） | best_effort（End-of-Work Capture + 显式「收工」；无原生 session-end hook） | manual | best_effort（SessionStart 的 session-start payload 暴露未确认 incident） |
 | Codex | best_effort（SessionStart hook 需用户 enable `features.hooks` + `/hooks` 审批） | manual（无 hook；靠显式收工） | manual | best_effort（hook 生效时 SessionStart 检查） |
 | Cursor | best_effort（Rules `.mdc` / sessionStart hook） | manual（无 hook；靠显式收工） | manual | manual（无自动 SessionStart 检查） |
 

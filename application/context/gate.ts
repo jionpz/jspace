@@ -70,3 +70,18 @@ export function gate(mode: GateMode, prompt: string | undefined, start: string):
   if (mode === "turn" && promptHasSkipKeyword(prompt)) return { emit: false, reason: "skip-keyword" };
   return { emit: true, root };
 }
+
+/** Pre-prompt gate for the turn handler: the checks that never need the
+ *  user prompt (hooks off / headless / not a workbench). The caller reads the
+ *  hook prompt from stdin *after* this passes — so a non-TTY pipe that never
+ *  closes stdin cannot block the short-circuits, and the stdin read itself is
+ *  wrapped in a timeout by the caller. The per-turn no-jspace check still runs
+ *  afterwards against the read prompt. */
+export function gatePre(mode: GateMode, start: string): GateResult {
+  void mode; // reserved: future pre-gate modes may branch on session-start vs turn
+  if (hooksDisabled()) return { emit: false, reason: "hooks-disabled" };
+  if (nonInteractive()) return { emit: false, reason: "non-interactive" };
+  const root = findWorkbenchRoot(start);
+  if (root === null) return { emit: false, reason: "no-workbench" };
+  return { emit: true, root };
+}

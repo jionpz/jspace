@@ -5,23 +5,44 @@
 // Business logic lives in application/context/{gate,collect,payload,envelope}.
 import type { CommandSpec, CmdContext } from "../../application/commands/command.ts";
 import { collectWorkbenchState } from "../../application/context/collect.ts";
-import { gate } from "../../application/context/gate.ts";
+import { gate, gatePre, promptHasSkipKeyword } from "../../application/context/gate.ts";
 import { renderSessionStart, renderTurn } from "../../application/context/payload.ts";
 import { sessionStartEnvelope, turnEnvelope } from "../../application/context/envelope.ts";
+
+/** Deadline for reading the hook prompt from stdin. A real Claude Code hook
+ *  closes stdin immediately, so this is generous; a hung pipe (e.g.
+ *  `tail -f | jspace context turn`) must never block a session — we exit 0
+ *  (no output) past the deadline. Mirrors Trellis' 0.2s stdin-read guard. */
+const STDIN_TIMEOUT_MS = 200;
 
 /** Read the hook JSON prompt from stdin (UserPromptSubmit payload carries the
  *  user's prompt under `.prompt`). Never blocks on a terminal: TTY stdin means
  *  the user ran `jspace context turn` by hand — no hook prompt, return undefined.
- *  A non-TTY pipe with no/empty JSON also degrades to undefined (no skip). */
+ *  A non-TTY pipe with no/empty JSON also degrades to undefined (no skip).
+ *  A pipe that never closes (no EOF) is cut off at STDIN_TIMEOUT_MS with a
+ *  clean exit 0 — the hook must never hang the conversation. */
 async function readHookPrompt(): Promise<string | undefined> {
   if (process.stdin.isTTY) return undefined;
+  let timedOut = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const raw = await new Response(Bun.stdin).text();
+    const raw = await Promise.race([
+      new Response(Bun.stdin).text(),
+      new Promise<never>((_r, reject) => {
+        timer = setTimeout(() => {
+          timedOut = true;
+          reject(new Error("stdin timeout"));
+        }, STDIN_TIMEOUT_MS);
+      }),
+    ]);
+    clearTimeout(timer);
     if (!raw.trim()) return undefined;
     const data = JSON.parse(raw) as { prompt?: unknown };
     return typeof data.prompt === "string" ? data.prompt : undefined;
   } catch {
-    return undefined;
+    if (timer) clearTimeout(timer);
+    if (timedOut) process.exit(0); // hung pipe: a hook must never block a session
+    return undefined; // invalid JSON: no prompt, no skip
   }
 }
 
@@ -59,10 +80,13 @@ const turnSpec: CommandSpec = {
   options: [{ name: "--plain", takesValue: false, help: "output plain text instead of the hook JSON envelope" }],
   handler: async (ctx: CmdContext, args: Record<string, unknown>) => {
     try {
+      // Pre-gate first (no stdin read): hooks off / headless / not a workbench
+      // short-circuit before we touch stdin, so a hung pipe can't block them.
+      const pre = gatePre("turn", ctx.root);
+      if (!pre.emit) return { lines: [] };
       const prompt = await readHookPrompt();
-      const g = gate("turn", prompt, ctx.root);
-      if (!g.emit) return { lines: [] }; // no-workbench / skip-keyword / hooks off: silent
-      const state = collectWorkbenchState(g.root);
+      if (promptHasSkipKeyword(prompt)) return { lines: [] }; // no-jspace: this turn only
+      const state = collectWorkbenchState(pre.root);
       const text = renderTurn(state);
       if (text === "") return { lines: [] }; // nothing actionable: zero output
       return { lines: [plain(args) ? text : turnEnvelope(text)] };

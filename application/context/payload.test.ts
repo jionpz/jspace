@@ -19,18 +19,19 @@ function doms(n: number, prefix = "d"): WorkbenchState {
   return {
     ...empty,
     domains: ids,
-    domainsDetail: ids.map((id) => ({ id, path: `workspace/${id}` })),
+    domainsDetail: ids.map((id) => ({ id, path: `workspace/${id}`, summary: "" })),
   };
 }
 
-test("empty workbench -> pointer block + neutral next-action, no state lines", () => {
+test("empty workbench -> pointer block + neutral next-action, NO empty current-state (noise)", () => {
   const r = renderSessionStart(empty, "/wb");
   expect(r).toContain("<jspace-workbench>");
   expect(r).toContain("JSpace 工作台 /wb");
-  expect(r).toContain("<current-state>");
+  expect(r).not.toContain("<current-state>"); // no empty block on a clean workbench
   expect(r).not.toContain("域:");
   expect(r).not.toContain("pending:");
   expect(r).not.toContain("待办:");
+  expect(r).not.toContain("<available>"); // no empty read list either
   expect(r).toContain("<next-action>");
   expect(r).toContain("当前无待办");
 });
@@ -40,9 +41,9 @@ test("3 domains + 2 pending + 1 incident + inbox -> all populated, next-action h
     ...empty,
     domains: ["acme", "research", "ops"],
     domainsDetail: [
-      { id: "acme", path: "workspace/acme" },
-      { id: "research", path: "workspace/research" },
-      { id: "ops", path: "workspace/ops" },
+      { id: "acme", path: "workspace/acme", summary: "客户交付" },
+      { id: "research", path: "workspace/research", summary: "" },
+      { id: "ops", path: "workspace/ops", summary: "" },
     ],
     pendingCount: 2,
     pendingProducers: ["asset-ingest", "memory-writeback"],
@@ -50,7 +51,7 @@ test("3 domains + 2 pending + 1 incident + inbox -> all populated, next-action h
     inboxCount: 4,
   };
   const r = renderSessionStart(state, "/wb");
-  expect(r).toContain("域: 3 个 — acme / research / ops");
+  expect(r).toContain("域: 3 个 — acme（客户交付） / research / ops"); // B2.1: 名 + 一行摘要
   expect(r).toContain("pending: 2 笔 gbrain 暂存写待落盘（asset-ingest, memory-writeback）");
   expect(r).toContain("cron: inbox-tidy[failed] 上次失败，未确认");
   expect(r).toContain("待办: filehub/_inbox 有 4 份未归档资料");
@@ -114,4 +115,25 @@ test("turn: clean workbench -> empty (no noise); each state -> single-line top p
   for (const s of [pending, inc, inbox, broken]) {
     expect(Buffer.byteLength(renderTurn(s), "utf-8")).toBeLessThan(512);
   }
+});
+
+test("many cron incidents -> current-state caps at MAX_CRON_LINES with tail", () => {
+  const state = {
+    ...empty,
+    cronIncidents: Array.from({ length: 40 }, (_, i) => ({ cronId: `cron-${i}`, failureClass: "failed" })),
+  };
+  const r = renderSessionStart(state, "/wb");
+  const stateBlock = r.slice(r.indexOf("<current-state>"), r.indexOf("</current-state>"));
+  expect((stateBlock.match(/cron: cron-\d+\[failed\] 上次失败，未确认/g) ?? []).length).toBe(5);
+  expect(stateBlock).toContain("另有 35 个 cron 失败");
+});
+
+test("long cronId -> truncated in both session-start and turn (stays under budget)", () => {
+  const longId = "x".repeat(500);
+  const state = { ...empty, cronIncidents: [{ cronId: longId, failureClass: "failed" }] };
+  const r = renderSessionStart(state, "/wb");
+  expect(r).toContain(`cron: ${"x".repeat(48)}…[failed]`); // truncated to MAX_CRON_ID_CHARS
+  expect(r).not.toContain("x".repeat(60)); // the full 500 never appears
+  const t = renderTurn(state);
+  expect(Buffer.byteLength(t, "utf-8")).toBeLessThan(512);
 });
