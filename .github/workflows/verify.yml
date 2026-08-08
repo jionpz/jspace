@@ -55,7 +55,9 @@ jobs:
           bun run cli/main.ts filehub init /tmp/jspace-fh --register --dir /tmp/jspace-verify
           mkdir -p /tmp/jspace-fh/projects/acme
           bun run cli/main.ts resource add acme --domain files --type project --path /tmp/jspace-fh/projects/acme --dir /tmp/jspace-verify
-          # rehearsal: skill-target validate + argv, asserted (not a silent pass)
+          # rehearsal: skill-target validate + argv, asserted (not a silent pass).
+          # template crons ship disabled by default, so enable before the dry-run.
+          bun run cli/main.ts cron enable inbox-tidy --dir /tmp/jspace-verify
           bun run cli/main.ts cron run inbox-tidy --dir /tmp/jspace-verify --dry-run | grep "dry-run: would run"
           # reconciliation plan preview (no real scheduler apply)
           bun run cli/main.ts cron install --dir /tmp/jspace-verify --dry-run | grep "would apply"
