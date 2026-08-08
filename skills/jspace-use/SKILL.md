@@ -43,15 +43,15 @@ JSpace 工作台 = 本地工作控制平面:根 `AGENTS.md` 是入口面,其余�
 
 ## 2. 首次启用(first-use)
 
-全新工作台 `jspace init` 后,按步骤启用(细节指向 references;golden run 见 `references/example-first-use.md`):
+全新工作台 `jspace init` 后,按步骤启用(细节指向 references;golden run 见 `~/.agents/skills/jspace-use/references/example-first-use.md`):
 
 0. **Prerequisites**:检测 bun/git;缺失按决策表给官方安装命令,**默认不执行**(治理红线:下载临时文件→展示核验→用户确认后跑)。
    - bun 缺失(装 gbrain 需要):官方脚本 `curl -fsSL https://bun.sh/install | bash`(macOS/Linux)或 `powershell -c "irm bun.sh/install.ps1 | iex"`(Windows)——**默认不执行**(`curl | bash` 一类,治理红线)。
    - 确需安装:① 下载临时文件、不直接管道执行(`curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh`);② 展示来源(bun.sh 官方)+ 抽查脚本核验;③ **用户显式确认后**才 `bash /tmp/bun-install.sh`。
-1. **gbrain**(first core):解析二进制 → `bun install -g gbrain` → `gbrain init` → `gbrain doctor --json` 修所报 → embedding(默认本地 Ollama bge-m3;不可达 `embed_skip: true` 保底,不失败)。细则 `references/gbrain.md`。
-2. **Registry health**:`jspace doctor --dir .`;`hub.json` 合法 JSON;域文件夹/id 一致;每资源恰一 primary。细则 `references/registry.md`。
+1. **gbrain**(first core):解析二进制 → `bun install -g gbrain` → `gbrain init` → `gbrain doctor --json` 修所报 → embedding(默认本地 Ollama bge-m3;不可达 `embed_skip: true` 保底,不失败)。细则 `~/.agents/skills/jspace-use/references/gbrain.md`。
+2. **Registry health**:`jspace doctor --dir .`;`hub.json` 合法 JSON;域文件夹/id 一致;每资源恰一 primary。细则 `~/.agents/skills/jspace-use/references/registry.md`。
 3. **File center**:问用户选 filehub 根 → `jspace filehub init <根> --register`;暂不配则告知降级暂存区。**首启验收**:放一份示例文件进 `_inbox/` 跑一次「整理一下 inbox」,确认入库→gbrain 页→中文召回闭环。
-4. **Harness wiring**:问用户用哪个 harness,wire 那一个(MCP/CLI + 会话注入/写回)。细则 `references/harnesses.md`。
+4. **Harness wiring**:问用户用哪个 harness,wire 那一个(MCP/CLI + 会话注入/写回)。细则 `~/.agents/skills/jspace-use/references/harnesses.md`。
 5. **Final smoke + sign-off**:`jspace doctor` + `jq hub.json` + `gbrain doctor --fast`;报 configured/already-OK/missing-deferred。
 
 ## 3. 日常会话路由
@@ -72,12 +72,12 @@ SessionStart hook(`.claude/settings.json`)注入 `<current-state>`(域/pending/c
 
 ## 4. gbrain 记忆
 
-记忆层用法(写回纪律 / 召回 / 指针 / 周快照):**深入章节 → `references/gbrain.md`**。要点:状态写固定 slug 覆盖、知识 append-only 新页、每页带 `project` + `tags` + `source`、embedding 不可达 `embed_skip: true` 保底、promotion 记忆→知识。写回走 `memory-writeback`、召回走 `memory-recall`(各自 SKILL.md),本指南不重复其纪律。
+记忆层用法(写回纪律 / 召回 / 指针 / 周快照):**深入章节 → `~/.agents/skills/jspace-use/references/gbrain.md`**。要点:状态写固定 slug 覆盖、知识 append-only 新页、每页带 `project` + `tags` + `source`、embedding 不可达 `embed_skip: true` 保底、promotion 记忆→知识。写回走 `memory-writeback`、召回走 `memory-recall`(各自 SKILL.md),本指南不重复其纪律。
 
 ## 5. 资源与资产
 
-- **hub.json 增删查**:`jspace domain add` / `jspace resource add` / `jspace domain list` / `jspace resource list`;schema(hub v4 / local / marker)与 drift 规则 → `references/registry.md`。
-- **filehub 协议**:`jspace filehub init <根> --register`;跟踪新项目三步(资产层 index → 域 README 挂接 → 记忆层实体)见 `README.md`「资产管理」+ `references/registry.md` + `asset-ingest`。
+- **hub.json 增删查**:`jspace domain add` / `jspace resource add` / `jspace domain list` / `jspace resource list`;schema(hub v4 / local / marker)与 drift 规则 → `~/.agents/skills/jspace-use/references/registry.md`。
+- **filehub 协议**:`jspace filehub init <根> --register`;跟踪新项目三步(资产层 index → 域 README 挂接 → 记忆层实体)见 `README.md`「资产管理」+ `~/.agents/skills/jspace-use/references/registry.md` + `asset-ingest`。
 - 重资产归位与入库 → `asset-ingest` skill(本指南不重复其流程)。
 
 ## 6. CLI 维护与诊断
@@ -105,7 +105,7 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 | 会话结束收工写回 | `memory-writeback` |
 | 周快照 | memory-consolidate cron |
 
-- **registry broken / gbrain missing / upgrade 异常 / 自检命令**:先跑 `jspace doctor --dir .` 看诊断;`jspace workspace diff --dry-run` 看差异;`jspace workspace upgrade --rollback <id>` 回退已应用升级。无头运维(账号/配额/failover/失败可见性)→ `references/headless-ops.md`;命令级排障 → CLI `--help`。
+- **registry broken / gbrain missing / upgrade 异常 / 自检命令**:先跑 `jspace doctor --dir .` 看诊断;`jspace workspace diff --dry-run` 看差异;`jspace workspace upgrade --rollback <id>` 回退已应用升级。无头运维(账号/配额/failover/失败可见性)→ `~/.agents/skills/jspace-use/references/headless-ops.md`;命令级排障 → CLI `--help`。
 
 ## 8. 治理细节
 
@@ -123,7 +123,7 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 ### 8.2 资源
 
 - 资源是域内可发现的入口(项目/仓库/URL/provider/容器/笔记等值得再次找到的对象)。
-- schema(entrypoints/binding/primary)与 drift 规则 → `references/registry.md`,不在此复制。
+- schema(entrypoints/binding/primary)与 drift 规则 → `~/.agents/skills/jspace-use/references/registry.md`,不在此复制。
 
 ### 8.3 skill
 
@@ -136,7 +136,7 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 - **session start 契约**:跑 `jspace cron check`,把失败与 pending 暂存写(`.jspace-logs/*.APPLY.json`)上报用户。
 - **定义即代码**:定义在 `.jspace/cron.json`(声明式:schedule + harness + prompt),git 同步、应用前 review。
 - **rehearsal gate**:机器侧 `jspace cron install` 前,先 `jspace cron run` 各任务一次验证契约。
-- **运维细节** → `references/headless-ops.md`(无头代理/账号/配额/失败可见性)。
+- **运维细节** → `~/.agents/skills/jspace-use/references/headless-ops.md`(无头代理/账号/配额/失败可见性)。
 
 ### 8.5 知识路由纪律
 
@@ -158,11 +158,11 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 ## 按需深入(条件读指针)
 
 - 治理细节(域/资源/skill 创建规则、cron 运维)→ 第 8 章
-- gbrain 安装/embedding 三方案/frontmatter schema/离线策略 → `references/gbrain.md`
-- registry schema(hub v4 / local / marker)/drift 规则 → `references/registry.md`
-- 逐 harness 接线(Pi/Claude/Codex/Cursor + 跨平台路径 + lifecycle 矩阵)→ `references/harnesses.md`
-- 无头执行运维(账号/配额/失败可见性)→ `references/headless-ops.md`
-- 首次启用 golden run → `references/example-first-use.md`
+- gbrain 安装/embedding 三方案/frontmatter schema/离线策略 → `~/.agents/skills/jspace-use/references/gbrain.md`
+- registry schema(hub v4 / local / marker)/drift 规则 → `~/.agents/skills/jspace-use/references/registry.md`
+- 逐 harness 接线(Pi/Claude/Codex/Cursor + 跨平台路径 + lifecycle 矩阵)→ `~/.agents/skills/jspace-use/references/harnesses.md`
+- 无头执行运维(账号/配额/失败可见性)→ `~/.agents/skills/jspace-use/references/headless-ops.md`
+- 首次启用 golden run → `~/.agents/skills/jspace-use/references/example-first-use.md`
 
 ## 自检(做完跑这条)
 
@@ -174,10 +174,10 @@ jq .jspace/hub.json           # 合法 JSON
 (首次启用真正验收 = 第 2 章第 3 步的「放一份文件跑 inbox 整理」闭环成立)
 
 ## 参考
-- `references/gbrain.md` — gbrain 安装/embedding/schema/离线策略
-- `references/registry.md` — 注册表 schema + drift
-- `references/harnesses.md` — 逐 harness 接线 + lifecycle 矩阵
-- `references/headless-ops.md` — 无头运维(账号/配额/失败可见性)
-- `references/example-first-use.md` — 首次启用 golden run(S5 产出)
+- `~/.agents/skills/jspace-use/references/gbrain.md` — gbrain 安装/embedding/schema/离线策略
+- `~/.agents/skills/jspace-use/references/registry.md` — 注册表 schema + drift
+- `~/.agents/skills/jspace-use/references/harnesses.md` — 逐 harness 接线 + lifecycle 矩阵
+- `~/.agents/skills/jspace-use/references/headless-ops.md` — 无头运维(账号/配额/失败可见性)
+- `~/.agents/skills/jspace-use/references/example-first-use.md` — 首次启用 golden run(S5 产出)
 
 > **Note**:官方 skill 只随 `jspace init` 物化;既有工作台经 `jspace workspace upgrade` 刷新(未修改的模板/skill 随升级更新,本地改动保留为 `skip`);`jspace init --force .` 对已有工作台会拒绝(用 upgrade,不用 init)。

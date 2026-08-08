@@ -42,7 +42,7 @@ smoke 后清理(不留探针页):
 printf '---\ntype: smoke\nembed_skip: true\n---\nprobe\n' | gbrain put smoke/first-use
 gbrain get smoke/first-use && gbrain delete smoke/first-use
 ```
-断言:`gbrain doctor --json` resolver/pgvector 全 `ok`;smoke 页 put→get→delete 三步通过。细则 `references/gbrain.md`。
+断言:`gbrain doctor --json` resolver/pgvector 全 `ok`;smoke 页 put→get→delete 三步通过。细则 `~/.agents/skills/jspace-use/references/gbrain.md`。
 
 ## Phase 2 — Registry health
 
@@ -55,7 +55,7 @@ jq .jspace/hub.json >/dev/null   # 合法 JSON
 ✓ hub.json version 4   ✓ domains ↔ workspace/ 一致   ✓ 每资源恰一 primary
 ⚠ resource <x> 外部路径未绑定(warning,不阻塞)
 ```
-断言:`jspace doctor` 退出 0;缺外部路径只报 warning,不视为失败。细则 `references/registry.md`。
+断言:`jspace doctor` 退出 0;缺外部路径只报 warning,不视为失败。细则 `~/.agents/skills/jspace-use/references/registry.md`。
 
 ## Phase 3 — File center(含首启验收闭环)
 
@@ -77,13 +77,13 @@ Claude Code 走 MCP,写 `~/.claude.json` 的 `mcpServers.gbrain`(`command` = gbr
 ```json
 { "mcpServers": { "gbrain": { "command": "/Users/<you>/.bun/bin/gbrain", "args": ["serve"], "type": "stdio" } } }
 ```
-断言:`~/.claude.json` 有 `mcpServers.gbrain`;重启 Claude Code 后 `/mcp` 见 gbrain 已连。只接线用户选的这一个,不代装其余 harness。细则 `references/harnesses.md`。
+断言:`~/.claude.json` 有 `mcpServers.gbrain`;重启 Claude Code 后 `/mcp` 见 gbrain 已连。只接线用户选的这一个,不代装其余 harness。细则 `~/.agents/skills/jspace-use/references/harnesses.md`。
 
 接线后补一步 gbrain skill 路由:
 ```bash
 jspace gbrain wire --dir .   # GBRAIN_SKILLS_DIR=<工作台>/.jspace/skills 注入 gbrain MCP env
 ```
-重启 Claude Code 让 `gbrain serve` 以新 env 启动(否则 resolver 只认根 `skills/` 或回退内置 skill)。细则 `references/gbrain.md`「Skill routing wiring」。
+重启 Claude Code 让 `gbrain serve` 以新 env 启动(否则 resolver 只认根 `skills/` 或回退内置 skill)。细则 `~/.agents/skills/jspace-use/references/gbrain.md`「Skill routing wiring」。
 
 ## Phase 5 — Final smoke + sign-off
 

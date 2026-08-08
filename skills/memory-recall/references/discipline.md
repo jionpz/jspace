@@ -1,6 +1,6 @@
 # memory-recall — 召回纪律细则
 
-纪律源 = `references/memory-acceptance.md`（可复跑验收协议）。本文件把协议中经基线验收（2026-08-03 通过）的纪律固化为日常读侧操作细则；协议是**回归**，本文件是**日常**。
+纪律源 = `~/.agents/skills/memory-recall/references/memory-acceptance.md`（可复跑验收协议）。本文件把协议中经基线验收（2026-08-03 通过）的纪律固化为日常读侧操作细则；协议是**回归**，本文件是**日常**。
 
 ## 1. canonical 面约束
 
@@ -41,16 +41,16 @@
 ## 6. embedding 降级
 
 - 不可达 → `gbrain search` 关键词降级，**固定提示**「embedding 不可用，当前为关键词检索，中文命中率可能偏低」（不得静默）。
-- 写侧纪律（不可达时 `embed_skip: true` 保写入成功）见 `../asset-ingest/references/gbrain-write.md`。
+- 写侧纪律（不可达时 `embed_skip: true` 保写入成功）见 `~/.agents/skills/asset-ingest/references/gbrain-write.md`。
 - 每次校准/重跑前重查可达性并留痕。
 
 ## 7. 与相关文档的关系
 
 | 文档 | 角色 |
 |---|---|
-| `references/memory-acceptance.md` | 可复跑验收协议（回归基准，本 skill 引用） |
-| `../SKILL.md` | 日常流程（触发面 + 步骤） |
-| `../asset-ingest/` | 写侧（入库 + 归位后自检）；读侧触发时如发现「页不存在/指针断」回写侧补 |
+| `~/.agents/skills/memory-recall/references/memory-acceptance.md` | 可复跑验收协议（回归基准，本 skill 引用） |
+| `~/.agents/skills/memory-recall/SKILL.md` | 日常流程（触发面 + 步骤） |
+| `~/.agents/skills/asset-ingest/` | 写侧（入库 + 归位后自检）；读侧触发时如发现「页不存在/指针断」回写侧补 |
 
 ## 8. 换机解析（M5：指针可移植）
 
@@ -58,4 +58,4 @@
 - **解析规则**：读**当前机** `hub.json` 中 `type: filehub` resource 的 `primary: true` path entrypoint（= 本机 filehub 根）→ 根 + 页 frontmatter `rel_path`（相对 filehub 根的全相对路径）→ 得到本机 Pointer → 再走 §3 指针断言链。
 - **字段**：`rel_path` 由写侧（asset-ingest）写页时产出；`Pointer`（绝对路径）保留为本机真理。
 - **断言失败处置**：rel_path 解析失败（根读不到 / 文件缺失）→ 按 §5 诊断（纪律缺口? 资产未同步?）→ 报告用户（资产需同步到本机 filehub / 补 rel_path）。
-- **回归**：换机解析作为新增断言入 `references/memory-acceptance.md`（「换机解析扩展(M5)」节）；原四用例断言不变。
+- **回归**：换机解析作为新增断言入 `~/.agents/skills/memory-recall/references/memory-acceptance.md`（「换机解析扩展(M5)」节）；原四用例断言不变。

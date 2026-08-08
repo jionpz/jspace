@@ -4,7 +4,7 @@
 
 ## 原则（与资产协议一致）
 
-- **新东西一律走 inbox**：`_inbox/` → 批量整理（`references/batch.md`）。
+- **新东西一律走 inbox**：`_inbox/` → 批量整理（`~/.agents/skills/asset-ingest/references/batch.md`）。
 - **存量按需收编**：旧资料按项目/领域，用户点名时收，不默认全量搬。
 - **收编 = 复用 asset-ingest 纪律**（归位/命名/查重/入脑/登记/自检），本 runbook 只补「存量从哪里来、怎么分」的边界，不另造第二套流程。
 - 重资产不进工作台 git；文件本体永远留在资产层；gbrain 只存事实与指针。
@@ -36,7 +36,7 @@
 
 ### 4. 入脑（复用 gbrain-write.md）
 - 写 gbrain reference 页（slug `assets/<项目|领域>/<语义名>`）：frontmatter（type/source/project/tags/**rel_path**）+ Summary + Key Facts + Pointer。
-- excel/ppt 关键数字需要时可走深度抽取（`references/deep-extract.md`）。
+- excel/ppt 关键数字需要时可走深度抽取（`~/.agents/skills/asset-ingest/references/deep-extract.md`）。
 
 ### 5. 登记
 - 项目 `index.md` 挂一行（文件名 + 日期 + gbrain slug）；areas 是否建 index 按使用涌现。

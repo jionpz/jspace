@@ -1,6 +1,6 @@
 # Golden run — memory-recall 精准召回(四连断言 + 带出处作答)
 
-> 端到端范例:用户「问一句」→ 有出处的答案。真值来源:`references/memory-acceptance.md` 基线(2026-08-03,2 文档语料通过)。gbrain 输出为**示意**(格式真实)。
+> 端到端范例:用户「问一句」→ 有出处的答案。真值来源:`~/.agents/skills/memory-recall/references/memory-acceptance.md` 基线(2026-08-03,2 文档语料通过)。gbrain 输出为**示意**(格式真实)。
 
 ## 场景
 
@@ -48,7 +48,7 @@ gbrain query "那 12.8T 的数据怎么搬?"            # ④ top-1 slug == 目�
 - 重跑 ≤3 轮;3 轮未过 → 显式终态:接受关键词降级记入验收文档 / 上报用户(扩语料/换 embedding)。
 
 ## 换机场景(rel_path 重解析)
-导入/换机后 Pointer 绝对路径指向旧机 → 读**当前机** `hub.json` 的 filehub primary path(根)+ 页 `rel_path` → 本机 Pointer → 再走四连。细则 `references/discipline.md` §8。
+导入/换机后 Pointer 绝对路径指向旧机 → 读**当前机** `hub.json` 的 filehub primary path(根)+ 页 `rel_path` → 本机 Pointer → 再走四连。细则 `~/.agents/skills/memory-recall/references/discipline.md` §8。
 
 ## 断言清单(照此判"做完没")
 - [ ] `gbrain query` 原型 + 变体均 top-1 目标页,负对照不反超

@@ -69,7 +69,7 @@
 ## 4. 修改与回滚
 
 - 改治理规则:编辑 `~/.agents/agents.md`(symlink 入口自动跟随,无需动各 harness 文件)。
-- 接线动作(建 / 删 symlink、.mdc 指针)见 `references/harnesses.md`。
+- 接线动作(建 / 删 symlink、.mdc 指针)见 `~/.agents/skills/harness-config/references/harnesses.md`。
 - 撤销接线:**先删各 harness 入口 symlink,再删 `~/.agents` 目录**——只删目录会留下悬空 symlink(Codex 读悬空链接会报错,Claude/Pi 静默无治理)。
 - 若某 harness 原本有非空全局文件,不覆盖:内容并入本文件,或保留原文件 + 追加 import / 接线行(见 harnesses.md 对应节)。
 - 若入口文件由 dotfile 管理器(chezmoi / stow / mackup 等)托管:接线前先处理冲突——从管理器中排除该文件,或改用 `@import` / 指针方式,避免管理器同步时覆盖 symlink。

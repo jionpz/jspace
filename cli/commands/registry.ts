@@ -23,6 +23,7 @@ import { pendingSpec } from "./pending.ts";
 import { updateSpec, workspaceSpec } from "./workspace.ts";
 import { contextSpec } from "./context.ts";
 import { gbrainSpec } from "./gbrain.ts";
+import { skillsSpec } from "./skills.ts";
 
 const initSpec: CommandSpec = {
   name: "init",
@@ -71,4 +72,5 @@ export const COMMANDS: CommandSpec[] = [
   workspaceSpec,
   contextSpec,
   gbrainSpec,
+  skillsSpec,
 ];

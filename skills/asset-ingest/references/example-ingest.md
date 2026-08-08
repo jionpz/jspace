@@ -1,7 +1,7 @@
 # Golden run — asset-ingest 单文件入库(journal 四步 + cleanup-pending 收尾)
 
 > 端到端范例:一份虚构 xlsx 从 inbox 到可召回。**命令 + 预期输出示意 + 断言**。中等模型照此改参即可。
-> 场景为**虚构占位**(项目 `acme`、金额为示意值),不引用任何真实资料;真实入库时按 `references/filing.md` 归属/命名。gbrain 输出为**示意**(格式真实,具体值随语料)。
+> 场景为**虚构占位**(项目 `acme`、金额为示意值),不引用任何真实资料;真实入库时按 `~/.agents/skills/asset-ingest/references/filing.md` 归属/命名。gbrain 输出为**示意**(格式真实,具体值随语料)。
 
 ## 场景
 
@@ -38,10 +38,10 @@ python3 .jspace/skills/asset-ingest/scripts/extract.py \
   projects/acme/2026-08-03-供应商报价明细-v1.xlsx \
   --out projects/acme/2026-08-03-供应商报价明细.extract.md
 ```
-预期:伴生 `.extract.md`(xlsx 走零依赖 office-extract 回退:各 sheet 单元格引用 + 值,全空高空行被幻影行过滤;有 markitdown 则走增强路径)。→ 策展关键数字入页(步骤 4),全量留伴生文件。细则 `references/deep-extract.md`。
+预期:伴生 `.extract.md`(xlsx 走零依赖 office-extract 回退:各 sheet 单元格引用 + 值,全空高空行被幻影行过滤;有 markitdown 则走增强路径)。→ 策展关键数字入页(步骤 4),全量留伴生文件。细则 `~/.agents/skills/asset-ingest/references/deep-extract.md`。
 
 ### 4. 入脑(写 reference 页 + advance --gbrain)
-写页正文(模板见 `references/gbrain-write.md`):
+写页正文(模板见 `~/.agents/skills/asset-ingest/references/gbrain-write.md`):
 ```markdown
 ---
 type: reference

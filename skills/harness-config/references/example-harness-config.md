@@ -33,7 +33,7 @@ rsync -a --ignore-existing "$SKILL_DIR"/. "$HOME/.agents/skills/harness-config/"
 test -f "$HOME/.agents/agents.md" && echo exists || echo "absent → 用 governance.md 骨架建"
 ```
 预期:`absent → 用 governance.md 骨架建`
-→ 复制 `references/governance.md` §3 骨架为 `~/.agents/agents.md`,确认「安全与隐私红线」在最高优先级(第 2 节)。断言:治理文档在,含红线小节。
+→ 复制 `~/.agents/skills/harness-config/references/governance.md` §3 骨架为 `~/.agents/agents.md`,确认「安全与隐私红线」在最高优先级(第 2 节)。断言:治理文档在,含红线小节。
 (若已存在 → **不覆盖**,review 内容分层:harness 无关规则进,MCP/hooks/注入不进。)
 
 ### Phase 3 — Wire installed(幂等带守卫,不覆盖非空)

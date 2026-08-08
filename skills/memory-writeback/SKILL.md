@@ -58,13 +58,13 @@ jspace pending apply                             # 锁空闲落 live(幂等)
 
 ## 按需深入(条件读指针)
 
-- 分类表/slug 派生/晋升信号/降级细则 → `references/writeback.md`
-- state 覆盖 vs 知识追加 / 晋升 纪律源 → `../jspace-use/references/gbrain.md`
-- 文件归位(转引用)→ `../asset-ingest/SKILL.md`
+- 分类表/slug 派生/晋升信号/降级细则 → `~/.agents/skills/memory-writeback/references/writeback.md`
+- state 覆盖 vs 知识追加 / 晋升 纪律源 → `~/.agents/skills/jspace-use/references/gbrain.md`
+- 文件归位(转引用)→ `~/.agents/skills/asset-ingest/SKILL.md`
 
 ## Golden run
 
-端到端范例(扫描 → 分类 → 写回 → 读回验证)见 `references/example-writeback.md`。
+端到端范例(扫描 → 分类 → 写回 → 读回验证)见 `~/.agents/skills/memory-writeback/references/example-writeback.md`。
 
 ## 自检(做完跑这条)
 
@@ -74,7 +74,7 @@ gbrain get <slug>          # project/tags/source 齐;state 覆盖未新增、知
 (无持久事实时本 skill 应静默结束,不写页、不提示)
 
 ## 参考
-- `references/writeback.md` — 分类表/slug/晋升信号/降级
-- `../jspace-use/references/gbrain.md` — 纪律源(state 覆盖 vs 知识追加/晋升)
-- `references/example-writeback.md` — golden run(S5 产出)
-- `../asset-ingest/SKILL.md` — 文件归位(转引用)
+- `~/.agents/skills/memory-writeback/references/writeback.md` — 分类表/slug/晋升信号/降级
+- `~/.agents/skills/jspace-use/references/gbrain.md` — 纪律源(state 覆盖 vs 知识追加/晋升)
+- `~/.agents/skills/memory-writeback/references/example-writeback.md` — golden run(S5 产出)
+- `~/.agents/skills/asset-ingest/SKILL.md` — 文件归位(转引用)

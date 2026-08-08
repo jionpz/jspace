@@ -52,14 +52,14 @@ gbrain models doctor --json        # 确认 embedding_reachability(仅确认,不
 
 ## 按需深入(条件读指针)
 
-- 断言链/变体负对照/诊断终止/降级提示/canonical 面约束细则 → `references/discipline.md`
-- 换机/导入后指针解析(rel_path 重解析)→ `references/discipline.md` §8
-- 可复跑验收协议(基线/重跑)→ `references/memory-acceptance.md`
-- 写侧 embedding 降级细节 → `../asset-ingest/references/gbrain-write.md`
+- 断言链/变体负对照/诊断终止/降级提示/canonical 面约束细则 → `~/.agents/skills/memory-recall/references/discipline.md`
+- 换机/导入后指针解析(rel_path 重解析)→ `~/.agents/skills/memory-recall/references/discipline.md` §8
+- 可复跑验收协议(基线/重跑)→ `~/.agents/skills/memory-recall/references/memory-acceptance.md`
+- 写侧 embedding 降级细节 → `~/.agents/skills/asset-ingest/references/gbrain-write.md`
 
 ## Golden run
 
-端到端范例(Q1/Q2 四连断言 + 带出处作答)见 `references/example-recall.md`。
+端到端范例(Q1/Q2 四连断言 + 带出处作答)见 `~/.agents/skills/memory-recall/references/example-recall.md`。
 
 ## 自检(做完跑这条)
 
@@ -71,7 +71,7 @@ gbrain query "<问题>"       # top-1 == 目标 slug
 (作答必须带文件路径 + slug,不得只给「页里有」)
 
 ## 参考
-- `references/discipline.md` — 断言链/变体负对照/诊断终止/降级/换机解析
-- `references/memory-acceptance.md` — 可复跑验收协议(基线 2026-08-03 通过)
-- `references/example-recall.md` — golden run(S5 产出)
-- `../asset-ingest/references/gbrain-write.md` — 写侧纪律(读侧触发时参考)
+- `~/.agents/skills/memory-recall/references/discipline.md` — 断言链/变体负对照/诊断终止/降级/换机解析
+- `~/.agents/skills/memory-recall/references/memory-acceptance.md` — 可复跑验收协议(基线 2026-08-03 通过)
+- `~/.agents/skills/memory-recall/references/example-recall.md` — golden run(S5 产出)
+- `~/.agents/skills/asset-ingest/references/gbrain-write.md` — 写侧纪律(读侧触发时参考)

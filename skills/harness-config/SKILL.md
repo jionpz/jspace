@@ -26,7 +26,7 @@ triggers:
 | 判断 | 取值 | 动作 |
 |---|---|---|
 | harness state(`detect.sh`) | installed / config_only / not_found | 接线 / 向用户确认后决定 / 跳过 |
-| 治理文档 `~/.agents/agents.md` | 不存在 / 已存在 | 用 `references/governance.md` 骨架创建 / review 分层 + 确认红线最高优先级 |
+| 治理文档 `~/.agents/agents.md` | 不存在 / 已存在 | 用 `~/.agents/skills/harness-config/references/governance.md` 骨架创建 / review 分层 + 确认红线最高优先级 |
 | 既有全局文件非空 | 是 / 否(空 stub/不存在) | **不覆盖**:并入治理文档或保留+附加接线,二选一说明 / 直接 symlink |
 | Phase 4 会话级配置 | wired / missing / n/a | **只核对报告,不改既有配置** |
 
@@ -45,20 +45,20 @@ ls -la "$HOME/.pi/agent/AGENTS.md" "$HOME/.codex/AGENTS.md" "$HOME/.claude/CLAUD
 
 0. **Detect**:跑 `detect.sh`;installed 接线 / config_only 确认 / not_found 跳过。前提:至少一个 installed。
 1. **Install self**:幂等装到 `~/.agents/skills/harness-config`(补缺不覆盖本地改动)。
-2. **治理文档**:`~/.agents/agents.md` 不存在则用 `references/governance.md` 骨架建;已存在则 review 内容分层(harness 无关规则进、MCP/hooks/注入不进)+ 确认安全红线最高优先级。
-3. **Wire installed**:对 installed 的每个 harness 按 `references/harnesses.md` 接线(全局文件 → `~/.agents/agents.md`);幂等带守卫,不覆盖非空既有文件。逐 harness 报 wired/skipped/already-OK。
+2. **治理文档**:`~/.agents/agents.md` 不存在则用 `~/.agents/skills/harness-config/references/governance.md` 骨架建;已存在则 review 内容分层(harness 无关规则进、MCP/hooks/注入不进)+ 确认安全红线最高优先级。
+3. **Wire installed**:对 installed 的每个 harness 按 `~/.agents/skills/harness-config/references/harnesses.md` 接线(全局文件 → `~/.agents/agents.md`);幂等带守卫,不覆盖非空既有文件。逐 harness 报 wired/skipped/already-OK。
 4. **Config check(只读)**:核对 gbrain MCP/CLI、session-start 注入、hooks,三态 wired/missing/n/a。**不改既有配置**;密钥卫生(只报名称状态,不回显令牌)。
 5. **Verify + report**:文件层验证(+ Claude Code 内容层 `/context`);两维词汇分清(接线状态 vs 配置核对状态)。
 
 ## 按需深入(条件读指针)
 
-- 逐 harness 接线命令(幂等守卫 / symlink / @import / .mdc / Codex override)+ 跨平台路径 + lifecycle 矩阵 → `references/harnesses.md`
-- 治理文档骨架模板 + 内容分层表 + 回滚 → `references/governance.md`
+- 逐 harness 接线命令(幂等守卫 / symlink / @import / .mdc / Codex override)+ 跨平台路径 + lifecycle 矩阵 → `~/.agents/skills/harness-config/references/harnesses.md`
+- 治理文档骨架模板 + 内容分层表 + 回滚 → `~/.agents/skills/harness-config/references/governance.md`
 - harness 检测逻辑 → `scripts/detect.sh`
 
 ## Golden run
 
-端到端范例(detect → 建治理文档 → 接线一个 harness → 核对 → 验证)见 `references/example-harness-config.md`。
+端到端范例(detect → 建治理文档 → 接线一个 harness → 核对 → 验证)见 `~/.agents/skills/harness-config/references/example-harness-config.md`。
 
 ## 自检(做完跑这条)
 
@@ -70,7 +70,7 @@ bash "$SKILL_DIR/scripts/detect.sh"                           # 各 harness stat
 (Claude Code 内容层:新会话 `/context` 确认治理文档出现在 Memory files)
 
 ## 参考
-- `references/harnesses.md` — 逐 harness 接线 + 跨平台路径 + lifecycle 矩阵
-- `references/governance.md` — 治理文档骨架 + 内容分层 + 回滚
+- `~/.agents/skills/harness-config/references/harnesses.md` — 逐 harness 接线 + 跨平台路径 + lifecycle 矩阵
+- `~/.agents/skills/harness-config/references/governance.md` — 治理文档骨架 + 内容分层 + 回滚
 - `scripts/detect.sh` — 检测已装 harness
-- `references/example-harness-config.md` — golden run(S5 产出)
+- `~/.agents/skills/harness-config/references/example-harness-config.md` — golden run(S5 产出)

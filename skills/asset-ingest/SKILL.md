@@ -60,7 +60,7 @@ gbrain query <关键词>
 
 1. **识别**:定类型/归属;查重(`gbrain get assets/<id>/<语义名>`)→ 冲突按决策表。
 2. **暂存**:`jspace ingest begin ...`(jspace 复制到目标、source 留 inbox、写 journal,返回 id)。
-3. **入脑**:写 gbrain reference 页(slug `assets/<projectId>/<语义名>`,模板见 `references/gbrain-write.md`)→ 成功 `advance --gbrain`;锁冲突 `jspace pending stage`。
+3. **入脑**:写 gbrain reference 页(slug `assets/<projectId>/<语义名>`,模板见 `~/.agents/skills/asset-ingest/references/gbrain-write.md`)→ 成功 `advance --gbrain`;锁冲突 `jspace pending stage`。
 4. **登记+提交**:`advance --index` → `advance --complete`(jspace 移除 source)。
 5. **召回自检**(必做):`gbrain query <关键词>` 命中;未命中 → 查 slug/tags/embedding。
 
@@ -68,15 +68,15 @@ gbrain query <关键词>
 
 ## 按需深入(条件读指针)
 
-- 要做**批量整理** inbox(`整理一下 inbox` / cron 无头)→ 先读 `references/batch.md`(两遍式·幂等·日志·无头只跑第一遍;执行日志落 `<filehub>/.jspace-logs/inbox-batch.md`)
-- 要做 **office 深度抽取**(excel/ppt 把数字/表格也收)→ 先读 `references/deep-extract.md`(`scripts/extract.py` 统一入口 + 伴生 `.extract.md` + 策展)
-- 存量旧资料按需收编 → 先读 `references/migration.md`
-- 归位/命名/类型细则、降级暂存区定位 → `references/filing.md`
-- 写页模板/slug 派生/embedding 降级/type 纪律 → `references/gbrain-write.md`
+- 要做**批量整理** inbox(`整理一下 inbox` / cron 无头)→ 先读 `~/.agents/skills/asset-ingest/references/batch.md`(两遍式·幂等·日志·无头只跑第一遍;执行日志落 `<filehub>/.jspace-logs/inbox-batch.md`)
+- 要做 **office 深度抽取**(excel/ppt 把数字/表格也收)→ 先读 `~/.agents/skills/asset-ingest/references/deep-extract.md`(`scripts/extract.py` 统一入口 + 伴生 `.extract.md` + 策展)
+- 存量旧资料按需收编 → 先读 `~/.agents/skills/asset-ingest/references/migration.md`
+- 归位/命名/类型细则、降级暂存区定位 → `~/.agents/skills/asset-ingest/references/filing.md`
+- 写页模板/slug 派生/embedding 降级/type 纪律 → `~/.agents/skills/asset-ingest/references/gbrain-write.md`
 
 ## Golden run
 
-端到端范例(journal 四步 + 一次 cleanup-pending 收尾)见 `references/example-ingest.md`。
+端到端范例(journal 四步 + 一次 cleanup-pending 收尾)见 `~/.agents/skills/asset-ingest/references/example-ingest.md`。
 
 ## 自检(做完跑这条)
 
@@ -87,10 +87,10 @@ jspace ingest list                          # 无 in-progress(已 committed 或�
 ```
 
 ## 参考
-- `references/filing.md` — 归位/命名/类型/文件中心定位/降级
-- `references/gbrain-write.md` — 写页模板/slug/embedding 降级/type 纪律
-- `references/batch.md` — 批量模式(两遍式/幂等/日志/无头)
-- `references/deep-extract.md` — 深度抽取(markitdown + office-extract 回退)
-- `references/migration.md` — 存量收编 runbook
-- `references/example-ingest.md` — golden run(S5 产出)
+- `~/.agents/skills/asset-ingest/references/filing.md` — 归位/命名/类型/文件中心定位/降级
+- `~/.agents/skills/asset-ingest/references/gbrain-write.md` — 写页模板/slug/embedding 降级/type 纪律
+- `~/.agents/skills/asset-ingest/references/batch.md` — 批量模式(两遍式/幂等/日志/无头)
+- `~/.agents/skills/asset-ingest/references/deep-extract.md` — 深度抽取(markitdown + office-extract 回退)
+- `~/.agents/skills/asset-ingest/references/migration.md` — 存量收编 runbook
+- `~/.agents/skills/asset-ingest/references/example-ingest.md` — golden run(S5 产出)
 - `scripts/extract.py` — 统一抽取入口(markitdown 增强 + office-extract 回退);`scripts/office-extract.py` — 零依赖回退器;各带自测脚本

@@ -26,11 +26,17 @@ function pass(label: string): void {
 }
 
 // ---- C1: reference integrity -------------------------------------------------
+// New form: `~/.agents/skills/<name>/<rest>` — must resolve to a repo source
+// file skills/<name>/<rest> (the user-level ~/.agents/skills/ is materialized
+// from the repo, so the repo source is the ground truth).
+// Old forms (`references/x.md`, `../<skill>/...`) are now forbidden — a stale
+// CWD-relative reference fails so the navigation fix can't silently regress.
 {
   const skillDirs = readdirSync(join(repoRoot, "skills"), { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name);
   let checked = 0;
+  const OLD_REF = /`(references\/[\w-]+\.md|\.\.\/[\w-]+\/(?:references\/[\w-]+\.md|SKILL\.md)|\.\.\/SKILL\.md)`/;
   for (const dir of skillDirs) {
     const base = join(repoRoot, "skills", dir);
     const walk = (d: string): void => {
@@ -43,15 +49,22 @@ function pass(label: string): void {
         if (!entry.name.endsWith(".md")) continue;
         const body = readFileSync(p, "utf-8");
         for (const line of body.split("\n")) {
-          const m = line.match(/`(references\/[\w-]+\.md|\.\.\/[\w-]+\/references\/[\w-]+\.md)`/);
-          if (!m) continue;
-          // reference paths in skills/<dir>/** are relative to skills/<dir>/;
-          // "../<skill>/references/x.md" stays repo-relative under skills/.
-          const resolved = join(repoRoot, "skills", dir, m[1]);
-          if (!existsSync(resolved)) {
-            fail(`C1 broken reference: ${p.replace(repoRoot + "/", "")} -> ${m[1]}`);
-          } else {
-            checked++;
+          // New form: ~/.agents/skills/<name>/<rest>
+          const m = line.match(/`~\/\.agents\/skills\/([\w-]+)\/([\w\/.-]+)`/);
+          if (m) {
+            // repo source: skills/<name>/<rest>
+            const resolved = join(repoRoot, "skills", m[1], m[2]);
+            if (!existsSync(resolved)) {
+              fail(`C1 broken reference: ${p.replace(repoRoot + "/", "")} -> ~/.agents/skills/${m[1]}/${m[2]} (no repo source skills/${m[1]}/${m[2]})`);
+            } else {
+              checked++;
+            }
+            continue;
+          }
+          // Old CWD-relative form is forbidden (must use ~/.agents/skills/...)
+          const old = line.match(OLD_REF);
+          if (old) {
+            fail(`C1 stale relative reference in ${p.replace(repoRoot + "/", "")}: \`${old[1]}\` — use \`~/.agents/skills/<skill>/...\` (multi-harness uniform) instead`);
           }
         }
       }

@@ -29,7 +29,7 @@ rel_path: <相对 filehub 根的路径>   # M5 起:机器无关指针标识(见�
 
 ## 深度抽取(office)页内纪律
 
-excel / ppt 走深度抽取(`references/deep-extract.md`)时,reference 页在此模板上补两条:
+excel / ppt 走深度抽取(`~/.agents/skills/asset-ingest/references/deep-extract.md`)时,reference 页在此模板上补两条:
 
 - `Key Facts` 只收**策展后的关键数字/表头要点**(精炼 ≤ ~10 条),不 dump 全量;数字带出处语境:`- 单价 32000 元/台 [Source: <rel_path>, Sheet 报价单 B2, YYYY-MM-DD]`。
 - `Pointer` 后加一行抽取注记:`抽取: <伴生文件 rel_path>`(如 `projects/<项目>/2026-08-03-acme报价.extract.md`),全量数据可随时重开。
