@@ -15,6 +15,7 @@ import { readEnvelopes } from "../pending/envelope.ts";
 import { isFile } from "../fs.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { readMaterializedJournal } from "./journal.ts";
+import { gbrainServer, gbrainSkillsDirWired } from "../gbrain/wiring.ts";
 
 /** Minimal cron view consumed by doctor; full cron surface lives in Child C. */
 export interface CronLike {
@@ -31,6 +32,10 @@ export interface CronHealthDeps {
   /** Official workbench skill names (SKILLS_MANIFEST.workbench). Injected from
    *  cli so doctor stays free of the embedded-bundle module. */
   officialSkillNames: () => string[];
+  /** Parsed ~/.claude.json (user machine config), or null when missing/invalid.
+   *  Injected so doctor can check the gbrain MCP skills-dir wiring without
+   *  touching the machine-level file itself. */
+  readUserClaudeJson?: () => unknown | null;
 }
 
 function countFiles(dir: string): number {
@@ -392,6 +397,28 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
             }
           }
         }
+      }
+    }
+  }
+
+  // gbrain skill-routing wiring (info). gbrain's resolver only auto-detects a
+  // root `skills/` dir; wire it to the workbench's official skills via
+  // GBRAIN_SKILLS_DIR=<wb>/.jspace/skills in ~/.claude.json's gbrain MCP env.
+  // Missing/invalid machine config is not a workbench health problem — the
+  // wire command handles it — so only report when we can read the config and
+  // the value is wrong.
+  {
+    const wbSkillsDir = join(root, CONFIG_DIR, "skills");
+    const doc = cron.readUserClaudeJson?.() ?? null;
+    if (doc !== null) {
+      const server = gbrainServer(doc);
+      if (server !== null && !gbrainSkillsDirWired(server, wbSkillsDir)) {
+        diags.push({
+          severity: "info",
+          code: "gbrain.skillsdir_unwired",
+          path: "gbrain",
+          message: `gbrain resolver not pointed at this workbench's official skills (${wbSkillsDir}); run jspace gbrain wire to wire GBRAIN_SKILLS_DIR`,
+        });
       }
     }
   }

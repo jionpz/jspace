@@ -4,6 +4,18 @@
 
 `$GBRAIN_BIN` -> `which gbrain`(Windows `where gbrain`) -> `~/.bun/bin/gbrain`(Windows `%USERPROFILE%\.bun\bin\gbrain.exe`).
 
+## Skill routing wiring (skillsDir)
+
+gbrain 的 skill resolver(`autoDetectSkillsDir`)只认 `$GBRAIN_SKILLS_DIR` / 根 `skills/` 目录,**不读**工作台的 `.jspace/skills/`。未接线时,resolver 走根 `skills/`(若无则回退 gbrain 安装路径的内置 skill)——**官方 skill 路由会静默断**。接线:
+
+```bash
+jspace gbrain wire --dir <工作台>   # 把 GBRAIN_SKILLS_DIR=<工作台>/.jspace/skills 写进 ~/.claude.json 的 gbrain MCP env
+```
+
+- 接线后**重启 claude 会话**(MCP 重连)让 `gbrain serve` 以新 env 启动。
+- 验证:`GBRAIN_SKILLS_DIR=<工作台>/.jspace/skills gbrain check-resolvable` 应报官方 4 skill reachable。
+- `jspace doctor` 的 `gbrain.skillsdir_unwired`(info)会提示未接线。
+
 ## CLI surface
 
 - `gbrain init` - create brain (PGLite default, no server)

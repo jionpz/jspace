@@ -332,3 +332,23 @@ test("stale filehub project -> filehub.project_stale (info); fresh -> none", () 
   const stale = c.filter((x) => x === "filehub.project_stale");
   expect(stale).toHaveLength(1); // only old-project, not active-project
 });
+// ---- gbrain skills-dir wiring (info level) ----
+
+const gbrainWiredDoc = (skillsDir: string): unknown => ({
+  mcpServers: { gbrain: { command: "/x/gbrain", args: ["serve"], type: "stdio", env: { GBRAIN_SKILLS_DIR: skillsDir } } },
+});
+
+test("gbrain skillsdir unwired -> gbrain.skillsdir_unwired (info); wired -> none", () => {
+  // stub returns null by default -> no diagnostic (machine config absent is not a wb problem)
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("gbrain.skillsdir_unwired");
+
+  // unwired: gbrain server env points elsewhere
+  const unwired = doctorWorkbench(root, stubDeps({ readUserClaudeJson: () => gbrainWiredDoc("/other/skills") }));
+  expect(codes(unwired)).toContain("gbrain.skillsdir_unwired");
+  const diags = (unwired.data as { diagnostics: { code: string; severity: string }[] }).diagnostics;
+  expect(diags.find((d) => d.code === "gbrain.skillsdir_unwired")?.severity).toBe("info");
+
+  // wired: env matches this workbench's .jspace/skills
+  const wired = doctorWorkbench(root, stubDeps({ readUserClaudeJson: () => gbrainWiredDoc(join(root, ".jspace", "skills")) }));
+  expect(codes(wired)).not.toContain("gbrain.skillsdir_unwired");
+});
