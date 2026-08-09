@@ -8,6 +8,7 @@ import { loadCrons, parseSchedule } from "../../application/automation/definitio
 import { schedulerAdapter } from "../../adapters/scheduler/index.ts";
 import { installedCronIdsForRoot, schedulerEnv } from "../scheduler.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
+import { binaryOnPath } from "../../adapters/harness/bin.ts";
 
 export const s = (v: unknown): string => (typeof v === "string" ? v : "");
 export const b = (v: unknown): boolean => v === true;
@@ -41,4 +42,5 @@ export const cronDeps = {
   linuxCronHealth: () => schedulerAdapter(process.platform)?.health?.(schedulerEnv()) ?? { crontab: false, service: false },
   officialSkillNames: () => SKILLS_MANIFEST.workbench.map((s) => s.name),
   readUserClaudeJson,
+  harnessBinOnPath: (name: string) => binaryOnPath(name, process.platform),
 };

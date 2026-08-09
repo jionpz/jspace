@@ -24,8 +24,28 @@ test("codex and pi headless argv shapes are stable", () => {
   expect(harnessArgv("pi", "do it", "darwin", "/bin/pi")).toEqual(["/bin/pi", "-p", "do it"]);
 });
 
+test("grok headless argv shape (capability-driven flags)", () => {
+  expect(harnessArgv("grok", "do it", "darwin", "/bin/grok")).toEqual([
+    "/bin/grok",
+    "-p",
+    "do it",
+    "--output-format",
+    "json",
+    "--allow",
+    "Bash(*)",
+  ]);
+});
+
+test("opencode headless argv is positional (opencode run <prompt>)", () => {
+  expect(harnessArgv("opencode", "do it", "darwin", "/bin/opencode")).toEqual(["/bin/opencode", "do it"]);
+});
+
+test("cursor is a session harness with no headless CLI", () => {
+  expect(() => harnessArgv("cursor", "p", "darwin", "/bin/x")).toThrow(/no headless CLI/);
+});
+
 test("unsupported harness fails loudly", () => {
-  expect(() => harnessArgv("cursor", "p", "darwin", "/bin/x")).toThrow(/unsupported harness/);
+  expect(() => harnessArgv("definitely-not-a-harness", "p", "darwin", "/bin/x")).toThrow(/unsupported harness/);
 });
 
 test("binary resolution falls back to the bare harness name when not on PATH", () => {

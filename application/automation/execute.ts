@@ -72,6 +72,10 @@ export interface CronRunOptions {
   dryRun: boolean;
   timeoutSec: number;
   force: boolean;
+  /** Override the cron definition's harness (e.g. `jspace cron run --harness grok`
+   *  to probe a new harness argv without editing cron.json). Falls back to the
+   *  cron's own harness when absent. */
+  harnessOverride?: string;
 }
 
 function todaySuccess(root: string, cronId: string): boolean {
@@ -190,7 +194,8 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   };
   // Skill-target crons validate + compile HERE, before the dry-run return: a
   // missing/stale skill fails with a fix action and never reaches execution.
-  const argv = harnessArgv(cron.harness, resolveCronPrompt(cron, root, skillCtx), deps.platform, deps.harnessBin);
+  const harness = opts.harnessOverride ?? cron.harness;
+  const argv = harnessArgv(harness, resolveCronPrompt(cron, root, skillCtx), deps.platform, deps.harnessBin);
   if (opts.dryRun) {
     return { lines: [`jspace: dry-run: would run in ${root}:`, `  $ ${argv.join(" ")}`] };
   }

@@ -24,7 +24,10 @@ import {
 import { ID_PATTERN, isId } from "./ids.ts";
 import { parseSchedule } from "../../core/shared/schedule.ts";
 
-export const HARNESSES = ["claude", "codex", "pi"] as const;
+// The cron enum is the headless-cron-capable subset of capabilities.yaml
+// (adapters/harness/capabilities.yaml). cursor is a session harness with no
+// headless CLI and is intentionally absent here — it can never run a cron.
+export const HARNESSES = ["claude", "codex", "grok", "opencode", "pi"] as const;
 export type Harness = (typeof HARNESSES)[number];
 
 export interface CronSkillTarget {

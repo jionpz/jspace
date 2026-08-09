@@ -63,10 +63,14 @@ test("recreateOnMissing: hub.json recovers, cron.json deletion respected", () =>
 
 test("materializedRels maps workbench + skills to source + harness projections, skips filehub", () => {
   expect(materializedRels("templates/workbench/AGENTS.md")).toEqual(["AGENTS.md"]);
-  expect(materializedRels("skills/jspace-use/SKILL.md")).toEqual([
-    `${skillRel("jspace-use")}/SKILL.md`,
-    ".claude/skills/jspace-use/SKILL.md",
+  // projection dirs derive from capabilities.yaml (shared + per-harness); the
+  // set now includes grok/opencode projections declared there (P2/P3 wiring).
+  expect(materializedRels("skills/jspace-use/SKILL.md").sort()).toEqual([
     ".agents/skills/jspace-use/SKILL.md",
+    ".claude/skills/jspace-use/SKILL.md",
+    ".grok/skills/jspace-use/SKILL.md",
+    `${skillRel("jspace-use")}/SKILL.md`,
+    ".opencode/skills/jspace-use/SKILL.md",
   ]);
   expect(materializedRels("templates/filehub/README.md")).toEqual([]); // on-demand, not in workbench
 });

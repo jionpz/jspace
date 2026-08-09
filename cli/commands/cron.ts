@@ -3,6 +3,7 @@
 // scheduling identity/content stays in the adapters + scheduler-service.
 import type { CommandSpec } from "../../application/commands/command.ts";
 import { fail } from "../../core/shared/errors.ts";
+import { HARNESSES } from "../../core/contracts/cron.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 import { cronAck, cronAdd, cronList, cronRemove, cronSetEnabled } from "../../application/automation/use-cases.ts";
 import { cronInstall } from "../../application/automation/scheduler-service.ts";
@@ -16,7 +17,7 @@ import { schedulerAdapter } from "../../adapters/scheduler/index.ts";
 import { cronIsInstalledForRoot, schedulerEnv, workbenchTagFor } from "../scheduler.ts";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
-import { b, readFileOrNull, s } from "./helpers.ts";
+import { b, optS, readFileOrNull, s } from "./helpers.ts";
 
 const cronAddSpec: CommandSpec = {
   name: "add",
@@ -25,7 +26,7 @@ const cronAddSpec: CommandSpec = {
   features: { dir: true },
   options: [
     { name: "--schedule", takesValue: true, required: true, help: 'restricted 5-field cron expression (e.g. "0 21 * * *"; single values or *; no lists/ranges/steps)' },
-    { name: "--harness", takesValue: true, required: true, help: "harness to run: claude | codex | pi" },
+    { name: "--harness", takesValue: true, required: true, help: `harness to run: ${HARNESSES.join(" | ")}` },
     { name: "--prompt", takesValue: true, required: true, help: "instruction for the headless harness" },
     { name: "--disabled", takesValue: false, help: "add the cron disabled" },
   ],
@@ -124,6 +125,12 @@ const cronRunSpec: CommandSpec = {
       help: "per-run timeout (default: 1800)",
     },
     { name: "--dir", takesValue: true, metavar: "DIR", help: "workbench root (default: current directory; schedulers pass this explicitly)" },
+    {
+      name: "--harness",
+      takesValue: true,
+      metavar: "HARNESS",
+      help: `override the cron's harness (headless-capable: ${HARNESSES.join(" | ")})`,
+    },
   ],
   handler: async (ctx, args) => {
     if (s(args.id) === "") fail("the following arguments are required: id");
@@ -134,6 +141,7 @@ const cronRunSpec: CommandSpec = {
         dryRun: b(args.dryRun),
         timeoutSec: Number(s(args.timeout) || "1800"),
         force: b(args.force),
+        harnessOverride: optS(args.harness),
       },
       {
         platform: process.platform,

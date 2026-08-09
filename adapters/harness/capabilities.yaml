@@ -1,0 +1,170 @@
+# adapters/harness/capabilities.yaml — single source of truth for harness support.
+#
+# Consumers:
+#   - scripts/gen-assets.ts renders this into adapters/harness/capabilities.generated.ts
+#     (embedded in the compiled binary via the import graph; no yaml at runtime).
+#   - adapters/harness/registry.ts loads the generated module + validates it.
+#   - adapters/harness/{claude,grok,opencode,pi,cursor,codex}.ts build headless argv /
+#     hook files / skill projections from the declared capability.
+#   - application/workspace/manifest.ts derives SKILL_PROJECTIONS from
+#     workbench_projection (+ shared_workbench_projection).
+#   - P5 scripts/check-harness-consistency.ts asserts code/docs/CI match this file.
+#
+# Adding a 5th/6th harness = adding an entry here; no code change outside this file.
+#
+# Field semantics:
+#   headless              — headless invocation prefix, or `null` when the harness is
+#                           IDE-only (no CLI; never a cron harness).
+#   argv_flags            — extra flags for the headless argv (order is owned by the
+#                           adapter code, not this file).
+#   sessions              — session events jspace wires (or plans to wire); `source`
+#                           distinguishes hook / plugin / extension channels.
+#   mcp                   — `native: true` (harness-native MCP) or `via: <adapter>`
+#                           (third-party extension channel, e.g. pi-mcp-adapter).
+#   workbench_projection  — workbench-relative skill projection dirs materialized by
+#                           init/upgrade (byte-identical copies of .jspace/skills/).
+#   user_install          — user-level paths (doctor reports existence only; wired by
+#                           `jspace skills install`, never by init/upgrade).
+#   hook_format           — hook/plugin channel type, or `none` when the harness has
+#                           no Claude-style hooks (values consumed by P2/P3/P5).
+#   native_memory         — "none", or "full" when the harness has its own memory
+#                           subsystem (gbrain stays authoritative — D1/B).
+#   lifecycle             — 4-dimension grade (automated | best_effort | manual |
+#                           unsupported). Grade semantics follow harnesses.md:
+#                           automated = CI/test evidence; best_effort = mechanism
+#                           exists but real trigger depends on the environment;
+#                           manual = explicit user action; unsupported = no mechanism.
+#   cron_harness_enum_value — value valid in cron.json `harness` (absent/null for
+#                           IDE-only harnesses that cannot run headless).
+#   documented            — false for compatibility-only entries (codex) that have no
+#                           harness-<name>.md doc (P5 assertion exemption).
+
+schema_version: 1
+
+# Workbench-relative multi-harness projection shared by every harness. Complementary
+# to per-harness dirs (workbench_projection) and the user-level ~/.agents/skills.
+shared_workbench_projection:
+  - .agents/skills
+
+harnesses:
+  claude:
+    headless: ["claude", "-p"]
+    argv_flags:
+      permission: "--allowedTools"
+      tools_value: "Bash,Read,Write,Edit,mcp__gbrain__*"
+      output: "--output-format"
+      output_value: "text"
+    sessions:
+      - { name: SessionStart, source: hook }
+      - { name: UserPromptSubmit, source: hook }
+    mcp: { native: true }
+    workbench_projection: [".claude/skills"]
+    user_install: []
+    hook_format: claude_settings_json
+    native_memory: none
+    lifecycle:
+      session_start: best_effort
+      session_end: best_effort
+      fallback: manual
+      crash_recovery: best_effort
+    cron_harness_enum_value: claude
+    documented: true
+
+  grok:
+    headless: ["grok", "-p"]
+    argv_flags:
+      permission: "--allow"
+      tools_value: "Bash(*)"
+      output: "--output-format"
+      output_value: "json"
+    sessions:
+      - { name: SessionStart, source: hook }
+      - { name: UserPromptSubmit, source: hook }
+      - { name: PreCompact, source: hook }
+      - { name: SessionEnd, source: hook }
+    mcp: { native: true }
+    workbench_projection: [".grok/skills"]
+    user_install: []
+    hook_format: grok_hooks_json
+    native_memory: full
+    lifecycle:
+      session_start: best_effort
+      session_end: best_effort
+      fallback: manual
+      crash_recovery: best_effort
+    cron_harness_enum_value: grok
+    documented: true
+
+  opencode:
+    headless: ["opencode", "run"]
+    argv_flags: {}
+    sessions:
+      - { name: session.created, source: plugin }
+      - { name: session.idle, source: plugin }
+      - { name: experimental.session.compacting, source: plugin }
+    mcp: { native: true }
+    workbench_projection: [".opencode/skills"]
+    user_install: []
+    hook_format: opencode_plugin_ts
+    native_memory: none
+    lifecycle:
+      session_start: best_effort
+      session_end: best_effort
+      fallback: manual
+      crash_recovery: best_effort
+    cron_harness_enum_value: opencode
+    documented: true
+
+  pi:
+    headless: ["pi", "-p"]
+    argv_flags: {}
+    sessions:
+      - { name: session_start, source: extension }
+      - { name: before_agent_start, source: extension }
+    mcp: { via: pi_mcp_adapter }
+    workbench_projection: []
+    user_install: ["~/.agents/skills"]
+    hook_format: none
+    native_memory: none
+    lifecycle:
+      session_start: best_effort
+      session_end: best_effort
+      fallback: manual
+      crash_recovery: best_effort
+    cron_harness_enum_value: pi
+    documented: true
+
+  cursor:
+    headless: null
+    argv_flags: {}
+    sessions:
+      - { name: sessionStart, source: hook }
+    mcp: { native: true }
+    workbench_projection: []
+    user_install: []
+    hook_format: cursor_hooks_json
+    native_memory: none
+    lifecycle:
+      session_start: best_effort
+      session_end: manual
+      fallback: manual
+      crash_recovery: manual
+    cron_harness_enum_value: null
+    documented: true
+
+  codex:
+    headless: ["codex", "exec"]
+    argv_flags: {}
+    sessions: []
+    mcp: { native: true }
+    workbench_projection: []
+    user_install: []
+    hook_format: none
+    native_memory: none
+    lifecycle:
+      session_start: best_effort
+      session_end: manual
+      fallback: manual
+      crash_recovery: best_effort
+    cron_harness_enum_value: codex
+    documented: false

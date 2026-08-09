@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { doctorWorkbench, type CronHealthDeps } from "./doctor.ts";
+import { doctorWorkbench, type CronHealthDeps, type CronLike } from "./doctor.ts";
 import { loadCrons, parseSchedule } from "../automation/definitions.ts";
 import { sha256Of } from "../workspace/manifest.ts";
 import type { CmdResult } from "../commands/command.ts";
@@ -45,6 +45,9 @@ const stubDeps = (over: Partial<CronHealthDeps> = {}): CronHealthDeps => ({
   installedCronIds: () => [],
   linuxCronHealth: () => ({ crontab: true, service: true }),
   officialSkillNames: () => ["jspace-use", "asset-ingest", "memory-recall", "memory-writeback"],
+  // deterministic: the test workbenches schedule claude, but the CI runner may
+  // not have the claude binary — stub bin presence so harness checks are stable.
+  harnessBinOnPath: () => true,
   ...over,
 });
 
@@ -433,4 +436,36 @@ test("gbrain skillsdir unwired -> gbrain.skillsdir_unwired (info); wired -> none
   // wired: env matches this workbench's .jspace/skills
   const wired = doctorWorkbench(root, stubDeps({ readUserClaudeJson: () => gbrainWiredDoc(join(root, ".jspace", "skills")) }));
   expect(codes(wired)).not.toContain("gbrain.skillsdir_unwired");
+});
+
+// ---- checkHarness (active harness support health) ----
+
+test("active headless harness with binary present -> no harness.* diagnostics", () => {
+  setCrons([{ id: "a", schedule: "0 9 * * *", enabled: true }]); // harness claude, bin stubbed present
+  const c = codes(doctorWorkbench(root, stubDeps()));
+  expect(c.some((x) => x.startsWith("harness."))).toBe(false);
+});
+
+test("active headless harness with missing binary -> harness.bin_missing warning", () => {
+  setCrons([{ id: "a", schedule: "0 9 * * *", enabled: true }]);
+  const r = doctorWorkbench(root, stubDeps({ harnessBinOnPath: () => false }));
+  expect(codes(r)).toContain("harness.bin_missing");
+  expect(r.exitCode ?? 0).toBe(0); // warning is non-blocking
+});
+
+test("non-active harnesses are not checked (no cross-harness noise)", () => {
+  // only claude is scheduled; grok/opencode/pi/cursor must not be probed
+  setCrons([{ id: "a", schedule: "0 9 * * *", enabled: true }]);
+  const probed = new Set<string>();
+  doctorWorkbench(
+    root,
+    stubDeps({ harnessBinOnPath: (name) => (probed.add(name), true) }),
+  );
+  expect([...probed]).toEqual(["claude"]);
+});
+
+test("cron harness outside capabilities -> harness.unknown warning", () => {
+  const badLoad = (): { crons: CronLike[] } => ({ crons: [{ id: "a", schedule: "0 9 * * *", enabled: true, harness: "bogus" }] });
+  const r = doctorWorkbench(root, stubDeps({ loadCrons: badLoad }));
+  expect(codes(r)).toContain("harness.unknown");
 });

@@ -21,11 +21,14 @@ import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { readMaterializedJournal } from "../workspace/journal.ts";
 import { SKILL_PROJECTIONS } from "../workspace/manifest.ts";
 import { gbrainServer, gbrainSkillsDirWired } from "../gbrain/wiring.ts";
+import { loadCapabilities } from "../../adapters/harness/registry.ts";
+import { binaryOnPath } from "../../adapters/harness/bin.ts";
 
 /** Minimal cron view consumed by doctor; full cron surface lives in the scheduler. */
 export interface CronLike {
   id: string;
   schedule: string;
+  harness?: string; // read by checkHarness (active harness set)
   enabled: boolean;
 }
 
@@ -41,6 +44,9 @@ export interface CronHealthDeps {
    *  Injected so doctor can check the gbrain MCP skills-dir wiring without
    *  touching the machine-level file itself. */
   readUserClaudeJson?: () => unknown | null;
+  /** Active-harness binary presence (injectable so tests stay deterministic on
+   *  machines without the harness CLI installed). Defaults to a real PATH check. */
+  harnessBinOnPath?: (name: string) => boolean;
 }
 
 type WorkbenchReads = ReturnType<typeof readWorkbenchState>;
@@ -514,6 +520,38 @@ function checkCrons(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
   return diags;
 }
 
+/** Harness support health for the ACTIVE harnesses (the cron.json harness values
+ *  of this workbench). Active-only by design: a full matrix scan of every
+ *  capability (grok/opencode/pi/cursor) would warn "not installed" for harnesses
+ *  the user never selected — noise, not signal. The check surfaces (a) an
+ *  unknown harness key (capabilities drift) and (b) a missing binary for a
+ *  headless harness the workbench actually schedules. user_install paths and the
+ *  Pi adapter hint are surfaced by P4's Pi branch, not here. */
+function checkHarness(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
+  const diags: RegistryDiagnostic[] = [];
+  let crons: CronLike[];
+  try {
+    crons = cron.loadCrons(root).crons;
+  } catch {
+    return diags; // cron.json unreadable -> checkCrons reports it (read-only, never throw)
+  }
+  const caps = loadCapabilities();
+  const binOnPath = cron.harnessBinOnPath ?? ((name: string) => binaryOnPath(name, process.platform));
+  const active = new Set<string>();
+  for (const c of crons) if (c.harness) active.add(c.harness);
+  for (const name of active) {
+    const cap = caps.harnesses[name];
+    if (!cap) {
+      diags.push({ severity: "warning", code: "harness.unknown", path: `harness.${name}`, message: `cron harness ${name} is not in capabilities.yaml; run jspace update and check cron.json` });
+      continue;
+    }
+    if (cap.headless !== null && !binOnPath(name)) {
+      diags.push({ severity: "warning", code: "harness.bin_missing", path: `harness.${name}`, message: `cron harness ${name} binary not found on PATH; scheduled runs will fail (install the harness CLI)` });
+    }
+  }
+  return diags;
+}
+
 /** `jspace doctor` — orchestrate the read-only checks and aggregate by severity. */
 export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
   const reads = readWorkbenchState(root);
@@ -535,6 +573,7 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
     ...checkDomains(root),
     ...checkGBrain(root, cron),
     ...checkCrons(root, cron),
+    ...checkHarness(root, cron),
   ];
 
   const errors = diags.filter((d) => d.severity === "error").map((d) => d.message);

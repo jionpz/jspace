@@ -1,9 +1,11 @@
 // application/workspace/manifest.ts — bundle manifest ownership rules, path
 // mapping and freshness diff (pure; consumed by gen-assets and workspace diff).
+// extractAgentsBlock, JSPACE_BLOCK_START/END
 import { extractAgentsBlock, JSPACE_BLOCK_START, JSPACE_BLOCK_END } from "./agents-block.ts";
 import { join } from "node:path";
 import { sha256Of } from "../../core/shared/hash.ts";
 import { skillRel, skillRoot } from "../fs.ts";
+import { workbenchProjectionDirs } from "../../adapters/harness/registry.ts";
 export { sha256Of, skillRel, skillRoot };
 import type {
   AssetOwnership,
@@ -41,9 +43,12 @@ export function recreateOnMissing(rel: string): boolean {
  *  skills only from their own directory (e.g. Claude Code's `.claude/skills/`)
  *  can still see them. `.agents/skills/` is the project-level multi-harness
  *  location (jspace-use §skill layout), complementary to the user-level
- *  `~/.agents/skills/` materialized by `skills install`. Adding a location =
- *  adding its dir. */
-export const SKILL_PROJECTIONS = [".claude/skills", ".agents/skills"] as const;
+ *  `~/.agents/skills/` materialized by `skills install`.
+ *
+ * Derived from capabilities.yaml (per-harness workbench_projection + the shared
+ *  projection) so a new harness projection flows into materialization and
+ *  doctor's drift checks without touching this file (single source of truth). */
+export const SKILL_PROJECTIONS: readonly string[] = workbenchProjectionDirs();
 
 /** Map a bundle manifest key to every workbench-relative path it materializes
  *  to. Empty array = not materialized into the workbench (filehub is created

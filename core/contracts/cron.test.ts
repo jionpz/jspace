@@ -117,3 +117,19 @@ test("valid schedule still decodes (no false cron.schedule.invalid)", () => {
   const result = decodeCrons(JSON.parse(JSON.stringify(promptCron())));
   expect(result.ok).toBe(true);
 });
+
+test("headless-capable harness enum accepts grok/opencode/pi, rejects cursor", () => {
+  for (const harness of ["grok", "opencode", "pi"]) {
+    const input = { schema_version: 1, crons: [{ id: "x", schedule: "0 9 * * *", harness, prompt: "p", enabled: true }] };
+    expect(decodeCrons(input).ok).toBe(true);
+  }
+  // cursor is an IDE-only session harness (no headless CLI) -> never a cron harness
+  expectIssue(
+    { schema_version: 1, crons: [{ id: "x", schedule: "0 9 * * *", harness: "cursor", prompt: "p", enabled: true }] },
+    "cron.harness.invalid",
+  );
+  expectIssue(
+    { schema_version: 1, crons: [{ id: "x", schedule: "0 9 * * *", harness: "bogus", prompt: "p", enabled: true }] },
+    "cron.harness.invalid",
+  );
+});

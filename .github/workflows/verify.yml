@@ -42,7 +42,7 @@ jobs:
       - name: Asset freshness (gen-assets must be a no-op, incl. skills manifest)
         run: |
           bun run scripts/gen-assets.ts
-          git diff --exit-code -- cli/assets.generated.ts cli/manifest.generated.ts cli/skills.generated.ts
+          git diff --exit-code -- cli/assets.generated.ts cli/manifest.generated.ts cli/skills.generated.ts adapters/harness/capabilities.generated.ts
 
       # P1-1: catch a bumped package.json with a stale cli/version.generated.ts.
       # Not a full `gen-version && diff` — dev builds embed `git describe`'s
