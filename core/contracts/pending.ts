@@ -11,7 +11,10 @@ import {
   failure,
   isRecord,
   IssueCollector,
+  readEnum,
   readRequiredString,
+  readUuid,
+  readVersion,
   success,
   type DecodeResult,
 } from "./diagnostics.ts";
@@ -46,19 +49,14 @@ export function decodePendingEnvelope(input: unknown): DecodeResult<PendingWrite
     "status", "retryCount", "createdAt", "appliedAt", "error",
   ] as const;
   checkNoUnknownFields(input, FIELDS, "pending", "pending.unknown-field", issues);
-  if (input.version !== 1) {
-    issues.add("pending.version.unsupported", "pending.version", "version must be 1");
-  }
-  readRequiredString(input, "id", "pending", "pending.id.invalid", issues);
+  readVersion(issues, "pending.version.unsupported", "pending.version", input.version, [1]);
+  readUuid(issues, "pending.id.invalid", "pending.id", input.id);
   readRequiredString(input, "idempotencyKey", "pending", "pending.idempotencyKey.invalid", issues);
   readRequiredString(input, "producer", "pending", "pending.producer.invalid", issues);
   readRequiredString(input, "slug", "pending", "pending.slug.invalid", issues);
   readRequiredString(input, "content", "pending", "pending.content.invalid", issues);
   readRequiredString(input, "createdAt", "pending", "pending.createdAt.invalid", issues);
-  const status = readRequiredString(input, "status", "pending", "pending.status.invalid", issues);
-  if (status !== undefined && !(ENVELOPE_STATUSES as readonly string[]).includes(status)) {
-    issues.add("pending.status.invalid", "pending.status", `status must be one of ${ENVELOPE_STATUSES.join(", ")}`);
-  }
+  readEnum(issues, "pending.status.invalid", "pending.status", input.status, ENVELOPE_STATUSES);
   if (typeof input.retryCount !== "number" || !Number.isInteger(input.retryCount) || input.retryCount < 0) {
     issues.add("pending.retryCount.invalid", "pending.retryCount", "retryCount must be a non-negative integer");
   }
@@ -76,7 +74,7 @@ export function decodePendingEnvelope(input: unknown): DecodeResult<PendingWrite
     producer: input.producer as string,
     slug: input.slug as string,
     content: input.content as string,
-    status: status as EnvelopeStatus,
+    status: input.status as EnvelopeStatus,
     retryCount: input.retryCount as number,
     createdAt: input.createdAt as string,
     ...(input.appliedAt !== undefined ? { appliedAt: input.appliedAt as string } : {}),

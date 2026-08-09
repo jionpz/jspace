@@ -107,3 +107,13 @@ test("mixed prompt and target crons decode together", () => {
     expect(result.value.crons.map((c) => c.id)).toEqual(["weekly-report", "inbox-tidy"]);
   }
 });
+
+test("invalid schedule is rejected at decode time (P2-5; no longer deferred to cronAdd)", () => {
+  expectIssue({ version: 1, crons: [{ id: "x", schedule: "*/5 * * * *", harness: "claude", prompt: "p", enabled: true }] }, "cron.schedule.invalid");
+  expectIssue({ version: 1, crons: [{ id: "x", schedule: "not a cron", harness: "claude", prompt: "p", enabled: true }] }, "cron.schedule.invalid");
+});
+
+test("valid schedule still decodes (no false cron.schedule.invalid)", () => {
+  const result = decodeCrons(JSON.parse(JSON.stringify(promptCron())));
+  expect(result.ok).toBe(true);
+});

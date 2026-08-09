@@ -7,7 +7,11 @@ import {
   failure,
   isRecord,
   IssueCollector,
+  readBool,
+  readEnum,
   readRequiredString,
+  readUuid,
+  readVersion,
   success,
   type DecodeResult,
 } from "./diagnostics.ts";
@@ -38,26 +42,17 @@ export function decodeRunRecord(input: unknown): DecodeResult<RunRecordV1> {
     "version", "id", "cronId", "startedAt", "exit", "status", "timedOut", "outputLog", "batchChanged",
   ] as const;
   checkNoUnknownFields(input, FIELDS, "run", "run.unknown-field", issues);
-  if (input.version !== 1) {
-    issues.add("run.version.unsupported", "run.version", "version must be 1");
-  }
-  readRequiredString(input, "id", "run", "run.id.invalid", issues);
+  readVersion(issues, "run.version.unsupported", "run.version", input.version, [1]);
+  readUuid(issues, "run.id.invalid", "run.id", input.id);
   readRequiredString(input, "cronId", "run", "run.cronId.invalid", issues);
   readRequiredString(input, "startedAt", "run", "run.startedAt.invalid", issues);
   readRequiredString(input, "outputLog", "run", "run.outputLog.invalid", issues);
-  const status = readRequiredString(input, "status", "run", "run.status.invalid", issues);
-  if (status !== undefined && !(RUN_STATUSES as readonly string[]).includes(status)) {
-    issues.add("run.status.invalid", "run.status", `status must be one of ${RUN_STATUSES.join(", ")}`);
-  }
+  readEnum(issues, "run.status.invalid", "run.status", input.status, RUN_STATUSES);
   if (input.exit !== undefined && input.exit !== null && typeof input.exit !== "number") {
     issues.add("run.exit.invalid", "run.exit", "exit must be a number or null");
   }
-  if (typeof input.timedOut !== "boolean") {
-    issues.add("run.timedOut.invalid", "run.timedOut", "timedOut must be a boolean");
-  }
-  if (typeof input.batchChanged !== "boolean") {
-    issues.add("run.batchChanged.invalid", "run.batchChanged", "batchChanged must be a boolean");
-  }
+  readBool(issues, "run.timedOut.invalid", "run.timedOut", input.timedOut);
+  readBool(issues, "run.batchChanged.invalid", "run.batchChanged", input.batchChanged);
   if (!issues.ok) return failure(issues.issues);
   return success({
     version: 1,
@@ -65,7 +60,7 @@ export function decodeRunRecord(input: unknown): DecodeResult<RunRecordV1> {
     cronId: input.cronId as string,
     startedAt: input.startedAt as string,
     exit: (input.exit ?? null) as number | null,
-    status: status as RunStatus,
+    status: input.status as RunStatus,
     timedOut: input.timedOut as boolean,
     outputLog: input.outputLog as string,
     batchChanged: input.batchChanged as boolean,

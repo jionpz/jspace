@@ -14,11 +14,15 @@ import {
   failure,
   isRecord,
   IssueCollector,
+  readBool,
+  readEnum,
   readRequiredString,
+  readVersion,
   success,
   type DecodeResult,
 } from "./diagnostics.ts";
 import { ID_PATTERN, isId } from "./ids.ts";
+import { parseSchedule } from "../../core/shared/schedule.ts";
 
 export const HARNESSES = ["claude", "codex", "pi"] as const;
 export type Harness = (typeof HARNESSES)[number];
@@ -59,9 +63,7 @@ export function decodeCrons(input: unknown): DecodeResult<CronsFile> {
     return failure(issues.issues);
   }
   checkNoUnknownFields(input, ["version", "crons"], "cron", "cron.unknown-field", issues);
-  if (input.version !== 1) {
-    issues.add("cron.version.unsupported", "cron.version", "version must be 1");
-  }
+  readVersion(issues, "cron.version.unsupported", "cron.version", input.version, [1]);
   const crons: CronDefinition[] = [];
   if (!Array.isArray(input.crons)) {
     issues.add("cron.crons.type", "cron.crons", "crons must be an array");
@@ -76,7 +78,16 @@ export function decodeCrons(input: unknown): DecodeResult<CronsFile> {
       checkNoUnknownFields(item, ["id", "schedule", "harness", "prompt", "target", "enabled"], prefix, "cron.entry.unknown-field", issues);
       const id = readRequiredString(item, "id", prefix, "cron.id.invalid", issues);
       const schedule = readRequiredString(item, "schedule", prefix, "cron.schedule.invalid", issues);
-      const harness = readRequiredString(item, "harness", prefix, "cron.harness.invalid", issues);
+      readEnum(issues, "cron.harness.invalid", `${prefix}.harness`, item.harness, HARNESSES);
+      // schedule is validated here, not deferred to cronAdd/doctor: a hand-edited
+      // cron.json with a bad schedule must fail decode (visible, not silent).
+      if (schedule !== undefined) {
+        try {
+          parseSchedule(schedule);
+        } catch {
+          issues.add("cron.schedule.invalid", `${prefix}.schedule`, `invalid schedule: ${schedule}`);
+        }
+      }
       // exactly one of prompt | target; prompt remains the custom escape hatch.
       const hasPrompt = item.prompt !== undefined;
       const hasTarget = item.target !== undefined;
@@ -92,17 +103,12 @@ export function decodeCrons(input: unknown): DecodeResult<CronsFile> {
       if (id !== undefined && !isId(id)) {
         issues.add("cron.id.invalid", `${prefix}.id`, `id must match ${ID_PATTERN}`);
       }
-      if (harness !== undefined && !(HARNESSES as readonly string[]).includes(harness)) {
-        issues.add("cron.harness.invalid", `${prefix}.harness`, `harness must be one of ${HARNESSES.join(", ")}`);
-      }
-      if (typeof item.enabled !== "boolean") {
-        issues.add("cron.enabled.invalid", `${prefix}.enabled`, "enabled must be a boolean");
-      }
+      readBool(issues, "cron.enabled.invalid", `${prefix}.enabled`, item.enabled);
       if (issues.issues.length === before) {
         crons.push({
           id: id as string,
           schedule: schedule as string,
-          harness: harness as Harness,
+          harness: item.harness as Harness,
           ...(prompt !== undefined ? { prompt } : {}),
           ...(target !== undefined ? { target } : {}),
           enabled: item.enabled as boolean,

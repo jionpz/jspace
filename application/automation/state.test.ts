@@ -21,15 +21,19 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
+// ids must be uuid-shape (P2-5: run/incident/pending id strictness).
+const RUN_A = "6f3c5a20-0000-4000-8000-0000000000a1";
+const RUN_B = "6f3c5a20-0000-4000-8000-0000000000b1";
+
 function run(id: string, status: RunRecord["status"], startedAt: string): RunRecord {
   return { version: 1, id, cronId: "nightly", startedAt, exit: status === "ok" ? 0 : 1, status, timedOut: false, outputLog: `/logs/${id}.md`, batchChanged: true };
 }
 
 test("writeRun/readRuns/lastRun round-trip and sort by startedAt", () => {
-  writeRun(root, "nightly", run("a", "failed", "2026-08-04T09:00:00"));
-  writeRun(root, "nightly", run("b", "ok", "2026-08-04T10:00:00"));
+  writeRun(root, "nightly", run(RUN_A, "failed", "2026-08-04T09:00:00"));
+  writeRun(root, "nightly", run(RUN_B, "ok", "2026-08-04T10:00:00"));
   const { records: runs } = readRuns(root, "nightly");
-  expect(runs.map((r) => r.id)).toEqual(["a", "b"]);
+  expect(runs.map((r) => r.id)).toEqual([RUN_A, RUN_B]);
   expect(lastRun(root, "nightly")?.status).toBe("ok");
   expect(lastRun(root, "missing")).toBeNull();
 });
@@ -73,14 +77,14 @@ test("ackIncidents with a cron id only touches that cron", () => {
 });
 
 test("damaged run/incident records surface as issues, valid ones still readable", () => {
-  writeRun(root, "nightly", run("a", "ok", "2026-08-04T09:00:00"));
+  writeRun(root, "nightly", run(RUN_A, "ok", "2026-08-04T09:00:00"));
   const runsDir = join(root, ".jspace", "state", "runs", "nightly");
   mkdirSync(runsDir, { recursive: true });
   writeFileSync(join(runsDir, "corrupt.json"), "{ not json");
-  writeFileSync(join(runsDir, "bad-version.json"), JSON.stringify({ ...run("b", "ok", "2026-08-04T10:00:00"), version: 99 }));
+  writeFileSync(join(runsDir, "bad-version.json"), JSON.stringify({ ...run(RUN_B, "ok", "2026-08-04T10:00:00"), version: 99 }));
 
   const col = readRuns(root, "nightly");
-  expect(col.records.map((r) => r.id)).toEqual(["a"]); // valid still readable
+  expect(col.records.map((r) => r.id)).toEqual([RUN_A]); // valid still readable
   expect(col.issues.map((i) => i.path).sort()).toEqual(["bad-version.json", "corrupt.json"]);
   expect(col.issues.every((i) => i.code !== "")).toBe(true);
 

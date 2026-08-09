@@ -447,13 +447,15 @@ function checkGBrain(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
  *  but not installed, stale installed tasks, open/damaged incidents. */
 function checkCrons(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
   const diags: RegistryDiagnostic[] = [];
-  const crons = cron.loadCrons(root).crons;
-  for (const c of crons) {
-    try {
-      cron.parseSchedule(c.schedule);
-    } catch {
-      diags.push({ severity: "warning", code: "cron.invalid_schedule", path: `cron.${c.id}.schedule`, message: `cron ${c.id}: invalid schedule "${c.schedule}"` });
-    }
+  let crons: CronLike[];
+  try {
+    crons = cron.loadCrons(root).crons;
+  } catch (e) {
+    // schedule is now validated at decode (P2-5): a hand-edited cron.json with
+    // a bad schedule fails decode, so doctor reports the file as unreadable
+    // instead of crashing (read-only diagnostics must never throw).
+    diags.push({ severity: "warning", code: "cron.file_unreadable", path: "cron", message: `cron.json unreadable: ${e instanceof Error ? e.message : String(e)}` });
+    crons = [];
   }
   if (process.platform === "linux") {
     const health = cron.linuxCronHealth();

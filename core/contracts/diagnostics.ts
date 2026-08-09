@@ -91,3 +91,57 @@ export function readOptionalString(
   if (obj[key] === undefined) return undefined;
   return readRequiredString(obj, key, prefix, code, issues);
 }
+
+/** UUID shape shared by every state contract's id (matches the historical
+ *  ingest check; lenient enough for legacy writers, strict enough that junk
+ *  ids can't pass). */
+export const UUID_PATTERN = /^[0-9a-f-]{36}$/i;
+
+/** Read a value that must be one of `allowed`; records an issue otherwise.
+ *  Shared by run/incident/pending/cron decoders so enum strictness never drifts. */
+export function readEnum<T extends string>(
+  issues: IssueCollector,
+  code: string,
+  path: string,
+  value: unknown,
+  allowed: readonly T[],
+): T | undefined {
+  if (typeof value !== "string" || !(allowed as readonly string[]).includes(value)) {
+    issues.add(code, path, `must be one of ${allowed.join(", ")}`);
+    return undefined;
+  }
+  return value as T;
+}
+
+/** Read a uuid; records an issue when the value is not the uuid shape. */
+export function readUuid(issues: IssueCollector, code: string, path: string, value: unknown): string | undefined {
+  if (typeof value !== "string" || !UUID_PATTERN.test(value)) {
+    issues.add(code, path, "must be a uuid");
+    return undefined;
+  }
+  return value;
+}
+
+/** Read a strict boolean; records an issue otherwise. */
+export function readBool(issues: IssueCollector, code: string, path: string, value: unknown): boolean | undefined {
+  if (typeof value !== "boolean") {
+    issues.add(code, path, "must be a boolean");
+    return undefined;
+  }
+  return value;
+}
+
+/** Read a schema version that must be one of `expected`; records an issue otherwise. */
+export function readVersion(
+  issues: IssueCollector,
+  code: string,
+  path: string,
+  value: unknown,
+  expected: number[],
+): number | undefined {
+  if (typeof value !== "number" || !expected.includes(value)) {
+    issues.add(code, path, `must be one of ${expected.join(", ")}`);
+    return undefined;
+  }
+  return value;
+}

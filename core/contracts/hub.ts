@@ -291,14 +291,17 @@ export function decodeHub(input: unknown): DecodeResult<HubV4> {
   checkNoUnknownFields(input, ["schema_version", "version", "domains", "resources", "projects"], "hub", "hub.unknown-field", issues);
 
   // Schema version: `schema_version: 1` is the unified numeric form (matches
-  // every other contract). Legacy `schema_version: 1` is the same schema and reads
-  // in transparently — existing workbenches are not forced to rebuild.
+  // every other contract). Legacy `version: "4"` (pre-unification string form)
+  // is the same schema and reads in transparently — existing workbenches are
+  // not forced to rebuild. This branch is intentionally kept inline (not the
+  // generic readVersion helper) because the legacy string form must stay
+  // accepted alongside the numeric one.
   const sv = input.schema_version;
   const legacy = input.version;
   if (typeof sv === "number") {
     if (sv !== 1) issues.add("hub.version.unsupported", "hub.schema_version", "schema_version must be 1");
   } else if (legacy !== "4") {
-    issues.add("hub.version.unsupported", "hub.schema_version", 'hub.json must carry schema_version: 1 (legacy schema_version: 1 is accepted)');
+    issues.add("hub.version.unsupported", "hub.schema_version", 'hub.json must carry schema_version: 1 (legacy version: "4" is accepted)');
   }
 
   const domainIds = new Set<string>();

@@ -9,6 +9,12 @@ import { join } from "node:path";
 import { findPendingApplies, cronFailures, cronStatus } from "./status.ts";
 import { resolveFilehubRoot } from "../registry/filehub-lookup.ts";
 
+/** ids must be uuid-shape (P2-5 run/incident/pending strictness). */
+const INC_ID = "a1b2c3d4-0000-4000-8000-000000000101";
+const RUN_ID = "a1b2c3d4-0000-4000-8000-000000000102";
+const APPLY_A = "a1b2c3d4-0000-4000-8000-000000000103";
+const APPLY_B = "a1b2c3d4-0000-4000-8000-000000000104";
+
 /** Build a temp workbench (and optional unique filehub) for failure-surface tests.
  *  State is structured: incidents (.jspace/state/incidents) + runs (.jspace/state/runs). */
 function makeWorkbench(opts: {
@@ -40,7 +46,7 @@ function makeWorkbench(opts: {
       join(dir, `${inc.cron}-${inc.failureClass}.json`),
       JSON.stringify({
         version: 1,
-        id: `${inc.cron}-${inc.failureClass}`,
+        id: INC_ID,
         cronId: inc.cron,
         failureClass: inc.failureClass,
         status: inc.status ?? "open",
@@ -57,7 +63,7 @@ function makeWorkbench(opts: {
       join(dir, "run-1.json"),
       JSON.stringify({
         version: 1,
-        id: "run-1",
+        id: RUN_ID,
         cronId: id,
         startedAt: "2026-08-03T12:00:00",
         exit: status === "ok" ? 0 : 1,
@@ -106,16 +112,16 @@ test("findPendingApplies: empty unless filehub has APPLY.json", () => {
 });
 
 test("findPendingApplies: lists staged APPLY.json envelopes", () => {
-  const wb = makeWorkbench({ filehub: true, applies: ["memory-consolidate-2026-08-03", "weekly-2026-08-03"] });
+  const wb = makeWorkbench({ filehub: true, applies: [APPLY_A, APPLY_B] });
   const r = findPendingApplies(wb);
   expect(r.root).toBe(join(wb, "filehub"));
   expect(r.paths).toHaveLength(2);
-  expect(r.paths[0]).toContain("memory-consolidate");
+  expect(r.paths[0]).toContain(APPLY_A);
   rmSync(wb, { recursive: true, force: true });
 });
 
 test("cronFailures: needs attention -> exit 1, data has fields", () => {
-  const wb = makeWorkbench({ crons: ["a", "b"], incidents: [{ cron: "a", failureClass: "failed" }], runs: { a: "failed", b: "ok" }, filehub: true, applies: ["x"] });
+  const wb = makeWorkbench({ crons: ["a", "b"], incidents: [{ cron: "a", failureClass: "failed" }], runs: { a: "failed", b: "ok" }, filehub: true, applies: [APPLY_A] });
   const r = cronFailures(wb);
   expect(r.exitCode).toBe(1);
   const data = r.data as FailureData;

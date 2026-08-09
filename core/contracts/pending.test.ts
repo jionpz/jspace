@@ -58,3 +58,7 @@ test("optional appliedAt/error and terminal states decode", () => {
 test("unknown fields are rejected", () => {
   expectIssue({ ...valid(), extra: 1 }, "pending.unknown-field");
 });
+
+test("non-uuid id is rejected (P2-5 id strictness, matches ingest)", () => {
+  expectIssue({ ...valid(), id: "not-a-uuid" }, "pending.id.invalid");
+});

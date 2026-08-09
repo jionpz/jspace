@@ -95,3 +95,8 @@ test("non-object input fails root type for all four", () => {
   expectIssue(decodeMaterializedJournal([]).ok, codesOf(decodeMaterializedJournal([])), "materialized.root.type");
   expectIssue(decodeUpgradeJournal(42).ok, codesOf(decodeUpgradeJournal(42)), "upgrade.root.type");
 });
+
+test("run/incident non-uuid ids are rejected (P2-5 id strictness)", () => {
+  expectIssue(decodeRunRecord({ ...validRun(), id: "not-a-uuid" }).ok, codesOf(decodeRunRecord({ ...validRun(), id: "not-a-uuid" })), "run.id.invalid");
+  expectIssue(decodeIncident({ ...validIncident(), id: "not-a-uuid" }).ok, codesOf(decodeIncident({ ...validIncident(), id: "not-a-uuid" })), "incident.id.invalid");
+});

@@ -85,22 +85,33 @@ test("installed task not in cron.json -> cron.stale_task", () => {
   expect(codes(r)).not.toContain("cron.not_installed"); // "a" is installed
 });
 
-test("invalid schedule -> cron.invalid_schedule; valid cron no warning", () => {
+test("invalid schedule -> cron.file_unreadable (schedule now validated at decode, P2-5)", () => {
   setCrons([
     { id: "ok", schedule: "0 21 * * *", enabled: true },
     { id: "bad", schedule: "*/5 * * * *", enabled: true },
   ]);
   const r = doctorWorkbench(root, stubDeps({ installedCronIds: () => ["ok", "bad"] }));
   const d = codes(r);
-  expect(d).toContain("cron.invalid_schedule");
-  expect(d).not.toContain("cron.not_installed"); // both installed
+  // a hand-edited cron.json with a bad schedule fails decode -> doctor reports
+  // the file as unreadable (never crashes; read-only diagnostics invariant).
+  expect(d).toContain("cron.file_unreadable");
+  expect(d).not.toContain("cron.not_installed"); // nothing readable to judge installs
+});
+
+test("valid schedules -> no cron.file_unreadable", () => {
+  setCrons([
+    { id: "ok", schedule: "0 21 * * *", enabled: true },
+    { id: "bad", schedule: "0 21 * * *", enabled: true },
+  ]);
+  const r = doctorWorkbench(root, stubDeps({ installedCronIds: () => ["ok", "bad"] }));
+  expect(codes(r)).not.toContain("cron.file_unreadable");
 });
 
 test("open incident -> cron.open_incidents", () => {
   mkdirSync(join(root, ".jspace", "state", "incidents"), { recursive: true });
   writeFileSync(
     join(root, ".jspace", "state", "incidents", "x-failed.json"),
-    JSON.stringify({ version: 1, id: "x-failed", cronId: "x", failureClass: "failed", status: "open", openedAt: "2026-08-03T12:00:00", evidence: [] }),
+    JSON.stringify({ version: 1, id: "a1b2c3d4-0000-4000-8000-000000000201", cronId: "x", failureClass: "failed", status: "open", openedAt: "2026-08-03T12:00:00", evidence: [] }),
   );
   const r = doctorWorkbench(root, stubDeps());
   expect(codes(r)).toContain("cron.open_incidents");

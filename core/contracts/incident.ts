@@ -8,7 +8,10 @@ import {
   failure,
   isRecord,
   IssueCollector,
+  readEnum,
   readRequiredString,
+  readUuid,
+  readVersion,
   success,
   type DecodeResult,
 } from "./diagnostics.ts";
@@ -42,20 +45,12 @@ export function decodeIncident(input: unknown): DecodeResult<IncidentV1> {
     "resolvedAt", "acknowledgedAt", "evidence",
   ] as const;
   checkNoUnknownFields(input, FIELDS, "incident", "incident.unknown-field", issues);
-  if (input.version !== 1) {
-    issues.add("incident.version.unsupported", "incident.version", "version must be 1");
-  }
-  readRequiredString(input, "id", "incident", "incident.id.invalid", issues);
+  readVersion(issues, "incident.version.unsupported", "incident.version", input.version, [1]);
+  readUuid(issues, "incident.id.invalid", "incident.id", input.id);
   readRequiredString(input, "cronId", "incident", "incident.cronId.invalid", issues);
   readRequiredString(input, "openedAt", "incident", "incident.openedAt.invalid", issues);
-  const failureClass = readRequiredString(input, "failureClass", "incident", "incident.failureClass.invalid", issues);
-  if (failureClass !== undefined && !(FAILURE_CLASSES as readonly string[]).includes(failureClass)) {
-    issues.add("incident.failureClass.invalid", "incident.failureClass", `failureClass must be one of ${FAILURE_CLASSES.join(", ")}`);
-  }
-  const status = readRequiredString(input, "status", "incident", "incident.status.invalid", issues);
-  if (status !== undefined && !(INCIDENT_STATUSES as readonly string[]).includes(status)) {
-    issues.add("incident.status.invalid", "incident.status", `status must be one of ${INCIDENT_STATUSES.join(", ")}`);
-  }
+  readEnum(issues, "incident.failureClass.invalid", "incident.failureClass", input.failureClass, FAILURE_CLASSES);
+  readEnum(issues, "incident.status.invalid", "incident.status", input.status, INCIDENT_STATUSES);
   if (input.resolvedAt !== undefined && typeof input.resolvedAt !== "string") {
     issues.add("incident.resolvedAt.invalid", "incident.resolvedAt", "resolvedAt must be a string");
   }
@@ -70,8 +65,8 @@ export function decodeIncident(input: unknown): DecodeResult<IncidentV1> {
     version: 1,
     id: input.id as string,
     cronId: input.cronId as string,
-    failureClass: failureClass as FailureClass,
-    status: status as IncidentStatus,
+    failureClass: input.failureClass as FailureClass,
+    status: input.status as IncidentStatus,
     openedAt: input.openedAt as string,
     ...(input.resolvedAt !== undefined ? { resolvedAt: input.resolvedAt as string } : {}),
     ...(input.acknowledgedAt !== undefined ? { acknowledgedAt: input.acknowledgedAt as string } : {}),

@@ -100,7 +100,7 @@ bin/jspace cron uninstall              # 期望:任务移除
 | cron 已删但调度器残留 | 全部 | warning `stale scheduled task <id>` |
 | 存在 open cron incident | 全部 | warning `cron.open_incidents`（`N open cron incident(s)`） |
 | Linux 无 crontab/无 crond | Linux | warning `crontab command not found` / `cron daemon not running; scheduled tasks won't fire until it starts` |
-| 非法 schedule | 全部 | warning `cron <id>: invalid schedule` |
+| 非法 schedule | 全部 | warning `cron.file_unreadable`（schedule 已在 decode 层校验，手改 cron.json 使文件不可读） |
 
 ## CI 解锁后 cron 冒烟(占位)
 
