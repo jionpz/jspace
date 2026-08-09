@@ -14,7 +14,7 @@ import {
 
 function validHub(): HubV4 {
   return {
-    version: "4",
+    schema_version: 1,
     domains: [{ id: "files", path: "workspace/files" }],
     resources: [
       {

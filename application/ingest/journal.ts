@@ -23,6 +23,7 @@ import {
 } from "../../core/contracts/ingest.ts";
 import { localStamp } from "../time.ts";
 import { readJsonRecords } from "../fs.ts";
+import type { ContractIssue } from "../../core/contracts/diagnostics.ts";
 
 export const INGEST_STATE_DIR = join(CONFIG_DIR, "state", "ingest");
 
@@ -88,16 +89,18 @@ export function writeJournal(root: string, j: IngestJournalV1): void {
   writeBytesAtomic(join(dir(root), `${j.id}.json`), JSON.stringify(j, null, 2) + "\n");
 }
 
-export function readJournals(root: string): IngestJournalV1[] {
+export function readJournals(root: string): { records: IngestJournalV1[]; issues: ContractIssue[] } {
+  // Damaged journals are surfaced via issues (never silently dropped) so the
+  // health surface (doctor / context) can report them like damaged incidents.
   return readJsonRecords(dir(root), {
     ext: ".json",
     decode: decodeIngestJournal,
     sort: (a, b) => a.createdAt.localeCompare(b.createdAt),
-  }).records;
+  });
 }
 
 export function readJournal(root: string, id: string): IngestJournalV1 {
-  const j = readJournals(root).find((x) => x.id === id);
+  const j = readJournals(root).records.find((x) => x.id === id);
   if (!j) throw new Error(`no ingest journal: ${id}`);
   return j;
 }
@@ -126,7 +129,7 @@ function withStamp(j: IngestJournalV1): IngestJournalV1 {
  *  without re-staging. A missing source is a hard error unless it is already
  *  recorded as committed (source removed after commit). */
 export function beginIngest(root: string, plan: IngestPlan, ops: IngestFileOps): BeginResult {
-  const journals = readJournals(root);
+  const journals = readJournals(root).records;
   // a previous commit left cleanup pending for this source: do NOT stage a
   // second copy/journal — the user/skill must finish cleanup with --complete.
   // Note: source identity is the path; if a NEW file landed at the same inbox
@@ -332,7 +335,7 @@ export function rollbackIngest(root: string, id: string, ops: IngestFileOps): In
 /** In-progress journals whose source still exists in inbox are resumable:
  *  the next batch continues from the recorded step (no completed step redoes). */
 export function resumableJournals(root: string): IngestJournalV1[] {
-  return readJournals(root).filter(
+  return readJournals(root).records.filter(
     (j) => (j.status === "staged" || j.status === "gbrain" || j.status === "index") && existsSync(j.source),
   );
 }

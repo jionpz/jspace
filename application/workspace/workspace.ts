@@ -40,6 +40,15 @@ function parseHubJson(raw: string | null): Record<string, unknown> | null {
   }
 }
 
+/** Hub schema version as a numeric string for migration comparisons: the
+ *  unified `schema_version: number`, or legacy `schema_version: 1` (same schema,
+ *  == schema_version 1). Returns null when neither form is present. */
+function hubVersion(doc: Record<string, unknown>): string | null {
+  if (typeof doc.schema_version === "number") return String(doc.schema_version);
+  if (doc.version === "4") return "1";
+  return null;
+}
+
 /** Compare the bundle's hub.json template schema against the installed hub.json
  *  and run the migration chain. Returns null when nothing to migrate (installed
  *  absent/malformed, same version, or installed ahead of the bundle). */
@@ -49,8 +58,9 @@ function planHubMigration(root: string, deps: UpgradeDeps): HubMigrationPlan | n
   const bundleDoc = parseHubJson(deps.assets[hubKey] ?? null);
   const installedDoc = parseHubJson(deps.readFile(join(root, ".jspace/hub.json")));
   if (bundleDoc === null || installedDoc === null) return null;
-  const from = String(installedDoc.version);
-  const to = String(bundleDoc.version);
+  const from = hubVersion(installedDoc);
+  const to = hubVersion(bundleDoc);
+  if (from === null || to === null) return null;
   const fromNum = Number(from);
   const toNum = Number(to);
   if (Number.isNaN(fromNum) || Number.isNaN(toNum) || fromNum >= toNum) return null;

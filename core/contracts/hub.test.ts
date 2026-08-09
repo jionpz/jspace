@@ -8,7 +8,7 @@ import { decodeHub, type HubV4 } from "./hub.ts";
 
 function validHub(): HubV4 {
   return {
-    version: "4",
+    schema_version: 1,
     domains: [
       { id: "files", path: "workspace/files", tags: ["assets"] },
       { id: "general", path: "workspace/general" },
@@ -61,7 +61,7 @@ test("valid v4 hub decodes ok and round-trips through JSON", () => {
 });
 
 test("empty domains/resources/projects arrays are valid", () => {
-  const hub = { version: "4", domains: [], resources: [], projects: [] };
+  const hub = { schema_version: 1, domains: [], resources: [], projects: [] };
   const value = expectOk(hub);
   expect(value.domains).toEqual([]);
   expect(value.projects).toEqual([]);
@@ -70,7 +70,7 @@ test("empty domains/resources/projects arrays are valid", () => {
 test("primary field accepts true/false/missing; resource needs exactly one true", () => {
   // false and missing are valid field *values* when a true primary exists
   expectOk({
-    version: "4",
+    schema_version: 1,
     domains: [{ id: "d", path: "workspace/d" }],
     resources: [
       {
@@ -98,21 +98,29 @@ test("primary field accepts true/false/missing; resource needs exactly one true"
 
 // ---- version ----
 
-test("v3 hub is explicitly rejected as unsupported", () => {
-  const result = decodeHub({ ...validHub(), version: "3" });
+test("schema_version other than 1 is rejected as unsupported", () => {
+  const result = decodeHub({ ...validHub(), schema_version: 3 });
   expect(result.ok).toBe(false);
   if (!result.ok) {
     const v = result.issues.find((i) => i.code === "hub.version.unsupported");
-    expect(v?.message).toContain("unsupported");
-    expect(v?.message).toContain("no implicit migration");
+    expect(v?.message).toContain("schema_version must be 1");
   }
 });
 
-test("missing or non-string version is rejected", () => {
-  const { version: _omit, ...rest } = validHub();
+test("legacy version:\"4\" (pre-unification) is accepted as schema_version 1", () => {
+  // pure legacy shape: no schema_version at all
+  const legacy = { version: "4", domains: [], resources: [], projects: [] } as unknown;
+  const result = decodeHub(legacy);
+  expect(result.ok).toBe(true);
+  if (result.ok) expect(result.value.schema_version).toBe(1);
+});
+
+test("missing schema_version or unknown legacy version is rejected", () => {
+  const { schema_version: _omit, ...rest } = validHub();
   expectIssue(rest, "hub.version.unsupported");
-  expectIssue({ ...validHub(), version: 4 }, "hub.version.unsupported");
-  expectIssue({ ...validHub(), version: null }, "hub.version.unsupported");
+  // pure legacy shapes with a non-"4" version (no schema_version) are damaged
+  expectIssue({ version: "3", domains: [], resources: [], projects: [] }, "hub.version.unsupported");
+  expectIssue({ version: null, domains: [], resources: [], projects: [] }, "hub.version.unsupported");
 });
 
 test("non-object root is rejected", () => {
@@ -252,7 +260,7 @@ test("path resources require exactly one primary", () => {
 
 test("non-path resources need no primary", () => {
   expectOk({
-    version: "4",
+    schema_version: 1,
     domains: [{ id: "d", path: "workspace/d" }],
     resources: [
       { id: "r", type: "url", domain: "d", entrypoints: [{ id: "a", kind: "url", value: "https://x" }] },
@@ -299,7 +307,7 @@ test("project id, domain reference, asset path and status are validated", () => 
 
 test("independent issues are all reported in one decode", () => {
   const bad = {
-    version: "4",
+    schema_version: 1,
     domains: [
       { id: "Bad id", path: "/abs", extra: 1 },
       { id: "files", path: "workspace/files" },

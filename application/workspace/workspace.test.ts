@@ -164,7 +164,7 @@ test("modified hub.json (user data) -> skip, upgrade proceeds, registry preserve
   initWorkbench(root, false, initDeps);
   const userHub =
     JSON.stringify(
-      { version: "4", domains: [{ id: "dev", path: "workspace/dev", tags: [] }], resources: [], projects: [] },
+      { schema_version: 1, domains: [{ id: "dev", path: "workspace/dev", tags: [] }], resources: [], projects: [] },
       null,
       2,
     ) + "\n";
@@ -227,19 +227,19 @@ test("hub schema gap with no registered migration -> upgrade fails, hub.json unt
   markerOnlyWorkbench(root);
   writeFileSync(
     join(root, ".jspace", "hub.json"),
-    JSON.stringify({ version: "4", domains: [{ id: "d", path: "workspace/d" }], resources: [], projects: [] }, null, 2) + "\n",
+    JSON.stringify({ schema_version: 1, domains: [{ id: "d", path: "workspace/d" }], resources: [], projects: [] }, null, 2) + "\n",
     "utf-8",
   );
   const deps = syntheticDeps([
     {
       path: "templates/workbench/.jspace/hub.json",
-      content: JSON.stringify({ version: "5", domains: [], resources: [], projects: [] }),
+      content: JSON.stringify({ schema_version: 2, domains: [], resources: [], projects: [] }),
       ownership: "user",
     },
     { path: "templates/workbench/AGENTS.md", content: "NEW AGENTS", ownership: "seed" },
   ]);
   expect(() => workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, deps)).toThrow(/no registered migration/);
-  expect(readFileSync(join(root, ".jspace", "hub.json"), "utf-8")).toContain('"version": "4"');
+  expect(readFileSync(join(root, ".jspace", "hub.json"), "utf-8")).toContain('"schema_version": 1');
   expect(readFileSync(join(root, ".jspace", "hub.json"), "utf-8")).toContain('"id": "d"'); // user data untouched
   rmSync(root, { recursive: true, force: true });
 });
@@ -249,13 +249,13 @@ test("dry-run with a no-migration hub gap reports [manual], not a fake [migrate]
   markerOnlyWorkbench(root);
   writeFileSync(
     join(root, ".jspace", "hub.json"),
-    JSON.stringify({ version: "4", domains: [{ id: "d", path: "workspace/d" }], resources: [], projects: [] }, null, 2) + "\n",
+    JSON.stringify({ schema_version: 1, domains: [{ id: "d", path: "workspace/d" }], resources: [], projects: [] }, null, 2) + "\n",
     "utf-8",
   );
   const deps = syntheticDeps([
     {
       path: "templates/workbench/.jspace/hub.json",
-      content: JSON.stringify({ version: "5", domains: [], resources: [], projects: [] }),
+      content: JSON.stringify({ schema_version: 2, domains: [], resources: [], projects: [] }),
       ownership: "user",
     },
   ]);
@@ -273,24 +273,24 @@ test("hub schema migration writes the migrated document, user data preserved, ma
   markerOnlyWorkbench(root);
   writeFileSync(
     join(root, ".jspace", "hub.json"),
-    JSON.stringify({ version: "4", domains: [{ id: "d", path: "workspace/d" }], resources: [], projects: [] }, null, 2) + "\n",
+    JSON.stringify({ schema_version: 1, domains: [{ id: "d", path: "workspace/d" }], resources: [], projects: [] }, null, 2) + "\n",
     "utf-8",
   );
   const deps = syntheticDeps([
     {
       path: "templates/workbench/.jspace/hub.json",
-      content: JSON.stringify({ version: "5", domains: [], resources: [], projects: [] }),
+      content: JSON.stringify({ schema_version: 2, domains: [], resources: [], projects: [] }),
       ownership: "user",
     },
     { path: "templates/workbench/AGENTS.md", content: "NEW AGENTS", ownership: "seed" },
   ]);
   deps.migrations = {
-    "4": (raw: Record<string, unknown>) => ({ ...raw, version: "5", migrated_by: "v5" }),
+    "1": (raw: Record<string, unknown>) => ({ ...raw, schema_version: 2, migrated_by: "v5" }),
   };
   const result = workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, deps);
   expect(result.lines.some((l) => l.includes("upgraded"))).toBe(true);
   const hub = JSON.parse(readFileSync(join(root, ".jspace", "hub.json"), "utf-8"));
-  expect(hub.version).toBe("5");
+  expect(hub.schema_version).toBe(2);
   expect(hub.domains).toEqual([{ id: "d", path: "workspace/d" }]); // user data preserved
   expect(hub.migrated_by).toBe("v5"); // transform applied
   const m = readMarker(root);

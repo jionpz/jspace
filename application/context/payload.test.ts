@@ -9,6 +9,7 @@ const empty: WorkbenchState = {
   domainsDetail: [],
   pendingCount: 0,
   pendingProducers: [],
+  pendingDamaged: 0,
   cronIncidents: [],
   inboxCount: 0,
   hubBroken: false,

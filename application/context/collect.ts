@@ -8,6 +8,7 @@ import { join } from "node:path";
 import type { HubV4 } from "../../core/contracts/hub.ts";
 import type { IncidentCollection } from "../automation/incidents.ts";
 import type { PendingWriteEnvelopeV1 } from "../../core/contracts/pending.ts";
+import type { ContractIssue } from "../../core/contracts/diagnostics.ts";
 import { readIncidents } from "../automation/incidents.ts";
 import { countInbox } from "../registry/inbox.ts";
 import { readEnvelopes } from "../pending/envelope.ts";
@@ -24,6 +25,9 @@ export interface WorkbenchState {
   pendingCount: number;
   /** Producer names of actionable pending writes (for the next-action hint). */
   pendingProducers: string[];
+  /** Damaged pending envelope files (unreadable .APPLY.json) — surfaced like
+   *  damaged incidents/runs, never silently dropped (visible-degradation rule). */
+  pendingDamaged: number;
   /** Open cron incidents (cronId + failureClass). */
   cronIncidents: { cronId: string; failureClass: string }[];
   /** Files in the filehub _inbox (0 when no filehub / empty). */
@@ -37,7 +41,7 @@ export interface CollectDeps {
   readHub: (root: string) => HubV4;
   hubOk: (root: string) => boolean;
   resolveFilehubRoot: (root: string) => string | null;
-  readEnvelopes: (fhRoot: string) => PendingWriteEnvelopeV1[];
+  readEnvelopes: (fhRoot: string) => { records: PendingWriteEnvelopeV1[]; issues: ContractIssue[] };
   readIncidents: (root: string) => IncidentCollection;
   /** Count files in the filehub _inbox (0 when absent/empty). Resolves the
    *  filehub root itself, so it takes root — kept in deps so the collector
@@ -83,6 +87,7 @@ export function collectWorkbenchState(root: string, deps: CollectDeps = realDeps
     domainsDetail: [],
     pendingCount: 0,
     pendingProducers: [],
+    pendingDamaged: 0,
     cronIncidents: [],
     inboxCount: 0,
     hubBroken: false,
@@ -109,10 +114,11 @@ export function collectWorkbenchState(root: string, deps: CollectDeps = realDeps
   try {
     const fh = deps.resolveFilehubRoot(root);
     if (fh !== null) {
-      const envs = deps.readEnvelopes(fh);
-      const actionable = envs.filter((e) => e.status === "staged" || e.status === "terminal_failed");
+      const { records, issues } = deps.readEnvelopes(fh);
+      const actionable = records.filter((e) => e.status === "staged" || e.status === "terminal_failed");
       state.pendingCount = actionable.length;
       state.pendingProducers = [...new Set(actionable.map((e) => e.producer))];
+      state.pendingDamaged = issues.length;
       state.inboxCount = deps.readInboxCount(root);
     }
   } catch {

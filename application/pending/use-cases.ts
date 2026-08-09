@@ -22,7 +22,7 @@ export function pendingStage(root: string, slug: string, contentFile: string, pr
 export function pendingList(root: string, json: boolean): CmdResult {
   const fh = resolveFilehubRoot(root);
   if (!fh) return json ? { lines: [], data: { envelopes: [] } } : { lines: ["jspace: ok: no filehub registered (no pending envelopes)"] };
-  const envs = readEnvelopes(fh);
+  const envs = readEnvelopes(fh).records;
   if (json) return { lines: [], data: { envelopes: envs } };
   if (envs.length === 0) return { lines: ["jspace: ok: no pending envelopes"] };
   return { lines: envs.map((e) => `${e.id}  ${e.status}  retry=${e.retryCount}  ${e.slug}  (${e.producer})`) };

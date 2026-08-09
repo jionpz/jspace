@@ -5,7 +5,7 @@ import type { HubV4 } from "../../core/contracts/hub.ts";
 import { deriveProjectId, resolveProjectId } from "./project.ts";
 
 function hubWith(projects: HubV4["projects"]): HubV4 {
-  return { version: "4" as const, domains: [], resources: [], projects };
+  return { schema_version: 1 as const, domains: [], resources: [], projects };
 }
 
 test("registered project id is used as-is", () => {

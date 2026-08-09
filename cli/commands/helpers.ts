@@ -11,6 +11,10 @@ import { SKILLS_MANIFEST } from "../skills.generated.ts";
 
 export const s = (v: unknown): string => (typeof v === "string" ? v : "");
 export const b = (v: unknown): boolean => v === true;
+/** Optional string argument: "" / missing -> undefined (omitted), else the
+ *  value. Use for optional flags that map to `| undefined` in a call site
+ *  (`s(args.x) || undefined`). */
+export const optS = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined);
 
 export const readFileOrNull = (p: string): string | null => {
   try {

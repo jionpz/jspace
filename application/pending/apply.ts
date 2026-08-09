@@ -33,7 +33,7 @@ function terminal(fhRoot: string, env: PendingWriteEnvelopeV1, error: string): v
  *  page whose content differs, never re-applies a non-staged envelope. */
 export function applyPending(fhRoot: string, gbrain: GbrainDeps, targetId?: string): ApplyResult {
   const res: ApplyResult = { applied: [], deduped: [], failed: [], terminal: [], skipped: [] };
-  const envs = targetId !== undefined ? [readEnvelope(fhRoot, targetId)] : readEnvelopes(fhRoot);
+  const envs = targetId !== undefined ? [readEnvelope(fhRoot, targetId)] : readEnvelopes(fhRoot).records;
   for (const env of envs) {
     if (env.status !== "staged") {
       res.skipped.push(env.id);

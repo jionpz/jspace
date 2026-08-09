@@ -1,9 +1,12 @@
-// core/contracts/hub.ts — portable hub v4 contract + pure typed decoder.
+// core/contracts/hub.ts — portable hub contract + pure typed decoder.
 //
 // Hub is the portable workbench registry: domain/resource/project logical
 // identity only. Machine-local path values live in local.json (core/contracts/local.ts).
-// The decoder is pure and reports every independent issue at once; v3 is
-// explicitly rejected with no implicit migration (upgrade belongs to Child B).
+// Schema version uses the unified numeric `schema_version: number` form (same
+// as every other contract). Legacy `schema_version: 1` (pre-unification string form)
+// is the same schema and reads in transparently so existing workbenches never
+// need a rebuild; anything else (incl. the old explicit-v3 rejection) decodes
+// as damaged.
 import {
   checkNoUnknownFields,
   failure,
@@ -54,7 +57,7 @@ export interface Project {
 }
 
 export interface HubV4 {
-  version: "4";
+  schema_version: 1;
   domains: Domain[];
   resources: Resource[];
   projects: Project[];
@@ -285,12 +288,17 @@ export function decodeHub(input: unknown): DecodeResult<HubV4> {
     issues.add("hub.root.type", "hub", "hub.json root must be an object");
     return failure(issues.issues);
   }
-  checkNoUnknownFields(input, ["version", "domains", "resources", "projects"], "hub", "hub.unknown-field", issues);
+  checkNoUnknownFields(input, ["schema_version", "version", "domains", "resources", "projects"], "hub", "hub.unknown-field", issues);
 
-  if (input.version === "3") {
-    issues.add("hub.version.unsupported", "hub.version", 'version "3" is unsupported; workspace upgrade arrives in a later release (no implicit migration)');
-  } else if (input.version !== "4") {
-    issues.add("hub.version.unsupported", "hub.version", 'version must be "4"');
+  // Schema version: `schema_version: 1` is the unified numeric form (matches
+  // every other contract). Legacy `schema_version: 1` is the same schema and reads
+  // in transparently — existing workbenches are not forced to rebuild.
+  const sv = input.schema_version;
+  const legacy = input.version;
+  if (typeof sv === "number") {
+    if (sv !== 1) issues.add("hub.version.unsupported", "hub.schema_version", "schema_version must be 1");
+  } else if (legacy !== "4") {
+    issues.add("hub.version.unsupported", "hub.schema_version", 'hub.json must carry schema_version: 1 (legacy schema_version: 1 is accepted)');
   }
 
   const domainIds = new Set<string>();
@@ -299,5 +307,5 @@ export function decodeHub(input: unknown): DecodeResult<HubV4> {
   const projects = decodeProjects(input.projects, domainIds, issues);
 
   if (!issues.ok) return failure(issues.issues);
-  return success({ version: "4", domains, resources, projects });
+  return success({ schema_version: 1, domains, resources, projects });
 }

@@ -18,12 +18,14 @@ export function cronLogDir(root: string, id: string): string {
 
 /** Find actionable pending gbrain writes: staged (needs apply) or
  *  terminal_failed (needs ack) envelopes in <filehub>/.jspace-logs/*.APPLY.json.
- *  Applied/acked envelopes no longer alert. */
-export function findPendingApplies(root: string): { root: string | null; paths: string[] } {
+ *  Applied/acked envelopes no longer alert. Damaged envelope files are surfaced
+ *  via issues (like damaged incidents/runs), never silently dropped. */
+export function findPendingApplies(root: string): { root: string | null; paths: string[]; issues: ContractIssue[] } {
   const fh = resolveFilehubRoot(root);
-  if (!fh) return { root: null, paths: [] };
-  const actionable = readEnvelopes(fh).filter((e) => e.status === "staged" || e.status === "terminal_failed");
-  return { root: fh, paths: actionable.map((e) => envelopePath(fh, e.id)) };
+  if (!fh) return { root: null, paths: [], issues: [] };
+  const { records, issues } = readEnvelopes(fh);
+  const actionable = records.filter((e) => e.status === "staged" || e.status === "terminal_failed");
+  return { root: fh, paths: actionable.map((e) => envelopePath(fh, e.id)), issues };
 }
 
 /** `jspace cron status` — last run result per cron (all, or one). */
@@ -62,7 +64,7 @@ export function cronFailures(root: string): CmdResult {
   const suspect = crons.filter((c) => c.status === "suspect").length;
   const neverRun = crons.filter((c) => c.status === "never run").length;
   // damaged state records are attention-worthy, never silently dropped
-  const stateIssues = [...runIssues, ...incidentIssues];
+  const stateIssues = [...runIssues, ...incidentIssues, ...pending.issues];
   // alert only on open (unacknowledged) incidents, actionable pending writes,
   // or damaged machine-state records
   const needsAttention = open.length + pending.paths.length + stateIssues.length;

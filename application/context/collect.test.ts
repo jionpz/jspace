@@ -7,10 +7,10 @@ import { collectWorkbenchState, type CollectDeps } from "./collect.ts";
 
 function stubDeps(over: Partial<CollectDeps> = {}): CollectDeps {
   return {
-    readHub: () => ({ version: "4", domains: [], resources: [], projects: [] }),
+    readHub: () => ({ schema_version: 1, domains: [], resources: [], projects: [] }),
     hubOk: () => true,
     resolveFilehubRoot: () => null,
-    readEnvelopes: () => [],
+    readEnvelopes: () => ({ records: [], issues: [] }),
     readIncidents: () => ({ records: [], issues: [] }),
     readInboxCount: () => 0,
     readDomainSummary: () => null,
@@ -34,7 +34,7 @@ function env(over: Partial<PendingWriteEnvelopeV1>): PendingWriteEnvelopeV1 {
 }
 
 const hubWith = (domains: { id: string; path: string }[]): HubV4 => ({
-  version: "4",
+  schema_version: 1,
   domains,
   resources: [],
   projects: [],
@@ -61,11 +61,14 @@ test("3 domains + 2 pending + 1 open incident + inbox -> all populated", () => {
         ]),
       readDomainSummary: (_r, p) => (p === "workspace/acme" ? "客户交付" : p === "workspace/research" ? "论文跟读" : null),
       resolveFilehubRoot: () => "/fh",
-      readEnvelopes: () => [
-        env({ id: "e1", status: "staged", producer: "asset-ingest" }),
-        env({ id: "e2", status: "terminal_failed", producer: "memory-writeback", retryCount: 2 }),
-        env({ id: "e3", status: "applied", producer: "asset-ingest" }), // not actionable
-      ],
+      readEnvelopes: () => ({
+        records: [
+          env({ id: "e1", status: "staged", producer: "asset-ingest" }),
+          env({ id: "e2", status: "terminal_failed", producer: "memory-writeback", retryCount: 2 }),
+          env({ id: "e3", status: "applied", producer: "asset-ingest" }), // not actionable
+        ],
+        issues: [],
+      }),
       readIncidents: () => ({
         records: [
           { version: 1, id: "i1", cronId: "inbox-tidy", failureClass: "failed", status: "open", openedAt: "2026-08-05T12:00:00", evidence: [] },
@@ -117,4 +120,13 @@ test("incident read throws -> incidents degrade, no throw", () => {
     }),
   );
   expect(s.cronIncidents).toEqual([]);
+});
+
+test("damaged pending envelopes surface as pendingDamaged (P2-6)", () => {
+  const s = collectWorkbenchState("root", stubDeps({
+    resolveFilehubRoot: () => "/fh",
+    readEnvelopes: () => ({ records: [], issues: [{ code: "pending.json.parse", path: "corrupt.APPLY.json", message: "not valid JSON" }] }),
+  }));
+  expect(s.pendingDamaged).toBe(1);
+  expect(s.pendingCount).toBe(0); // actionable count unaffected
 });

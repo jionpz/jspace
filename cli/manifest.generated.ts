@@ -8,7 +8,7 @@ export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   { path: "templates/workbench/.claude/settings.json", sha256: "3f0ebe9a0cc565ac1f1539a81f09056b733e42205f02ccc7fbcedc06c0be7b56", ownership: "seed" },
   { path: "templates/workbench/.gitignore", sha256: "0f2e16c43f69d5da1cbffb1ff533c71f45eebe132b475471f0c014f6d204fd55", ownership: "seed" },
   { path: "templates/workbench/.jspace/cron.json", sha256: "2afcd6aa49354f2f6e55e81071b4f28f7945afd2035672d093c86c24b3cbf7b9", ownership: "user" },
-  { path: "templates/workbench/.jspace/hub.json", sha256: "d30ccf5cbcfd59ef4e5d2d21ef989d59c831587614a6ec66cb2d91c4441b55e7", ownership: "user" },
+  { path: "templates/workbench/.jspace/hub.json", sha256: "56125ed5177d55eae719e876a90cf0299c386c7f571c945c1e6291e808106001", ownership: "user" },
   { path: "templates/workbench/AGENTS.md", sha256: "f5fd1cb16ba5820298f7c4774c662f2786ed9088eeca670f77d4151cfbb6e927", ownership: "seed" },
   { path: "templates/workbench/CLAUDE.md", sha256: "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49", ownership: "seed" },
   { path: "templates/workbench/README.md", sha256: "7eab615fe5a5678e5d71d41ac1d0d80429f1ecfa19bb8d5f0751065d3cbcabfa", ownership: "seed" },

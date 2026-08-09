@@ -37,7 +37,7 @@ function stub(overrides: Partial<GbrainDeps> = {}) {
 }
 
 function statuses(): string[] {
-  return readEnvelopes(fh).map((e) => e.status);
+  return readEnvelopes(fh).records.map((e) => e.status);
 }
 
 test("stage writes a typed APPLY.json envelope (status staged, idempotency key)", () => {
@@ -45,7 +45,7 @@ test("stage writes a typed APPLY.json envelope (status staged, idempotency key)"
   expect(env.status).toBe("staged");
   expect(env.idempotencyKey).toHaveLength(64);
   expect(existsSync(join(fh, ".jspace-logs", `${env.id}.APPLY.json`))).toBe(true);
-  expect(readEnvelopes(fh)).toHaveLength(1);
+  expect(readEnvelopes(fh).records).toHaveLength(1);
 });
 
 test("apply succeeds: put called once, envelope applied", () => {
@@ -82,8 +82,8 @@ test("existing page with DIFFERENT content is never overwritten -> terminal_fail
   const res = applyPending(fh, s.deps);
   expect(s.puts).toHaveLength(0); // no overwrite
   expect(res.terminal).toHaveLength(1);
-  expect(readEnvelopes(fh)[0].status).toBe("terminal_failed");
-  expect(readEnvelopes(fh)[0].error).toContain("different content");
+  expect(readEnvelopes(fh).records[0].status).toBe("terminal_failed");
+  expect(readEnvelopes(fh).records[0].error).toContain("different content");
 });
 
 test("existing EMPTY page counts as absent -> put proceeds (not terminal)", () => {
@@ -99,15 +99,15 @@ test("put failure retries then reaches terminal_failed at MAX_RETRY", () => {
   stageEnvelope(fh, "asset-ingest", "assets/foo/doc", "content");
   const fail = stub({ put: () => ({ ok: false, error: "gbrain lock held" }) });
   applyPending(fh, fail.deps); // retry 1 -> stays staged
-  expect(readEnvelopes(fh)[0].status).toBe("staged");
-  expect(readEnvelopes(fh)[0].retryCount).toBe(1);
+  expect(readEnvelopes(fh).records[0].status).toBe("staged");
+  expect(readEnvelopes(fh).records[0].retryCount).toBe(1);
   applyPending(fh, fail.deps); // retry 2 -> stays staged
-  expect(readEnvelopes(fh)[0].status).toBe("staged");
-  expect(readEnvelopes(fh)[0].retryCount).toBe(2);
+  expect(readEnvelopes(fh).records[0].status).toBe("staged");
+  expect(readEnvelopes(fh).records[0].retryCount).toBe(2);
   const res = applyPending(fh, fail.deps); // retry 3 -> terminal_failed
   expect(res.terminal).toHaveLength(1);
-  expect(readEnvelopes(fh)[0].status).toBe("terminal_failed");
-  expect(readEnvelopes(fh)[0].retryCount).toBe(3);
+  expect(readEnvelopes(fh).records[0].status).toBe("terminal_failed");
+  expect(readEnvelopes(fh).records[0].retryCount).toBe(3);
   // subsequent applies skip it entirely
   const again = applyPending(fh, fail.deps);
   expect(again.skipped).toHaveLength(1);
@@ -117,7 +117,7 @@ test("put failure retries then reaches terminal_failed at MAX_RETRY", () => {
 test("terminal_failed envelope stays terminal until acked (ack is the use-case)", () => {
   const env = stageEnvelope(fh, "asset-ingest", "assets/foo/doc", "content");
   writeEnvelope(fh, { ...env, status: "terminal_failed", error: "x" });
-  expect(readEnvelopes(fh)[0].status).toBe("terminal_failed");
+  expect(readEnvelopes(fh).records[0].status).toBe("terminal_failed");
   const s = stub();
   const res = applyPending(fh, s.deps);
   expect(res.skipped).toHaveLength(1); // terminal_failed is never re-applied
@@ -129,6 +129,6 @@ test("applying a specific id only touches that envelope", () => {
   const s = stub();
   const res = applyPending(fh, s.deps, a.id);
   expect(res.applied).toEqual([a.id]);
-  expect(readEnvelopes(fh).map((e) => e.id).sort()).toEqual([a.id, b.id].sort());
-  expect(readEnvelopes(fh).find((e) => e.id === b.id)!.status).toBe("staged");
+  expect(readEnvelopes(fh).records.map((e) => e.id).sort()).toEqual([a.id, b.id].sort());
+  expect(readEnvelopes(fh).records.find((e) => e.id === b.id)!.status).toBe("staged");
 });

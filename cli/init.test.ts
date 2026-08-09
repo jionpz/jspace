@@ -61,9 +61,9 @@ test("init creates portable marker v1 and machine-local v1", () => {
   expect(local.bindings).toEqual({});
   expect(decodeLocal(local).ok).toBe(true);
 
-  // the materialized template hub is v4 (embedded assets are in sync)
+  // the materialized template hub uses schema_version 1 (embedded assets in sync)
   const hub = JSON.parse(readFileSync(join(root, ".jspace", "hub.json"), "utf-8"));
-  expect(hub.version).toBe("4");
+  expect(hub.schema_version).toBe(1);
   expect(hub.projects).toEqual([]);
   expect(decodeHub(hub).ok).toBe(true);
 
@@ -81,7 +81,7 @@ test("workbench template hub is v4 and gitignore ignores local state", () => {
   const hub = JSON.parse(
     readFileSync(join(repo, "templates/workbench/.jspace/hub.json"), "utf-8"),
   );
-  expect(hub.version).toBe("4");
+  expect(hub.schema_version).toBe(1);
   expect(hub.domains).toEqual([]);
   expect(hub.resources).toEqual([]);
   expect(hub.projects).toEqual([]);
@@ -100,7 +100,7 @@ test("cloned workbench without local.json reports local missing and unbound bind
     join(jspace, "hub.json"),
     JSON.stringify(
       {
-        version: "4",
+        schema_version: 1,
         domains: [{ id: "files", path: "workspace/files" }],
         resources: [
           {

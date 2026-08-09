@@ -26,7 +26,7 @@ beforeEach(() => {
       created_at: "2026-08-05",
     }),
   );
-  writeFileSync(join(root, ".jspace", "hub.json"), JSON.stringify({ version: "4", domains: [], resources: [], projects: [] }));
+  writeFileSync(join(root, ".jspace", "hub.json"), JSON.stringify({ schema_version: 1, domains: [], resources: [], projects: [] }));
 });
 afterEach(() => {
   rmSync(root, { recursive: true, force: true });
@@ -111,7 +111,7 @@ test("filehub registered with unfiled _inbox -> filehub.inbox_unfiled", () => {
   writeFileSync(
     join(root, ".jspace", "hub.json"),
     JSON.stringify({
-      version: "4",
+      schema_version: 1,
       domains: [{ id: "files", path: "workspace/files" }],
       resources: [{ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] }],
       projects: [],
@@ -132,7 +132,7 @@ test("nested _inbox dir counts as ONE item (top-level semantics; single countInb
   writeFileSync(
     join(root, ".jspace", "hub.json"),
     JSON.stringify({
-      version: "4",
+      schema_version: 1,
       domains: [{ id: "files", path: "workspace/files" }],
       resources: [{ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] }],
       projects: [],
@@ -149,6 +149,25 @@ test("nested _inbox dir counts as ONE item (top-level semantics; single countInb
   const diag = (r.data as { diagnostics: { code: string; message: string }[] }).diagnostics.find((d) => d.code === "filehub.inbox_unfiled");
   expect(diag).toBeDefined();
   expect(diag!.message).toContain("2 unfiled file(s)");
+});
+
+test("malformed .APPLY.json -> filehub.pending_decode warning (P2-6)", () => {
+  writeFileSync(
+    join(root, ".jspace", "hub.json"),
+    JSON.stringify({
+      schema_version: 1,
+      domains: [{ id: "files", path: "workspace/files" }],
+      resources: [{ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] }],
+      projects: [],
+    }),
+  );
+  const fh = join(root, "filehub");
+  mkdirSync(join(fh, ".jspace-logs"), { recursive: true });
+  writeFileSync(join(fh, ".jspace-logs", "corrupt.APPLY.json"), "{ not json", "utf-8");
+  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
+  const r = doctorWorkbench(root, stubDeps());
+  const diags = (r.data as { diagnostics: { code: string }[] }).diagnostics;
+  expect(diags.some((d) => d.code === "filehub.pending_decode")).toBe(true);
 });
 
 test("orphan skill dir without journal record -> skills.orphan_dir", () => {
@@ -351,7 +370,7 @@ test("stale filehub project -> filehub.project_stale (info); fresh -> none", () 
   writeFileSync(
     join(root, ".jspace", "hub.json"),
     JSON.stringify({
-      version: "4",
+      schema_version: 1,
       domains: [{ id: "files", path: "workspace/files" }],
       resources: [{ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] }],
       projects: [],

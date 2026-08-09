@@ -18,7 +18,7 @@ beforeEach(() => {
   writeFileSync(
     join(wb, ".jspace", "hub.json"),
     JSON.stringify({
-      version: "4",
+      schema_version: 1,
       domains: [{ id: "files", path: "workspace/files" }],
       resources: [{ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] }],
       projects: [],
@@ -35,12 +35,12 @@ function contentFile(body = "page content"): string {
 }
 
 function id(): string {
-  return readEnvelopes(fh)[0].id;
+  return readEnvelopes(fh).records[0].id;
 }
 
 test("stage writes an envelope; list reports it", () => {
   pendingStage(wb, "assets/foo/doc", contentFile(), "asset-ingest");
-  expect(readEnvelopes(fh)).toHaveLength(1);
+  expect(readEnvelopes(fh).records).toHaveLength(1);
   const res = pendingList(wb, true);
   expect((res.data as { envelopes: unknown[] }).envelopes).toHaveLength(1);
 });
@@ -51,7 +51,7 @@ test("apply with a stub gbrain puts once and marks applied", () => {
   const stub: GbrainDeps = { get: () => ({ ok: false }), put: () => ({ ok: true }) };
   const res = pendingApply(wb, undefined, stub);
   expect(res.lines[0]).toContain("applied 1");
-  expect(readEnvelopes(fh)[0].status).toBe("applied");
+  expect(readEnvelopes(fh).records[0].status).toBe("applied");
   void envId;
 });
 
@@ -60,11 +60,11 @@ test("ack only accepts terminal_failed and stops alerting", () => {
   const envId = id();
   expect(() => pendingAck(wb, envId)).toThrow(/only terminal_failed can be acked/);
   // force terminal then ack
-  const env = readEnvelopes(fh)[0];
+  const env = readEnvelopes(fh).records[0];
   writeEnvelope(fh, { ...env, status: "terminal_failed", error: "x" });
   const ack = pendingAck(wb, envId);
   expect(ack.lines[0]).toContain("acknowledged");
-  expect(readEnvelopes(fh)[0].status).toBe("acked");
+  expect(readEnvelopes(fh).records[0].status).toBe("acked");
 });
 
 test("stage requires an existing content file", () => {

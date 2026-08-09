@@ -136,7 +136,7 @@ export function ingestStatus(root: string, id: string, json: boolean): CmdResult
 }
 
 export function ingestList(root: string, json: boolean): CmdResult {
-  const journals = readJournals(root);
+  const journals = readJournals(root).records;
   if (json) {
     return { lines: [], data: { journals } };
   }

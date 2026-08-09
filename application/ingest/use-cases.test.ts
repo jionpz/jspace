@@ -24,7 +24,7 @@ beforeEach(() => {
   writeFileSync(
     join(wb, ".jspace", "hub.json"),
     JSON.stringify({
-      version: "4",
+      schema_version: 1,
       domains: [{ id: "files", path: "workspace/files" }],
       resources: [{ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] }],
       projects: [{ id: "foo", domain: "files", asset_rel_path: "projects/foo", status: "active" }],
@@ -41,7 +41,7 @@ function sourceFile(name = "doc.txt", content = "ingestable content\n"): string 
 }
 
 function journalId(): string {
-  return readJournals(wb)[0].id;
+  return readJournals(wb).records[0].id;
 }
 
 test("begin stages a copy, keeps source, uses registered project id (no warning)", () => {
@@ -50,7 +50,7 @@ test("begin stages a copy, keeps source, uses registered project id (no warning)
   const res = ingestBegin(wb, { file: src, target, slug: "assets/foo/doc", project: "foo" });
   expect(res.lines.some((l) => l.includes("ingest staged"))).toBe(true);
   expect(res.lines.some((l) => l.includes("warn: project"))).toBe(false); // registered
-  expect(readJournals(wb)[0].projectId).toBe("foo");
+  expect(readJournals(wb).records[0].projectId).toBe("foo");
   expect(existsSync(target)).toBe(true); // staged copy
   expect(existsSync(src)).toBe(true); // source stays in inbox
 });
@@ -59,7 +59,7 @@ test("unregistered project derives id + warns", () => {
   const src = sourceFile();
   const res = ingestBegin(wb, { file: src, target: join(projDir, "x.txt"), slug: "assets/foo/x", project: "Acme 报价" });
   expect(res.lines.some((l) => l.includes("warn: project Acme 报价 is not registered"))).toBe(true);
-  expect(readJournals(wb)[0].projectId).toBe("acme"); // Latin prefix slugs; pure CJK uses hash fallback (see project.test.ts)
+  expect(readJournals(wb).records[0].projectId).toBe("acme"); // Latin prefix slugs; pure CJK uses hash fallback (see project.test.ts)
 });
 
 test("full chain begin→gbrain→index→committed removes source from inbox", () => {
@@ -71,7 +71,7 @@ test("full chain begin→gbrain→index→committed removes source from inbox", 
   expect(ingestAdvance(wb, id, "index").lines[0]).toContain("-> index");
   expect(ingestAdvance(wb, id, "committed").lines[0]).toContain("committed");
   expect(existsSync(src)).toBe(false); // source removed at commit
-  expect(readJournals(wb)[0].status).toBe("committed");
+  expect(readJournals(wb).records[0].status).toBe("committed");
 });
 
 test("fail at staged compensates (target removed, source stays), exitCode 1", () => {
@@ -84,7 +84,7 @@ test("fail at staged compensates (target removed, source stays), exitCode 1", ()
   expect(res.lines.some((l) => l.includes("compensated: removed staged target"))).toBe(true);
   expect(existsSync(target)).toBe(false); // staged copy compensated
   expect(existsSync(src)).toBe(true); // source stays, retryable
-  expect(readJournals(wb)[0].status).toBe("failed");
+  expect(readJournals(wb).records[0].status).toBe("failed");
 });
 
 test("duplicate begin after commit is skipped; re-begin of in-progress resumes", () => {
@@ -97,7 +97,7 @@ test("duplicate begin after commit is skipped; re-begin of in-progress resumes",
   ingestAdvance(wb, id, "committed");
   const again = ingestBegin(wb, { file: src, target, slug: "assets/foo/doc", project: "foo" });
   expect(again.lines.some((l) => l.includes("already ingested"))).toBe(true);
-  expect(readJournals(wb)).toHaveLength(1);
+  expect(readJournals(wb).records).toHaveLength(1);
 });
 
 test("status json + list report journals", () => {
@@ -118,7 +118,7 @@ test("rollback abandons a staged ingest; source stays, target removed", () => {
   ingestRollback(wb, id);
   expect(existsSync(target)).toBe(false);
   expect(existsSync(src)).toBe(true);
-  expect(readJournals(wb)[0].status).toBe("failed");
+  expect(readJournals(wb).records[0].status).toBe("failed");
 });
 
 // ---- cleanup-pending recovery (R1) ----
@@ -143,7 +143,7 @@ test("ingestAdvance reports unlink failure as non-zero with a retry action, then
   expect(res.lines.some((l) => l.includes("source NOT removed"))).toBe(true);
   expect(res.lines.some((l) => l.includes("--complete"))).toBe(true); // exact retry action
   expect(res.errors?.some((e) => e.includes("source cleanup failed"))).toBe(true);
-  const j = readJournals(wb)[0];
+  const j = readJournals(wb).records[0];
   expect(j.status).toBe("failed");
   expect(j.failedStep).toBe("committed"); // cleanup-pending machine state
   expect(j.failureReason).toContain("source cleanup pending");
@@ -151,7 +151,7 @@ test("ingestAdvance reports unlink failure as non-zero with a retry action, then
   rmSync(src, { recursive: true, force: true });
   const res2 = ingestAdvance(wb, id, "committed");
   expect(res2.exitCode ?? 0).toBe(0);
-  expect(readJournals(wb)[0].status).toBe("committed");
+  expect(readJournals(wb).records[0].status).toBe("committed");
 });
 
 test("ingestBegin on a cleanup-pending source directs to finish cleanup, no second journal", () => {
@@ -166,7 +166,7 @@ test("ingestBegin on a cleanup-pending source directs to finish cleanup, no seco
   const again = ingestBegin(wb, { file: src, target, slug: "assets/foo/doc", project: "foo" });
   expect(again.exitCode).toBe(1);
   expect(again.lines.some((l) => l.includes("--complete"))).toBe(true);
-  expect(readJournals(wb)).toHaveLength(1); // no second journal / re-stage
+  expect(readJournals(wb).records).toHaveLength(1); // no second journal / re-stage
 });
 
 test("ingest list/status surface cleanup-pending and its retry action; JSON shape unchanged", () => {

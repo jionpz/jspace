@@ -13,6 +13,7 @@ import {
 import { sha256Of } from "../workspace/manifest.ts";
 import { localStamp } from "../time.ts";
 import { readJsonRecords } from "../fs.ts";
+import type { ContractIssue } from "../../core/contracts/diagnostics.ts";
 
 export const PENDING_LOG_DIR = ".jspace-logs";
 
@@ -24,19 +25,21 @@ export function envelopePath(fhRoot: string, id: string): string {
   return join(envelopesDir(fhRoot), `${id}${ENVELOPE_EXT}`);
 }
 
-export function readEnvelopes(fhRoot: string): PendingWriteEnvelopeV1[] {
+export function readEnvelopes(fhRoot: string): { records: PendingWriteEnvelopeV1[]; issues: ContractIssue[] } {
   // deterministic order: createdAt then id — readdir order differs across
   // filesystems (APFS vs ext4) and a createdAt tie must not make the order
   // filesystem-dependent (CI caught a flaky order in cron.test.ts).
+  // Damaged envelopes are surfaced via issues (never silently dropped) — the
+  // health surface (doctor / cron check / context) merges them in.
   return readJsonRecords(envelopesDir(fhRoot), {
     ext: ENVELOPE_EXT,
     decode: decodePendingEnvelope,
     sort: (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
-  }).records;
+  });
 }
 
 export function readEnvelope(fhRoot: string, id: string): PendingWriteEnvelopeV1 {
-  const env = readEnvelopes(fhRoot).find((e) => e.id === id);
+  const env = readEnvelopes(fhRoot).records.find((e) => e.id === id);
   if (!env) throw new Error(`no pending envelope: ${id}`);
   return env;
 }

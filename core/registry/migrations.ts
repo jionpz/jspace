@@ -6,13 +6,15 @@
 // If no migration is registered for a version gap, upgrade fails WITHOUT
 // touching the file — the user must migrate manually.
 
-/** Current portable hub schema version (matches core/contracts/hub.ts). */
-export const HUB_SCHEMA_VERSION = "4";
+/** Current portable hub schema version (matches core/contracts/hub.ts). The
+ *  version axis is the unified numeric `schema_version`; legacy `schema_version: 1`
+ *  is treated as schema_version 1. */
+export const HUB_SCHEMA_VERSION = "1";
 
 export type HubTransform = (raw: Record<string, unknown>) => Record<string, unknown>;
 
 /** from-version -> transform producing the next schema version. Empty today
- *  (no v5 yet); a future v5 registers `"4": (raw) => ({ ...raw, version: "5" })`
+ *  (no v2 yet); a future v2 registers `"1": (raw) => ({ ...raw, schema_version: 2 })`
  *  and chained steps as needed. Upgrade injects this via UpgradeDeps for tests. */
 const MIGRATIONS: Record<string, HubTransform> = {};
 
@@ -26,8 +28,15 @@ export interface MigrationOutcome {
   document?: Record<string, unknown>;
 }
 
+/** Version of a hub document for migration comparisons: unified
+ *  `schema_version: number`, or legacy `version` string. */
+function docVersion(doc: Record<string, unknown>): string {
+  if (typeof doc.schema_version === "number") return String(doc.schema_version);
+  return String(doc.version);
+}
+
 /** Migrate an installed hub document from its schema version to `toVersion`.
- *  - from === to -> "unchanged" (identity; the common v4->v4 case).
+ *  - from === to -> "unchanged" (identity; the common 1->1 case).
  *  - a registered step chain leads to `toVersion` -> "migrated" + document.
  *  - the gap has no registered migration -> "no-migration" (caller must not
  *    rewrite the file).
@@ -47,8 +56,8 @@ export function migrateHubSchema(
   }
   let doc = registered[fromVersion](raw);
   let guard = 0;
-  while (String(doc.version) !== toVersion) {
-    const next = String(doc.version);
+  while (docVersion(doc) !== toVersion) {
+    const next = docVersion(doc);
     const step = registered[next];
     if (step === undefined || guard++ > 8) {
       return { status: "no-migration", from: fromVersion, to: toVersion };

@@ -83,7 +83,7 @@ test("begin copies a staged target, keeps source in inbox, journal=staged", () =
   expect(t.copied).toEqual([`${src}->${plan(src).target}`]);
   expect(res.journal.status).toBe("staged");
   expect(existsSync(src)).toBe(true); // source stays in inbox
-  expect(readJournals(root)).toHaveLength(1);
+  expect(readJournals(root).records).toHaveLength(1);
 });
 
 test("full advance staged→gbrain→index→committed removes the source", () => {
@@ -120,7 +120,7 @@ test("duplicate ingest (same content+relPath, committed) is skipped idempotently
   completeIngest(root, first.journal.id, t.ops);
   const again = beginIngest(root, plan(src), t.ops);
   expect(again.kind).toBe("duplicate");
-  expect(readJournals(root)).toHaveLength(1); // no second journal, no second page
+  expect(readJournals(root).records).toHaveLength(1); // no second journal, no second page
 });
 
 test("re-begin of an in-progress file resumes (no re-copy)", () => {
@@ -286,7 +286,7 @@ test("begin on a cleanup-pending source does not create a second journal", () =>
   expect(completeIngest(root, first.journal.id, failOps.ops).kind).toBe("cleanup-pending");
   const again = beginIngest(root, plan(src), failOps.ops);
   expect(again.kind).toBe("cleanup-pending");
-  expect(readJournals(root)).toHaveLength(1); // no second journal, no re-stage
+  expect(readJournals(root).records).toHaveLength(1); // no second journal, no re-stage
   expect(isCleanupPending(readJournal(root, first.journal.id))).toBe(true);
 });
 
@@ -367,7 +367,7 @@ test("fail at index is NOT cleanup-pending; --complete refuses; re-begin recover
   // retry: re-begin stages a fresh journal; the source is still in inbox
   const again = beginIngest(root, plan(src), t.ops);
   expect(again.kind).toBe("created");
-  expect(readJournals(root)).toHaveLength(2);
+  expect(readJournals(root).records).toHaveLength(2);
   expect(existsSync(src)).toBe(true);
 });
 
@@ -375,7 +375,7 @@ test("copy failure at begin does not write a journal", () => {
   const src = sourceFile();
   const t = track({ copyFile: () => { throw new Error("disk full"); } });
   expect(() => beginIngest(root, plan(src), t.ops)).toThrow(/disk full/);
-  expect(readJournals(root)).toHaveLength(0);
+  expect(readJournals(root).records).toHaveLength(0);
 });
 
 test("sha256File is byte-level (matches shasum, not utf-8 text hash)", () => {

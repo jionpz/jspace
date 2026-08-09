@@ -9,7 +9,7 @@ import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
 import { ASSETS } from "../assets.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
-import { b, cronDeps, readFileOrNull, s } from "./helpers.ts";
+import { b, cronDeps, optS, readFileOrNull, s } from "./helpers.ts";
 import { userSkillsRoot } from "./skills.ts";
 
 /** After a successful workbench upgrade, refresh the user-level ~/.agents/skills/
@@ -75,7 +75,7 @@ const workspaceUpgradeSpec: CommandSpec = {
       {
         dryRun: b(args.dryRun),
         acceptConflicts: b(args.acceptConflicts),
-        rollbackId: s(args.rollback) || undefined,
+        rollbackId: optS(args.rollback),
       },
       { manifest: BUNDLE_MANIFEST, assets: ASSETS, readFile: readFileOrNull, writeFile: (p, c) => writeBytesAtomic(p, c) },
     );

@@ -25,7 +25,7 @@ function makeWorkbench(opts: {
   if (opts.filehub) {
     resources.push({ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] });
   }
-  writeFileSync(join(wb, ".jspace", "hub.json"), JSON.stringify({ version: "4", domains: [{ id: "files", path: "workspace/files" }], resources, projects: [] }));
+  writeFileSync(join(wb, ".jspace", "hub.json"), JSON.stringify({ schema_version: 1, domains: [{ id: "files", path: "workspace/files" }], resources, projects: [] }));
   if (opts.filehub) {
     writeFileSync(join(wb, ".jspace", "local.json"), JSON.stringify({ version: 1, installation_id: "inst", bindings: { "filehub-path": fh } }));
   }
@@ -98,9 +98,9 @@ test("filehubRoot resolution: unregistered -> null; registered -> primary path",
 
 test("findPendingApplies: empty unless filehub has APPLY.json", () => {
   const wb = makeWorkbench({});
-  expect(findPendingApplies(wb)).toEqual({ root: null, paths: [] });
+  expect(findPendingApplies(wb)).toEqual({ root: null, paths: [], issues: [] });
   const wb2 = makeWorkbench({ filehub: true });
-  expect(findPendingApplies(wb2)).toEqual({ root: join(wb2, "filehub"), paths: [] });
+  expect(findPendingApplies(wb2)).toEqual({ root: join(wb2, "filehub"), paths: [], issues: [] });
   rmSync(wb, { recursive: true, force: true });
   rmSync(wb2, { recursive: true, force: true });
 });
@@ -177,5 +177,17 @@ test("cronFailures: damaged run record -> damaged_state diagnostics, warnings, e
   const data = r.data as FailureData & { damaged_state: unknown[]; summary: { damaged_state: number } };
   expect(data.damaged_state).toHaveLength(1);
   expect(data.summary.damaged_state).toBe(1);
+  rmSync(wb, { recursive: true, force: true });
+});
+
+test("damaged pending envelope (.APPLY.json malformed) -> cron check reports damaged_state (P2-6)", () => {
+  const wb = makeWorkbench({ filehub: true, crons: ["x"] });
+  const fh = join(wb, "filehub");
+  mkdirSync(join(fh, ".jspace-logs"), { recursive: true });
+  writeFileSync(join(fh, ".jspace-logs", "corrupt.APPLY.json"), "{ not json", "utf-8");
+  const r = cronFailures(wb);
+  const d = r.data as FailureData & { damaged_state: { code: string }[] };
+  expect(d.damaged_state.some((s) => s.code.includes("APPLY"))).toBe(true);
+  expect(r.exitCode).toBe(1); // needs attention
   rmSync(wb, { recursive: true, force: true });
 });

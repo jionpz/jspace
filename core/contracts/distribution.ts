@@ -1,7 +1,8 @@
 // core/contracts/distribution.ts — distribution manifest base contract + decoder.
 //
-// Child A only defines and tests the typed base contract. Manifest generation,
-// embedded-asset location and diff/upgrade conflict policy are decided by Child B.
+// This contract only defines the typed base shape + decoder. Manifest
+// generation and embedded-asset location live in cli (generated manifests);
+// diff/upgrade conflict policy lives in application/workspace.
 import {
   checkNoUnknownFields,
   failure,

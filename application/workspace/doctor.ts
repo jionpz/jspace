@@ -1,8 +1,10 @@
 // application/workspace/doctor.ts — `jspace doctor` use case.
-// Business logic moved out of cli/cmds.ts cmdDoctor. Cron checks are injected
-// (cli/cron.ts still owns the scheduler surface until Child C); everything here
-// is read-only diagnostics with severity-tagged output. JSON output carries the
-// full diagnostics (code/severity/path) so scripts can classify errors.
+// Business logic moved out of cli/cmds.ts cmdDoctor; cron checks are injected.
+// Everything here is read-only diagnostics with severity-tagged output. The
+// workbench lifecycle checks live here; cross-domain health checks are factored
+// into focused check* functions (one responsibility each) so doctorWorkbench
+// only orchestrates + aggregates severity. JSON output carries the full
+// diagnostics (code/severity/path) so scripts can classify errors.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { CmdResult } from "../commands/command.ts";
@@ -19,7 +21,7 @@ import { readMaterializedJournal } from "./journal.ts";
 import { SKILL_PROJECTIONS } from "./manifest.ts";
 import { gbrainServer, gbrainSkillsDirWired } from "../gbrain/wiring.ts";
 
-/** Minimal cron view consumed by doctor; full cron surface lives in Child C. */
+/** Minimal cron view consumed by doctor; full cron surface lives in the scheduler. */
 export interface CronLike {
   id: string;
   schedule: string;
@@ -39,6 +41,8 @@ export interface CronHealthDeps {
    *  touching the machine-level file itself. */
   readUserClaudeJson?: () => unknown | null;
 }
+
+type WorkbenchReads = ReturnType<typeof readWorkbenchState>;
 
 // Retirement thresholds (design §5). Deliberately conservative: mtime is
 // rewritten by git clone / cloud-sync, so a false "stale" would be noise.
@@ -134,51 +138,92 @@ function diffDirs(a: string, b: string): string[] {
   return out;
 }
 
-export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
-  const reads = readWorkbenchState(root);
-  const env: InspectEnv = {
-    root,
-    hub: reads.hub,
-    marker: reads.marker,
-    local: reads.local,
-    pathExists: existsSync,
-    isFile,
-    readJson: (p) => JSON.parse(readFileSync(p, "utf-8")),
-  };
-  const diags: RegistryDiagnostic[] = [...inspectWorkbench(env)];
+/** Registered filehub root for a workbench, or null when unregistered/broken.
+ *  Shared by the filehub resource-level, inbox and pending checks. */
+function resolveFhRoot(reads: WorkbenchReads): string | null {
+  if (reads.hub.status !== "ok") return null;
+  const local = reads.local.status === "ok" ? reads.local.value : null;
+  const effective = resolveEffectiveRegistry(reads.hub.value, local, { pathExists: existsSync });
+  return primaryPathForResourceType(effective, "filehub");
+}
 
-  // filehub asset-layer checks (info for unregistered, warnings for broken/inbox).
-  if (reads.hub.status === "ok") {
-    const local = reads.local.status === "ok" ? reads.local.value : null;
-    const effective = resolveEffectiveRegistry(reads.hub.value, local, { pathExists: existsSync });
-    const fhRoot = primaryPathForResourceType(effective, "filehub");
-    if (!fhRoot) {
-      // unregistered is an unconfigured optional resource (asset-ingest falls
-      // back to the degraded staging area by design), not a health problem.
-      diags.push({
-        severity: "info",
-        code: "filehub.unregistered",
-        path: "resources",
-        message: "no filehub resource registered (type=filehub); asset-ingest falls back to the degraded staging area",
-      });
-    } else {
-      const inboxDir = join(fhRoot, "_inbox");
-      if (!existsSync(inboxDir) || !statSync(inboxDir).isDirectory()) {
-        diags.push({ severity: "warning", code: "filehub.inbox_missing", path: `filehub.${fhRoot}`, message: `filehub: _inbox missing: ${inboxDir}` });
-      } else {
-        const unfiled = countInbox(inboxDir);
-        if (unfiled > 0) {
-          diags.push({ severity: "warning", code: "filehub.inbox_unfiled", path: `filehub.${fhRoot}`, message: `filehub: _inbox has ${unfiled} unfiled file(s); run asset-ingest ("整理一下 inbox")` });
-        }
-      }
-      // actionable pending gbrain writes (staged needs apply; terminal_failed
-      // needs ack). applied/acked no longer alert.
-      const actionable = readEnvelopes(fhRoot).filter((e) => e.status === "staged" || e.status === "terminal_failed");
-      if (actionable.length > 0) {
-        diags.push({ severity: "warning", code: "filehub.pending_applies", path: `filehub.${fhRoot}/.jspace-logs`, message: `filehub: ${actionable.length} actionable pending gbrain write(s); apply with "jspace pending apply", ack terminal_failed with "jspace pending ack"` });
+/** filehub resource-level health: unregistered (info), _inbox state, stale
+ *  projects (info nudge). Read-only; never throws. */
+function checkInbox(reads: WorkbenchReads): RegistryDiagnostic[] {
+  const diags: RegistryDiagnostic[] = [];
+  const fhRoot = resolveFhRoot(reads);
+  if (!fhRoot) {
+    // unregistered is an unconfigured optional resource (asset-ingest falls
+    // back to the degraded staging area by design), not a health problem.
+    diags.push({
+      severity: "info",
+      code: "filehub.unregistered",
+      path: "resources",
+      message: "no filehub resource registered (type=filehub); asset-ingest falls back to the degraded staging area",
+    });
+    return diags;
+  }
+  const inboxDir = join(fhRoot, "_inbox");
+  if (!existsSync(inboxDir) || !statSync(inboxDir).isDirectory()) {
+    diags.push({ severity: "warning", code: "filehub.inbox_missing", path: `filehub.${fhRoot}`, message: `filehub: _inbox missing: ${inboxDir}` });
+  } else {
+    const unfiled = countInbox(inboxDir);
+    if (unfiled > 0) {
+      diags.push({ severity: "warning", code: "filehub.inbox_unfiled", path: `filehub.${fhRoot}`, message: `filehub: _inbox has ${unfiled} unfiled file(s); run asset-ingest ("整理一下 inbox")` });
+    }
+  }
+  // stale filehub projects (candidate for archive/<年>/)
+  const now = Date.now();
+  const projectsDir = join(fhRoot, "projects");
+  if (existsSync(projectsDir) && statSync(projectsDir).isDirectory()) {
+    for (const name of readdirSync(projectsDir)) {
+      if (name.startsWith(".")) continue;
+      const p = join(projectsDir, name);
+      if (!statSync(p).isDirectory()) continue;
+      const last = lastActivityMs(p);
+      if (last === 0) continue;
+      const days = (now - last) / 86_400_000;
+      if (days >= PROJECT_STALE_DAYS) {
+        diags.push({
+          severity: "info",
+          code: "filehub.project_stale",
+          path: `filehub.projects.${name}`,
+          message: `filehub project ${name} untouched for ${Math.round(days)}d (≥${PROJECT_STALE_DAYS}d); archive to archive/<年>/ if closed — see jspace-use 8.6`,
+        });
       }
     }
   }
+  return diags;
+}
+
+/** Pending gbrain write envelopes: damaged files + actionable (staged /
+ *  terminal_failed). Damaged envelopes surface as warnings (visible-degradation). */
+function checkPending(reads: WorkbenchReads): RegistryDiagnostic[] {
+  const diags: RegistryDiagnostic[] = [];
+  const fhRoot = resolveFhRoot(reads);
+  if (!fhRoot) return diags;
+  const envRead = readEnvelopes(fhRoot);
+  for (const issue of envRead.issues) {
+    diags.push({
+      severity: "warning",
+      code: "filehub.pending_decode",
+      path: `filehub.${issue.path}`,
+      message: `pending envelope unreadable: ${issue.message}`,
+    });
+  }
+  // actionable pending gbrain writes (staged needs apply; terminal_failed needs
+  // ack). applied/acked no longer alert.
+  const actionable = envRead.records.filter((e) => e.status === "staged" || e.status === "terminal_failed");
+  if (actionable.length > 0) {
+    diags.push({ severity: "warning", code: "filehub.pending_applies", path: `filehub.${fhRoot}/.jspace-logs`, message: `filehub: ${actionable.length} actionable pending gbrain write(s); apply with "jspace pending apply", ack terminal_failed with "jspace pending ack"` });
+  }
+  return diags;
+}
+
+/** Skill materialization health: orphan dirs, harness projection drift, legacy
+ *  root copies, and the claude harness pointer (CLAUDE.md + context hooks). */
+function checkSkills(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
+  const diags: RegistryDiagnostic[] = [];
 
   // orphan skill dirs under .jspace/skills/ (official managed area). A directory
   // that is neither an official workbench skill nor recorded in the materialization
@@ -343,84 +388,65 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
     }
   }
 
-  // Long-term-use health (info level, design §5): dormant domains and stale
-  // filehub projects. These are "take a look" nudges, never assertions — mtime
-  // is rewritten by git clone / cloud-sync, so thresholds stay conservative.
-  {
-    const now = Date.now();
-    // domain.dormant: workspace/<d>/ has no file touched within the window.
-    const workspaceDir = join(root, "workspace");
-    if (existsSync(workspaceDir) && statSync(workspaceDir).isDirectory()) {
-      for (const name of readdirSync(workspaceDir)) {
-        if (name.startsWith(".")) continue;
-        const p = join(workspaceDir, name);
-        if (!statSync(p).isDirectory()) continue;
-        const last = lastActivityMs(p);
-        if (last === 0) continue; // empty/unreadable: nothing to judge
-        const days = (now - last) / 86_400_000;
-        if (days >= DOMAIN_DORMANT_DAYS) {
-          diags.push({
-            severity: "info",
-            code: "domain.dormant",
-            path: `domain.${name}`,
-            message: `domain workspace/${name} has not been touched in ${Math.round(days)}d (≥${DOMAIN_DORMANT_DAYS}d); archive/merge or update it — see jspace-use 8.6`,
-          });
-        }
-      }
-    }
-    // filehub.project_stale: a registered filehub with a projects/<x>/ dir
-    // untouched within the window (candidate for archive/<年>/).
-    if (reads.hub.status === "ok") {
-      const readsLocal = reads.local.status === "ok" ? reads.local.value : null;
-      const effective = resolveEffectiveRegistry(reads.hub.value, readsLocal, { pathExists: existsSync });
-      const fhRoot = primaryPathForResourceType(effective, "filehub");
-      if (fhRoot) {
-        const projectsDir = join(fhRoot, "projects");
-        if (existsSync(projectsDir) && statSync(projectsDir).isDirectory()) {
-          for (const name of readdirSync(projectsDir)) {
-            if (name.startsWith(".")) continue;
-            const p = join(projectsDir, name);
-            if (!statSync(p).isDirectory()) continue;
-            const last = lastActivityMs(p);
-            if (last === 0) continue;
-            const days = (now - last) / 86_400_000;
-            if (days >= PROJECT_STALE_DAYS) {
-              diags.push({
-                severity: "info",
-                code: "filehub.project_stale",
-                path: `filehub.projects.${name}`,
-                message: `filehub project ${name} untouched for ${Math.round(days)}d (≥${PROJECT_STALE_DAYS}d); archive to archive/<年>/ if closed — see jspace-use 8.6`,
-              });
-            }
-          }
-        }
-      }
-    }
-  }
+  return diags;
+}
 
-  // gbrain skill-routing wiring (info). gbrain's resolver only auto-detects a
-  // root `skills/` dir; wire it to the workbench's official skills via
-  // GBRAIN_SKILLS_DIR=<wb>/.jspace/skills in ~/.claude.json's gbrain MCP env.
-  // Missing/invalid machine config is not a workbench health problem — the
-  // wire command handles it — so only report when we can read the config and
-  // the value is wrong.
-  {
-    const wbSkillsDir = join(root, CONFIG_DIR, "skills");
-    const doc = cron.readUserClaudeJson?.() ?? null;
-    if (doc !== null) {
-      const server = gbrainServer(doc);
-      if (server !== null && !gbrainSkillsDirWired(server, wbSkillsDir)) {
+/** Long-term-use health (info level, design §5): dormant domains. A "take a
+ *  look" nudge, never an assertion — mtime is rewritten by git clone /
+ *  cloud-sync, so the threshold stays conservative. */
+function checkDomains(root: string): RegistryDiagnostic[] {
+  const diags: RegistryDiagnostic[] = [];
+  const now = Date.now();
+  const workspaceDir = join(root, "workspace");
+  if (existsSync(workspaceDir) && statSync(workspaceDir).isDirectory()) {
+    for (const name of readdirSync(workspaceDir)) {
+      if (name.startsWith(".")) continue;
+      const p = join(workspaceDir, name);
+      if (!statSync(p).isDirectory()) continue;
+      const last = lastActivityMs(p);
+      if (last === 0) continue; // empty/unreadable: nothing to judge
+      const days = (now - last) / 86_400_000;
+      if (days >= DOMAIN_DORMANT_DAYS) {
         diags.push({
           severity: "info",
-          code: "gbrain.skillsdir_unwired",
-          path: "gbrain",
-          message: `gbrain resolver not pointed at this workbench's official skills (${wbSkillsDir}); run jspace gbrain wire to wire GBRAIN_SKILLS_DIR`,
+          code: "domain.dormant",
+          path: `domain.${name}`,
+          message: `domain workspace/${name} has not been touched in ${Math.round(days)}d (≥${DOMAIN_DORMANT_DAYS}d); archive/merge or update it — see jspace-use 8.6`,
         });
       }
     }
   }
+  return diags;
+}
 
-  // cron configuration checks (read-only; warnings only).
+/** gbrain skill-routing wiring (info). gbrain's resolver only auto-detects a
+ *  root `skills/` dir; wire it to the workbench's official skills via
+ *  GBRAIN_SKILLS_DIR=<wb>/.jspace/skills in ~/.claude.json's gbrain MCP env.
+ *  Missing/invalid machine config is not a workbench health problem — the
+ *  wire command handles it — so only report when we can read the config and
+ *  the value is wrong. */
+function checkGBrain(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
+  const diags: RegistryDiagnostic[] = [];
+  const wbSkillsDir = join(root, CONFIG_DIR, "skills");
+  const doc = cron.readUserClaudeJson?.() ?? null;
+  if (doc !== null) {
+    const server = gbrainServer(doc);
+    if (server !== null && !gbrainSkillsDirWired(server, wbSkillsDir)) {
+      diags.push({
+        severity: "info",
+        code: "gbrain.skillsdir_unwired",
+        path: "gbrain",
+        message: `gbrain resolver not pointed at this workbench's official skills (${wbSkillsDir}); run jspace gbrain wire to wire GBRAIN_SKILLS_DIR`,
+      });
+    }
+  }
+  return diags;
+}
+
+/** Cron configuration + scheduler health: schedule parse, linux daemon, enabled
+ *  but not installed, stale installed tasks, open/damaged incidents. */
+function checkCrons(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
+  const diags: RegistryDiagnostic[] = [];
   const crons = cron.loadCrons(root).crons;
   for (const c of crons) {
     try {
@@ -465,6 +491,30 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
       message: `incident record unreadable: ${issue.message}`,
     });
   }
+  return diags;
+}
+
+/** `jspace doctor` — orchestrate the read-only checks and aggregate by severity. */
+export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
+  const reads = readWorkbenchState(root);
+  const env: InspectEnv = {
+    root,
+    hub: reads.hub,
+    marker: reads.marker,
+    local: reads.local,
+    pathExists: existsSync,
+    isFile,
+    readJson: (p) => JSON.parse(readFileSync(p, "utf-8")),
+  };
+  const diags: RegistryDiagnostic[] = [
+    ...inspectWorkbench(env),
+    ...checkInbox(reads),
+    ...checkPending(reads),
+    ...checkSkills(root, cron),
+    ...checkDomains(root),
+    ...checkGBrain(root, cron),
+    ...checkCrons(root, cron),
+  ];
 
   const errors = diags.filter((d) => d.severity === "error").map((d) => d.message);
   const warnings = diags.filter((d) => d.severity === "warning").map((d) => d.message);
