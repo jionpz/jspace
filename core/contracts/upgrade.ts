@@ -7,7 +7,9 @@ import {
   failure,
   isRecord,
   IssueCollector,
+  readEnum,
   readRequiredString,
+  readVersion,
   success,
   type DecodeResult,
 } from "./diagnostics.ts";
@@ -44,15 +46,13 @@ export function decodeUpgradeJournal(input: unknown): DecodeResult<UpgradeJourna
   }
   const FIELDS = ["version", "id", "from_version", "to_version", "plan", "status"] as const;
   checkNoUnknownFields(input, FIELDS, "upgrade", "upgrade.unknown-field", issues);
-  if (input.version !== 1) {
-    issues.add("upgrade.version.unsupported", "upgrade.version", "version must be 1");
-  }
+  readVersion(issues, "upgrade.version.unsupported", "upgrade.version", input.version, [1]);
   readRequiredString(input, "id", "upgrade", "upgrade.id.invalid", issues);
   readRequiredString(input, "from_version", "upgrade", "upgrade.from_version.invalid", issues);
   readRequiredString(input, "to_version", "upgrade", "upgrade.to_version.invalid", issues);
   const status = readRequiredString(input, "status", "upgrade", "upgrade.status.invalid", issues);
-  if (status !== undefined && !(UPGRADE_STATUSES as readonly string[]).includes(status)) {
-    issues.add("upgrade.status.invalid", "upgrade.status", `status must be one of ${UPGRADE_STATUSES.join(", ")}`);
+  if (status !== undefined) {
+    readEnum(issues, "upgrade.status.invalid", "upgrade.status", status, UPGRADE_STATUSES);
   }
   if (!Array.isArray(input.plan)) {
     issues.add("upgrade.plan.invalid", "upgrade.plan", "plan must be an array of {action, rel}");
@@ -63,9 +63,7 @@ export function decodeUpgradeJournal(input: unknown): DecodeResult<UpgradeJourna
         issues.add("upgrade.plan.invalid", `upgrade.plan.${i}`, `plan[${i}] must be { action: string; rel: string }`);
         continue;
       }
-      if (!(UPGRADE_ACTIONS as readonly string[]).includes(step.action)) {
-        issues.add("upgrade.plan.invalid", `upgrade.plan.${i}.action`, `plan[${i}].action must be one of ${UPGRADE_ACTIONS.join(", ")}`);
-      }
+      readEnum(issues, "upgrade.plan.invalid", `upgrade.plan.${i}.action`, step.action, UPGRADE_ACTIONS);
     }
   }
   if (!issues.ok) return failure(issues.issues);

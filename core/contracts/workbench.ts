@@ -9,6 +9,7 @@ import {
   isRecord,
   IssueCollector,
   readRequiredString,
+  readVersion,
   success,
   type DecodeResult,
 } from "./diagnostics.ts";
@@ -32,9 +33,7 @@ export function decodeMarker(input: unknown): DecodeResult<WorkbenchMarkerV1> {
   }
   checkNoUnknownFields(input, ["schema_version", "product", "workbench_id", "template_version", "created_at"], "marker", "marker.unknown-field", issues);
 
-  if (input.schema_version !== 1) {
-    issues.add("marker.version.unsupported", "marker.schema_version", "schema_version must be 1");
-  }
+  readVersion(issues, "marker.version.unsupported", "marker.schema_version", input.schema_version, [1]);
   if (input.product !== "JSpace") {
     issues.add("marker.product.invalid", "marker.product", 'product must be "JSpace"');
   }

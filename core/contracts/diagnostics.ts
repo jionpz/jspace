@@ -94,7 +94,10 @@ export function readOptionalString(
 
 /** UUID shape shared by every state contract's id (matches the historical
  *  ingest check; lenient enough for legacy writers, strict enough that junk
- *  ids can't pass). */
+ *  ids can't pass). Accepts any UUID shape (v1/v3/v4/v5); variant/magic bits
+ *  are not enforced. Rationale: v4-only 太严,而 jspace 生成的 id 本就是
+ *  v4(crypto.randomUUID);接受任何形状的 uuid 可让外部工具自己生成的 ids
+ *  也能进 schema。 */
 export const UUID_PATTERN = /^[0-9a-f-]{36}$/i;
 
 /** Read a value that must be one of `allowed`; records an issue otherwise.

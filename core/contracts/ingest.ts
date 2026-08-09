@@ -12,7 +12,10 @@ import {
   failure,
   isRecord,
   IssueCollector,
+  readEnum,
   readRequiredString,
+  readUuid,
+  readVersion,
   success,
   type DecodeResult,
 } from "./diagnostics.ts";
@@ -49,10 +52,8 @@ export function decodeIngestJournal(input: unknown): DecodeResult<IngestJournalV
     "contentHash", "status", "failedStep", "failureReason", "indexEntry", "createdAt", "updatedAt",
   ] as const;
   checkNoUnknownFields(input, FIELDS, "ingest", "ingest.unknown-field", issues);
-  if (input.version !== 1) {
-    issues.add("ingest.version.unsupported", "ingest.version", "version must be 1");
-  }
-  readRequiredString(input, "id", "ingest", "ingest.id.invalid", issues);
+  readVersion(issues, "ingest.version.unsupported", "ingest.version", input.version, [1]);
+  const id = readRequiredString(input, "id", "ingest", "ingest.id.invalid", issues);
   readRequiredString(input, "source", "ingest", "ingest.source.invalid", issues);
   readRequiredString(input, "target", "ingest", "ingest.target.invalid", issues);
   readRequiredString(input, "relPath", "ingest", "ingest.relPath.invalid", issues);
@@ -61,13 +62,12 @@ export function decodeIngestJournal(input: unknown): DecodeResult<IngestJournalV
   readRequiredString(input, "contentHash", "ingest", "ingest.contentHash.invalid", issues);
   readRequiredString(input, "createdAt", "ingest", "ingest.createdAt.invalid", issues);
   readRequiredString(input, "updatedAt", "ingest", "ingest.updatedAt.invalid", issues);
-  const id = input.id;
   const status = readRequiredString(input, "status", "ingest", "ingest.status.invalid", issues);
-  if (status !== undefined && !(INGEST_STEPS as readonly string[]).includes(status) && status !== "failed") {
-    issues.add("ingest.status.invalid", "ingest.status", `status must be one of ${INGEST_STEPS.join(", ")} or "failed"`);
+  if (status !== undefined) {
+    readEnum(issues, "ingest.status.invalid", "ingest.status", status, [...INGEST_STEPS, "failed"]);
   }
-  if (input.failedStep !== undefined && !(INGEST_STEPS as readonly string[]).includes(input.failedStep as string)) {
-    issues.add("ingest.failedStep.invalid", "ingest.failedStep", `failedStep must be one of ${INGEST_STEPS.join(", ")}`);
+  if (input.failedStep !== undefined) {
+    readEnum(issues, "ingest.failedStep.invalid", "ingest.failedStep", input.failedStep, INGEST_STEPS);
   }
   if (input.failureReason !== undefined && typeof input.failureReason !== "string") {
     issues.add("ingest.failureReason.invalid", "ingest.failureReason", "failureReason must be a string");
@@ -75,9 +75,7 @@ export function decodeIngestJournal(input: unknown): DecodeResult<IngestJournalV
   if (input.indexEntry !== undefined && typeof input.indexEntry !== "string") {
     issues.add("ingest.indexEntry.invalid", "ingest.indexEntry", "indexEntry must be a string");
   }
-  if (typeof id === "string" && !/^[0-9a-f-]{36}$/i.test(id)) {
-    issues.add("ingest.id.invalid", "ingest.id", "id must be a uuid");
-  }
+  if (id !== undefined) readUuid(issues, "ingest.id.invalid", "ingest.id", id);
   if (!issues.ok) return failure(issues.issues);
   return success({
     version: 1,

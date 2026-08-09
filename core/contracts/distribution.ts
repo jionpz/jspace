@@ -8,7 +8,9 @@ import {
   failure,
   isRecord,
   IssueCollector,
+  readEnum,
   readRequiredString,
+  readVersion,
   success,
   type DecodeResult,
 } from "./diagnostics.ts";
@@ -39,9 +41,7 @@ export function decodeDistributionManifest(input: unknown): DecodeResult<Distrib
   }
   checkNoUnknownFields(input, ["version", "bundle_version", "files"], "manifest", "manifest.unknown-field", issues);
 
-  if (input.version !== 1) {
-    issues.add("manifest.version.unsupported", "manifest.version", "version must be 1");
-  }
+  readVersion(issues, "manifest.version.unsupported", "manifest.version", input.version, [1]);
   readRequiredString(input, "bundle_version", "manifest", "manifest.bundle_version.invalid", issues);
 
   const files: DistributionFile[] = [];
@@ -64,12 +64,9 @@ export function decodeDistributionManifest(input: unknown): DecodeResult<Distrib
       if (sha256 !== undefined && !SHA256_PATTERN.test(sha256)) {
         issues.add("manifest.file.sha256.invalid", `${prefix}.sha256`, "sha256 must be a 64-char hex digest");
       }
-      const ownership = item.ownership;
-      if (!OWNERSHIPS.includes(ownership as AssetOwnership)) {
-        issues.add("manifest.file.ownership.invalid", `${prefix}.ownership`, 'ownership must be "managed", "seed" or "user"');
-      }
+      readEnum(issues, "manifest.file.ownership.invalid", `${prefix}.ownership`, item.ownership, OWNERSHIPS);
       if (issues.issues.length === before) {
-        files.push({ path: path as string, sha256: sha256 as string, ownership: ownership as AssetOwnership });
+        files.push({ path: path as string, sha256: sha256 as string, ownership: item.ownership as AssetOwnership });
       }
     });
   }

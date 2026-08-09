@@ -8,6 +8,7 @@ import {
   isRecord,
   IssueCollector,
   readRequiredString,
+  readVersion,
   success,
   type DecodeResult,
 } from "./diagnostics.ts";
@@ -28,9 +29,7 @@ export function decodeLocal(input: unknown): DecodeResult<LocalStateV1> {
   }
   checkNoUnknownFields(input, ["version", "installation_id", "bindings"], "local", "local.unknown-field", issues);
 
-  if (input.version !== 1) {
-    issues.add("local.version.unsupported", "local.version", "version must be 1");
-  }
+  readVersion(issues, "local.version.unsupported", "local.version", input.version, [1]);
   const installationId = readRequiredString(input, "installation_id", "local", "local.installation_id.invalid", issues);
   if (installationId !== undefined && !isId(installationId)) {
     issues.add("local.installation_id.invalid", "local.installation_id", `installation_id must match ${ID_PATTERN}`);
