@@ -2,7 +2,8 @@
 // cross-workbench tag isolation (AC1) + reconciliation identity.
 // Run: bun test adapters/scheduler/scheduler.test.ts
 import { expect, test } from "bun:test";
-import { taskIdFor, workbenchTag, buildPlist } from "./types.ts";
+import { taskIdFor, workbenchTag } from "./types.ts";
+import { buildPlist } from "./darwin.ts";
 import { parseSchedule } from "../../core/shared/schedule.ts";
 import { linuxAdapter, crontabBlock, replaceManagedBlock, parseManagedLine, extractTagBlock, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
 import { darwinAdapter, plistPath, parsePlistName, plistBelongsToTag } from "./darwin.ts";

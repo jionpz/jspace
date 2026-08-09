@@ -8,7 +8,7 @@
 // layer + scheduler adapters (dry-run and real install share one engine).
 import type { CommandSpec } from "../../application/commands/command.ts";
 import { initWorkbench } from "../../application/workspace/init.ts";
-import { doctorWorkbench } from "../../application/workspace/doctor.ts";
+import { doctorWorkbench } from "../../application/diagnostics/doctor.ts";
 import { expandTilde, isCompiled, devRoot, materializeTree } from "../embed.ts";
 import { resolvePath } from "../paths.ts";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";

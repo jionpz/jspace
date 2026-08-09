@@ -4,8 +4,7 @@
 // inspect/apply. Task identity is workbench-scoped: com.jspace.cron.<tag>.<id>
 // (darwin plist Label, linux managed-block lines, win32 schtasks task names),
 // so two workbenches never collide on the same platform scheduler.
-import { join } from "node:path";
-import type { ScheduleDict } from "../../core/shared/schedule.ts";
+import type { CronDefinition } from "../../core/contracts/cron.ts";
 
 export type PlatformName = "darwin" | "linux" | "win32";
 
@@ -56,6 +55,10 @@ export interface SchedulerAdapter {
   /** canonical platform identity for a cron (single source — never assembled
    *  outside the adapter). */
   identity(tag: string, cronId: string): SchedulerIdentity;
+  /** Compile the platform install content for one cron (plist body / managed
+   *  crontab line / schtasks args). Content building is adapter-internal; the
+   *  application layer never switches on platform to produce it. */
+  buildContent(cron: CronDefinition, tag: string, root: string, env: SchedulerEnv): string;
   /** tasks installed for this workbench tag (never other tags — cross-workbench safety). */
   inspect(tag: string, env: SchedulerEnv): InstalledTask[];
   /** apply one op; returns a human line for the report. */
@@ -83,47 +86,4 @@ export function taskIdFor(tag: string, id: string): string {
  *  (plist Label / linux managed-block comment). */
 export function posixIdentity(tag: string, cronId: string): SchedulerIdentity {
   return { logicalId: taskIdFor(tag, cronId), taskId: taskIdFor(tag, cronId) };
-}
-
-function xmlEscape(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-/** launchd plist body; Label carries the workbench tag (cross-workbench safety). */
-export function buildPlist(id: string, tag: string, schedule: ScheduleDict, root: string, jspaceBin: string, home: string, path: string): string {
-  const launchdDir = join(root, ".jspace", "logs", "cron");
-  const keys = ["Minute", "Hour", "Day", "Month", "Weekday"] as const;
-  const dict = keys.filter((k) => schedule[k] !== undefined)
-    .map((k) => `    <key>${k}</key>\n    <integer>${schedule[k]}</integer>`)
-    .join("\n");
-  const taskId = taskIdFor(tag, id);
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>${taskId}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>${xmlEscape(jspaceBin)}</string>
-    <string>cron</string>
-    <string>run</string>
-    <string>--id</string>
-    <string>${xmlEscape(id)}</string>
-  </array>
-  <key>StartCalendarInterval</key>
-  <dict>
-${dict}
-  </dict>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>PATH</key><string>${xmlEscape(path)}</string>
-    <key>HOME</key><string>${xmlEscape(home)}</string>
-  </dict>
-  <key>WorkingDirectory</key><string>${xmlEscape(root)}</string>
-  <key>StandardOutPath</key><string>${xmlEscape(join(launchdDir, `launchd-${id}.log`))}</string>
-  <key>StandardErrorPath</key><string>${xmlEscape(join(launchdDir, `launchd-${id}.log`))}</string>
-  <key>RunAtLoad</key><false/>
-</dict>
-</plist>
-`;
 }

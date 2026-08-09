@@ -3,7 +3,7 @@
 // Real cmd.exe round-trip is CI-verified on the Windows runner (AC9 matrix).
 // Run: bun test application/automation/win32-spawn.test.ts
 import { expect, test } from "bun:test";
-import { win32SpawnTarget } from "./win32-spawn.ts";
+import { win32SpawnTarget } from "./spawn.ts";
 
 test(".cmd script -> cmd.exe /d /s /c, doubled-quoted tail, verbatim", () => {
   const t = win32SpawnTarget(["C:\\bin\\claude.cmd", "-p", "prompt", "--allowedTools", "Bash,Read"]);

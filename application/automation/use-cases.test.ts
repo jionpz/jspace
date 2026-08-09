@@ -35,6 +35,8 @@ const fakeAdapter = (opts: {
     opts.platform === "win32"
       ? { logicalId: taskIdFor(tag, cronId), taskId: `JSpaceCron_${tag}_${cronId}` }
       : posixIdentity(tag, cronId),
+  buildContent: (cron, _tag, _root, env) =>
+    opts.platform === "darwin" ? "<plist>fake</plist>" : `${env.jspaceBinary}:${cron.id}`,
   inspect: () => opts.inspect(),
   apply: (op) => {
     opts.onApply?.(op);

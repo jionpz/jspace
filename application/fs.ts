@@ -6,6 +6,16 @@ import type { ContractIssue, DecodeResult } from "../core/contracts/diagnostics.
 
 export { isFile } from "../core/shared/fs.ts";
 
+/** Official skill name → workbench-relative `.jspace/skills/<name>` path. */
+export function skillRel(name: string): string {
+  return `.jspace/skills/${name}`;
+}
+
+/** Official skill name → absolute path rooted at the workbench root. */
+export function skillRoot(root: string, name: string): string {
+  return join(root, skillRel(name));
+}
+
 /** readdir + parse JSON + decode record repository loop, parameterized by ext,
  *  decode and sort. A corrupt/undecodable file is reported as an issue (code +
  *  filename) but never blocks reading the rest — historical collections surface

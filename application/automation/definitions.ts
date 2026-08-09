@@ -8,7 +8,7 @@ import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { decodeCrons, type CronDefinition, type CronSkillTarget, type CronsFile } from "../../core/contracts/cron.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
-import { diffBundle, skillRel, skillRoot } from "../workspace/manifest.ts";
+import { skillRel, skillRoot } from "../fs.ts";
 import { isFile } from "../fs.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { parseSchedule, type ScheduleDict } from "../../core/shared/schedule.ts";
@@ -44,12 +44,20 @@ export function saveCrons(root: string, data: CronsFile): void {
 // ---- skill-target cron compilation / validation (Child D, RD5) ----
 
 /** Everything validate/compile needs about the workbench; injected by the cli
- *  layer so application never imports the generated cli/*.generated.ts. */
+ *  layer so application never imports the generated cli/*.generated.ts and
+ *  automation never imports workspace/* (breaks the workspace↔automation ring). */
 export interface SkillTargetContext {
   skillsManifest: SkillsManifestV1; // which skills are required + entrypoints
   bundleManifest: DistributionManifestV1; // current bundle (diff target)
   readFile: (p: string) => string | null; // workbench file reader (null when missing)
   recorded: Record<string, { sha256: string }>; // materialization journal (applied base)
+  /** Freshness diff (materialized workbench vs bundle). Injected so automation
+   *  never imports workspace/manifest. */
+  diffBundle: (
+    root: string,
+    manifest: DistributionManifestV1,
+    deps: { readFile: (p: string) => string | null; recorded: Record<string, { sha256: string }> },
+  ) => { rel: string; action: string }[];
 }
 
 export type SkillTargetResult = { ok: true; prompt: string } | { ok: false; fix: string };
@@ -72,7 +80,7 @@ export function compileSkillTarget(target: CronSkillTarget, wbRoot: string, ctx:
   if (entry.entrypoints !== undefined && entry.entrypoints.length > 0 && !entry.entrypoints.includes(target.entrypoint)) {
     return { ok: false, fix: `skill ${target.skill} has no entrypoint ${target.entrypoint} (choose from: ${entry.entrypoints.join(", ")})` };
   }
-  const diff = diffBundle(wbRoot, ctx.bundleManifest, { readFile: ctx.readFile, recorded: ctx.recorded });
+  const diff = ctx.diffBundle(wbRoot, ctx.bundleManifest, { readFile: ctx.readFile, recorded: ctx.recorded });
   if (diff.some((e) => e.rel.startsWith(`${skillRel(target.skill)}/`) && e.action !== "no-op")) {
     return { ok: false, fix: `run jspace workspace upgrade (skill ${target.skill} is out of date; a local edit is preserved as conflict)` };
   }

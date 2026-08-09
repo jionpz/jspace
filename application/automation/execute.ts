@@ -3,7 +3,6 @@
 // RunRecord, opens/resolves incidents, and applies the inbox batch guard.
 // Platform/filehub/log-dir/clock are injected so statuses are testable without
 // spawning a real harness.
-import { spawn, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -18,20 +17,16 @@ import type { CmdResult } from "../commands/command.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
+import { spawnProcess } from "../../adapters/process/spawn.ts";
 import { loadCrons, resolveCronPrompt, type SkillTargetContext } from "./definitions.ts";
-import { readMaterializedJournal } from "../workspace/journal.ts";
-import { skillRel, skillRoot } from "../workspace/manifest.ts";
+import { skillRel, skillRoot } from "../fs.ts";
 import { lastRun, writeRun } from "./runs.ts";
 import { openOrUpdate, resolveIncidents } from "./incidents.ts";
 import { acquireLock } from "./lock.ts";
-import { win32SpawnTarget } from "./win32-spawn.ts";
 import { harnessArgv } from "../../adapters/harness/argv.ts";
 import { isFile } from "../fs.ts";
 import { localDate, localStamp } from "../time.ts";
 
-/** Max harness output bytes kept in memory (1 MiB); beyond that output is
- *  dropped at the tail so a runaway cron can't OOM the CLI. */
-const MAX_OUTPUT_BYTES = 1_048_576;
 /** Prose log body truncation (bytes) — the RunRecord is machine truth; the log
  *  only needs enough to debug. */
 const LOG_TRUNCATE_BYTES = 64_000;
@@ -54,6 +49,15 @@ export interface ExecuteDeps {
   skillsManifest: SkillsManifestV1;
   bundleManifest: DistributionManifestV1;
   readFile: (p: string) => string | null;
+  /** Freshness diff (materialized workbench vs bundle) + materialization journal.
+   *  Injected so automation never imports workspace/* (breaks the
+   *  workspace↔automation ring). */
+  diffBundle: (
+    root: string,
+    manifest: DistributionManifestV1,
+    deps: { readFile: (p: string) => string | null; recorded: Record<string, { sha256: string }> },
+  ) => { rel: string; action: string }[];
+  readMaterializedJournal: (root: string) => { files: Record<string, { sha256: string }> } | null;
   /** optional harness binary override (tests: fake harness; prod: undefined → PATH resolve). */
   harnessBin?: string;
 }
@@ -115,59 +119,8 @@ function validateInboxGuard(
 }
 
 /** Spawn the harness, stream stdout+stderr (capped), and arm the timeout kill.
- *  Returns the live child + timer so the caller can await exit and clear the
- *  timer, plus `collect()` for the final capped output. win32 .cmd/.bat can't
- *  spawn directly -> routed through cmd.exe via the testable builder; .exe/.com
- *  (and every non-win32 binary) spawn directly, so no shell:true is ever needed
- *  (shell quoting would mangle spaced args). */
-function spawnHarness(
-  argv: string[],
-  platform: string,
-  cwd: string,
-  timeoutSec: number,
-): {
-  child: ReturnType<typeof spawn>;
-  timer: NodeJS.Timeout;
-  /** Capped utf-8 output once the child exits. */
-  collect: () => string;
-} {
-  const defaultPath = platform === "win32" ? "C:\\Windows\\system32;C:\\Windows" : "/usr/local/bin:/usr/bin:/bin";
-  const env = { ...process.env, PATH: process.env.PATH ?? defaultPath };
-  const chunks: Buffer[] = [];
-  let bytes = 0;
-  const push = (d: Buffer): void => {
-    if (bytes >= MAX_OUTPUT_BYTES) return;
-    const take = Math.min(d.length, MAX_OUTPUT_BYTES - bytes);
-    chunks.push(d.subarray(0, take));
-    bytes += take;
-  };
-  const spawnTarget = platform === "win32"
-    ? win32SpawnTarget(argv)
-    : { command: argv[0], args: argv.slice(1), verbatim: false };
-  const child = spawn(spawnTarget.command, spawnTarget.args, {
-    cwd,
-    env,
-    detached: platform !== "win32",
-    windowsVerbatimArguments: spawnTarget.verbatim,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  child.stdout?.on("data", push);
-  child.stderr?.on("data", push);
-  const timer = setTimeout(() => {
-    if (platform === "win32") {
-      try {
-        spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"]);
-      } catch { /* ignore */ }
-    } else {
-      try { process.kill(-child.pid!, "SIGTERM"); } catch { try { child.kill("SIGKILL"); } catch { /* ignore */ } }
-    }
-  }, timeoutSec * 1000);
-  return {
-    child,
-    timer,
-    collect: () => Buffer.concat(chunks).toString("utf-8"),
-  };
-}
+ *  win32 .cmd/.bat routing and the timeout kill live in adapters/process/spawn.ts;
+ *  the executor only passes argv + config. */
 
 /** Write the prose log (human payload, truncated) + the structured RunRecord
  *  (machine truth), then prune old logs. Returns the paths/ids the caller needs
@@ -227,7 +180,8 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
     skillsManifest: deps.skillsManifest,
     bundleManifest: deps.bundleManifest,
     readFile: deps.readFile,
-    recorded: readMaterializedJournal(root)?.files ?? {},
+    recorded: deps.readMaterializedJournal(root)?.files ?? {},
+    diffBundle: deps.diffBundle,
   };
   // Skill-target crons validate + compile HERE, before the dry-run return: a
   // missing/stale skill fails with a fix action and never reaches execution.
@@ -255,17 +209,10 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
     const fhRoot = deps.filehubRoot(root);
     const { isInboxTask, batchLog, batchBefore } = validateInboxGuard(cron, root, fhRoot);
 
-    const started = deps.now();
-    const { child, timer, collect } = spawnHarness(argv, deps.platform, root, opts.timeoutSec);
-    const exited = await new Promise<number>((resolveExit) => {
-      child.on("error", (e) => { console.error(`jspace: spawn error: ${e.message}`); resolveExit(1); });
-      child.on("exit", (code) => resolveExit(code ?? 1));
-    }).then((code) => {
-      clearTimeout(timer);
-      return code;
-    });
-    const output = collect();
-    const timedOut = deps.now() - started > opts.timeoutSec * 1000;
+    const spawned = await spawnProcess(argv, { cwd: root, platform: deps.platform, timeoutMs: opts.timeoutSec * 1000 });
+    const exited = spawned.exit;
+    const output = spawned.output;
+    const timedOut = spawned.timedOut;
     const exitOk = exited === 0 && !timedOut;
     const hasOutput = output.trim().length > 0;
     const suspect = exited === 0 && !timedOut && !hasOutput;

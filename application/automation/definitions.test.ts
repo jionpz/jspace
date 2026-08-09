@@ -5,7 +5,7 @@ import { expect, test } from "bun:test";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
-import { sha256Of } from "../workspace/manifest.ts";
+import { sha256Of, diffBundle } from "../workspace/manifest.ts";
 import { compileSkillTarget, resolveCronPrompt, type SkillTargetContext } from "./definitions.ts";
 
 const NEW_SKILL = "asset-ingest NEW content";
@@ -32,6 +32,7 @@ function ctx(overrides: { current?: string | null; recorded?: string } = {}): Sk
     bundleManifest,
     readFile: (p) => (p.endsWith(".jspace/skills/asset-ingest/SKILL.md") ? current : null),
     recorded: overrides.recorded !== undefined ? { ".jspace/skills/asset-ingest/SKILL.md": { sha256: sha256Of(overrides.recorded) } } : {},
+    diffBundle,
   };
 }
 

@@ -3,7 +3,8 @@
 import { extractAgentsBlock, JSPACE_BLOCK_START, JSPACE_BLOCK_END } from "./agents-block.ts";
 import { join } from "node:path";
 import { sha256Of } from "../../core/shared/hash.ts";
-export { sha256Of };
+import { skillRel, skillRoot } from "../fs.ts";
+export { sha256Of, skillRel, skillRoot };
 import type {
   AssetOwnership,
   DistributionManifestV1,
@@ -32,16 +33,6 @@ export function ownershipFor(key: string): AssetOwnership {
  *  deleted the file) -> respect the deletion and never recreate it. */
 export function recreateOnMissing(rel: string): boolean {
   return rel !== ".jspace/cron.json";
-}
-
-/** Official skill name → workbench-relative path under `.jspace/skills/`. */
-export function skillRel(name: string): string {
-  return `.jspace/skills/${name}`;
-}
-
-/** Official skill name → absolute path rooted at the workbench root. */
-export function skillRoot(root: string, name: string): string {
-  return join(root, skillRel(name));
 }
 
 /** Harness-specific skill projection dirs (workbench-relative). Official skills

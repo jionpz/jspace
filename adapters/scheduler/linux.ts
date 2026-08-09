@@ -133,6 +133,12 @@ export const linuxAdapter: SchedulerAdapter = {
     return posixIdentity(tag, cronId);
   },
 
+  buildContent(cron: CronDefinition, _tag: string, _root: string, _env: SchedulerEnv): string {
+    // content is rebuilt as the whole workbench block at apply time — this
+    // placeholder just routes the cron through; application never switches.
+    return cron.id;
+  },
+
   inspect(tag: string): InstalledTask[] {
     const out: InstalledTask[] = [];
     const existing = readCrontab();

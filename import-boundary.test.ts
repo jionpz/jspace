@@ -70,3 +70,61 @@ test("production imports respect the layer direction (no forbidden edges)", () =
   }
   expect(violations).toEqual([]);
 });
+
+/** application business submodules (registry-driven state + use cases). The
+ *  aggregator layers (context/, diagnostics/) are deliberately excluded: they
+ *  read across the tree but are never imported by the business submodules, so
+ *  they cannot participate in a cycle. */
+const BUSINESS_SUBMODULES = ["automation", "workspace", "pending", "ingest", "registry", "skills", "gbrain"] as const;
+
+test("application business submodules form no import cycles (intra-layer ring guard)", () => {
+  const graph = new Map<string, Set<string>>();
+  for (const s of BUSINESS_SUBMODULES) graph.set(s, new Set());
+  for (const file of sourceFiles(join(ROOT, "application"))) {
+    const parts = relative(ROOT, file).split("/");
+    if (parts.length < 3) continue; // application/x.ts shared files are not a submodule
+    const imp = parts[1];
+    if (!(BUSINESS_SUBMODULES as readonly string[]).includes(imp)) continue;
+    for (const spec of importSpecifiers(file)) {
+      if (!spec.startsWith(".")) continue;
+      const tparts = relative(ROOT, resolve(dirname(file), spec)).split("/");
+      if (tparts.length < 3 || tparts[0] !== "application") continue;
+      const tgt = tparts[1];
+      if (tgt !== imp && (BUSINESS_SUBMODULES as readonly string[]).includes(tgt)) graph.get(imp)!.add(tgt);
+    }
+  }
+  // Tarjan SCC: any strongly connected component with >1 vertex is a cycle.
+  const idx = new Map<string, number>();
+  const low = new Map<string, number>();
+  const stack: string[] = [];
+  const onStack = new Set<string>();
+  let counter = 0;
+  const cycles: string[] = [];
+  const strongconnect = (v: string): void => {
+    idx.set(v, counter);
+    low.set(v, counter);
+    counter++;
+    stack.push(v);
+    onStack.add(v);
+    for (const w of graph.get(v)!) {
+      if (!idx.has(w)) {
+        strongconnect(w);
+        low.set(v, Math.min(low.get(v)!, low.get(w)!));
+      } else if (onStack.has(w)) {
+        low.set(v, Math.min(low.get(v)!, idx.get(w)!));
+      }
+    }
+    if (low.get(v) === idx.get(v)) {
+      const comp: string[] = [];
+      while (true) {
+        const w = stack.pop()!;
+        onStack.delete(w);
+        comp.push(w);
+        if (w === v) break;
+      }
+      if (comp.length > 1) cycles.push(comp.join(" <-> "));
+    }
+  };
+  for (const s of BUSINESS_SUBMODULES) if (!idx.has(s)) strongconnect(s);
+  expect(cycles).toEqual([]);
+});

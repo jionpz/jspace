@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { doctorWorkbench, type CronHealthDeps } from "./doctor.ts";
 import { loadCrons, parseSchedule } from "../automation/definitions.ts";
-import { sha256Of } from "./manifest.ts";
+import { sha256Of } from "../workspace/manifest.ts";
 import type { CmdResult } from "../commands/command.ts";
 
 let root: string;

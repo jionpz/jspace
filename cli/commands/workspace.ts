@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import type { CommandSpec } from "../../application/commands/command.ts";
 import { workspaceDiff, workspaceUpgrade } from "../../application/workspace/workspace.ts";
-import { doctorWorkbench } from "../../application/workspace/doctor.ts";
+import { doctorWorkbench } from "../../application/diagnostics/doctor.ts";
 import { installSkills, type InstallDeps } from "../../application/skills/install.ts";
 import { cmdUpdate } from "../update.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";

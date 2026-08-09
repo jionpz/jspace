@@ -17,8 +17,8 @@ import { countInbox } from "../registry/inbox.ts";
 import { readEnvelopes } from "../pending/envelope.ts";
 import { isFile } from "../fs.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
-import { readMaterializedJournal } from "./journal.ts";
-import { SKILL_PROJECTIONS } from "./manifest.ts";
+import { readMaterializedJournal } from "../workspace/journal.ts";
+import { SKILL_PROJECTIONS } from "../workspace/manifest.ts";
 import { gbrainServer, gbrainSkillsDirWired } from "../gbrain/wiring.ts";
 
 /** Minimal cron view consumed by doctor; full cron surface lives in the scheduler. */

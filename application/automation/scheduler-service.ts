@@ -9,10 +9,8 @@ import type { CronDefinition } from "../../core/contracts/cron.ts";
 import { loadCrons } from "./definitions.ts";
 import { invocationArgv } from "./invocation.ts";
 import { planReconciliation, type DesiredTask } from "./scheduler.ts";
-import { buildPlist, type SchedulerAdapter, type SchedulerEnv, type SchedulerOp } from "../../adapters/scheduler/types.ts";
+import { type SchedulerAdapter, type SchedulerEnv, type SchedulerOp } from "../../adapters/scheduler/types.ts";
 import { crontabBlock } from "../../adapters/scheduler/linux.ts";
-import { schtasksArgs } from "../../adapters/scheduler/win32.ts";
-import { parseSchedule } from "../../core/shared/schedule.ts";
 
 export interface SchedulerInstallDeps {
   tag: string; // workbench tag from marker workbench_id
@@ -24,31 +22,16 @@ export interface SchedulerInstallDeps {
   validateSkillTargets?: (enabled: CronDefinition[]) => string | null;
 }
 
-/** Platform content compilation — the only place platform task content is built.
- *  taskId always comes from adapter.identity (single source). */
-function contentFor(cron: CronDefinition, tag: string, root: string, env: SchedulerEnv, adapter: SchedulerAdapter): string {
-  if (adapter.platform === "darwin") {
-    return buildPlist(cron.id, tag, parseSchedule(cron.schedule), root, env.jspaceBinary, env.home, env.path);
-  }
-  if (adapter.platform === "linux") {
-    // content is rebuilt as the whole workbench block at apply time
-    return cron.id;
-  }
-  // win32: args array JSON-encoded (schtasks; paths may contain spaces)
-  const tn = adapter.identity(tag, cron.id).taskId;
-  const args = schtasksArgs(cron, env.jspaceBinary, root, tn);
-  if (!args) fail(`cron ${cron.id}: schedule "${cron.schedule}" not supported on Windows (MVP: DAILY/WEEKLY with month=*)`);
-  return JSON.stringify(args);
-}
-
-/** Build the desired task set for one workbench's enabled crons. */
+/** Build the desired task set for one workbench's enabled crons. Content
+ *  compilation is adapter-internal (adapter.buildContent) — application never
+ *  switches on platform to produce install content. */
 export function buildDesired(crons: CronDefinition[], tag: string, root: string, env: SchedulerEnv, adapter: SchedulerAdapter): DesiredTask[] {
   return crons.map((c) => ({
     taskId: adapter.identity(tag, c.id).taskId, // canonical platform handle — single source
     cronId: c.id,
     schedule: c.schedule,
     argv: invocationArgv({ cronId: c.id, workbench: root }).join(" "),
-    content: contentFor(c, tag, root, env, adapter),
+    content: adapter.buildContent(c, tag, root, env),
   }));
 }
 

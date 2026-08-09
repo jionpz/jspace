@@ -9,6 +9,7 @@ import { cronInstall } from "../../application/automation/scheduler-service.ts";
 import { cronRun } from "../../application/automation/execute.ts";
 import { compileSkillTarget, type SkillTargetContext } from "../../application/automation/definitions.ts";
 import { readMaterializedJournal } from "../../application/workspace/journal.ts";
+import { diffBundle } from "../../application/workspace/manifest.ts";
 import { cronFailures, cronLogDir, cronStatus } from "../../application/automation/status.ts";
 import { resolveFilehubRoot } from "../../application/registry/filehub-lookup.ts";
 import { schedulerAdapter } from "../../adapters/scheduler/index.ts";
@@ -80,6 +81,7 @@ const cronInstallSpec: CommandSpec = {
         bundleManifest: BUNDLE_MANIFEST,
         readFile: readFileOrNull,
         recorded: readMaterializedJournal(ctx.root)?.files ?? {},
+        diffBundle,
       };
       for (const c of enabled) {
         if (!c.target) continue;
@@ -141,6 +143,8 @@ const cronRunSpec: CommandSpec = {
         skillsManifest: SKILLS_MANIFEST,
         bundleManifest: BUNDLE_MANIFEST,
         readFile: readFileOrNull,
+        diffBundle,
+        readMaterializedJournal,
       },
     );
   },

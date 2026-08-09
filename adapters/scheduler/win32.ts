@@ -102,6 +102,13 @@ export const win32Adapter: SchedulerAdapter = {
     return { logicalId: taskIdFor(tag, cronId), taskId: `JSpaceCron_${tag}_${cronId}` };
   },
 
+  buildContent(cron: CronDefinition, tag: string, root: string, env: SchedulerEnv): string {
+    const tn = taskIdFor(tag, cron.id);
+    const args = schtasksArgs(cron, env.jspaceBinary, root, tn);
+    if (!args) fail(`cron ${cron.id}: schedule "${cron.schedule}" not supported on Windows (MVP: DAILY/WEEKLY with month=*)`);
+    return JSON.stringify(args);
+  },
+
   inspect(tag: string): InstalledTask[] {
     return queryTasks(tag).map((n) => {
       const res = spawnSync("schtasks", ["/query", "/tn", n, "/xml"], { encoding: "utf-8" });

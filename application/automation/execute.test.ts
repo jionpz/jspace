@@ -47,6 +47,8 @@ const deps = (over: Partial<ExecuteDeps> = {}): ExecuteDeps => ({
   skillsManifest: SKILLS,
   bundleManifest: BUNDLE,
   readFile: () => null,
+  diffBundle: () => [],
+  readMaterializedJournal: () => null,
   harnessBin: fakeHarness,
   ...over,
 });
