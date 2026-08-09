@@ -21,7 +21,7 @@ function runsDir(root: string, cronId: string): string {
 export function writeRun(root: string, cronId: string, record: RunRecord): void {
   const dir = runsDir(root, cronId);
   mkdirSync(dir, { recursive: true });
-  writeBytesAtomic(join(dir, `${record.id}.json`), JSON.stringify({ ...record, version: 1 }, null, 2) + "\n");
+  writeBytesAtomic(join(dir, `${record.id}.json`), JSON.stringify({ ...record, schema_version: 1 }, null, 2) + "\n");
 }
 
 export interface RunCollection {

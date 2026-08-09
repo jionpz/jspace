@@ -1,6 +1,6 @@
 # Registry reference
 
-## Portable state (.jspace/hub.json, version 4)
+## Portable state (.jspace/hub.json, schema_version 1)
 
 Hub is the **portable** registry — logical identity only, safe to sync via git:
 
@@ -11,17 +11,17 @@ Hub is the **portable** registry — logical identity only, safe to sync via git
 - `primary: true` is a strict boolean, only valid on path entrypoints, exactly one per resource that has path entrypoints.
 - `projects[]`: `{ id, domain, asset_rel_path, status: "active"|"archived" }` — `asset_rel_path` is `/`-separated, starts with `projects/`, resolves below the filehub root.
 - Resource `domain` and project `domain` must reference a registered domain.
-- `version` must be `"4"`; v3 is rejected (workspace upgrade lands separately).
+- `schema_version` must be `1`; the legacy string `version` form (any value, incl. the old `"4"`) is no longer accepted and decodes as damaged.
 
-## Machine-local state (.jspace/local.json, version 1)
+## Machine-local state (.jspace/local.json, schema_version 1)
 
 `local.json` is **gitignored** and holds only this machine's facts:
 
-- `{ version: 1, installation_id, bindings: { <binding-key>: <absolute-path> } }`.
+- `{ schema_version: 1, installation_id, bindings: { <binding-key>: <absolute-path> } }`.
 - `binding` keys follow the same id pattern (`<resource-id>-<entrypoint-id>` by default).
 - Values are absolute paths on the current machine. Missing local state (e.g. a fresh clone) means path resources are *unbound* until a binding is created; it does not invalidate hub.
 
-## Marker (.jspace/marker.json, version 1)
+## Marker (.jspace/marker.json, schema_version 1)
 
 - `{ schema_version: 1, product: "JSpace", workbench_id, template_version, created_at }`.
 - Portable and stable across syncs; `workbench_id` is generated once by `jspace init`. The legacy `source` (dev-repo absolute path) is rejected.

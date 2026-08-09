@@ -38,7 +38,7 @@ export function readMaterializedJournal(root: string): MaterializedJournal | nul
 
 function writeJournal(root: string, bundleVersion: string, files: Record<string, { sha256: string }>): void {
   const j: MaterializedJournal = {
-    version: 1,
+    schema_version: 1,
     asset_version: bundleVersion,
     applied_at: localDate(),
     files,

@@ -33,10 +33,10 @@ function makeWorkbench(opts: {
   }
   writeFileSync(join(wb, ".jspace", "hub.json"), JSON.stringify({ schema_version: 1, domains: [{ id: "files", path: "workspace/files" }], resources, projects: [] }));
   if (opts.filehub) {
-    writeFileSync(join(wb, ".jspace", "local.json"), JSON.stringify({ version: 1, installation_id: "inst", bindings: { "filehub-path": fh } }));
+    writeFileSync(join(wb, ".jspace", "local.json"), JSON.stringify({ schema_version: 1, installation_id: "inst", bindings: { "filehub-path": fh } }));
   }
   const crons = (opts.crons ?? []).map((id) => ({ id, schedule: "0 21 * * *", harness: "claude", prompt: "test", enabled: true }));
-  writeFileSync(join(wb, ".jspace", "cron.json"), JSON.stringify({ version: 1, crons }));
+  writeFileSync(join(wb, ".jspace", "cron.json"), JSON.stringify({ schema_version: 1, crons }));
 
   // structured incidents
   for (const inc of opts.incidents ?? []) {
@@ -45,7 +45,7 @@ function makeWorkbench(opts: {
     writeFileSync(
       join(dir, `${inc.cron}-${inc.failureClass}.json`),
       JSON.stringify({
-        version: 1,
+        schema_version: 1,
         id: INC_ID,
         cronId: inc.cron,
         failureClass: inc.failureClass,
@@ -62,7 +62,7 @@ function makeWorkbench(opts: {
     writeFileSync(
       join(dir, "run-1.json"),
       JSON.stringify({
-        version: 1,
+        schema_version: 1,
         id: RUN_ID,
         cronId: id,
         startedAt: "2026-08-03T12:00:00",
@@ -80,7 +80,7 @@ function makeWorkbench(opts: {
     for (const a of opts.applies) {
       writeFileSync(
         join(dir, `${a}.APPLY.json`),
-        JSON.stringify({ version: 1, id: a, idempotencyKey: "a".repeat(64), producer: "test", slug: `assets/${a}`, content: "content", status: "staged", retryCount: 0, createdAt: "2026-08-04T100000" }),
+        JSON.stringify({ schema_version: 1, id: a, idempotencyKey: "a".repeat(64), producer: "test", slug: `assets/${a}`, content: "content", status: "staged", retryCount: 0, createdAt: "2026-08-04T100000" }),
       );
     }
   }

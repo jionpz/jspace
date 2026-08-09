@@ -25,7 +25,7 @@ export type EnvelopeStatus = (typeof ENVELOPE_STATUSES)[number];
 export const ENVELOPE_EXT = ".APPLY.json";
 
 export interface PendingWriteEnvelopeV1 {
-  version: 1;
+  schema_version: 1;
   id: string; // uuid
   idempotencyKey: string; // sha256(content); repeat-apply dedupe
   producer: string; // asset-ingest | memory-writeback
@@ -45,11 +45,11 @@ export function decodePendingEnvelope(input: unknown): DecodeResult<PendingWrite
     return failure(issues.issues);
   }
   const FIELDS = [
-    "version", "id", "idempotencyKey", "producer", "slug", "content",
+    "schema_version", "id", "idempotencyKey", "producer", "slug", "content",
     "status", "retryCount", "createdAt", "appliedAt", "error",
   ] as const;
   checkNoUnknownFields(input, FIELDS, "pending", "pending.unknown-field", issues);
-  readVersion(issues, "pending.version.unsupported", "pending.version", input.version, [1]);
+  readVersion(issues, "pending.version.unsupported", "pending.version", input.schema_version, [1]);
   readUuid(issues, "pending.id.invalid", "pending.id", input.id);
   readRequiredString(input, "idempotencyKey", "pending", "pending.idempotencyKey.invalid", issues);
   readRequiredString(input, "producer", "pending", "pending.producer.invalid", issues);
@@ -68,7 +68,7 @@ export function decodePendingEnvelope(input: unknown): DecodeResult<PendingWrite
   }
   if (!issues.ok) return failure(issues.issues);
   return success({
-    version: 1,
+    schema_version: 1,
     id: input.id as string,
     idempotencyKey: input.idempotencyKey as string,
     producer: input.producer as string,

@@ -30,7 +30,7 @@ export interface UpgradePlanStep {
 }
 
 export interface UpgradeJournalV1 {
-  version: 1;
+  schema_version: 1;
   id: string;
   from_version: string;
   to_version: string;
@@ -44,9 +44,9 @@ export function decodeUpgradeJournal(input: unknown): DecodeResult<UpgradeJourna
     issues.add("upgrade.root.type", "upgrade", "upgrade journal must be an object");
     return failure(issues.issues);
   }
-  const FIELDS = ["version", "id", "from_version", "to_version", "plan", "status"] as const;
+  const FIELDS = ["schema_version", "id", "from_version", "to_version", "plan", "status"] as const;
   checkNoUnknownFields(input, FIELDS, "upgrade", "upgrade.unknown-field", issues);
-  readVersion(issues, "upgrade.version.unsupported", "upgrade.version", input.version, [1]);
+  readVersion(issues, "upgrade.version.unsupported", "upgrade.version", input.schema_version, [1]);
   readRequiredString(input, "id", "upgrade", "upgrade.id.invalid", issues);
   readRequiredString(input, "from_version", "upgrade", "upgrade.from_version.invalid", issues);
   readRequiredString(input, "to_version", "upgrade", "upgrade.to_version.invalid", issues);
@@ -68,7 +68,7 @@ export function decodeUpgradeJournal(input: unknown): DecodeResult<UpgradeJourna
   }
   if (!issues.ok) return failure(issues.issues);
   return success({
-    version: 1,
+    schema_version: 1,
     id: input.id as string,
     from_version: input.from_version as string,
     to_version: input.to_version as string,

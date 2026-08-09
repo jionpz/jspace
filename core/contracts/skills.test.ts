@@ -19,7 +19,7 @@ function entry(name: string, scope: SkillEntry["scope"]): SkillEntry {
 
 function validManifest(): SkillsManifestV1 {
   return {
-    version: 1,
+    schema_version: 1,
     workbench: [
       entry("jspace-use", "workbench"),
       entry("asset-ingest", "workbench"),
@@ -48,9 +48,9 @@ test("valid manifest decodes ok and round-trips", () => {
 });
 
 test("version must be 1 and arrays required", () => {
-  expectIssue({ ...validManifest(), version: 2 }, "skills.version.unsupported");
-  expectIssue({ version: 1, workbench: "nope", global: [] }, "skills.workbench.type");
-  expectIssue({ version: 1, workbench: [], global: {} }, "skills.global.type");
+  expectIssue({ ...validManifest(), schema_version: 2 }, "skills.version.unsupported");
+  expectIssue({ schema_version: 1, workbench: "nope", global: [] }, "skills.workbench.type");
+  expectIssue({ schema_version: 1, workbench: [], global: {} }, "skills.global.type");
 });
 
 test("skill name must be a valid id and unique", () => {

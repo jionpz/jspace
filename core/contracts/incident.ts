@@ -23,7 +23,7 @@ export const INCIDENT_STATUSES = ["open", "acknowledged", "resolved"] as const;
 export type IncidentStatus = (typeof INCIDENT_STATUSES)[number];
 
 export interface IncidentV1 {
-  version: 1;
+  schema_version: 1;
   id: string; // uuid
   cronId: string;
   failureClass: FailureClass;
@@ -41,11 +41,11 @@ export function decodeIncident(input: unknown): DecodeResult<IncidentV1> {
     return failure(issues.issues);
   }
   const FIELDS = [
-    "version", "id", "cronId", "failureClass", "status", "openedAt",
+    "schema_version", "id", "cronId", "failureClass", "status", "openedAt",
     "resolvedAt", "acknowledgedAt", "evidence",
   ] as const;
   checkNoUnknownFields(input, FIELDS, "incident", "incident.unknown-field", issues);
-  readVersion(issues, "incident.version.unsupported", "incident.version", input.version, [1]);
+  readVersion(issues, "incident.version.unsupported", "incident.version", input.schema_version, [1]);
   readUuid(issues, "incident.id.invalid", "incident.id", input.id);
   readRequiredString(input, "cronId", "incident", "incident.cronId.invalid", issues);
   readRequiredString(input, "openedAt", "incident", "incident.openedAt.invalid", issues);
@@ -62,7 +62,7 @@ export function decodeIncident(input: unknown): DecodeResult<IncidentV1> {
   }
   if (!issues.ok) return failure(issues.issues);
   return success({
-    version: 1,
+    schema_version: 1,
     id: input.id as string,
     cronId: input.cronId as string,
     failureClass: input.failureClass as FailureClass,

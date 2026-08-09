@@ -55,7 +55,7 @@ test("init creates portable marker v1 and machine-local v1", () => {
   expect(decodeMarker(marker).ok).toBe(true);
 
   const local = JSON.parse(readFileSync(localPath, "utf-8"));
-  expect(local.version).toBe(1);
+  expect(local.schema_version).toBe(1);
   expect(typeof local.installation_id).toBe("string");
   expect(local.installation_id.length).toBeGreaterThan(0);
   expect(local.bindings).toEqual({});

@@ -12,7 +12,7 @@ const NEW_SKILL = "asset-ingest NEW content";
 const OLD_SKILL = "asset-ingest OLD content";
 
 const skillsManifest: SkillsManifestV1 = {
-  version: 1,
+  schema_version: 1,
   workbench: [
     { name: "asset-ingest", version: "1", scope: "workbench", dependencies: [], entrypoints: ["batch"], description: "" },
   ],
@@ -20,7 +20,7 @@ const skillsManifest: SkillsManifestV1 = {
 };
 
 const bundleManifest: DistributionManifestV1 = {
-  version: 1,
+  schema_version: 1,
   bundle_version: "1.0.0",
   files: [{ path: "skills/asset-ingest/SKILL.md", sha256: sha256Of(NEW_SKILL), ownership: "managed" }],
 };

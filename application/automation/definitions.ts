@@ -22,7 +22,7 @@ export const CRON_FILE = join(CONFIG_DIR, "cron.json");
 
 export function loadCrons(root: string): CronsFile {
   const p = join(root, CRON_FILE);
-  if (!isFile(p)) return { version: 1, crons: [] };
+  if (!isFile(p)) return { schema_version: 1, crons: [] };
   let data: unknown;
   try {
     data = JSON.parse(readFileSync(p, "utf-8"));

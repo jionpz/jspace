@@ -35,7 +35,7 @@ function validHub(): HubV4 {
 }
 
 const local = (bindings: Record<string, string>, id = "inst"): LocalStateV1 => ({
-  version: 1,
+  schema_version: 1,
   installation_id: id,
   bindings,
 });

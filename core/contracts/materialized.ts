@@ -8,12 +8,13 @@ import {
   isRecord,
   IssueCollector,
   readRequiredString,
+  readVersion,
   success,
   type DecodeResult,
 } from "./diagnostics.ts";
 
 export interface MaterializedJournalV1 {
-  version: 1;
+  schema_version: 1;
   asset_version: string;
   applied_at: string;
   files: Record<string, { sha256: string }>;
@@ -25,11 +26,9 @@ export function decodeMaterializedJournal(input: unknown): DecodeResult<Material
     issues.add("materialized.root.type", "materialized", "materialized journal must be an object");
     return failure(issues.issues);
   }
-  const FIELDS = ["version", "asset_version", "applied_at", "files"] as const;
+  const FIELDS = ["schema_version", "asset_version", "applied_at", "files"] as const;
   checkNoUnknownFields(input, FIELDS, "materialized", "materialized.unknown-field", issues);
-  if (input.version !== 1) {
-    issues.add("materialized.version.unsupported", "materialized.version", "version must be 1");
-  }
+  readVersion(issues, "materialized.version.unsupported", "materialized.version", input.schema_version, [1]);
   readRequiredString(input, "asset_version", "materialized", "materialized.asset_version.invalid", issues);
   readRequiredString(input, "applied_at", "materialized", "materialized.applied_at.invalid", issues);
   if (!isRecord(input.files)) {
@@ -43,7 +42,7 @@ export function decodeMaterializedJournal(input: unknown): DecodeResult<Material
   }
   if (!issues.ok) return failure(issues.issues);
   return success({
-    version: 1,
+    schema_version: 1,
     asset_version: input.asset_version as string,
     applied_at: input.applied_at as string,
     files: input.files as Record<string, { sha256: string }>,

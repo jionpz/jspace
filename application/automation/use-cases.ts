@@ -42,7 +42,7 @@ export function cronAdd(
 export function cronList(root: string, json: boolean): CmdResult {
   const data = loadCrons(root);
   if (json) {
-    return { lines: [], data: { version: data.version, crons: data.crons } };
+    return { lines: [], data: { schema_version: data.schema_version, crons: data.crons } };
   }
   if (data.crons.length === 0) {
     return { lines: ["jspace: ok: no crons defined (add one with: jspace cron add <id> --schedule ... )"] };

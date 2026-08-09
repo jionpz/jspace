@@ -44,7 +44,7 @@ export interface CronDefinition {
 }
 
 export interface CronsFile {
-  version: 1;
+  schema_version: 1;
   crons: CronDefinition[];
 }
 
@@ -62,8 +62,8 @@ export function decodeCrons(input: unknown): DecodeResult<CronsFile> {
     issues.add("cron.root.type", "cron", "cron.json root must be an object");
     return failure(issues.issues);
   }
-  checkNoUnknownFields(input, ["version", "crons"], "cron", "cron.unknown-field", issues);
-  readVersion(issues, "cron.version.unsupported", "cron.version", input.version, [1]);
+  checkNoUnknownFields(input, ["schema_version", "crons"], "cron", "cron.unknown-field", issues);
+  readVersion(issues, "cron.version.unsupported", "cron.version", input.schema_version, [1]);
   const crons: CronDefinition[] = [];
   if (!Array.isArray(input.crons)) {
     issues.add("cron.crons.type", "cron.crons", "crons must be an array");
@@ -117,7 +117,7 @@ export function decodeCrons(input: unknown): DecodeResult<CronsFile> {
     });
   }
   if (!issues.ok) return failure(issues.issues);
-  return success({ version: 1, crons });
+  return success({ schema_version: 1, crons });
 }
 
 /** Decode a CronSkillTarget object. Returns undefined when invalid (issues added). */

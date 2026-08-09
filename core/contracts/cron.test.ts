@@ -8,14 +8,14 @@ import { decodeCrons, type CronsFile } from "./cron.ts";
 
 function promptCron(): CronsFile {
   return {
-    version: 1,
+    schema_version: 1,
     crons: [{ id: "weekly-report", schedule: "0 21 * * 0", harness: "claude", prompt: "生成本周周报…", enabled: true }],
   };
 }
 
 function targetCron(): CronsFile {
   return {
-    version: 1,
+    schema_version: 1,
     crons: [
       {
         id: "inbox-tidy",
@@ -58,10 +58,10 @@ test("skill target crons decode with target and no prompt", () => {
 });
 
 test("exactly one of prompt | target is required", () => {
-  const neither = { version: 1, crons: [{ id: "x", schedule: "* * * * *", harness: "claude", enabled: true }] };
+  const neither = { schema_version: 1, crons: [{ id: "x", schedule: "* * * * *", harness: "claude", enabled: true }] };
   expectIssue(neither, "cron.entry.prompt_or_target");
   const both = {
-    version: 1,
+    schema_version: 1,
     crons: [
       {
         id: "x",
@@ -88,11 +88,11 @@ test("target shape is validated", () => {
 });
 
 test("non-string prompt is rejected", () => {
-  expectIssue({ version: 1, crons: [{ id: "x", schedule: "* * * * *", harness: "claude", prompt: 42, enabled: true }] }, "cron.prompt.invalid");
+  expectIssue({ schema_version: 1, crons: [{ id: "x", schedule: "* * * * *", harness: "claude", prompt: 42, enabled: true }] }, "cron.prompt.invalid");
 });
 
 test("unknown cron entry fields are rejected (including target-aware)", () => {
-  const extra = { version: 1, crons: [{ id: "x", schedule: "* * * * *", harness: "claude", prompt: "p", enabled: true, size: 1 }] };
+  const extra = { schema_version: 1, crons: [{ id: "x", schedule: "* * * * *", harness: "claude", prompt: "p", enabled: true, size: 1 }] };
   expectIssue(extra, "cron.entry.unknown-field");
   const also = promptCron() as unknown as Record<string, unknown>;
   (also as { crons: unknown[] }).crons = [{ ...(also as { crons: Record<string, unknown>[] }).crons[0], target: { kind: "skill", skill: "a", entrypoint: "b", input: "c" } }];
@@ -100,7 +100,7 @@ test("unknown cron entry fields are rejected (including target-aware)", () => {
 });
 
 test("mixed prompt and target crons decode together", () => {
-  const mixed: CronsFile = { version: 1, crons: [...promptCron().crons, ...targetCron().crons] };
+  const mixed: CronsFile = { schema_version: 1, crons: [...promptCron().crons, ...targetCron().crons] };
   const result = decodeCrons(JSON.parse(JSON.stringify(mixed)));
   expect(result.ok).toBe(true);
   if (result.ok) {
@@ -109,8 +109,8 @@ test("mixed prompt and target crons decode together", () => {
 });
 
 test("invalid schedule is rejected at decode time (P2-5; no longer deferred to cronAdd)", () => {
-  expectIssue({ version: 1, crons: [{ id: "x", schedule: "*/5 * * * *", harness: "claude", prompt: "p", enabled: true }] }, "cron.schedule.invalid");
-  expectIssue({ version: 1, crons: [{ id: "x", schedule: "not a cron", harness: "claude", prompt: "p", enabled: true }] }, "cron.schedule.invalid");
+  expectIssue({ schema_version: 1, crons: [{ id: "x", schedule: "*/5 * * * *", harness: "claude", prompt: "p", enabled: true }] }, "cron.schedule.invalid");
+  expectIssue({ schema_version: 1, crons: [{ id: "x", schedule: "not a cron", harness: "claude", prompt: "p", enabled: true }] }, "cron.schedule.invalid");
 });
 
 test("valid schedule still decodes (no false cron.schedule.invalid)", () => {

@@ -8,7 +8,7 @@ import { decodeLocal, type LocalStateV1 } from "./local.ts";
 
 function validLocal(): LocalStateV1 {
   return {
-    version: 1,
+    schema_version: 1,
     installation_id: "7f9c6b0a-1a2b-4c3d-8e4f-5a6b7c8d9e0f",
     bindings: {
       "filehub-primary": "/Users/u/filehub",
@@ -40,16 +40,16 @@ test("valid local state decodes ok and round-trips", () => {
 });
 
 test("empty bindings are valid", () => {
-  expectOk({ version: 1, installation_id: "abc-123", bindings: {} });
+  expectOk({ schema_version: 1,installation_id: "abc-123", bindings: {} });
 });
 
 test("version must be 1", () => {
-  expectIssue({ ...validLocal(), version: 2 }, "local.version.unsupported");
-  expectIssue({ ...validLocal(), version: "1" }, "local.version.unsupported");
+  expectIssue({ ...validLocal(), schema_version: 2 }, "local.version.unsupported");
+  expectIssue({ ...validLocal(), schema_version: "1" }, "local.version.unsupported");
 });
 
 test("installation_id must be present and match the id pattern", () => {
-  expectIssue({ version: 1, bindings: {} }, "local.installation_id.invalid");
+  expectIssue({ schema_version: 1,bindings: {} }, "local.installation_id.invalid");
   expectIssue({ ...validLocal(), installation_id: "Has Spaces" }, "local.installation_id.invalid");
 });
 
@@ -65,7 +65,7 @@ test("unknown fields are rejected", () => {
 });
 
 test("independent issues are all reported at once", () => {
-  const bad = { version: 2, installation_id: "Bad", bindings: { "Bad Key": "rel" }, extra: true };
+  const bad = { schema_version: 2, installation_id: "Bad", bindings: { "Bad Key": "rel" }, extra: true };
   const result = decodeLocal(bad);
   expect(result.ok).toBe(false);
   if (!result.ok) {

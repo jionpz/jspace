@@ -3,16 +3,15 @@
 // Hub is the portable workbench registry: domain/resource/project logical
 // identity only. Machine-local path values live in local.json (core/contracts/local.ts).
 // Schema version uses the unified numeric `schema_version: number` form (same
-// as every other contract). Legacy `schema_version: 1` (pre-unification string form)
-// is the same schema and reads in transparently so existing workbenches never
-// need a rebuild; anything else (incl. the old explicit-v3 rejection) decodes
-// as damaged.
+// as every other contract); the legacy string `version: "4"` form is no longer
+// accepted and decodes as damaged (M5 之后的模板已经升级,无兼容性负担).
 import {
   checkNoUnknownFields,
   failure,
   isRecord,
   IssueCollector,
   readRequiredString,
+  readVersion,
   success,
   type DecodeResult,
 } from "./diagnostics.ts";
@@ -288,21 +287,12 @@ export function decodeHub(input: unknown): DecodeResult<HubV4> {
     issues.add("hub.root.type", "hub", "hub.json root must be an object");
     return failure(issues.issues);
   }
-  checkNoUnknownFields(input, ["schema_version", "version", "domains", "resources", "projects"], "hub", "hub.unknown-field", issues);
+  checkNoUnknownFields(input, ["schema_version", "domains", "resources", "projects"], "hub", "hub.unknown-field", issues);
 
-  // Schema version: `schema_version: 1` is the unified numeric form (matches
-  // every other contract). Legacy `version: "4"` (pre-unification string form)
-  // is the same schema and reads in transparently — existing workbenches are
-  // not forced to rebuild. This branch is intentionally kept inline (not the
-  // generic readVersion helper) because the legacy string form must stay
-  // accepted alongside the numeric one.
-  const sv = input.schema_version;
-  const legacy = input.version;
-  if (typeof sv === "number") {
-    if (sv !== 1) issues.add("hub.version.unsupported", "hub.schema_version", "schema_version must be 1");
-  } else if (legacy !== "4") {
-    issues.add("hub.version.unsupported", "hub.schema_version", 'hub.json must carry schema_version: 1 (legacy version: "4" is accepted)');
-  }
+  // Schema version: the unified numeric `schema_version: 1` (matches every
+  // other contract). The legacy string `version: "4"` form is deliberately NOT
+  // accepted — unified schema (P2-2) dropped the legacy read path.
+  readVersion(issues, "hub.version.unsupported", "hub.schema_version", input.schema_version, [1]);
 
   const domainIds = new Set<string>();
   const domains = decodeDomains(input.domains, domainIds, issues);

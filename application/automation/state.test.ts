@@ -26,7 +26,7 @@ const RUN_A = "6f3c5a20-0000-4000-8000-0000000000a1";
 const RUN_B = "6f3c5a20-0000-4000-8000-0000000000b1";
 
 function run(id: string, status: RunRecord["status"], startedAt: string): RunRecord {
-  return { version: 1, id, cronId: "nightly", startedAt, exit: status === "ok" ? 0 : 1, status, timedOut: false, outputLog: `/logs/${id}.md`, batchChanged: true };
+  return { schema_version: 1, id, cronId: "nightly", startedAt, exit: status === "ok" ? 0 : 1, status, timedOut: false, outputLog: `/logs/${id}.md`, batchChanged: true };
 }
 
 test("writeRun/readRuns/lastRun round-trip and sort by startedAt", () => {
@@ -81,7 +81,7 @@ test("damaged run/incident records surface as issues, valid ones still readable"
   const runsDir = join(root, ".jspace", "state", "runs", "nightly");
   mkdirSync(runsDir, { recursive: true });
   writeFileSync(join(runsDir, "corrupt.json"), "{ not json");
-  writeFileSync(join(runsDir, "bad-version.json"), JSON.stringify({ ...run(RUN_B, "ok", "2026-08-04T10:00:00"), version: 99 }));
+  writeFileSync(join(runsDir, "bad-version.json"), JSON.stringify({ ...run(RUN_B, "ok", "2026-08-04T10:00:00"), schema_version: 99 }));
 
   const col = readRuns(root, "nightly");
   expect(col.records.map((r) => r.id)).toEqual([RUN_A]); // valid still readable

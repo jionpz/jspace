@@ -52,7 +52,7 @@ jq .jspace/hub.json >/dev/null   # 合法 JSON
 ```
 预期(示意):
 ```
-✓ hub.json version 4   ✓ domains ↔ workspace/ 一致   ✓ 每资源恰一 primary
+✓ hub.json schema_version 1   ✓ domains ↔ workspace/ 一致   ✓ 每资源恰一 primary
 ⚠ resource <x> 外部路径未绑定(warning,不阻塞)
 ```
 断言:`jspace doctor` 退出 0;缺外部路径只报 warning,不视为失败。细则 `~/.agents/skills/jspace-use/references/registry.md`。

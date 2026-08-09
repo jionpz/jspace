@@ -20,7 +20,7 @@ export const RUN_STATUSES = ["ok", "suspect", "failed"] as const;
 export type RunStatus = (typeof RUN_STATUSES)[number];
 
 export interface RunRecordV1 {
-  version: 1;
+  schema_version: 1;
   id: string; // uuid
   cronId: string;
   startedAt: string;
@@ -39,10 +39,10 @@ export function decodeRunRecord(input: unknown): DecodeResult<RunRecordV1> {
     return failure(issues.issues);
   }
   const FIELDS = [
-    "version", "id", "cronId", "startedAt", "exit", "status", "timedOut", "outputLog", "batchChanged",
+    "schema_version", "id", "cronId", "startedAt", "exit", "status", "timedOut", "outputLog", "batchChanged",
   ] as const;
   checkNoUnknownFields(input, FIELDS, "run", "run.unknown-field", issues);
-  readVersion(issues, "run.version.unsupported", "run.version", input.version, [1]);
+  readVersion(issues, "run.version.unsupported", "run.version", input.schema_version, [1]);
   readUuid(issues, "run.id.invalid", "run.id", input.id);
   readRequiredString(input, "cronId", "run", "run.cronId.invalid", issues);
   readRequiredString(input, "startedAt", "run", "run.startedAt.invalid", issues);
@@ -55,7 +55,7 @@ export function decodeRunRecord(input: unknown): DecodeResult<RunRecordV1> {
   readBool(issues, "run.batchChanged.invalid", "run.batchChanged", input.batchChanged);
   if (!issues.ok) return failure(issues.issues);
   return success({
-    version: 1,
+    schema_version: 1,
     id: input.id as string,
     cronId: input.cronId as string,
     startedAt: input.startedAt as string,

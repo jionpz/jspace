@@ -55,7 +55,7 @@ export function writeEnvelope(fhRoot: string, env: PendingWriteEnvelopeV1): void
  *  sha256(content) so the applier can dedupe and repeated apply never duplicates. */
 export function stageEnvelope(fhRoot: string, producer: string, slug: string, content: string): PendingWriteEnvelopeV1 {
   const env: PendingWriteEnvelopeV1 = {
-    version: 1,
+    schema_version: 1,
     id: crypto.randomUUID(),
     idempotencyKey: sha256Of(content),
     producer,

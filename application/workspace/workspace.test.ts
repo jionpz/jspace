@@ -92,7 +92,7 @@ function syntheticDeps(
   bundleVersion = "2.0.0",
 ): UpgradeDeps {
   const manifest: DistributionManifestV1 = {
-    version: 1,
+    schema_version: 1,
     bundle_version: bundleVersion,
     files: spec.map((f) => ({ path: f.path, sha256: sha256Of(f.content), ownership: f.ownership })),
   };
@@ -364,7 +364,7 @@ test("legacy workbench: unmodified old-name root skills/ copy is removed, upgrad
   writeBytesAtomic(
     join(root, ".jspace", "state", "materialized.json"),
     JSON.stringify({
-      version: 1,
+      schema_version: 1,
       asset_version: "1.0.6",
       applied_at: "2026-08-05",
       files: { "skills/jspace-bootstrap/SKILL.md": { sha256: sha256Of("OLD SKILL") } },
@@ -392,7 +392,7 @@ test("legacy workbench: modified old-name root skills/ copy is kept as stale, js
   writeBytesAtomic(
     join(root, ".jspace", "state", "materialized.json"),
     JSON.stringify({
-      version: 1,
+      schema_version: 1,
       asset_version: "1.0.6",
       applied_at: "2026-08-05",
       files: { "skills/jspace-bootstrap/SKILL.md": { sha256: sha256Of("OLD SKILL") } },
@@ -418,7 +418,7 @@ test("remove during upgrade is backed up and restored by --rollback", () => {
   writeBytesAtomic(
     join(root, ".jspace", "state", "materialized.json"),
     JSON.stringify({
-      version: 1,
+      schema_version: 1,
       asset_version: "1.0.6",
       applied_at: "2026-08-05",
       files: { "skills/jspace-bootstrap/SKILL.md": { sha256: sha256Of("OLD SKILL") } },

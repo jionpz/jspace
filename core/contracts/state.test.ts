@@ -21,16 +21,16 @@ const RUN_ID = "6f3c5a20-0000-4000-8000-000000000001";
 const INC_ID = "7f3c5a20-0000-4000-8000-000000000002";
 
 function validRun(): RunRecordV1 {
-  return { version: 1, id: RUN_ID, cronId: "nightly", startedAt: "2026-08-04T120000", exit: 0, status: "ok", timedOut: false, outputLog: "/logs/x.md", batchChanged: true };
+  return { schema_version: 1,id: RUN_ID, cronId: "nightly", startedAt: "2026-08-04T120000", exit: 0, status: "ok", timedOut: false, outputLog: "/logs/x.md", batchChanged: true };
 }
 function validIncident(): IncidentV1 {
-  return { version: 1, id: INC_ID, cronId: "nightly", failureClass: "failed", status: "open", openedAt: "2026-08-04T120000", evidence: ["run-1"] };
+  return { schema_version: 1,id: INC_ID, cronId: "nightly", failureClass: "failed", status: "open", openedAt: "2026-08-04T120000", evidence: ["run-1"] };
 }
 function validMaterialized(): MaterializedJournalV1 {
-  return { version: 1, asset_version: "v1.0.5", applied_at: "2026-08-04", files: { "AGENTS.md": { sha256: "abc" } } };
+  return { schema_version: 1,asset_version: "v1.0.5", applied_at: "2026-08-04", files: { "AGENTS.md": { sha256: "abc" } } };
 }
 function validUpgrade(): UpgradeJournalV1 {
-  return { version: 1, id: "up-1", from_version: "v1.0.4", to_version: "v1.0.5", plan: [{ action: "update", rel: "AGENTS.md" }], status: "applied" };
+  return { schema_version: 1,id: "up-1", from_version: "v1.0.4", to_version: "v1.0.5", plan: [{ action: "update", rel: "AGENTS.md" }], status: "applied" };
 }
 
 function roundTrip<T>(decode: (v: unknown) => DecodeResult<T>, value: T): void {
@@ -44,7 +44,7 @@ test("RunRecordV1: invalid status / unknown field / unsupported version", () => 
   const d = decodeRunRecord({ ...validRun(), status: "skipped" });
   expectIssue(d.ok, codesOf(d), "run.status.invalid");
   expectIssue(decodeRunRecord({ ...validRun(), bogus: 1 }).ok, codesOf(decodeRunRecord({ ...validRun(), bogus: 1 })), "run.unknown-field");
-  const v = decodeRunRecord({ ...validRun(), version: 2 });
+  const v = decodeRunRecord({ ...validRun(), schema_version: 2 });
   expectIssue(v.ok, codesOf(v), "run.version.unsupported");
   const m = decodeRunRecord({ ...validRun(), id: undefined });
   expectIssue(m.ok, codesOf(m), "run.id.invalid");
@@ -61,7 +61,7 @@ test("IncidentV1: invalid class/status/evidence / unknown field / version", () =
   const e = decodeIncident({ ...validIncident(), evidence: "not-array" });
   expectIssue(e.ok, codesOf(e), "incident.evidence.invalid");
   expectIssue(decodeIncident({ ...validIncident(), extra: true }).ok, codesOf(decodeIncident({ ...validIncident(), extra: true })), "incident.unknown-field");
-  const v = decodeIncident({ ...validIncident(), version: 0 });
+  const v = decodeIncident({ ...validIncident(), schema_version: 0 });
   expectIssue(v.ok, codesOf(v), "incident.version.unsupported");
 });
 
@@ -72,7 +72,7 @@ test("MaterializedJournalV1: bad files entry / unknown field / version", () => {
   const n = decodeMaterializedJournal({ ...validMaterialized(), files: "nope" });
   expectIssue(n.ok, codesOf(n), "materialized.files.invalid");
   expectIssue(decodeMaterializedJournal({ ...validMaterialized(), stray: 1 }).ok, codesOf(decodeMaterializedJournal({ ...validMaterialized(), stray: 1 })), "materialized.unknown-field");
-  const v = decodeMaterializedJournal({ ...validMaterialized(), version: 2 });
+  const v = decodeMaterializedJournal({ ...validMaterialized(), schema_version: 2 });
   expectIssue(v.ok, codesOf(v), "materialized.version.unsupported");
 });
 
@@ -85,7 +85,7 @@ test("UpgradeJournalV1: bad status / bad plan / unknown field / version", () => 
   const n = decodeUpgradeJournal({ ...validUpgrade(), plan: "none" });
   expectIssue(n.ok, codesOf(n), "upgrade.plan.invalid");
   expectIssue(decodeUpgradeJournal({ ...validUpgrade(), junk: true }).ok, codesOf(decodeUpgradeJournal({ ...validUpgrade(), junk: true })), "upgrade.unknown-field");
-  const v = decodeUpgradeJournal({ ...validUpgrade(), version: 3 });
+  const v = decodeUpgradeJournal({ ...validUpgrade(), schema_version: 3 });
   expectIssue(v.ok, codesOf(v), "upgrade.version.unsupported");
 });
 

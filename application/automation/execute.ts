@@ -161,7 +161,7 @@ function recordRun(
   pruneLogs(root, opts.cronId, LOG_KEEP, deps.logDir);
 
   writeRun(root, opts.cronId, {
-    version: 1,
+    schema_version: 1,
     id: runId,
     cronId: opts.cronId,
     startedAt: localStamp(),

@@ -13,8 +13,8 @@ import { localDate } from "../time.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
 
-const SKILLS: SkillsManifestV1 = { version: 1, workbench: [], global: [] };
-const BUNDLE: DistributionManifestV1 = { version: 1, bundle_version: "test", files: [] };
+const SKILLS: SkillsManifestV1 = { schema_version: 1, workbench: [], global: [] };
+const BUNDLE: DistributionManifestV1 = { schema_version: 1, bundle_version: "test", files: [] };
 
 let root: string;
 let fakeHarness: string;
@@ -23,7 +23,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "jspace-exec-"));
   mkdirSync(join(root, ".jspace", "logs", "cron"), { recursive: true });
   writeFileSync(join(root, ".jspace", "cron.json"), JSON.stringify({
-    version: 1,
+    schema_version: 1,
     crons: [
       { id: "weekly", schedule: "0 9 * * 1", harness: "claude", prompt: "report", enabled: true },
       { id: "inbox-tidy", schedule: "0 21 * * *", harness: "claude", target: { kind: "skill", skill: "asset-ingest", entrypoint: "batch", input: "tidy inbox" }, enabled: true },

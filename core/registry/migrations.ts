@@ -7,8 +7,8 @@
 // touching the file — the user must migrate manually.
 
 /** Current portable hub schema version (matches core/contracts/hub.ts). The
- *  version axis is the unified numeric `schema_version`; legacy `schema_version: 1`
- *  is treated as schema_version 1. */
+ *  version axis is the unified numeric `schema_version` (P2-2 dropped the
+ *  legacy string `version` axis). */
 export const HUB_SCHEMA_VERSION = "1";
 
 export type HubTransform = (raw: Record<string, unknown>) => Record<string, unknown>;
@@ -28,11 +28,10 @@ export interface MigrationOutcome {
   document?: Record<string, unknown>;
 }
 
-/** Version of a hub document for migration comparisons: unified
- *  `schema_version: number`, or legacy `version` string. */
+/** Version of a hub document for migration comparisons: the unified numeric
+ *  `schema_version` only (P2-2 dropped the legacy string `version` axis). */
 function docVersion(doc: Record<string, unknown>): string {
-  if (typeof doc.schema_version === "number") return String(doc.schema_version);
-  return String(doc.version);
+  return String(doc.schema_version);
 }
 
 /** Migrate an installed hub document from its schema version to `toVersion`.

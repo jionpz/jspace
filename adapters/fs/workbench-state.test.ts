@@ -34,7 +34,7 @@ function validHub(): HubV4 {
 }
 
 function validLocal(): LocalStateV1 {
-  return { version: 1, installation_id: "inst", bindings: { "filehub-primary": "/tmp/fh" } };
+  return { schema_version: 1, installation_id: "inst", bindings: { "filehub-primary": "/tmp/fh" } };
 }
 
 function tempWorkbench(): string {
@@ -83,7 +83,14 @@ test("missing files report status missing; invalid JSON and v3 report invalid", 
   writeHubFile(root, { version: "3", domains: [], resources: [] });
   const v3 = readWorkbenchState(root);
   expect(v3.hub.status).toBe("invalid");
-  if (v3.hub.status === "invalid") expect(v3.hub.issues[0].code).toBe("hub.version.unsupported");
+  // P2-2: the legacy string `version` field is no longer a recognized axis —
+  // it reports both unknown-field (not in the allowed list) and
+  // version.unsupported (schema_version missing).
+  if (v3.hub.status === "invalid") {
+    const codes = v3.hub.issues.map((i) => i.code);
+    expect(codes).toContain("hub.version.unsupported");
+    expect(codes).toContain("hub.unknown-field");
+  }
   rmSync(root, { recursive: true, force: true });
 });
 

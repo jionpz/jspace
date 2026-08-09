@@ -6,7 +6,7 @@ import { decodeIngestJournal, type IngestJournalV1 } from "./ingest.ts";
 
 function valid(): IngestJournalV1 {
   return {
-    version: 1,
+    schema_version: 1,
     id: "6f3c5a20-0000-4000-8000-000000000001",
     source: "/tmp/inbox/doc.txt",
     target: "/tmp/filehub/projects/foo/2026-08-04-doc.txt",
@@ -37,7 +37,7 @@ test("valid journal decodes ok and round-trips", () => {
 });
 
 test("version must be 1 and required fields present", () => {
-  expectIssue({ ...valid(), version: 2 }, "ingest.version.unsupported");
+  expectIssue({ ...valid(), schema_version: 2 }, "ingest.version.unsupported");
   expectIssue({ ...valid(), source: undefined }, "ingest.source.invalid");
   expectIssue({ ...valid(), status: undefined }, "ingest.status.invalid");
 });

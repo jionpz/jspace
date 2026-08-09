@@ -8,7 +8,7 @@ import { decodeDistributionManifest, type DistributionManifestV1 } from "./distr
 
 function validManifest(): DistributionManifestV1 {
   return {
-    version: 1,
+    schema_version: 1,
     bundle_version: "1.0.3",
     files: [
       { path: "cli/main.ts", sha256: "a".repeat(64), ownership: "managed" },
@@ -36,8 +36,8 @@ test("valid manifest decodes ok and round-trips", () => {
 });
 
 test("version must be 1 and bundle_version required", () => {
-  expectIssue({ ...validManifest(), version: 2 }, "manifest.version.unsupported");
-  expectIssue({ version: 1, files: [] }, "manifest.bundle_version.invalid");
+  expectIssue({ ...validManifest(), schema_version: 2 }, "manifest.version.unsupported");
+  expectIssue({ schema_version: 1, files: [] }, "manifest.bundle_version.invalid");
 });
 
 test("files must be an array", () => {

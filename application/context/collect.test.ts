@@ -21,7 +21,7 @@ function stubDeps(over: Partial<CollectDeps> = {}): CollectDeps {
 
 function env(over: Partial<PendingWriteEnvelopeV1>): PendingWriteEnvelopeV1 {
   return {
-    version: 1,
+    schema_version: 1,
     id: "e",
     idempotencyKey: "k",
     producer: "asset-ingest",
@@ -72,8 +72,8 @@ test("3 domains + 2 pending + 1 open incident + inbox -> all populated", () => {
       }),
       readIncidents: () => ({
         records: [
-          { version: 1, id: "i1", cronId: "inbox-tidy", failureClass: "failed", status: "open", openedAt: "2026-08-05T12:00:00", evidence: [] },
-          { version: 1, id: "i2", cronId: "weekly-report", failureClass: "failed", status: "acknowledged", openedAt: "2026-08-05T12:00:00", evidence: [] },
+          { schema_version: 1, id: "i1", cronId: "inbox-tidy", failureClass: "failed", status: "open", openedAt: "2026-08-05T12:00:00", evidence: [] },
+          { schema_version: 1, id: "i2", cronId: "weekly-report", failureClass: "failed", status: "acknowledged", openedAt: "2026-08-05T12:00:00", evidence: [] },
         ],
         issues: [],
       }),

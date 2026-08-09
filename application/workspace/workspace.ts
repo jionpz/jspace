@@ -41,11 +41,10 @@ function parseHubJson(raw: string | null): Record<string, unknown> | null {
 }
 
 /** Hub schema version as a numeric string for migration comparisons: the
- *  unified `schema_version: number`, or legacy `schema_version: 1` (same schema,
- *  == schema_version 1). Returns null when neither form is present. */
+ *  unified `schema_version: number` only (P2-2 dropped the legacy string
+ *  `version: "4"` axis). Returns null when the numeric form is absent. */
 function hubVersion(doc: Record<string, unknown>): string | null {
   if (typeof doc.schema_version === "number") return String(doc.schema_version);
-  if (doc.version === "4") return "1";
   return null;
 }
 
@@ -120,7 +119,7 @@ function upgradeJournalPath(root: string, id: string): string {
 function writeUpgradeJournal(root: string, id: string, journal: UpgradeJournal): void {
   const p = upgradeJournalPath(root, id);
   mkdirSync(dirname(p), { recursive: true });
-  writeBytesAtomic(p, JSON.stringify({ ...journal, version: 1 }, null, 2) + "\n");
+  writeBytesAtomic(p, JSON.stringify({ ...journal, schema_version: 1 }, null, 2) + "\n");
 }
 
 /** Read an upgrade journal; fail loud on a damaged journal — a rollback must
@@ -242,7 +241,7 @@ export function workspaceUpgrade(
   const id = crypto.randomUUID();
   const backupDir = join(root, CONFIG_DIR, "state", "upgrades", id);
   const journal: UpgradeJournal = {
-    version: 1,
+    schema_version: 1,
     id,
     from_version: marker.value.template_version,
     to_version: deps.manifest.bundle_version,

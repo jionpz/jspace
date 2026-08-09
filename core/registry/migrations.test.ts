@@ -1,6 +1,6 @@
 // core/registry/migrations.test.ts — hub.json schema migration mechanism.
-// Version axis is the unified numeric `schema_version` (legacy `version: "4"`
-// == schema_version 1).
+// Version axis is the unified numeric `schema_version` (P2-2 dropped the
+// legacy string `version: "4"` axis).
 // Run: bun test core/registry/migrations.test.ts
 import { expect, test } from "bun:test";
 import { HUB_SCHEMA_VERSION, migrateHubSchema } from "./migrations.ts";

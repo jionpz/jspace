@@ -35,7 +35,7 @@ afterEach(() => {
 function setCrons(crons: { id: string; schedule: string; enabled: boolean }[]): void {
   writeFileSync(
     join(root, ".jspace", "cron.json"),
-    JSON.stringify({ version: 1, crons: crons.map((c) => ({ ...c, harness: "claude", prompt: "p" })) }, null, 2),
+    JSON.stringify({ schema_version: 1, crons: crons.map((c) => ({ ...c, harness: "claude", prompt: "p" })) }, null, 2),
   );
 }
 
@@ -111,7 +111,7 @@ test("open incident -> cron.open_incidents", () => {
   mkdirSync(join(root, ".jspace", "state", "incidents"), { recursive: true });
   writeFileSync(
     join(root, ".jspace", "state", "incidents", "x-failed.json"),
-    JSON.stringify({ version: 1, id: "a1b2c3d4-0000-4000-8000-000000000201", cronId: "x", failureClass: "failed", status: "open", openedAt: "2026-08-03T12:00:00", evidence: [] }),
+    JSON.stringify({ schema_version: 1, id: "a1b2c3d4-0000-4000-8000-000000000201", cronId: "x", failureClass: "failed", status: "open", openedAt: "2026-08-03T12:00:00", evidence: [] }),
   );
   const r = doctorWorkbench(root, stubDeps());
   expect(codes(r)).toContain("cron.open_incidents");
@@ -131,7 +131,7 @@ test("filehub registered with unfiled _inbox -> filehub.inbox_unfiled", () => {
   const fh = join(root, "filehub");
   mkdirSync(join(fh, "_inbox"), { recursive: true });
   writeFileSync(join(fh, "_inbox", "untidy.pdf"), "x");
-  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
+  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ schema_version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
   const r = doctorWorkbench(root, stubDeps());
   expect(codes(r)).toContain("filehub.inbox_unfiled");
 });
@@ -155,7 +155,7 @@ test("nested _inbox dir counts as ONE item (top-level semantics; single countInb
   writeFileSync(join(fh, "_inbox", "sub", "a.pdf"), "x");
   writeFileSync(join(fh, "_inbox", "sub", "b.pdf"), "x");
   writeFileSync(join(fh, "_inbox", "sub", "c.pdf"), "x");
-  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
+  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ schema_version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
   const r = doctorWorkbench(root, stubDeps());
   const diag = (r.data as { diagnostics: { code: string; message: string }[] }).diagnostics.find((d) => d.code === "filehub.inbox_unfiled");
   expect(diag).toBeDefined();
@@ -175,7 +175,7 @@ test("malformed .APPLY.json -> filehub.pending_decode warning (P2-6)", () => {
   const fh = join(root, "filehub");
   mkdirSync(join(fh, ".jspace-logs"), { recursive: true });
   writeFileSync(join(fh, ".jspace-logs", "corrupt.APPLY.json"), "{ not json", "utf-8");
-  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
+  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ schema_version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
   const r = doctorWorkbench(root, stubDeps());
   const diags = (r.data as { diagnostics: { code: string }[] }).diagnostics;
   expect(diags.some((d) => d.code === "filehub.pending_decode")).toBe(true);
@@ -214,7 +214,7 @@ test("orphan skill dir with a journal record -> no skills.orphan_dir (upgrade ow
   writeFileSync(
     join(root, ".jspace", "state", "materialized.json"),
     JSON.stringify({
-      version: 1,
+      schema_version: 1,
       asset_version: "1.0.6",
       applied_at: "2026-08-05",
       files: { ".jspace/skills/jspace-bootstrap/SKILL.md": { sha256: sha256Of("old skill") } },
@@ -328,7 +328,7 @@ test("projection wholly missing but was materialized -> skills.projection_drift"
   writeFileSync(
     join(root, ".jspace", "state", "materialized.json"),
     JSON.stringify({
-      version: 1,
+      schema_version: 1,
       asset_version: "1.0.9",
       applied_at: "2026-08-06",
       files: { ".claude/skills/jspace-use/SKILL.md": { sha256: "x" } },
@@ -407,7 +407,7 @@ test("stale filehub project -> filehub.project_stale (info); fresh -> none", () 
   const t = new Date(Date.now() - 130 * 86_400_000);
   utimesSync(oldP, t, t);
   writeFileSync(join(fh, "projects", "active-project", "docs", "index.md"), "x");
-  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
+  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ schema_version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
 
   const c = codes(doctorWorkbench(root, stubDeps()));
   expect(c).toContain("filehub.project_stale");

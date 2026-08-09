@@ -13,7 +13,7 @@ ${JSPACE_BLOCK_END}`;
 export const AGENTS_BUNDLE = AGENTS_BLOCK; // template = block (no user content in bundle)
 
 const manifest: DistributionManifestV1 = {
-  version: 1,
+  schema_version: 1,
   bundle_version: "1.0.2",
   files: [
     { path: "templates/workbench/AGENTS.md", sha256: sha256Of(AGENTS_BUNDLE), ownership: "seed" },
@@ -173,7 +173,7 @@ test("unrecorded modification -> seed skip (preserved), managed conflict", () =>
 
   // the reserved managed class still surfaces edits as conflict
   const managedManifest: DistributionManifestV1 = {
-    version: 1,
+    schema_version: 1,
     bundle_version: "1",
     files: [{ path: "templates/workbench/.gitignore", sha256: sha256Of("new"), ownership: "managed" }],
   };

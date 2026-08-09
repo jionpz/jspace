@@ -2,12 +2,12 @@
 // Regenerate with: bun run scripts/gen-assets.ts
 import type { DistributionManifestV1 } from "../core/contracts/distribution.ts";
 export const BUNDLE_MANIFEST: DistributionManifestV1 = {
-  version: 1,
+  schema_version: 1,
   bundle_version: "1.0.11",
   files: [
   { path: "templates/workbench/.claude/settings.json", sha256: "3f0ebe9a0cc565ac1f1539a81f09056b733e42205f02ccc7fbcedc06c0be7b56", ownership: "seed" },
   { path: "templates/workbench/.gitignore", sha256: "0f2e16c43f69d5da1cbffb1ff533c71f45eebe132b475471f0c014f6d204fd55", ownership: "seed" },
-  { path: "templates/workbench/.jspace/cron.json", sha256: "2afcd6aa49354f2f6e55e81071b4f28f7945afd2035672d093c86c24b3cbf7b9", ownership: "user" },
+  { path: "templates/workbench/.jspace/cron.json", sha256: "f63e5ad4e9b965603886956e8997bf59b837ea5d9947d96d3335aa1e79d2b902", ownership: "user" },
   { path: "templates/workbench/.jspace/hub.json", sha256: "56125ed5177d55eae719e876a90cf0299c386c7f571c945c1e6291e808106001", ownership: "user" },
   { path: "templates/workbench/AGENTS.md", sha256: "efbf8bb669136591e8df8f9dc205f1feb344c67c82805e358d837500a8c22108", ownership: "seed" },
   { path: "templates/workbench/CLAUDE.md", sha256: "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49", ownership: "seed" },
@@ -15,11 +15,11 @@ export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   { path: "templates/filehub/README.md", sha256: "2c9b5508d27afa8889f1240ed580d60210ccdd763604021a6c8ca0521a3df2e9", ownership: "managed" },
   { path: "skills/jspace-use/SKILL.md", sha256: "108d8a6c3e24472a2786661d32949537b0188160ee5f5f1bd4ce43668b880227", ownership: "seed" },
   { path: "skills/jspace-use/agents/openai.yaml", sha256: "bcfce9990e7f8e1507e729c6c6afe2d93a61f20c34e2d78bb8caad6e3aa0a05c", ownership: "seed" },
-  { path: "skills/jspace-use/references/example-first-use.md", sha256: "dafccaf930ef71c248a7fcbf51435627ac655606a24692fc04a287377a3e0e7b", ownership: "seed" },
+  { path: "skills/jspace-use/references/example-first-use.md", sha256: "b48592dc1008b4a711019fe7f00b7bbe4472634488fab340c1e534fe4139789e", ownership: "seed" },
   { path: "skills/jspace-use/references/gbrain.md", sha256: "3824604cc6ecc715db3d09732f9974c5656ae1a7a4eb77eb58e67bcb8898db22", ownership: "seed" },
   { path: "skills/jspace-use/references/harnesses.md", sha256: "2c49c4d8f719dce0e6bb3c3eac227fda12caec2b3f3dbd3698899d4e17f6b7d8", ownership: "seed" },
   { path: "skills/jspace-use/references/headless-ops.md", sha256: "a1aef844240e2ac0b07db93321e87026b0a9b59dd4db2e2ea8216ca1eedaaf58", ownership: "seed" },
-  { path: "skills/jspace-use/references/registry.md", sha256: "fbab4b4399317e43f7bba1fad8f15b6e85be0b1b6eea2aa3d558868f94ee8283", ownership: "seed" },
+  { path: "skills/jspace-use/references/registry.md", sha256: "f538046741fe90570821243ea151bfde7d90f9fc2fb44554374ac542b6eb4ffa", ownership: "seed" },
   { path: "skills/asset-ingest/SKILL.md", sha256: "4b3216561dded391f58b5c595893da6aa3475435d4dd296122487acd496b6b3f", ownership: "seed" },
   { path: "skills/asset-ingest/references/batch.md", sha256: "8e98250cf8f14779fbb4627a22f61051fae487c19d1eccb561f0f909dd0d8744", ownership: "seed" },
   { path: "skills/asset-ingest/references/deep-extract.md", sha256: "72f6712eba14589676957dd3390278b351b1f42e74fffc4572cbff90ca37a24b", ownership: "seed" },

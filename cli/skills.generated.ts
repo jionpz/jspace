@@ -2,7 +2,7 @@
 // Regenerate with: bun run scripts/gen-assets.ts
 import type { SkillsManifestV1 } from "../core/contracts/skills.ts";
 export const SKILLS_MANIFEST: SkillsManifestV1 = {
-  "version": 1,
+  "schema_version": 1,
   "workbench": [
     {
       "name": "jspace-use",

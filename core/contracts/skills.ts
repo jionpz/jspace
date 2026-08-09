@@ -11,6 +11,7 @@ import {
   IssueCollector,
   readOptionalString,
   readRequiredString,
+  readVersion,
   success,
   type DecodeResult,
 } from "./diagnostics.ts";
@@ -30,7 +31,7 @@ export interface SkillEntry {
 }
 
 export interface SkillsManifestV1 {
-  version: 1;
+  schema_version: 1;
   workbench: SkillEntry[]; // 4 required workbench skills
   global: SkillEntry[]; // machine-global optional skills (harness-config)
 }
@@ -43,14 +44,12 @@ export function decodeSkillsManifest(input: unknown): DecodeResult<SkillsManifes
     issues.add("skills.root.type", "skills", "skills-manifest.json root must be an object");
     return failure(issues.issues);
   }
-  checkNoUnknownFields(input, ["version", "workbench", "global"], "skills", "skills.unknown-field", issues);
-  if (input.version !== 1) {
-    issues.add("skills.version.unsupported", "skills.version", "version must be 1");
-  }
+  checkNoUnknownFields(input, ["schema_version", "workbench", "global"], "skills", "skills.unknown-field", issues);
+  readVersion(issues, "skills.version.unsupported", "skills.version", input.schema_version, [1]);
   const workbench = decodeEntries(input.workbench, "workbench", issues);
   const global = decodeEntries(input.global, "global", issues);
   if (!issues.ok) return failure(issues.issues);
-  return success({ version: 1, workbench, global });
+  return success({ schema_version: 1, workbench, global });
 }
 
 function decodeEntries(raw: unknown, group: string, issues: IssueCollector): SkillEntry[] {

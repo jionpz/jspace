@@ -16,7 +16,7 @@ import { ID_PATTERN, isId } from "./ids.ts";
 import { isAbsolutePath } from "./paths.ts";
 
 export interface LocalStateV1 {
-  version: 1;
+  schema_version: 1;
   installation_id: string;
   bindings: Record<string, string>;
 }
@@ -27,9 +27,9 @@ export function decodeLocal(input: unknown): DecodeResult<LocalStateV1> {
     issues.add("local.root.type", "local", "local.json root must be an object");
     return failure(issues.issues);
   }
-  checkNoUnknownFields(input, ["version", "installation_id", "bindings"], "local", "local.unknown-field", issues);
+  checkNoUnknownFields(input, ["schema_version", "installation_id", "bindings"], "local", "local.unknown-field", issues);
 
-  readVersion(issues, "local.version.unsupported", "local.version", input.version, [1]);
+  readVersion(issues, "local.version.unsupported", "local.version", input.schema_version, [1]);
   const installationId = readRequiredString(input, "installation_id", "local", "local.installation_id.invalid", issues);
   if (installationId !== undefined && !isId(installationId)) {
     issues.add("local.installation_id.invalid", "local.installation_id", `installation_id must match ${ID_PATTERN}`);
@@ -51,5 +51,5 @@ export function decodeLocal(input: unknown): DecodeResult<LocalStateV1> {
   }
 
   if (!issues.ok) return failure(issues.issues);
-  return success({ version: 1, installation_id: installationId as string, bindings });
+  return success({ schema_version: 1, installation_id: installationId as string, bindings });
 }

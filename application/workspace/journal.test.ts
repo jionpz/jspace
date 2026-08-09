@@ -21,7 +21,7 @@ function writeFile(p: string, content: string): void {
 }
 
 const validJournal = () =>
-  JSON.stringify({ version: 1, asset_version: "v1.0.5", applied_at: "2026-08-04", files: { "AGENTS.md": { sha256: "abc" } } });
+  JSON.stringify({ schema_version: 1, asset_version: "v1.0.5", applied_at: "2026-08-04", files: { "AGENTS.md": { sha256: "abc" } } });
 
 test("readMaterializedJournal: missing -> null (no known base); valid -> value; damaged -> fail loud", () => {
   const root = wb();
@@ -34,7 +34,7 @@ test("readMaterializedJournal: missing -> null (no known base); valid -> value; 
   expect(() => readMaterializedJournal(root)).toThrow(CliError); // never silently null
   expect(() => readMaterializedJournal(root)).toThrow(/materialized\.json/);
 
-  writeFile(join(root, MATERIALIZED_FILE), JSON.stringify({ version: 2, asset_version: "v2", applied_at: "x", files: {} }));
+  writeFile(join(root, MATERIALIZED_FILE), JSON.stringify({ schema_version: 2, asset_version: "v2", applied_at: "x", files: {} }));
   expect(() => readMaterializedJournal(root)).toThrow(/damaged/);
   rmSync(root, { recursive: true, force: true });
 });
@@ -46,7 +46,7 @@ function writeMarker(root: string): void {
   );
 }
 
-const emptyDeps = { manifest: { version: 1 as const, bundle_version: "v1.0.5", files: [] }, assets: {}, readFile: () => null, writeFile: () => {} };
+const emptyDeps = { manifest: { schema_version: 1 as const, bundle_version: "v1.0.5", files: [] }, assets: {}, readFile: () => null, writeFile: () => {} };
 
 test("workspace upgrade rollback: damaged/missing journal fails loud, never a silent no-op", () => {
   const root = wb();
@@ -58,7 +58,7 @@ test("workspace upgrade rollback: damaged/missing journal fails loud, never a si
   writeFile(journalPath, "{ not json");
   expect(() => workspaceUpgrade(root, { dryRun: false, acceptConflicts: false, rollbackId: "up-1" }, emptyDeps)).toThrow(/not valid JSON/);
   // invalid shape (wrong version) -> explicit error
-  writeFile(journalPath, JSON.stringify({ version: 9, id: "up-1", from_version: "v1", to_version: "v2", plan: [], status: "applied" }));
+  writeFile(journalPath, JSON.stringify({ schema_version: 9, id: "up-1", from_version: "v1", to_version: "v2", plan: [], status: "applied" }));
   expect(() => workspaceUpgrade(root, { dryRun: false, acceptConflicts: false, rollbackId: "up-1" }, emptyDeps)).toThrow(/damaged/);
   rmSync(root, { recursive: true, force: true });
 });
@@ -66,7 +66,7 @@ test("workspace upgrade rollback: damaged/missing journal fails loud, never a si
 test("writeActualMaterializedJournal writes atomically and decodes back", () => {
   const root = wb();
   const manifest = {
-    version: 1 as const,
+    schema_version: 1 as const,
     bundle_version: "v1.0.5",
     files: [{ path: "templates/workbench/AGENTS.md", sha256: "a".repeat(64), ownership: "managed" as const }],
   };

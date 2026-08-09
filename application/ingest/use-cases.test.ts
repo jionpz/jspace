@@ -30,7 +30,7 @@ beforeEach(() => {
       projects: [{ id: "foo", domain: "files", asset_rel_path: "projects/foo", status: "active" }],
     }),
   );
-  writeFileSync(join(wb, ".jspace", "local.json"), JSON.stringify({ version: 1, installation_id: "inst", bindings: { "filehub-path": fh } }));
+  writeFileSync(join(wb, ".jspace", "local.json"), JSON.stringify({ schema_version: 1, installation_id: "inst", bindings: { "filehub-path": fh } }));
 });
 afterEach(() => rmSync(wb, { recursive: true, force: true }));
 

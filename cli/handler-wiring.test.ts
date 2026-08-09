@@ -33,7 +33,7 @@ afterEach(() => {
 function seedCrons(enabled: boolean): void {
   writeFileSync(
     join(wb, ".jspace", "cron.json"),
-    JSON.stringify({ version: 1, crons: [{ id: "a", schedule: "0 21 * * *", harness: "claude", prompt: "p", enabled }] }),
+    JSON.stringify({ schema_version: 1, crons: [{ id: "a", schedule: "0 21 * * *", harness: "claude", prompt: "p", enabled }] }),
   );
 }
 

@@ -158,7 +158,7 @@ export function beginIngest(root: string, plan: IngestPlan, ops: IngestFileOps):
 
   ops.copyFile(plan.source, plan.target);
   const journal: IngestJournalV1 = {
-    version: 1,
+    schema_version: 1,
     id: crypto.randomUUID(),
     source: plan.source,
     target: plan.target,

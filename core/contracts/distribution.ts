@@ -25,7 +25,7 @@ export interface DistributionFile {
 }
 
 export interface DistributionManifestV1 {
-  version: 1;
+  schema_version: 1;
   bundle_version: string;
   files: DistributionFile[];
 }
@@ -39,9 +39,9 @@ export function decodeDistributionManifest(input: unknown): DecodeResult<Distrib
     issues.add("manifest.root.type", "manifest", "manifest root must be an object");
     return failure(issues.issues);
   }
-  checkNoUnknownFields(input, ["version", "bundle_version", "files"], "manifest", "manifest.unknown-field", issues);
+  checkNoUnknownFields(input, ["schema_version", "bundle_version", "files"], "manifest", "manifest.unknown-field", issues);
 
-  readVersion(issues, "manifest.version.unsupported", "manifest.version", input.version, [1]);
+  readVersion(issues, "manifest.version.unsupported", "manifest.version", input.schema_version, [1]);
   readRequiredString(input, "bundle_version", "manifest", "manifest.bundle_version.invalid", issues);
 
   const files: DistributionFile[] = [];
@@ -72,5 +72,5 @@ export function decodeDistributionManifest(input: unknown): DecodeResult<Distrib
   }
 
   if (!issues.ok) return failure(issues.issues);
-  return success({ version: 1, bundle_version: input.bundle_version as string, files });
+  return success({ schema_version: 1, bundle_version: input.bundle_version as string, files });
 }

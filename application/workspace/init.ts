@@ -95,7 +95,7 @@ export function initWorkbench(
 
   // Machine-local state v1 (gitignored): installation identity + bindings.
   const local: LocalStateV1 = {
-    version: 1,
+    schema_version: 1,
     installation_id: crypto.randomUUID(),
     bindings: {},
   };

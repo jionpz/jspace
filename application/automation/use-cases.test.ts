@@ -16,7 +16,7 @@ function makeWorkbench(crons: { id: string; enabled: boolean }[]): string {
   writeFileSync(
     join(wb, ".jspace", "cron.json"),
     JSON.stringify({
-      version: 1,
+      schema_version: 1,
       crons: crons.map((c) => ({ id: c.id, schedule: "0 21 * * *", harness: "claude", prompt: "p", enabled: c.enabled })),
     }, null, 2) + "\n",
   );

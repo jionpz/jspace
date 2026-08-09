@@ -25,7 +25,7 @@ export type IngestStep = (typeof INGEST_STEPS)[number];
 export type IngestStatus = IngestStep | "failed";
 
 export interface IngestJournalV1 {
-  version: 1;
+  schema_version: 1;
   id: string; // uuid
   source: string; // inbox file absolute path
   target: string; // staged target absolute path (inside the filehub)
@@ -48,11 +48,11 @@ export function decodeIngestJournal(input: unknown): DecodeResult<IngestJournalV
     return failure(issues.issues);
   }
   const FIELDS = [
-    "version", "id", "source", "target", "relPath", "slug", "projectId",
+    "schema_version", "id", "source", "target", "relPath", "slug", "projectId",
     "contentHash", "status", "failedStep", "failureReason", "indexEntry", "createdAt", "updatedAt",
   ] as const;
   checkNoUnknownFields(input, FIELDS, "ingest", "ingest.unknown-field", issues);
-  readVersion(issues, "ingest.version.unsupported", "ingest.version", input.version, [1]);
+  readVersion(issues, "ingest.version.unsupported", "ingest.version", input.schema_version, [1]);
   const id = readRequiredString(input, "id", "ingest", "ingest.id.invalid", issues);
   readRequiredString(input, "source", "ingest", "ingest.source.invalid", issues);
   readRequiredString(input, "target", "ingest", "ingest.target.invalid", issues);
@@ -78,7 +78,7 @@ export function decodeIngestJournal(input: unknown): DecodeResult<IngestJournalV
   if (id !== undefined) readUuid(issues, "ingest.id.invalid", "ingest.id", id);
   if (!issues.ok) return failure(issues.issues);
   return success({
-    version: 1,
+    schema_version: 1,
     id: id as string,
     source: input.source as string,
     target: input.target as string,

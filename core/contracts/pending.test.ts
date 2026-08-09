@@ -6,7 +6,7 @@ import { decodePendingEnvelope, type PendingWriteEnvelopeV1 } from "./pending.ts
 
 function valid(): PendingWriteEnvelopeV1 {
   return {
-    version: 1,
+    schema_version: 1,
     id: "a1b2c3d4-0000-4000-8000-000000000001",
     idempotencyKey: "b".repeat(64),
     producer: "asset-ingest",

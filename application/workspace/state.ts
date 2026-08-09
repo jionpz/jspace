@@ -47,5 +47,5 @@ export function assertHubValid(hub: HubV4): void {
 
 /** Fresh machine-local state for a workbench that has none yet (e.g. a clone). */
 export function freshLocal(): LocalStateV1 {
-  return { version: 1, installation_id: crypto.randomUUID(), bindings: {} };
+  return { schema_version: 1, installation_id: crypto.randomUUID(), bindings: {} };
 }

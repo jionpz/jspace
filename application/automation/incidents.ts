@@ -36,7 +36,7 @@ export function readIncidents(root: string): IncidentCollection {
 
 function writeIncident(root: string, inc: Incident): void {
   mkdirSync(dir(root), { recursive: true });
-  writeBytesAtomic(join(dir(root), `${inc.id}.json`), JSON.stringify({ ...inc, version: 1 }, null, 2) + "\n");
+  writeBytesAtomic(join(dir(root), `${inc.id}.json`), JSON.stringify({ ...inc, schema_version: 1 }, null, 2) + "\n");
 }
 
 /** Open a new incident for cron+failureClass, or re-open/update an existing
@@ -55,7 +55,7 @@ export function openOrUpdate(root: string, cronId: string, failureClass: Failure
     return updated;
   }
   const inc: Incident = {
-    version: 1,
+    schema_version: 1,
     id: crypto.randomUUID(),
     cronId,
     failureClass,

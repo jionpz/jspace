@@ -32,7 +32,7 @@ function validMarker(): WorkbenchMarkerV1 {
 }
 
 function validLocal(bindings: Record<string, string> = { "filehub-primary": FH }): LocalStateV1 {
-  return { version: 1, installation_id: "inst", bindings };
+  return { schema_version: 1, installation_id: "inst", bindings };
 }
 
 interface FakeFs {

@@ -103,16 +103,22 @@ test("schema_version other than 1 is rejected as unsupported", () => {
   expect(result.ok).toBe(false);
   if (!result.ok) {
     const v = result.issues.find((i) => i.code === "hub.version.unsupported");
-    expect(v?.message).toContain("schema_version must be 1");
+    expect(v?.message).toContain("must be one of 1");
   }
 });
 
-test("legacy version:\"4\" (pre-unification) is accepted as schema_version 1", () => {
-  // pure legacy shape: no schema_version at all
+test("legacy version:\"4\" (pre-unification) is rejected (P2-2 dropped the legacy axis)", () => {
+  // pure legacy shape: no schema_version at all — the string `version` field is
+  // no longer a recognized axis, so it decodes as damaged (unknown-field +
+  // version.unsupported), never as a silent schema_version 1.
   const legacy = { version: "4", domains: [], resources: [], projects: [] } as unknown;
   const result = decodeHub(legacy);
-  expect(result.ok).toBe(true);
-  if (result.ok) expect(result.value.schema_version).toBe(1);
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    const codes = result.issues.map((i) => i.code);
+    expect(codes).toContain("hub.version.unsupported");
+    expect(codes).toContain("hub.unknown-field");
+  }
 });
 
 test("missing schema_version or unknown legacy version is rejected", () => {
