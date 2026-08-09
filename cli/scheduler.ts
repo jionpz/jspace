@@ -7,7 +7,6 @@ import { fail } from "../core/shared/errors.ts";
 import { readMarker } from "../adapters/fs/workbench-state.ts";
 import { schedulerAdapter, workbenchTag, type SchedulerEnv } from "../adapters/scheduler/index.ts";
 import { jspaceBinary } from "./cron.ts";
-import { resolvePath } from "./paths.ts";
 
 const DEFAULT_PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
 
@@ -16,7 +15,6 @@ export function schedulerEnv(): SchedulerEnv {
     jspaceBinary: jspaceBinary(),
     home: homedir(),
     path: process.env.PATH ?? DEFAULT_PATH,
-    resolvePath,
   };
 }
 

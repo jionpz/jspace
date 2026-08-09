@@ -149,6 +149,7 @@ const cronRunSpec: CommandSpec = {
 const cronStatusSpec: CommandSpec = {
   name: "status",
   summary: "show last run result",
+  features: { dir: true },
   positionals: [{ name: "id", help: "cron id (default: all)" }],
   handler: (ctx, args) => cronStatus(ctx.root, args.id === undefined ? undefined : s(args.id)),
 };

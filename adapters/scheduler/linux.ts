@@ -1,9 +1,9 @@
 // adapters/scheduler/linux.ts — crontab adapter (managed block, tag-scoped).
 // Task identity: com.jspace.cron.<tag>.<id> appears inside the managed-block
-// comment lines; inspect() only matches this workbench root (env.resolvePath)
-// so another workbench's crons are never touched. The managed-block markers
-// carry the workbench tag so two workbenches' blocks coexist on one crontab
-// and install/update/uninstall only touch the current workbench's block.
+// comment lines; inspect() only matches lines whose task identity carries THIS
+// workbench tag (parseManagedLine), so another workbench's crons are never
+// touched. Crontab is machine-global and tag-filtered per line — no root/path
+// matching is needed (an old build claimed env.resolvePath did that; it never did).
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";

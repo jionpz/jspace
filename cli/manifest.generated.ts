@@ -29,7 +29,7 @@ export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   { path: "skills/asset-ingest/references/migration.md", sha256: "e308540e3f7cc5773e21e62f85a7f3b7a75b8efa84cf82c7458d4021316409ec", ownership: "seed" },
   { path: "skills/asset-ingest/scripts/extract.py", sha256: "058ddee53fd9b0227e03aaa1443cca31e443aa652e51b53f3ffe3b4328dfa9e0", ownership: "seed" },
   { path: "skills/asset-ingest/scripts/extract.test.py", sha256: "13c409f09480594c8890e853ee2dd9138d66ab8888228bf8fb4e8d84044acea1", ownership: "seed" },
-  { path: "skills/asset-ingest/scripts/office-extract.py", sha256: "5fac27c07e98f255c8f548b1326ec53dc818a18e325b67a25a2593f9f06f26df", ownership: "seed" },
+  { path: "skills/asset-ingest/scripts/office-extract.py", sha256: "bf7b814056e9e9c167fcc252cceb9c5267e5f18088d4499652046be401f303ed", ownership: "seed" },
   { path: "skills/asset-ingest/scripts/office-extract.test.py", sha256: "13c1bddbb060754f425c38f7b587009f1c9a970b33702a843850a5f048db5b31", ownership: "seed" },
   { path: "skills/memory-recall/SKILL.md", sha256: "cb4084852ae466559bac88d25f883348f0eac857c952edec8a5e75b9ed7ad2c1", ownership: "seed" },
   { path: "skills/memory-recall/references/discipline.md", sha256: "cbaba0508eb48aa922c1d92c195019acc83b242d291ca9e012297bba65222b75", ownership: "seed" },

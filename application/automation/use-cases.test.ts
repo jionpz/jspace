@@ -23,7 +23,7 @@ function makeWorkbench(crons: { id: string; enabled: boolean }[]): string {
   return wb;
 }
 
-const env: SchedulerEnv = { jspaceBinary: "/bin/jspace", home: "/home/u", path: "/bin", resolvePath: (p) => p };
+const env: SchedulerEnv = { jspaceBinary: "/bin/jspace", home: "/home/u", path: "/bin" };
 
 const fakeAdapter = (opts: {
   platform: SchedulerAdapter["platform"];

@@ -233,7 +233,8 @@ def _render_pptx(path: str, data) -> str:
             out.append("(空)")
             continue
         for p in paras:
-            out.append(f"- {p.replace('|', '\\|')}")
+            escaped = p.replace("|", "\\|")
+            out.append(f"- {escaped}")
     return "\n".join(out)
 
 

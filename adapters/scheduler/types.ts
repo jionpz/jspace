@@ -39,8 +39,6 @@ export interface SchedulerEnv {
   jspaceBinary: string;
   home: string;
   path: string;
-  /** platform-like root resolver for linux installed-cron matching */
-  resolvePath: (p: string) => string;
 }
 
 /** Canonical identity for one cron. Single source of truth for the platform

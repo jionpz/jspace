@@ -30,13 +30,34 @@ jobs:
       - name: Cross-skill reference reachability
         run: bun test cli/assets-reachability.test.ts
 
+      - name: Skill self-checks (C1–C4)
+        run: bun run scripts/check-skills.ts
+
       - name: Office extraction tests
         run: python3 skills/asset-ingest/scripts/office-extract.test.py
+
+      - name: Layer-routing / markitdown fallback regression
+        run: python3 skills/asset-ingest/scripts/extract.test.py
 
       - name: Asset freshness (gen-assets must be a no-op, incl. skills manifest)
         run: |
           bun run scripts/gen-assets.ts
           git diff --exit-code -- cli/assets.generated.ts cli/manifest.generated.ts cli/skills.generated.ts
+
+      # P1-1: catch a bumped package.json with a stale cli/version.generated.ts.
+      # Not a full `gen-version && diff` — dev builds embed `git describe`'s
+      # commit delta (`1.0.11-2-g…`), which legitimately differs from the
+      # committed release form on every non-tag commit. The committed file must
+      # at least agree with package.json's version prefix; the tag-driven build
+      # (build.yml) pins the exact form via JSPACE_BUILD_VERSION.
+      - name: Version consistency (package.json ↔ cli/version.generated.ts)
+        run: |
+          V=$(node -p "require('./package.json').version")
+          G=$(grep -o 'VERSION = "[^"]*"' cli/version.generated.ts | cut -d'"' -f2)
+          case "$G" in
+            "$V"|"$V"-*) : ;;
+            *) echo "version mismatch: package.json=$V generated=$G (run scripts/gen-version.ts)"; exit 1 ;;
+          esac
 
       - name: Scheduler argv round-trip + reconciliation smoke (pure, no real scheduler)
         run: bun test application/automation/invocation.test.ts application/automation/scheduler.test.ts adapters/harness/argv.test.ts
@@ -62,6 +83,6 @@ jobs:
           # reconciliation plan preview (no real scheduler apply)
           bun run cli/main.ts cron install --dir /tmp/jspace-verify --dry-run | grep "would apply"
           bun run cli/main.ts cron check --dir /tmp/jspace-verify
-          (cd /tmp/jspace-verify && bun run "${{ github.workspace }}/cli/main.ts" cron status)
+          bun run cli/main.ts cron status --dir /tmp/jspace-verify
           bun run cli/main.ts workspace diff --dir /tmp/jspace-verify
           bun run cli/main.ts workspace upgrade --dir /tmp/jspace-verify --dry-run
