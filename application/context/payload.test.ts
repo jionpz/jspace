@@ -2,7 +2,7 @@
 // Run: bun test application/context/payload.test.ts
 import { expect, test } from "bun:test";
 import type { WorkbenchState } from "./collect.ts";
-import { renderSessionStart, renderTurn } from "./payload.ts";
+import { renderSessionStart, renderTurn, renderPreCompact, renderSessionEnd } from "./payload.ts";
 
 const empty: WorkbenchState = {
   domains: [],
@@ -71,6 +71,30 @@ test("broken hub -> alert line in current-state and top-priority next-action", (
   expect(r).toContain("先跑 jspace doctor --dir . 修复注册表");
   const t = renderTurn({ ...empty, hubBroken: true });
   expect(t).toContain("hub.json 缺失或损坏");
+});
+
+test("pre-compact emits a passive reminder + state, recommends explicit actions only (D2/方案 a)", () => {
+  const state: WorkbenchState = { ...empty, pendingCount: 1, pendingProducers: ["asset-ingest"] };
+  const r = renderPreCompact(state, "/wb");
+  expect(r).toContain("会话即将 compaction");
+  expect(r).toContain("本提醒不自动写 gbrain"); // passive: no auto write
+  expect(r).toContain("pending: 1 笔 gbrain 暂存写待落盘（asset-ingest）"); // state surfaced
+  // the reminder nudges an EXPLICIT action (user-initiated apply), never auto-writes
+  expect(r).toContain("jspace pending apply"); // explicit command is the recommendation
+  expect(r).toContain("<next-action>");
+});
+
+test("session-end emits a settlement reminder + state, never auto-writes", () => {
+  const state: WorkbenchState = { ...empty, cronIncidents: [{ cronId: "inbox-tidy", failureClass: "failed" }] };
+  const r = renderSessionEnd(state, "/wb");
+  expect(r).toContain("会话结束");
+  expect(r).toContain("本提醒不自动写 gbrain");
+  expect(r).toContain("cron: inbox-tidy[failed] 上次失败，未确认");
+  expect(r).toContain("处理 cron 失败"); // explicit action recommended
+  // clean workbench still emits the discipline nudge (the reminder is the point)
+  const clean = renderSessionEnd(empty, "/wb");
+  expect(clean).toContain("会话结束");
+  expect(clean).toContain("本提醒不自动写 gbrain");
 });
 
 test("many domains -> current-state caps at 5, available caps at 12 with tails", () => {

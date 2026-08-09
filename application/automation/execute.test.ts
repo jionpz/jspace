@@ -64,6 +64,20 @@ test("dry-run returns the would-run argv without executing", async () => {
   expect(res.lines[1]).toContain(fakeHarness); // argv routed to the fake harness
 });
 
+test("harnessOverride routes the argv to the override harness (grok probe seam)", async () => {
+  // `jspace cron run <cron> --harness grok` (P2 AC7): the cron defines claude,
+  // the override forces grok's argv shape without editing cron.json. Dry-run so
+  // no real grok spawn — this pins the "argv 组装" CI seam for a new harness.
+  const res = await cronRun(root, { cronId: "weekly", timeoutSec: 10, force: false, dryRun: true, harnessOverride: "grok" }, deps());
+  expect(res.lines[1]).toContain("$ ");
+  expect(res.lines[1]).toContain(fakeHarness); // bin still resolves to the injected fake
+  expect(res.lines[1]).toContain("--allow");
+  expect(res.lines[1]).toContain("Bash(*)");
+  // absent override keeps the cron's own harness (claude argv shape)
+  const claudeRes = await run({ cronId: "weekly", dryRun: true });
+  expect(claudeRes.lines[1]).toContain("--allowedTools");
+});
+
 test("same-day success skip: second run is skipped without executing", async () => {
   const d = deps();
   await run({ cronId: "weekly" }, d); // first run writes status: ok

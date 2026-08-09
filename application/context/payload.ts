@@ -71,6 +71,34 @@ export function renderTurn(state: WorkbenchState): string {
   return "";
 }
 
+/** Pre-compact passive reminder (D2/方案 a): the session is about to compact;
+ *  surface the state that could be lost + remind that write-back stays explicit
+ *  (never auto). This is an injection, NOT a gbrain write — the discipline is
+ *  "你说收工才写". */
+export function renderPreCompact(state: WorkbenchState, root: string): string {
+  const workbenchBlock = `<jspace-workbench>JSpace 工作台 ${root}。会话即将 compaction：以下状态若需持久化，请显式触发收工（memory-writeback），本提醒不自动写 gbrain。\n</jspace-workbench>`;
+  const stateLinesText = stateLines(state);
+  const parts = [workbenchBlock];
+  if (stateLinesText.length > 0) {
+    parts.push(`<current-state>\n${stateLinesText.join("\n")}\n</current-state>`);
+  }
+  parts.push(`<next-action>\n${nextAction(state)}\n</next-action>`);
+  return parts.join("\n\n");
+}
+
+/** Session-end settlement reminder (Grok SessionEnd): the session is closing;
+ *  same discipline — surface state + remind explicit write-back, never auto. */
+export function renderSessionEnd(state: WorkbenchState, root: string): string {
+  const workbenchBlock = `<jspace-workbench>JSpace 工作台 ${root}。会话结束：如需记忆本次事实，请显式触发收工（memory-writeback），本提醒不自动写 gbrain。\n</jspace-workbench>`;
+  const stateLinesText = stateLines(state);
+  const parts = [workbenchBlock];
+  if (stateLinesText.length > 0) {
+    parts.push(`<current-state>\n${stateLinesText.join("\n")}\n</current-state>`);
+  }
+  parts.push(`<next-action>\n${nextAction(state)}\n</next-action>`);
+  return parts.join("\n\n");
+}
+
 function truncateId(id: string): string {
   return id.length > MAX_CRON_ID_CHARS ? `${id.slice(0, MAX_CRON_ID_CHARS)}…` : id;
 }

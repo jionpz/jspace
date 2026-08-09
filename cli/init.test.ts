@@ -76,6 +76,27 @@ test("init creates portable marker v1 and machine-local v1", () => {
   rmSync(root, { recursive: true, force: true });
 });
 
+test("init materializes the Grok hook file and the .grok/.opencode skill projections", () => {
+  const root = mkdtempSync(join(tmpdir(), "jspace-init-grok-"));
+  init(root);
+
+  // .grok hooks file (Grok Build session hooks, seed-owned, materialized by init)
+  const hookPath = join(root, ".grok", "hooks", "jspace.json");
+  expect(isFile(hookPath)).toBe(true);
+  const hook = JSON.parse(readFileSync(hookPath, "utf-8"));
+  expect(hook.hooks.SessionStart[0].hooks[0].command).toContain("jspace context session-start");
+  expect(hook.hooks.UserPromptSubmit[0].hooks[0].command).toContain("jspace context turn");
+  expect(hook.hooks.PreCompact[0].hooks[0].command).toContain("jspace context pre-compact");
+  expect(hook.hooks.SessionEnd[0].hooks[0].command).toContain("jspace context session-end");
+
+  // skill projections derive from capabilities.yaml workbench_projection
+  for (const proj of [".grok/skills", ".opencode/skills", ".claude/skills", ".agents/skills"]) {
+    expect(existsSync(join(root, proj, "jspace-use", "SKILL.md"))).toBe(true);
+  }
+
+  rmSync(root, { recursive: true, force: true });
+});
+
 test("workbench template hub is v4 and gitignore ignores local state", () => {
   const repo = devRoot();
   const hub = JSON.parse(

@@ -89,6 +89,8 @@ jobs:
           # template crons ship disabled by default, so enable before the dry-run.
           bun run cli/main.ts cron enable inbox-tidy --dir /tmp/jspace-verify
           bun run cli/main.ts cron run inbox-tidy --dir /tmp/jspace-verify --dry-run | grep "dry-run: would run"
+          # P2 AC7: new-harness argv assembles without a real grok binary (argv-only seam)
+          bun run cli/main.ts cron run inbox-tidy --dir /tmp/jspace-verify --harness grok --dry-run | grep -- "--allow"
           # reconciliation plan preview (no real scheduler apply)
           bun run cli/main.ts cron install --dir /tmp/jspace-verify --dry-run | grep "would apply"
           bun run cli/main.ts cron check --dir /tmp/jspace-verify

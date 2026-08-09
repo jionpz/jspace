@@ -9,8 +9,18 @@
 import type { CommandSpec, CmdContext } from "../../application/commands/command.ts";
 import { collectWorkbenchState } from "../../application/context/collect.ts";
 import { gate, gatePre, promptHasSkipKeyword } from "../../application/context/gate.ts";
-import { renderSessionStart, renderTurn } from "../../application/context/payload.ts";
-import { sessionStartEnvelope, turnEnvelope } from "../../application/context/envelope.ts";
+import {
+  renderSessionStart,
+  renderTurn,
+  renderPreCompact,
+  renderSessionEnd,
+} from "../../application/context/payload.ts";
+import {
+  sessionStartEnvelope,
+  turnEnvelope,
+  preCompactEnvelope,
+  sessionEndEnvelope,
+} from "../../application/context/envelope.ts";
 import { readHookPrompt } from "../../application/context/hook-input.ts";
 
 /** Never propagate: any internal failure degrades to a warning + exit 0. */
@@ -65,6 +75,48 @@ const turnSpec: CommandSpec = {
   },
 };
 
+/** Grok PreCompact / SessionEnd passive reminder hook: surface the state that
+ *  could be lost + remind that write-back stays explicit (D2/方案 a — never
+ *  auto-writes gbrain). Shares the session-start gate (session lifecycle event). */
+function sessionReminderSpec(
+  name: string,
+  summary: string,
+  render: (state: ReturnType<typeof collectWorkbenchState>, root: string) => string,
+  envelope: (context: string) => string,
+): CommandSpec {
+  return {
+    name,
+    summary,
+    features: { dir: true },
+    options: [{ name: "--plain", takesValue: false, help: "output plain text instead of the hook JSON envelope" }],
+    handler: (ctx: CmdContext, args: Record<string, unknown>) => {
+      try {
+        const g = gate("session-start", undefined, ctx.root);
+        if (!g.emit) return { lines: [] }; // not a workbench / hooks off: silent exit 0
+        const state = collectWorkbenchState(g.root);
+        const text = render(state, g.root);
+        return { lines: [plain(args) ? text : envelope(text)] };
+      } catch (e) {
+        return failLines(e);
+      }
+    },
+  };
+}
+
+const preCompactSpec = sessionReminderSpec(
+  "pre-compact",
+  "emit the pre-compaction passive reminder (state + explicit write-back nudge; never auto-writes gbrain)",
+  renderPreCompact,
+  preCompactEnvelope,
+);
+
+const sessionEndSpec = sessionReminderSpec(
+  "session-end",
+  "emit the session-end settlement reminder (state + explicit write-back nudge; never auto-writes gbrain)",
+  renderSessionEnd,
+  sessionEndEnvelope,
+);
+
 export const contextSpec: CommandSpec = {
   name: "context",
   summary: "emit workbench context for harness session-start / per-turn hooks",
@@ -73,5 +125,5 @@ export const contextSpec: CommandSpec = {
     "Always exit 0 (a hook must never block the session); a non-workbench directory " +
     "or a disabled hook emits nothing.",
   features: { dir: true },
-  children: [sessionStartSpec, turnSpec],
+  children: [sessionStartSpec, turnSpec, preCompactSpec, sessionEndSpec],
 };
