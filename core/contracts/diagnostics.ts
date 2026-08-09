@@ -148,3 +148,12 @@ export function readVersion(
   }
   return value;
 }
+
+/** Repair guidance appended to schema-version mismatch errors. Single constant so
+ *  every decoder-error surface (registry inspect / cron loadCrons) shows the same
+ *  fix path. There is intentionally no migration channel (no-compat-burden rule):
+ *  a pre-1.0.11 state file is fixed by regeneration or a hand edit, not by
+ *  silently upgrading it. */
+export const SCHEMA_VERSION_REPAIR_HINT =
+  "state file was written by a pre-1.0.11 jspace; regenerate with `jspace init <dir> --force` " +
+  "(destructive — review first) or edit `version: ...` → `schema_version: 1` by hand";

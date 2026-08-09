@@ -107,18 +107,27 @@ export function extractTagBlock(existing: string, tag: string): string {
   return lines.slice(s, e + 1).join("\n");
 }
 
-function readCrontab(): string {
-  const res = spawnSync("crontab", ["-l"], { encoding: "utf-8" });
-  if (res.status === 0) return (res.stdout ?? "").replace(/\s+$/, "") + "\n";
-  if (res.status === 1) return ""; // no crontab
-  fail(`crontab -l failed (status ${res.status}): ${(res.stderr ?? "").trim()}`);
-  return "";
+/** crontab read/write IO. Production default shells out to `crontab`; tests
+ *  inject this seam so applyBatch/inspect/uninstallAll never touch the real
+ *  crontab. */
+export interface CrontabIO {
+  readCrontab(): string;
+  writeCrontab(content: string): void;
 }
 
-function writeCrontab(content: string): void {
-  const r = spawnSync("crontab", ["-"], { input: content, encoding: "utf-8" });
-  if (r.status !== 0) fail(`crontab write failed: ${(r.stderr ?? "").trim()}`);
-}
+const defaultIO: CrontabIO = {
+  readCrontab(): string {
+    const res = spawnSync("crontab", ["-l"], { encoding: "utf-8" });
+    if (res.status === 0) return (res.stdout ?? "").replace(/\s+$/, "") + "\n";
+    if (res.status === 1) return ""; // no crontab
+    fail(`crontab -l failed (status ${res.status}): ${(res.stderr ?? "").trim()}`);
+    return "";
+  },
+  writeCrontab(content: string): void {
+    const r = spawnSync("crontab", ["-"], { input: content, encoding: "utf-8" });
+    if (r.status !== 0) fail(`crontab write failed: ${(r.stderr ?? "").trim()}`);
+  },
+};
 
 /** Parse one managed-block crontab line into an InstalledTask, or null when it
  *  belongs to another workbench (tag mismatch) or is unparseable. Extracts the
@@ -140,7 +149,7 @@ export function parseManagedLine(line: string, tag: string): InstalledTask | nul
   return { taskId, cronId: id, schedule: m[1], argv: `cron run --id ${id} --dir ${dir}` };
 }
 
-export const linuxAdapter: SchedulerAdapter = {
+export const linuxAdapter: SchedulerAdapter & { io?: CrontabIO } = {
   platform: "linux",
 
   identity(tag: string, cronId: string): SchedulerIdentity {
@@ -155,8 +164,9 @@ export const linuxAdapter: SchedulerAdapter = {
   },
 
   inspect(tag: string): InstalledTask[] {
+    const io = linuxAdapter.io ?? defaultIO;
     const out: InstalledTask[] = [];
-    const existing = readCrontab();
+    const existing = io.readCrontab();
     for (const line of existing.split("\n")) {
       const parsed = parseManagedLine(line, tag);
       if (parsed) out.push(parsed);
@@ -169,7 +179,8 @@ export const linuxAdapter: SchedulerAdapter = {
     // enabled set (not the op list) decides the block. An empty enabled set ->
     // empty block -> the managed block is removed (all-disabled uninstalls);
     // delete/disable of one cron simply drops it from the rebuilt block.
-    const existing = readCrontab();
+    const io = linuxAdapter.io ?? defaultIO;
+    const existing = io.readCrontab();
     // empty enabled set -> empty block -> replaceManagedBlock removes the whole
     // managed block (markers too); a non-empty set rebuilds it from scratch.
     const block = enabled.length === 0 ? "" : crontabBlock(enabled, tag, root, env.jspaceBinary, env.path, env.home);
@@ -177,12 +188,13 @@ export const linuxAdapter: SchedulerAdapter = {
     mkdirSync(dirname(backup), { recursive: true });
     writeFileSync(backup, existing, "utf-8");
     const merged = replaceManagedBlock(existing, block, tag);
-    writeCrontab(merged);
+    io.writeCrontab(merged);
     return [`jspace: ok: installed cron block (${enabled.length} cron(s))`];
   },
 
   uninstallAll(tag: string, root: string, _env: SchedulerEnv): string[] {
-    const existing = readCrontab();
+    const io = linuxAdapter.io ?? defaultIO;
+    const existing = io.readCrontab();
     const merged = replaceManagedBlock(existing, "", tag);
     const backup = join(root, ".jspace", "logs", "cron", "crontab.backup");
     mkdirSync(dirname(backup), { recursive: true });
@@ -192,7 +204,7 @@ export const linuxAdapter: SchedulerAdapter = {
       if (r.status !== 0 && r.status !== 1) fail(`crontab -r failed: ${(r.stderr ?? "").trim()}`);
       return ["jspace: ok: removed jspace crons (empty crontab removed)"];
     }
-    writeCrontab(merged);
+    io.writeCrontab(merged);
     return ["jspace: ok: removed jspace crons from crontab"];
   },
 

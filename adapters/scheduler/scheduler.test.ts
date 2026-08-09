@@ -2,6 +2,9 @@
 // cross-workbench tag isolation (AC1) + reconciliation identity.
 // Run: bun test adapters/scheduler/scheduler.test.ts
 import { expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { taskIdFor, workbenchTag } from "./types.ts";
 import { buildPlist } from "./darwin.ts";
 import { parseSchedule } from "../../core/shared/schedule.ts";
@@ -313,4 +316,70 @@ test("linux buildContent returns a real per-cron crontab line, not a placeholder
   const content = linuxAdapter.buildContent(cron, "abc123", "/wb/a", { jspaceBinary: "/bin/jspace", home: "/home/u", path: "/bin" });
   expect(content).toContain("cron run --dir '/wb/a' --id 'inbox'");
   expect(content).toContain("# com.jspace.cron.abc123.inbox");
+});
+
+// ---- P2-1: linux applyBatch whole-block semantics (direct, injected IO) ----
+// applyBatch is the only safe crontab write path (crontab is whole-file). These
+// tests inject the CrontabIO seam so the real crontab is never touched; the
+// backup file lands in a throwaway tmp root.
+
+const LINUX_ENV = { jspaceBinary: "/bin/jspace", home: "/home/u", path: "/bin" };
+
+test("linux applyBatch: empty enabled removes this workbench's whole block, preserves others", () => {
+  const tagA = "tagA";
+  const crontab =
+    USER_CRONTAB.trim() + "\n" +
+    crontabBlock([mkCron("a1", "0 1 * * *"), mkCron("a2", "0 2 * * *")], tagA, "/wb/a", "/bin/jspace", "/bin", "/home/u") +
+    crontabBlock([mkCron("b1", "0 3 * * *")], "tagB", "/wb/b", "/bin/jspace", "/bin", "/home/u");
+  const root = mkdtempSync(join(tmpdir(), "jspace-lin-ab-"));
+  let written = "";
+  const savedIO = linuxAdapter.io;
+  linuxAdapter.io = {
+    readCrontab: () => crontab,
+    writeCrontab: (c) => { written = c; },
+  };
+  try {
+    linuxAdapter.applyBatch([], [], tagA, root, LINUX_ENV);
+  } finally {
+    linuxAdapter.io = savedIO;
+    rmSync(root, { recursive: true, force: true });
+  }
+  expect(written).not.toContain(CRON_BLOCK_START(tagA));
+  expect(written).not.toContain("com.jspace.cron.tagA");
+  expect(written).toContain(CRON_BLOCK_END("tagB")); // other workbench's block intact
+  expect(written).toContain("/usr/bin/tick"); // user line intact
+});
+
+test("linux applyBatch: non-empty enabled rebuilds the whole block from the enabled set, idempotent", () => {
+  const tagA = "tagA";
+  const crontab = USER_CRONTAB + crontabBlock([mkCron("a1", "0 1 * * *")], tagA, "/wb/a", "/bin/jspace", "/bin", "/home/u");
+  const enabled = [mkCron("a1", "0 1 * * *"), mkCron("a2", "0 2 * * *")];
+  // one tmp root for both runs so the embedded root path in each crontab line
+  // is stable — otherwise a fresh root per run breaks the idempotence check.
+  const root = mkdtempSync(join(tmpdir(), "jspace-lin-ab-"));
+  const run = (): string => {
+    let written = "";
+    const savedIO = linuxAdapter.io;
+    linuxAdapter.io = {
+      readCrontab: () => crontab,
+      writeCrontab: (c) => { written = c; },
+    };
+    try {
+      linuxAdapter.applyBatch([], enabled, tagA, root, LINUX_ENV);
+    } finally {
+      linuxAdapter.io = savedIO;
+    }
+    return written;
+  };
+  try {
+    const once = run();
+    expect(once).toContain(CRON_BLOCK_START(tagA));
+    expect(once).toContain(CRON_BLOCK_END(tagA));
+    expect(once).toContain("com.jspace.cron.tagA.a1");
+    expect(once).toContain("com.jspace.cron.tagA.a2");
+    expect(once).toContain("/usr/bin/tick"); // user line preserved
+    expect(run()).toBe(once); // idempotent: same root, identical input -> identical output
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

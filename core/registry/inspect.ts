@@ -5,6 +5,7 @@
 import { isAbsolute, join, relative } from "node:path";
 import {
   isRecord,
+  SCHEMA_VERSION_REPAIR_HINT,
   type FileRead,
   type RegistryDiagnostic,
 } from "../contracts/diagnostics.ts";
@@ -30,7 +31,15 @@ function isWithin(child: string, parent: string): boolean {
 }
 
 function asErrors(issues: readonly { code: string; path: string; message: string }[]): RegistryDiagnostic[] {
-  return issues.map((i) => ({ severity: "error", ...i }));
+  return issues.map((i) => ({
+    severity: "error",
+    ...i,
+    // schema-version mismatch (pre-1.0.11 state file) gets the repair path
+    // appended; other decoder issues pass through unchanged.
+    ...(i.code.endsWith(".version.unsupported")
+      ? { message: `${i.message} — ${SCHEMA_VERSION_REPAIR_HINT}` }
+      : {}),
+  }));
 }
 
 export function inspectWorkbench(env: InspectEnv): RegistryDiagnostic[] {

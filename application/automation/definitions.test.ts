@@ -2,11 +2,14 @@
 // validation (Child D, RD5/AC-D4). Pure: manifest/bundle/fs are injected.
 // Run: bun test application/automation/definitions.test.ts
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
 import { sha256Of, diffBundle } from "../workspace/manifest.ts";
-import { compileSkillTarget, resolveCronPrompt, type SkillTargetContext } from "./definitions.ts";
+import { compileSkillTarget, loadCrons, resolveCronPrompt, type SkillTargetContext } from "./definitions.ts";
 
 const NEW_SKILL = "asset-ingest NEW content";
 const OLD_SKILL = "asset-ingest OLD content";
@@ -89,4 +92,17 @@ test("resolveCronPrompt passes prose prompts through unchanged", () => {
 test("resolveCronPrompt throws (fail) on an invalid skill target", () => {
   const stale = { ...targetCron(), target: { ...targetCron().target!, skill: "nope" } };
   expect(() => resolveCronPrompt(stale, "/wb", ctx())).toThrow(/jspace update/);
+});
+
+test("loadCrons: pre-1.0.11 cron.json (legacy version field) fails with repair guidance", () => {
+  const root = mkdtempSync(join(tmpdir(), "jspace-cron-old-"));
+  try {
+    mkdirSync(join(root, ".jspace"), { recursive: true });
+    writeFileSync(join(root, ".jspace", "cron.json"), JSON.stringify({ version: 1, crons: [] }), "utf-8");
+    // error message must tell the user how to fix (regenerate / hand-edit the
+    // field) — not just "must be one of 1".
+    expect(() => loadCrons(root)).toThrow(/init|schema_version/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
