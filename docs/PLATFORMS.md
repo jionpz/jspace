@@ -20,19 +20,23 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 
 ## Harness 能力矩阵（M4，cron argv）
 
-`jspace cron run` 调 headless harness。各 harness 的 argv 形状在 `adapters/harness/argv.ts`；能力分级（automated = 有 `adapters/harness/argv.test.ts` 单测证据）：
+`jspace cron run` 调 headless harness。各 harness 的 argv 由 `adapters/harness/`（capabilities.yaml 驱动，P1 数据化）组装；能力分级（automated = 有 `adapters/harness/*.test.ts` 单测证据）：
 
 | harness | argv | 状态 | 备注 |
 |---|---|---|---|
 | claude | `-p <prompt> --output-format text --allowedTools Bash,Read,Write,Edit,mcp__gbrain__*` | automated | argv 形状 + 白名单有单测（`adapters/harness/argv.test.ts`）；无头执行需本机 `claude` 可用 |
+| grok | `-p <prompt> --output-format json --allow Bash(*)` | best-effort | argv 组装有单测（`adapters/harness/grok.test.ts`）；无头执行需本机 `grok`，CI 未全链验证 |
+| opencode | `run <prompt>`（positional） | best-effort | argv 组装有单测；无头 cron 可靠性未在 CI 验证 |
 | codex | `exec <prompt>` | best-effort | argv 已实现，未在 CI 全链验证 |
 | pi | `-p <prompt>` | best-effort | argv 已实现，未在 CI 全链验证 |
 
-> cron 是无头 unattended 执行：`--allowedTools` 白名单、绝不 bypassPermissions。
+> cron 是无头 unattended 执行：`--allowedTools` 白名单、绝不 bypassPermissions。cursor 无 headless CLI（IDE-only 会话 harness），永不进 cron。
+>
+> **支持集** = 五个会话 harness（Claude Code / Grok Build / OpenCode / Pi / Cursor）+ Codex（cron 兼容）。
 
 ## Harness lifecycle 能力矩阵（M4，会话生命周期）
 
-会话级能力（session-start / session-end / fallback / crash recovery）的**权威矩阵**在 `skills/jspace-use/references/harnesses.md`「Lifecycle 能力矩阵」节，逐格标注 automated / best-effort / manual / unsupported 并注明验证方法；本文档不复制整表以避免漂移。要点：当前无 automated 格（hook 真实触发是 harness 运行时行为，未在 CI 验证），产品措辞只在 automated 处使用「自动」。
+会话级能力（session-start / session-end / fallback / crash recovery）的**权威矩阵**在 `skills/jspace-use/references/harnesses.md`（capabilities.yaml render + 逐 harness 接线 `harness-<name>.md`），分级语义 automated / best-effort / manual / unsupported 并注明验证方法；本文档不复制整表以避免漂移。要点：lifecycle 当前无 automated 格（hook 真实触发是 harness 运行时行为，未在 CI 全链验证），产品措辞只在 automated 处使用「自动」。
 
 ## Scheduler 任务隔离（M5）
 

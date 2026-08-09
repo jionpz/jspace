@@ -15,7 +15,7 @@
 
 ## Product Vision
 
-完整愿景见根目录 **`GOAL.md`**（North Star，最高对齐物；冲突时以它为准）。摘要：JSpace 是**可移植的本地 AI 工作底座：路由 + 记忆 + 资产 + 定时**——在任意机器上安装 `jspace` CLI 初始化工作台，任何 AI harness（Pi / Claude Code / Codex / Cursor）从同一入口路由进正确的域、读写同一份持久记忆（gbrain）；工作产生的重资产（pdf/ppt/excel/md）被自动整理进独立的文件管理中心（Obsidian 可作为视图打开）；定时任务经系统调度 + harness 无头执行自动运行。对比基线是 hermes / OpenClaw 等常驻运行时方案：用静态组合覆盖其主要能力，而不引入常驻运行时与全家桶。
+完整愿景见根目录 **`GOAL.md`**（North Star，最高对齐物；冲突时以它为准）。摘要：JSpace 是**可移植的本地 AI 工作底座：路由 + 记忆 + 资产 + 定时**——在任意机器上安装 `jspace` CLI 初始化工作台，任何 AI harness（Claude Code / Grok Build / OpenCode / Pi / Cursor，codex 兼容 cron）从同一入口路由进正确的域、读写同一份持久记忆（gbrain）；工作产生的重资产（pdf/ppt/excel/md）被自动整理进独立的文件管理中心（Obsidian 可作为视图打开）；定时任务经系统调度 + harness 无头执行自动运行。对比基线是 hermes / OpenClaw 等常驻运行时方案：用静态组合覆盖其主要能力，而不引入常驻运行时与全家桶。
 
 - 本仓库是**开发/发行目录**；产品形态是 CLI，目标机上的工作台才是日常入口。
 - 能力分工：静态规则层（AGENTS.md + hub.json + 域）负责路由，gbrain 负责记忆（事实 + 资产指针）并兼作资料检索层（自带资料摄入/文件登记能力），文件管理中心负责重资产本体（人类可读），惯用 harness 负责执行，系统调度负责定时。**记忆存指针、资产存本体**。不封装 gbrain、不自研执行器、不自研文件同步。

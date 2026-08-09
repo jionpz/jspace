@@ -8,7 +8,7 @@
 
 # JSpace 工作台 - 本地工作控制平面
 
-本目录由 JSpace CLI (`jspace init`) 生成，是用户本地工作控制平面。大多数非项目特定的计算机工作从这里开始：domain 路由、资源查找和上下文进入。**First core - gbrain unified memory base.** 第一核心是共享记忆层（`gbrain`）：JSpace 工作台 + gbrain 支持 Pi、Claude Code、Codex、Cursor 四个会话 harness，用户选择其一；各 harness 通过 MCP/CLI 读写同一本地记忆库（PGLite + 知识图谱 + 本地 embedding），会话开始检索式注入，结束写回持久事实。hermes（自主/cron/多端）可选：提及即可，不主动推广。本工作台不包装 gbrain 命令，gbrain CLI/MCP 就是接口。
+本目录由 JSpace CLI (`jspace init`) 生成，是用户本地工作控制平面。大多数非项目特定的计算机工作从这里开始：domain 路由、资源查找和上下文进入。**First core - gbrain unified memory base.** 第一核心是共享记忆层（`gbrain`）：JSpace 工作台 + gbrain 支持 Pi、Claude Code、Codex、Cursor、Grok Build、OpenCode 六个 harness（会话 harness 五选一，codex 兼容 cron），用户选择其一；各 harness 通过 MCP/CLI 读写同一本地记忆库（PGLite + 知识图谱 + 本地 embedding），会话开始检索式注入，结束写回持久事实。hermes（自主/cron/多端）可选：提及即可，不主动推广。本工作台不包装 gbrain 命令，gbrain CLI/MCP 就是接口。
 
 > 治理与流程细节（域/资源/skill 创建规则、cron 运维）→ `.jspace/skills/jspace-use/SKILL.md` 第 8 章「治理细节」，按需读，不在此复制。
 

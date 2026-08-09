@@ -18,10 +18,13 @@ function workbenchMds(): Array<[string, string]> {
 test("lifecycle matrix is the authoritative single source (AC-D3/D7)", () => {
   const matrix = ASSETS["skills/jspace-use/references/harnesses.md"];
   expect(matrix, "lifecycle matrix must be bundled").toBeDefined();
-  expect(matrix).toContain("Lifecycle 能力矩阵");
+  // canonical grade definitions live in harnesses.md (capabilities render source)
   for (const grade of ["automated", "best_effort", "manual", "unsupported"]) {
     expect(matrix, `matrix must define grade: ${grade}`).toContain(grade);
   }
+  // the capabilities table is the render source (not a hand-maintained duplicate)
+  expect(matrix).toContain("auto-generated from capabilities.yaml");
+  expect(matrix).toContain("harness-<name>.md");
 });
 
 test("no unqualified harness 'automatically' claims in the materialized tree (AC-D3)", () => {

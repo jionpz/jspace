@@ -6,7 +6,7 @@
 
 ## 一句话终局
 
-在我的电脑上，从一个总控文件夹启动任何 AI harness（Pi / Claude Code / Codex / Cursor），就能带着准确的记忆开展任何工作；工作产生的重资产（pdf / ppt / excel / md …）被自动整理进文件管理中心；日积月累后，记忆可精准召回、资料整整齐齐；定期 AI 任务自动运行，不需要任何常驻程序。
+在我的电脑上，从一个总控文件夹启动任何 AI harness（Claude Code / Grok Build / OpenCode / Pi / Cursor，codex 兼容 cron），就能带着准确的记忆开展任何工作；工作产生的重资产（pdf / ppt / excel / md …）被自动整理进文件管理中心；日积月累后，记忆可精准召回、资料整整齐齐；定期 AI 任务自动运行，不需要任何常驻程序。
 
 ## 使用画面（终局的一天）
 

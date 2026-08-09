@@ -68,6 +68,11 @@ jobs:
           grep -q "already succeeded today" application/automation/execute.ts
           grep -q "no such cron" application/automation/execute.ts
 
+      # P5: harness support surfaces (capabilities.yaml ↔ code/docs/templates)
+      # must stay in sync — adding a harness but forgetting a doc/list turns red.
+      - name: Harness consistency (capabilities.yaml ↔ code/docs/templates)
+        run: bun run scripts/check-harness-consistency.ts
+
       - name: Scheduler argv round-trip + reconciliation smoke (pure, no real scheduler)
         run: bun test application/automation/invocation.test.ts application/automation/scheduler.test.ts adapters/harness/argv.test.ts
 
