@@ -1,6 +1,6 @@
 ---
 name: jspace-use
-description: "**使用与维护 JSpace 工作台**:初始化/配置/升级、日常路由、gbrain 记忆与 CLI 诊断(doctor/diff/upgrade/cron)。Use when 初始化或维护 JSpace 工作台、how to use jspace、工作台怎么用、workspace upgrade、jspace doctor、cron check、故障排查、registry broken、gbrain missing、fresh environment。Do NOT use for 机器级多-harness 全局治理(→harness-config)、日常资料入库(→asset-ingest)、会话记忆召回(→memory-recall)、收工写回(→memory-writeback)。"
+description: "工作台使用入门 + 首次配置 + 路由/记忆/资产/诊断日常操作。当用户问如何使用工作台、如何首次配置、如何诊断维护时触发。"
 triggers:
   - "initialize jspace"
   - "setup jspace"

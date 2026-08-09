@@ -1,6 +1,6 @@
 ---
 name: memory-recall
-description: "**读侧精准召回**:用户「问一句」时,把问题召回为有出处的答案——语义查询 → top-1 校验 → 指针断言链 → 打开文件引用出处。Use when 问一句/找那个文件/那个数/精准召回/recall/find the file。Do NOT use for 资料入库(→asset-ingest 写侧)或会话进度写回(→memory-writeback)。"
+description: "读侧精准召回:用户「问一句」时,把问题召回为有出处的答案。当用户问一句/找那个文件/那个数/精准召回时触发。"
 triggers:
   - "问一句"
   - "找那个文件"

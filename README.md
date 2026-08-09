@@ -9,6 +9,12 @@
 
 > 术语：下文「工作台 / workbench」即 JWorkspace 的正式命名。
 
+## 目录约定
+
+- `.trellis/` —— 本开发仓库使用的 **Trellis 开发工作流框架**（vendored，Claude Code 等 harness 的任务规划/执行/检查机制），**不是 jspace 运行时组件**，不影响 CLI 产物或 JWorkspace。
+- `templates/workbench/` —— 工作台模板源（CLI 生成 JWorkspace 的种子资产）。
+- `skills/` —— 官方技能源码，经 `scripts/gen-assets.ts` 嵌入二进制。
+
 ## 快速开始
 
 ### 一键安装（推荐，macOS / Linux / Windows）
