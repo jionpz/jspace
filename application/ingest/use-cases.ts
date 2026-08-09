@@ -136,9 +136,11 @@ export function ingestStatus(root: string, id: string, json: boolean): CmdResult
 }
 
 export function ingestList(root: string, json: boolean): CmdResult {
-  const journals = readJournals(root).records;
+  const { records: journals, issues } = readJournals(root);
   if (json) {
-    return { lines: [], data: { journals } };
+    // issues surface damaged journals (symmetric with pending/incidents) — never
+    // silently dropped from the machine-readable surface.
+    return { lines: [], data: issues.length > 0 ? { journals, issues } : { journals } };
   }
   if (journals.length === 0) return { lines: ["jspace: ok: no ingest journals"] };
   return {

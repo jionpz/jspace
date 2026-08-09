@@ -181,6 +181,17 @@ test("malformed .APPLY.json -> filehub.pending_decode warning (P2-6)", () => {
   expect(diags.some((d) => d.code === "filehub.pending_decode")).toBe(true);
 });
 
+test("malformed ingest journal -> ingest.journal_decode warning (symmetric with pending)", () => {
+  const dir = join(root, ".jspace", "state", "ingest");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "corrupt.json"), "{ not json", "utf-8");
+  const r = doctorWorkbench(root, stubDeps());
+  const diag = (r.data as { diagnostics: { code: string; severity: string; path: string }[] }).diagnostics.find((d) => d.code === "ingest.journal_decode");
+  expect(diag).toBeDefined();
+  expect(diag!.severity).toBe("warning");
+  expect(diag!.path).toContain("corrupt.json");
+});
+
 test("orphan skill dir without journal record -> skills.orphan_dir", () => {
   // a pre-journal leftover (e.g. old jspace-bootstrap dir) with no journal base
   mkdirSync(join(root, ".jspace", "skills", "jspace-bootstrap"), { recursive: true });

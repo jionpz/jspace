@@ -13,6 +13,7 @@ function stubDeps(over: Partial<CollectDeps> = {}): CollectDeps {
     readEnvelopes: () => ({ records: [], issues: [] }),
     readIncidents: () => ({ records: [], issues: [] }),
     readInboxCount: () => 0,
+    readIngestIssues: () => ({ issues: [] }),
     readDomainSummary: () => null,
     ...over,
   };
@@ -129,4 +130,26 @@ test("damaged pending envelopes surface as pendingDamaged (P2-6)", () => {
   }));
   expect(s.pendingDamaged).toBe(1);
   expect(s.pendingCount).toBe(0); // actionable count unaffected
+});
+
+test("damaged ingest journals surface as ingestDamaged (symmetric with pending)", () => {
+  const s = collectWorkbenchState(
+    "root",
+    stubDeps({
+      readIngestIssues: () => ({ issues: [{ code: "ingest.root.type", path: "corrupt.json", message: "ingest journal must be an object" }] }),
+    }),
+  );
+  expect(s.ingestDamaged).toBe(1);
+});
+
+test("ingest read throws -> ingestDamaged stays 0, no throw", () => {
+  const s = collectWorkbenchState(
+    "root",
+    stubDeps({
+      readIngestIssues: () => {
+        throw new Error("boom");
+      },
+    }),
+  );
+  expect(s.ingestDamaged).toBe(0);
 });

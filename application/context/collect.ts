@@ -10,6 +10,7 @@ import type { IncidentCollection } from "../automation/incidents.ts";
 import type { PendingWriteEnvelopeV1 } from "../../core/contracts/pending.ts";
 import type { ContractIssue } from "../../core/contracts/diagnostics.ts";
 import { readIncidents } from "../automation/incidents.ts";
+import { readJournals } from "../ingest/journal.ts";
 import { countInbox } from "../registry/inbox.ts";
 import { readEnvelopes } from "../pending/envelope.ts";
 import { loadHub } from "../workspace/state.ts";
@@ -28,6 +29,9 @@ export interface WorkbenchState {
   /** Damaged pending envelope files (unreadable .APPLY.json) — surfaced like
    *  damaged incidents/runs, never silently dropped (visible-degradation rule). */
   pendingDamaged: number;
+  /** Damaged ingest journal files (unreadable .jspace/state/ingest/*.json) —
+   *  symmetric with pendingDamaged; decode failures must be forwarded. */
+  ingestDamaged: number;
   /** Open cron incidents (cronId + failureClass). */
   cronIncidents: { cronId: string; failureClass: string }[];
   /** Files in the filehub _inbox (0 when no filehub / empty). */
@@ -47,6 +51,9 @@ export interface CollectDeps {
    *  filehub root itself, so it takes root — kept in deps so the collector
    *  never touches the filesystem directly (unit-testable with stubs). */
   readInboxCount: (root: string) => number;
+  /** Damaged ingest journal issues for a workbench root (decode failures must
+   *  be forwarded, never silently dropped — symmetric with readEnvelopes). */
+  readIngestIssues: (root: string) => { issues: ContractIssue[] };
   /** One-line summary of a domain (workspace/<id>/domain.json `summary`),
    *  or null when absent/unreadable. Path is workbench-relative. */
   readDomainSummary: (root: string, path: string) => string | null;
@@ -76,6 +83,7 @@ const realDeps: CollectDeps = {
     if (!existsSync(inbox) || !statSync(inbox).isDirectory()) return 0;
     return countInbox(inbox);
   },
+  readIngestIssues: readJournals,
   readDomainSummary,
 };
 
@@ -88,6 +96,7 @@ export function collectWorkbenchState(root: string, deps: CollectDeps = realDeps
     pendingCount: 0,
     pendingProducers: [],
     pendingDamaged: 0,
+    ingestDamaged: 0,
     cronIncidents: [],
     inboxCount: 0,
     hubBroken: false,
@@ -133,6 +142,13 @@ export function collectWorkbenchState(root: string, deps: CollectDeps = realDeps
       .map((i) => ({ cronId: i.cronId, failureClass: i.failureClass }));
   } catch {
     // incidents unreadable: fields stay at defaults
+  }
+
+  // ingest journal decode issues (workbench root — independent of filehub).
+  try {
+    state.ingestDamaged = deps.readIngestIssues(root).issues.length;
+  } catch {
+    // ingest unreadable: field stays at default
   }
 
   return state;

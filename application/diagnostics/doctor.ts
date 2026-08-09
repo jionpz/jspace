@@ -13,6 +13,7 @@ import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
 import { inspectWorkbench, type InspectEnv } from "../../core/registry/inspect.ts";
 import { primaryPathForResourceType, resolveEffectiveRegistry } from "../../core/registry/effective.ts";
 import { readIncidents } from "../automation/incidents.ts";
+import { readJournals } from "../ingest/journal.ts";
 import { countInbox } from "../registry/inbox.ts";
 import { readEnvelopes } from "../pending/envelope.ts";
 import { isFile } from "../fs.ts";
@@ -216,6 +217,23 @@ function checkPending(reads: WorkbenchReads): RegistryDiagnostic[] {
   const actionable = envRead.records.filter((e) => e.status === "staged" || e.status === "terminal_failed");
   if (actionable.length > 0) {
     diags.push({ severity: "warning", code: "filehub.pending_applies", path: `filehub.${fhRoot}/.jspace-logs`, message: `filehub: ${actionable.length} actionable pending gbrain write(s); apply with "jspace pending apply", ack terminal_failed with "jspace pending ack"` });
+  }
+  return diags;
+}
+
+/** Ingest journal decode issues: damaged .jspace/state/ingest/*.json surface as
+ *  warnings (same visible-degradation rule as damaged pending envelopes — decode
+ *  failures must be forwarded, never silently dropped). readJournals already
+ *  returns the issues; this is the workbench-root health check for them. */
+function checkIngest(root: string): RegistryDiagnostic[] {
+  const diags: RegistryDiagnostic[] = [];
+  for (const issue of readJournals(root).issues) {
+    diags.push({
+      severity: "warning",
+      code: "ingest.journal_decode",
+      path: `ingest.${issue.path}`,
+      message: `ingest journal unreadable: ${issue.message}`,
+    });
   }
   return diags;
 }
@@ -512,6 +530,7 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
     ...inspectWorkbench(env),
     ...checkInbox(reads),
     ...checkPending(reads),
+    ...checkIngest(root),
     ...checkSkills(root, cron),
     ...checkDomains(root),
     ...checkGBrain(root, cron),

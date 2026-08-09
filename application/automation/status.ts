@@ -11,6 +11,7 @@ import { loadCrons } from "./definitions.ts";
 import { lastRun, readRuns } from "./runs.ts";
 import { readIncidents } from "./incidents.ts";
 import { readEnvelopes, envelopePath } from "../pending/envelope.ts";
+import { readJournals } from "../ingest/journal.ts";
 
 export function cronLogDir(root: string, id: string): string {
   return join(root, CONFIG_DIR, "logs", "cron", id);
@@ -63,8 +64,10 @@ export function cronFailures(root: string): CmdResult {
   const failed = crons.filter((c) => c.status === "failed").length;
   const suspect = crons.filter((c) => c.status === "suspect").length;
   const neverRun = crons.filter((c) => c.status === "never run").length;
-  // damaged state records are attention-worthy, never silently dropped
-  const stateIssues = [...runIssues, ...incidentIssues, ...pending.issues];
+  // damaged state records are attention-worthy, never silently dropped. ingest
+  // journal decode issues aggregate here too (symmetric with run/incident/pending).
+  const ingestIssues = readJournals(root).issues;
+  const stateIssues = [...runIssues, ...incidentIssues, ...pending.issues, ...ingestIssues];
   // alert only on open (unacknowledged) incidents, actionable pending writes,
   // or damaged machine-state records
   const needsAttention = open.length + pending.paths.length + stateIssues.length;

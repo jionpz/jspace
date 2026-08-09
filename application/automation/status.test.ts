@@ -197,3 +197,17 @@ test("damaged pending envelope (.APPLY.json malformed) -> cron check reports dam
   expect(r.exitCode).toBe(1); // needs attention
   rmSync(wb, { recursive: true, force: true });
 });
+
+test("damaged ingest journal -> cron check reports damaged_state (symmetric with pending)", () => {
+  const wb = makeWorkbench({ crons: ["x"] });
+  const dir = join(wb, ".jspace", "state", "ingest");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "corrupt.json"), "{ not json", "utf-8");
+  const r = cronFailures(wb);
+  const d = r.data as FailureData & { damaged_state: { code: string; file: string }[]; summary: { damaged_state: number } };
+  expect(d.damaged_state.some((s) => s.file === "corrupt.json")).toBe(true);
+  expect(d.summary.damaged_state).toBe(1);
+  expect(r.exitCode).toBe(1); // needs attention
+  expect(r.lines.join("\n")).toContain("damaged state records: (1)");
+  rmSync(wb, { recursive: true, force: true });
+});
