@@ -20,6 +20,7 @@ ppt（逐页文本）抽成可读 markdown，供策展 Key Facts 与生成伴生
     python3 office-extract.py ~/filehub/_inbox/2026-08-03-acme.xlsx --out ~/filehub/_inbox/2026-08-03-acme.extract.md
 """
 
+import os
 import sys
 import zipfile
 from xml.etree import ElementTree as ET
@@ -185,8 +186,13 @@ def _read_pptx(path: str):
     return {"slides": result}
 
 
+def _basename(path: str) -> str:
+    """取文件名: 兼容 POSIX 与 Windows 分隔符（跨平台稳定，P3-3）。"""
+    return os.path.basename(path.replace("\\", "/"))
+
+
 def _render_xlsx(path: str, data) -> str:
-    out = [f"# {path.split('/')[-1]} — 抽取", f"来源: {path}", f"> {data['note']}"]
+    out = [f"# {_basename(path)} — 抽取", f"来源: {path}", f"> {data['note']}"]
     for sheet in data["sheets"]:
         out.append(f"\n## Sheet: {sheet['name']}")
         rows = sheet["rows"]
@@ -226,7 +232,7 @@ def _render_xlsx(path: str, data) -> str:
 
 
 def _render_pptx(path: str, data) -> str:
-    out = [f"# {path.split('/')[-1]} — 抽取", f"来源: {path}"]
+    out = [f"# {_basename(path)} — 抽取", f"来源: {path}"]
     for i, paras in enumerate(data["slides"], 1):
         out.append(f"\n## Slide {i}")
         if not paras:

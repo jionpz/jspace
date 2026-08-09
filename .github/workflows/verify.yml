@@ -59,6 +59,15 @@ jobs:
             *) echo "version mismatch: package.json=$V generated=$G (run scripts/gen-version.ts)"; exit 1 ;;
           esac
 
+      # P3-1: docs/PLATFORMS.md quotes user-facing warning literals; this cheap
+      # guard keeps them from drifting from the source (a rename here reds).
+      - name: Docs↔source drift guard (doctor/cron warning literals)
+        run: |
+          grep -q "cron daemon not running; scheduled tasks won't fire until it starts" application/diagnostics/doctor.ts
+          grep -q "crontab command not found on this system" application/diagnostics/doctor.ts
+          grep -q "already succeeded today" application/automation/execute.ts
+          grep -q "no such cron" application/automation/execute.ts
+
       - name: Scheduler argv round-trip + reconciliation smoke (pure, no real scheduler)
         run: bun test application/automation/invocation.test.ts application/automation/scheduler.test.ts adapters/harness/argv.test.ts
 

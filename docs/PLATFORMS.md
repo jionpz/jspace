@@ -74,7 +74,7 @@ bin/jspace filehub init ~/fh-test --register
 bin/jspace inbox status                # 期望:empty
 
 # 3. cron 全链
-bin/jspace cron list                   # 期望:3 默认任务,inbox-tidy enabled
+bin/jspace cron list                   # 期望:3 默认任务,inbox-tidy disabled(模板默认;启用后 doctor 才报未安装)
 bin/jspace cron run inbox-tidy --dry-run   # 期望:打印将执行的命令
 bin/jspace cron install                # 期望:调度器可见对应任务(见各平台)
 bin/jspace cron status inbox-tidy      # 期望:never run
@@ -99,7 +99,7 @@ bin/jspace cron uninstall              # 期望:任务移除
 | 已 install | Windows | 无「enabled but not installed」;无 stale;`schtasks /query` 存在 |
 | cron 已删但调度器残留 | 全部 | warning `stale scheduled task <id>` |
 | 存在 open cron incident | 全部 | warning `cron.open_incidents`（`N open cron incident(s)`） |
-| Linux 无 crontab/无 crond | Linux | warning `crontab command not found` / `cron daemon not running` |
+| Linux 无 crontab/无 crond | Linux | warning `crontab command not found` / `cron daemon not running; scheduled tasks won't fire until it starts` |
 | 非法 schedule | 全部 | warning `cron <id>: invalid schedule` |
 
 ## CI 解锁后 cron 冒烟(占位)
@@ -108,7 +108,7 @@ bin/jspace cron uninstall              # 期望:任务移除
 
 ## 纯函数单测(本机可跑,无需真机)
 
-`bun test` 覆盖:`application/automation/scheduler.test.ts`（planReconciliation create/update/delete、两 workbench tag 隔离）、`application/automation/state.test.ts`（runs/incidents 状态机）、`cli/cron.test.ts`（crontabBlock 单引号/`%` 转义/1000 字符、replaceManagedBlock、schtasksArgs、isWindowsInstallable、jspaceBinary、parseSchedule、cmdCronFailures 结构化 incidents）。对抗用例:路径含空格/单引号/`%`、dow=7、month 定值。
+`bun test` 覆盖:`adapters/scheduler/scheduler.test.ts`（planReconciliation create/update/delete、两 workbench tag 隔离、crontabBlock 单引号/`%` 转义/1000 字符、replaceManagedBlock、schtasksArgs、isWindowsInstallable、buildPlist）、`application/automation/status.test.ts`（cron status/failures/check 结构化 incidents）、`application/automation/use-cases.test.ts`（cronInstall 端到端）。对抗用例:路径含空格/单引号/`%`、dow=7、month 定值。
 
 ## 一键安装验证矩阵
 

@@ -211,6 +211,12 @@ def main() -> int:
     except office_extract.ExtractError:
         check("旧格式 .xls 报错", True)
 
+    # 5. Windows 路径标题取 basename（P3-3: split('/')[-1] 在 C:\... 会整段当标题）
+    win_xlsx = office_extract._render_xlsx(r"C:\Users\u\Desktop\报表.xlsx", {"note": "n", "sheets": [{"name": "S1", "rows": []}]})
+    check("xlsx 标题用 basename", win_xlsx.splitlines()[0] == "# 报表.xlsx — 抽取", f"got {win_xlsx.splitlines()[0]!r}")
+    win_pptx = office_extract._render_pptx(r"C:\Users\u\Desktop\deck.pptx", {"slides": []})
+    check("pptx 标题用 basename", win_pptx.splitlines()[0] == "# deck.pptx — 抽取", f"got {win_pptx.splitlines()[0]!r}")
+
     print("---")
     if failures:
         print(f"FAILED: {len(failures)} case(s): {failures}")

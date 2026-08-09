@@ -47,7 +47,7 @@ dl() { # url outfile
 # 从 checksums.txt 提取指定资产名的哈希（兼容 GNU -b 的 `*` 前缀）
 # 输出: 小写 hex 哈希；无匹配输出空
 expected_hash() { # checksums_file asset
-    awk -v a="$2" '{f=$2; sub(/^\*/,"",f); if(f==a) print $1}' "$1" | head -1 | tr '[:upper:]' '[:lower:]'
+    awk -v a="$2" '{f=$2; sub(/^\*/,"",f); if(f==a) print $1}' "$1" | head -n 1 | tr '[:upper:]' '[:lower:]'
 }
 
 # 向 rc 文件追加标记块（幂等；符号链接先解析；编辑前备份；不完整块守卫）
@@ -167,6 +167,15 @@ printf '  - 目标产物  %s\n' "$ASSET"
 
 # --- 下载（两段式到临时目录） ---
 BASE_URL="${JSPACE_BASE_URL:-https://github.com/jionpz/jspace/releases}"
+# https-only 下载（checksum 与二进制同源，http 可被同源劫持一起过）;
+# 本地 e2e 需要 http 时显式 JSPACE_ALLOW_INSECURE=1。
+case "$BASE_URL" in
+  https://*) ;;
+  http://*)
+    [ "${JSPACE_ALLOW_INSECURE:-0}" = "1" ] || err "JSPACE_BASE_URL 非 https（$BASE_URL）;本地 e2e 需 JSPACE_ALLOW_INSECURE=1 放行"
+    ;;
+  *) err "JSPACE_BASE_URL 非法: $BASE_URL（须以 https:// 开头）";;
+esac
 VER="${JSPACE_VERSION:-latest}"
 # GitHub 的 /releases/download/<tag> 会把 latest 当字面 tag（返回 404）；
 # latest 必须走 /releases/latest/download 重定向写法，具体 tag 才走 /download/<tag>
@@ -232,7 +241,7 @@ if [ "$DO_RC" = 1 ]; then
                     ;;
                 fish)
                     fish_dir="$HOME/.config/fish"; mkdir -p "$fish_dir"
-                    line="set -gx PATH $BIN_DIR \$PATH"
+                    line="set -gx PATH \"$BIN_DIR\" \$PATH"
                     append_markblock "$fish_dir/config.fish"
                     ;;
                 *)

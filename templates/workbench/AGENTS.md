@@ -24,9 +24,9 @@ Before changing files for non-trivial work, classify the request internally (imp
 | --- | --- |
 | Existing domain work | Read `workspace/<domain>/README.md` and `domain.json`; look up the domain/resource in `.jspace/hub.json`. |
 | Existing resource work | Look up the resource in `.jspace/hub.json`; enter the owning domain before operating. |
-| Candidate new domain | Create/propose a minimal domain only if it meets the domain rules below. |
+| Candidate new domain | Create/propose a minimal domain only if it meets the domain rules in jspace-use §8. |
 | Candidate new resource | Add/update a `.jspace/hub.json` resource only when it is a reusable entrypoint worth future lookup. |
-| Candidate new skill | Propose a skill only if it meets the skill rules below; ask before creating. |
+| Candidate new skill | Propose a skill only if it meets the skill rules in jspace-use §8; ask before creating. |
 | One-off operation | Do the work without adding durable structure. |
 | JSpace development | Go to the JSpace development repository (if registered); use its workflow before editing. |
 
@@ -83,9 +83,9 @@ Before finishing a work session, quietly check whether anything should be preser
 gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbrain` for skill routing; keep the format intact.
 
 <!-- TRELLIS-BRAIN-OPS:BEGIN -->
-- **jspace-use**: initialize jspace | setup jspace | configure jspace | first-use jspace | how to use jspace | 工作台怎么用 | 怎么开始 | maintain jspace | 维护工作台 | workspace upgrade | jspace doctor | cron check | 故障排查 | workbench broken | registry broken | gbrain missing | wire gbrain | fresh environment
+- **jspace-use**: initialize jspace | setup jspace | configure jspace | first-use jspace | how to use jspace | 工作台怎么用 | maintain jspace | 维护工作台 | workspace upgrade | jspace doctor | cron check | 故障排查 | workbench broken | registry broken | gbrain missing | wire gbrain | fresh environment
 - **asset-ingest**: 资料入库 | 整理 inbox | 归位资料 | 把这份资料入库
-- **memory-recall**: 问一句 | 找那个文件 | 那个数 | 精准召回 | recall | find the file | 帮我找
+- **memory-recall**: 问一句 | 找那个文件 | 那个数 | 精准召回 | recall | find the file
 - **memory-writeback**: 收工 | 写回记忆 | 记一下本次进展 | 本次进展 | end of work | session end | writeback
 <!-- TRELLIS-BRAIN-OPS:END -->
 > 区间内由 `scripts/gen-assets.ts` 从 SKILL.md frontmatter `triggers` 渲染生成,勿手工编辑;改 triggers 后重跑 gen-assets。

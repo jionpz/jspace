@@ -32,10 +32,10 @@ for (const d of skillDirs) {
 }
 const SOURCES = ["templates/workbench", "templates/filehub", ...skillDirs];
 
-// Render the two generated AGENTS.md blocks (Brain operations / Skill Governance)
-// from each workbench skill's SKILL.md frontmatter. Writes the template back to
-// disk so the checked-in template stays fresh (regenerate -> diff clean) and the
-// walk below embeds the same rendered bytes.
+// Render the generated AGENTS.md Brain-operations block (from each workbench
+// skill's SKILL.md frontmatter triggers). Writes the template back to disk so
+// the checked-in template stays fresh (regenerate -> diff clean) and the walk
+// below embeds the same rendered bytes.
 renderAgentsBlocks(repoRoot, skillsManifest.workbench.map((s) => s.name));
 
 // Skip VCS/build artifacts so they never get embedded into the binary.

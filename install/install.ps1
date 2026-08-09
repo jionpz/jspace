@@ -5,6 +5,7 @@
 # 卸载（双触发）:
 #   ① 落盘后: powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall
 #   ② env 触发: $env:JSPACE_UNINSTALL=1; irm <url> | iex
+# 注: 脚本本体不执行 `irm ... | iex` 管道——②仅为 env 触发说明，脚本仍建议两段式落盘后运行。
 # 环境变量: JSPACE_VERSION=<tag>(默认 latest)、JSPACE_BASE_URL=<base>(默认 GitHub releases)
 param(
     [switch]$Uninstall,
@@ -43,7 +44,7 @@ function Add-JspacePath {
 function Remove-JspacePath {
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     if (-not $userPath) { return }
-    $remaining = @($userPath -split ';') | Where-Object { ($_.TrimEnd('\')) -ne $PATH_ENTRY }
+    $remaining = @($userPath -split ';') | Where-Object { ($_.TrimEnd('\')) -ine $PATH_ENTRY }
     [Environment]::SetEnvironmentVariable('Path', ($remaining -join ';'), 'User')
 }
 
@@ -100,6 +101,13 @@ $asset = "jspace-windows-$arch.exe"
 Write-Host ("  - 目标产物  {0}" -f $asset)
 
 $baseUrl = if ($env:JSPACE_BASE_URL) { $env:JSPACE_BASE_URL } else { 'https://github.com/jionpz/jspace/releases' }
+# https-only 下载（checksum 与二进制同源，http 可被同源劫持一起过）;
+# 本地 e2e 需要 http 时设 JSPACE_ALLOW_INSECURE=1 放行。
+if (-not $baseUrl.StartsWith('https://')) {
+    if (-not ($baseUrl.StartsWith('http://') -and $env:JSPACE_ALLOW_INSECURE -eq '1')) {
+        Fail "JSPACE_BASE_URL 必须为 https（本地 e2e: 设 JSPACE_ALLOW_INSECURE=1 放行 http）"
+    }
+}
 $ver     = if ($env:JSPACE_VERSION)   { $env:JSPACE_VERSION }   else { 'latest' }
 # GitHub 的 /download/<tag> 会把 latest 当字面 tag（返回 404）；
 # latest 必须走 /latest/download 重定向写法，具体 tag 才走 /download/<tag>

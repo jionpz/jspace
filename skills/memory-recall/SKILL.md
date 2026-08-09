@@ -8,7 +8,6 @@ triggers:
   - "精准召回"
   - "recall"
   - "find the file"
-  - "帮我找"
 ---
 
 # memory-recall — 精准召回(读侧)

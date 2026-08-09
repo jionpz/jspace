@@ -27,8 +27,8 @@ for h in pi claude codex cursor; do
     state="installed"
   elif [ -d "$dir" ]; then
     state="config_only"
-  elif [ "$h" = "cursor" ] && { [ -d "/Applications/Cursor.app" ] || [ -d "${HOME:-}/Applications/Cursor.app" ]; }; then
-    state="config_only"   # Cursor 是 GUI 应用:装了 GUI 但 CLI 未在 PATH
+  elif [ "$h" = "cursor" ] && { [ -d "/Applications/Cursor.app" ] || [ -d "${HOME:-}/Applications/Cursor.app" ] || [ -d "${HOME:-}/.config/Cursor" ] || [ -d "${LOCALAPPDATA:-}/Programs/Cursor" ] || [ -d "${PROGRAMFILES:-}/Cursor" ] || ls "${HOME:-}/.local/share/applications/"cursor*.desktop >/dev/null 2>&1; }; then
+    state="config_only"   # Cursor 是 GUI 应用:装了 GUI 但 CLI 未在 PATH(macOS app / Linux ~/.config+Cursor desktop / Windows %LOCALAPPDATA%|%PROGRAMFILES%)
   else
     state="not_found"
   fi

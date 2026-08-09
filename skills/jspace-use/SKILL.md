@@ -1,6 +1,6 @@
 ---
 name: jspace-use
-description: "**使用与维护** JSpace 工作台(需已装至少一个 harness):理解工作台模型与所有权边界、首次启用(装 gbrain 统一记忆库/PGLite+知识图谱+本地 embedding、校验注册表、接线所选 harness)、日常会话路由、gbrain 记忆(写回/召回/指针/周快照)、资源与资产(hub.json/filehub)、CLI 维护与诊断(doctor/diff/upgrade/cron)。Use when 初始化/配置/使用/维护 jspace、how to use jspace、工作台怎么用、怎么开始、workspace upgrade、jspace doctor、cron check、故障排查、registry broken、gbrain missing、fresh environment。Do NOT use for 机器级多-harness 全局治理接线(→harness-config)、日常资料入库(→asset-ingest)、会话记忆召回(→memory-recall)、收工写回(→memory-writeback)。"
+description: "**使用与维护 JSpace 工作台**:初始化/配置/升级、日常路由、gbrain 记忆与 CLI 诊断(doctor/diff/upgrade/cron)。Use when 初始化或维护 JSpace 工作台、how to use jspace、工作台怎么用、workspace upgrade、jspace doctor、cron check、故障排查、registry broken、gbrain missing、fresh environment。Do NOT use for 机器级多-harness 全局治理(→harness-config)、日常资料入库(→asset-ingest)、会话记忆召回(→memory-recall)、收工写回(→memory-writeback)。"
 triggers:
   - "initialize jspace"
   - "setup jspace"
@@ -8,7 +8,6 @@ triggers:
   - "first-use jspace"
   - "how to use jspace"
   - "工作台怎么用"
-  - "怎么开始"
   - "maintain jspace"
   - "维护工作台"
   - "workspace upgrade"
