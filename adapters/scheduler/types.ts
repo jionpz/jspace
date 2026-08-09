@@ -61,8 +61,6 @@ export interface SchedulerAdapter {
   buildContent(cron: CronDefinition, tag: string, root: string, env: SchedulerEnv): string;
   /** tasks installed for this workbench tag (never other tags — cross-workbench safety). */
   inspect(tag: string, env: SchedulerEnv): InstalledTask[];
-  /** Apply one op; returns a human line for the report. */
-  apply(op: SchedulerOp, tag: string, root: string, env: SchedulerEnv): string[];
   /** Apply a batch of reconciliation ops. Default semantic: one op at a time
    *  (darwin/win32). A platform whose install is whole-file (linux crontab is
    *  whole-file) re-derives its content from the FULL enabled set and applies

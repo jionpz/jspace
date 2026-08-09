@@ -116,6 +116,28 @@ function plistArgv(name: string, home: string): string {
   return `cron run --id ${id} --dir ${wd}`;
 }
 
+/** Install one op (per-cron plist semantics). Private helper — the public write
+ *  port is applyBatch (darwin applies ops one at a time, no whole-block reshape). */
+function applyOne(op: SchedulerOp, tag: string, root: string, env: SchedulerEnv): string[] {
+  const cronId = op.taskId.split(".").pop() ?? op.taskId;
+  const p = plistPath(tag, cronId, env.home);
+  if (op.action === "create" || op.action === "update") {
+    mkdirSync(join(root, ".jspace", "logs", "cron"), { recursive: true });
+    if (existsSync(p)) unlinkSync(p); // idempotent: replace
+    writeFileSync(p, op.content, "utf-8"); // content = full plist body (caller-built)
+    const lint = spawnSync("plutil", ["-lint", p], { encoding: "utf-8" });
+    if (lint.status !== 0) fail(`plutil lint failed for ${p}: ${(lint.stderr ?? "").trim()}`);
+    spawnSync("launchctl", ["unload", p]); // unload may fail (not loaded) — tolerate
+    const load = spawnSync("launchctl", ["load", p], { encoding: "utf-8" });
+    if (load.status !== 0) fail(`launchctl load failed for ${p}: ${(load.stderr ?? "").trim()}`);
+    return [`jspace: ok: installed cron ${cronId} -> ${p.split("/").pop()}`];
+  }
+  // delete
+  spawnSync("launchctl", ["unload", p]); // tolerate not-loaded
+  if (existsSync(p)) unlinkSync(p);
+  return [`jspace: ok: removed ${op.taskId}.plist`];
+}
+
 export const darwinAdapter: SchedulerAdapter = {
   platform: "darwin",
 
@@ -142,29 +164,9 @@ export const darwinAdapter: SchedulerAdapter = {
     return out;
   },
 
-  apply(op: SchedulerOp, tag: string, root: string, env: SchedulerEnv): string[] {
-    const cronId = op.taskId.split(".").pop() ?? op.taskId;
-    const p = plistPath(tag, cronId, env.home);
-    if (op.action === "create" || op.action === "update") {
-      mkdirSync(join(root, ".jspace", "logs", "cron"), { recursive: true });
-      if (existsSync(p)) unlinkSync(p); // idempotent: replace
-      writeFileSync(p, op.content, "utf-8"); // content = full plist body (caller-built)
-      const lint = spawnSync("plutil", ["-lint", p], { encoding: "utf-8" });
-      if (lint.status !== 0) fail(`plutil lint failed for ${p}: ${(lint.stderr ?? "").trim()}`);
-      spawnSync("launchctl", ["unload", p]); // unload may fail (not loaded) — tolerate
-      const load = spawnSync("launchctl", ["load", p], { encoding: "utf-8" });
-      if (load.status !== 0) fail(`launchctl load failed for ${p}: ${(load.stderr ?? "").trim()}`);
-      return [`jspace: ok: installed cron ${cronId} -> ${p.split("/").pop()}`];
-    }
-    // delete
-    spawnSync("launchctl", ["unload", p]); // tolerate not-loaded
-    if (existsSync(p)) unlinkSync(p);
-    return [`jspace: ok: removed ${op.taskId}.plist`];
-  },
-
   // darwin installs per-cron plists — one op at a time, no whole-block reshape.
   applyBatch(ops: SchedulerOp[], _enabled: CronDefinition[], tag: string, root: string, env: SchedulerEnv): string[] {
-    return ops.flatMap((o) => this.apply(o, tag, root, env));
+    return ops.flatMap((o) => applyOne(o, tag, root, env));
   },
 
   uninstallAll(tag: string, _root: string, env: SchedulerEnv): string[] {

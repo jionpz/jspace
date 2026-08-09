@@ -1,4 +1,7 @@
 // adapters/scheduler/linux.ts — crontab adapter (managed block, tag-scoped).
+// Crontab is whole-file: the managed block's only safe write path is applyBatch
+// (a single-op apply was removed because it wrote a per-cron line as if it were
+// the whole block).
 // Task identity: com.jspace.cron.<tag>.<id> appears inside the managed-block
 // comment lines; inspect() only matches lines whose task identity carries THIS
 // workbench tag (parseManagedLine), so another workbench's crons are never
@@ -159,31 +162,6 @@ export const linuxAdapter: SchedulerAdapter = {
       if (parsed) out.push(parsed);
     }
     return out;
-  },
-
-  apply(op: SchedulerOp, tag: string, root: string, _env: SchedulerEnv): string[] {
-    const existing = readCrontab();
-    if (op.action === "delete") {
-      // remove just this cron's line from the current workbench block, keeping
-      // sibling crons of the same tag and all other workbenches' blocks.
-      const current = extractTagBlock(existing, tag);
-      const keep = current
-        .split("\n")
-        .filter((l) => !l.includes(`# ${op.taskId}`) && l.trim() !== "" && l.trim() !== CRON_BLOCK_START(tag) && l.trim() !== CRON_BLOCK_END(tag));
-      const rest = keep.length === 0 ? "" : `${CRON_BLOCK_START(tag)}\n${keep.join("\n")}\n${CRON_BLOCK_END(tag)}\n`;
-      writeCrontab(replaceManagedBlock(existing, rest, tag));
-      return [`jspace: ok: removed ${op.taskId}`];
-    }
-    // create/update: retained per-op port (interface-complete). The install
-    // path uses applyBatch, which rebuilds the whole block from the enabled
-    // set; a single-op apply here writes the caller-supplied content (buildDesired
-    // now yields a per-cron line, so direct create/update is not whole-block).
-    const backup = join(root, ".jspace", "logs", "cron", "crontab.backup");
-    mkdirSync(dirname(backup), { recursive: true });
-    writeFileSync(backup, existing, "utf-8");
-    const merged = replaceManagedBlock(existing, op.content, tag);
-    writeCrontab(merged);
-    return [`jspace: ok: installed cron block (${op.taskId})`];
   },
 
   applyBatch(_ops: SchedulerOp[], enabled: CronDefinition[], tag: string, root: string, env: SchedulerEnv): string[] {

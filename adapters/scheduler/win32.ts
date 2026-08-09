@@ -93,6 +93,21 @@ export function parseOpContent(content: string): string[] {
   return [];
 }
 
+/** Install one op (one schtasks task per cron). Private helper — the public
+ *  write port is applyBatch (win32 applies ops one at a time, no reshape). */
+function applyOne(op: SchedulerOp, _tag: string, _root: string, _env: SchedulerEnv): string[] {
+  if (op.action === "delete") {
+    const res = spawnSync("schtasks", ["/delete", "/tn", op.taskId, "/f"], { encoding: "utf-8" });
+    if (res.status !== 0) fail(`schtasks delete failed for ${op.taskId}: ${(res.stderr ?? "").trim()}`);
+    return [`jspace: ok: removed ${op.taskId}`];
+  }
+  // create/update: op.content is the JSON-encoded argv array built by the caller
+  const args = parseOpContent(op.content);
+  const res = spawnSync("schtasks", args, { encoding: "utf-8" });
+  if (res.status !== 0) fail(`schtasks create failed for ${op.taskId}: ${(res.stderr ?? "").trim()}`);
+  return [`jspace: ok: installed cron ${op.taskId.split("_").pop()} -> ${op.taskId}`];
+}
+
 export const win32Adapter: SchedulerAdapter = {
   platform: "win32",
 
@@ -122,22 +137,9 @@ export const win32Adapter: SchedulerAdapter = {
     });
   },
 
-  apply(op: SchedulerOp, _tag: string, _root: string, _env: SchedulerEnv): string[] {
-    if (op.action === "delete") {
-      const res = spawnSync("schtasks", ["/delete", "/tn", op.taskId, "/f"], { encoding: "utf-8" });
-      if (res.status !== 0) fail(`schtasks delete failed for ${op.taskId}: ${(res.stderr ?? "").trim()}`);
-      return [`jspace: ok: removed ${op.taskId}`];
-    }
-    // create/update: op.content is the JSON-encoded argv array built by the caller
-    const args = parseOpContent(op.content);
-    const res = spawnSync("schtasks", args, { encoding: "utf-8" });
-    if (res.status !== 0) fail(`schtasks create failed for ${op.taskId}: ${(res.stderr ?? "").trim()}`);
-    return [`jspace: ok: installed cron ${op.taskId.split("_").pop()} -> ${op.taskId}`];
-  },
-
   // win32 installs one schtasks task per cron — one op at a time, no whole-block reshape.
   applyBatch(ops: SchedulerOp[], _enabled: CronDefinition[], tag: string, root: string, env: SchedulerEnv): string[] {
-    return ops.flatMap((o) => this.apply(o, tag, root, env));
+    return ops.flatMap((o) => applyOne(o, tag, root, env));
   },
 
   uninstallAll(tag: string): string[] {

@@ -39,10 +39,6 @@ const fakeAdapter = (opts: {
   buildContent: (cron, _tag, _root, env) =>
     opts.platform === "darwin" ? "<plist>fake</plist>" : `${env.jspaceBinary}:${cron.id}`,
   inspect: () => opts.inspect(),
-  apply: (op) => {
-    opts.onApply?.(op);
-    return [`applied ${op.taskId}`];
-  },
   applyBatch: (ops, enabled, _tag, _root, _env) => {
     opts.onApplyBatch?.(ops, enabled);
     return ops.flatMap((op) => {
