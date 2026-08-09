@@ -23,6 +23,29 @@ function shq(s: string): string {
   return "'" + s.replace(/'/g, `'\\''`) + "'";
 }
 
+/** One managed crontab line for a cron (schedule + quoted jspace run). Shared
+ *  by buildContent (per-cron install content) and crontabBlock (whole-block). */
+export function crontabLine(
+  c: CronDefinition,
+  tag: string,
+  root: string,
+  jspaceBin: string,
+  path: string,
+  home: string,
+): string {
+  const d = parseSchedule(c.schedule);
+  const dom = d.Day ?? "*";
+  const mon = d.Month ?? "*";
+  const dow = d.Weekday ?? "*";
+  const log = join(root, ".jspace", "logs", "cron", `crontab-${c.id}.log`);
+  const line =
+    `${d.Minute} ${d.Hour} ${dom} ${mon} ${dow}  ` +
+    `cd ${shq(root)} && PATH=${shq(path)} HOME=${shq(home)} ${shq(jspaceBin)} cron run --dir ${shq(root)} --id ${shq(c.id)} ` +
+    `>> ${shq(log)} 2>&1  # ${taskIdFor(tag, c.id)}`;
+  if (line.length > 1000) fail(`crontab line for ${c.id} exceeds 1000 characters`);
+  return line.replace(/%/g, "\\%");
+}
+
 /** Managed crontab block for one workbench; every path is POSIX single-quoted, `%` escaped. */
 export function crontabBlock(
   crons: CronDefinition[],
@@ -34,19 +57,7 @@ export function crontabBlock(
 ): string {
   const lines = crons
     .filter((c) => c.enabled)
-    .map((c) => {
-      const d = parseSchedule(c.schedule);
-      const dom = d.Day ?? "*";
-      const mon = d.Month ?? "*";
-      const dow = d.Weekday ?? "*";
-      const log = join(root, ".jspace", "logs", "cron", `crontab-${c.id}.log`);
-      const line =
-        `${d.Minute} ${d.Hour} ${dom} ${mon} ${dow}  ` +
-        `cd ${shq(root)} && PATH=${shq(path)} HOME=${shq(home)} ${shq(jspaceBin)} cron run --dir ${shq(root)} --id ${shq(c.id)} ` +
-        `>> ${shq(log)} 2>&1  # ${taskIdFor(tag, c.id)}`;
-      if (line.length > 1000) fail(`crontab line for ${c.id} exceeds 1000 characters`);
-      return line.replace(/%/g, "\\%");
-    });
+    .map((c) => crontabLine(c, tag, root, jspaceBin, path, home));
   return `${CRON_BLOCK_START(tag)}\n${lines.join("\n")}\n${CRON_BLOCK_END(tag)}\n`;
 }
 
@@ -133,10 +144,11 @@ export const linuxAdapter: SchedulerAdapter = {
     return posixIdentity(tag, cronId);
   },
 
-  buildContent(cron: CronDefinition, _tag: string, _root: string, _env: SchedulerEnv): string {
-    // content is rebuilt as the whole workbench block at apply time — this
-    // placeholder just routes the cron through; application never switches.
-    return cron.id;
+  buildContent(cron: CronDefinition, tag: string, root: string, env: SchedulerEnv): string {
+    // real per-cron install content (a managed crontab line). applyBatch
+    // re-assembles the whole block from the enabled set at write time, so this
+    // also gives dry-run/planning a truthful per-cron view.
+    return crontabLine(cron, tag, root, env.jspaceBinary, env.path, env.home);
   },
 
   inspect(tag: string): InstalledTask[] {
@@ -162,15 +174,33 @@ export const linuxAdapter: SchedulerAdapter = {
       writeCrontab(replaceManagedBlock(existing, rest, tag));
       return [`jspace: ok: removed ${op.taskId}`];
     }
-    // create/update: rebuild full block from desired set — but apply() gets one
-    // op at a time; the reconciliation layer passes the whole new block via
-    // content. Simpler: linux apply writes the content as the new block.
+    // create/update: retained per-op port (interface-complete). The install
+    // path uses applyBatch, which rebuilds the whole block from the enabled
+    // set; a single-op apply here writes the caller-supplied content (buildDesired
+    // now yields a per-cron line, so direct create/update is not whole-block).
     const backup = join(root, ".jspace", "logs", "cron", "crontab.backup");
     mkdirSync(dirname(backup), { recursive: true });
     writeFileSync(backup, existing, "utf-8");
     const merged = replaceManagedBlock(existing, op.content, tag);
     writeCrontab(merged);
     return [`jspace: ok: installed cron block (${op.taskId})`];
+  },
+
+  applyBatch(_ops: SchedulerOp[], enabled: CronDefinition[], tag: string, root: string, env: SchedulerEnv): string[] {
+    // Whole-block semantic lives here: crontab is whole-file, so the FULL
+    // enabled set (not the op list) decides the block. An empty enabled set ->
+    // empty block -> the managed block is removed (all-disabled uninstalls);
+    // delete/disable of one cron simply drops it from the rebuilt block.
+    const existing = readCrontab();
+    // empty enabled set -> empty block -> replaceManagedBlock removes the whole
+    // managed block (markers too); a non-empty set rebuilds it from scratch.
+    const block = enabled.length === 0 ? "" : crontabBlock(enabled, tag, root, env.jspaceBinary, env.path, env.home);
+    const backup = join(root, ".jspace", "logs", "cron", "crontab.backup");
+    mkdirSync(dirname(backup), { recursive: true });
+    writeFileSync(backup, existing, "utf-8");
+    const merged = replaceManagedBlock(existing, block, tag);
+    writeCrontab(merged);
+    return [`jspace: ok: installed cron block (${enabled.length} cron(s))`];
   },
 
   uninstallAll(tag: string, root: string, _env: SchedulerEnv): string[] {

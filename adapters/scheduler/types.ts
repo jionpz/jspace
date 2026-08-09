@@ -61,8 +61,15 @@ export interface SchedulerAdapter {
   buildContent(cron: CronDefinition, tag: string, root: string, env: SchedulerEnv): string;
   /** tasks installed for this workbench tag (never other tags — cross-workbench safety). */
   inspect(tag: string, env: SchedulerEnv): InstalledTask[];
-  /** apply one op; returns a human line for the report. */
+  /** Apply one op; returns a human line for the report. */
   apply(op: SchedulerOp, tag: string, root: string, env: SchedulerEnv): string[];
+  /** Apply a batch of reconciliation ops. Default semantic: one op at a time
+   *  (darwin/win32). A platform whose install is whole-file (linux crontab is
+   *  whole-file) re-derives its content from the FULL enabled set and applies
+   *  once — a delete-only op set must not wipe still-enabled crons, and an
+   *  empty enabled set removes the whole managed block. The whole-block shape
+   *  is an adapter-internal detail; callers always see per-cron ops. */
+  applyBatch(ops: SchedulerOp[], enabled: CronDefinition[], tag: string, root: string, env: SchedulerEnv): string[];
   /** remove every task for this tag (cron uninstall). */
   uninstallAll(tag: string, root: string, env: SchedulerEnv): string[];
   /** platform health for doctor (linux: crontab present + daemon running). */

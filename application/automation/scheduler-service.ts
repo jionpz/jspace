@@ -9,8 +9,7 @@ import type { CronDefinition } from "../../core/contracts/cron.ts";
 import { loadCrons } from "./definitions.ts";
 import { invocationArgv } from "./invocation.ts";
 import { planReconciliation, type DesiredTask } from "./scheduler.ts";
-import { type SchedulerAdapter, type SchedulerEnv, type SchedulerOp } from "../../adapters/scheduler/types.ts";
-import { crontabBlock } from "../../adapters/scheduler/linux.ts";
+import { type SchedulerAdapter, type SchedulerEnv } from "../../adapters/scheduler/types.ts";
 
 export interface SchedulerInstallDeps {
   tag: string; // workbench tag from marker workbench_id
@@ -33,18 +32,6 @@ export function buildDesired(crons: CronDefinition[], tag: string, root: string,
     argv: invocationArgv({ cronId: c.id, workbench: root }).join(" "),
     content: adapter.buildContent(c, tag, root, env),
   }));
-}
-
-/** Linux applies as one whole-block write (crontab is whole-file); darwin/win32
- *  apply one op per cron. Rebuilt from the FULL enabled set — a delete-only op
- *  set must not wipe still-enabled crons. Empty desired -> empty block removes
- *  the workbench's managed block (all-disabled uninstalls). */
-function applyOps(ops: SchedulerOp[], enabled: CronDefinition[], tag: string, root: string, env: SchedulerEnv, adapter: SchedulerAdapter): string[] {
-  if (adapter.platform === "linux") {
-    const block = enabled.length === 0 ? "" : crontabBlock(enabled, tag, root, env.jspaceBinary, env.path, env.home);
-    return adapter.apply({ action: "create", taskId: adapter.identity(tag, enabled[0]?.id ?? "block").taskId, content: block }, tag, root, env);
-  }
-  return ops.flatMap((o) => adapter.apply(o, tag, root, env));
 }
 
 /** `cron install [--dry-run]`: reconcile desired (enabled crons, workbench-tagged)
@@ -71,6 +58,8 @@ export function cronInstall(root: string, dryRun: boolean, deps: SchedulerInstal
   if (ops.length === 0) {
     return { lines: ["jspace: ok: cron install: up to date"] };
   }
-  const results = applyOps(ops, enabled, deps.tag, root, deps.env, deps.adapter);
+  // How ops land is adapter-internal: darwin/win32 apply one op per cron, linux
+  // re-derives the whole crontab block from the enabled set (applyBatch).
+  const results = deps.adapter.applyBatch(ops, enabled, deps.tag, root, deps.env);
   return { lines: [`jspace: ok: cron install applied ${ops.length} change(s)`, ...results] };
 }

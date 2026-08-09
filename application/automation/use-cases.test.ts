@@ -29,6 +29,7 @@ const fakeAdapter = (opts: {
   platform: SchedulerAdapter["platform"];
   inspect: () => InstalledTask[];
   onApply?: (op: SchedulerOp) => void;
+  onApplyBatch?: (ops: SchedulerOp[], enabled: { id: string }[]) => void;
 }): SchedulerAdapter => ({
   platform: opts.platform,
   identity: (tag, cronId) =>
@@ -41,6 +42,13 @@ const fakeAdapter = (opts: {
   apply: (op) => {
     opts.onApply?.(op);
     return [`applied ${op.taskId}`];
+  },
+  applyBatch: (ops, enabled, _tag, _root, _env) => {
+    opts.onApplyBatch?.(ops, enabled);
+    return ops.flatMap((op) => {
+      opts.onApply?.(op);
+      return [`applied ${op.taskId}`];
+    });
   },
   uninstallAll: () => [],
 });
@@ -109,23 +117,29 @@ test("cronInstall: dry-run reports pending changes without applying", () => {
   rmSync(wb, { recursive: true, force: true });
 });
 
-test("cronInstall: linux applies one whole-block write for all enabled crons", () => {
+test("cronInstall: linux delegates whole-block semantics to adapter.applyBatch", () => {
+  // scheduler-service passes every reconciliation op + the FULL enabled set to
+  // adapter.applyBatch; the whole-block reshape (crontabBlock from enabled) is
+  // the linux adapter's internal detail — application never builds a block.
   const wb = makeWorkbench([{ id: "a", enabled: true }, { id: "b", enabled: true }]);
   const tag = "abc123";
   const applied: SchedulerOp[] = [];
+  let batch: { ops: SchedulerOp[]; enabled: { id: string }[] } | null = null;
   cronInstall(wb, false, {
     tag,
-    adapter: fakeAdapter({ platform: "linux", inspect: () => [], onApply: (op) => { applied.push(op); } }),
+    adapter: fakeAdapter({
+      platform: "linux",
+      inspect: () => [],
+      onApply: (op) => { applied.push(op); },
+      onApplyBatch: (ops, enabled) => { batch = { ops, enabled }; },
+    }),
     env,
   });
-  expect(applied).toHaveLength(1); // one create op, not per-cron
-  const [op] = applied;
-  expect(op.action).toBe("create");
-  if (op.action === "create") {
-    expect(op.content).toContain("cron run --dir '");
-    expect(op.content).toContain(taskIdFor(tag, "a"));
-    expect(op.content).toContain(taskIdFor(tag, "b"));
-  }
+  expect(batch).not.toBeNull();
+  expect(batch!.ops).toHaveLength(2); // one create per enabled cron (per-cron view)
+  expect(batch!.ops.every((o) => o.action === "create")).toBe(true);
+  expect(batch!.enabled.map((e) => e.id).sort()).toEqual(["a", "b"]); // full set, not just changed
+  expect(applied).toHaveLength(2); // fake flatMaps applyBatch back to per-op apply
   rmSync(wb, { recursive: true, force: true });
 });
 

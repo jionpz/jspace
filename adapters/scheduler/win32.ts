@@ -135,6 +135,11 @@ export const win32Adapter: SchedulerAdapter = {
     return [`jspace: ok: installed cron ${op.taskId.split("_").pop()} -> ${op.taskId}`];
   },
 
+  // win32 installs one schtasks task per cron — one op at a time, no whole-block reshape.
+  applyBatch(ops: SchedulerOp[], _enabled: CronDefinition[], tag: string, root: string, env: SchedulerEnv): string[] {
+    return ops.flatMap((o) => this.apply(o, tag, root, env));
+  },
+
   uninstallAll(tag: string): string[] {
     const tasks = queryTasks(tag);
     const lines: string[] = [];

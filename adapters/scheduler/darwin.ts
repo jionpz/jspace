@@ -162,6 +162,11 @@ export const darwinAdapter: SchedulerAdapter = {
     return [`jspace: ok: removed ${op.taskId}.plist`];
   },
 
+  // darwin installs per-cron plists — one op at a time, no whole-block reshape.
+  applyBatch(ops: SchedulerOp[], _enabled: CronDefinition[], tag: string, root: string, env: SchedulerEnv): string[] {
+    return ops.flatMap((o) => this.apply(o, tag, root, env));
+  },
+
   uninstallAll(tag: string, _root: string, env: SchedulerEnv): string[] {
     const lines: string[] = [];
     for (const name of listPlists(env.home)) {

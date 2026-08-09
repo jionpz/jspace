@@ -305,3 +305,12 @@ test("P0: linux full convergence — two workbenches converge independently", ()
   expect(crontab).not.toContain("cron run --dir '/wb/b'");
   expect(crontab).toContain("cron run --dir '/wb/a'"); // A survives
 });
+
+// ---- P2-1: linux whole-block semantics live in the adapter (applyBatch) ----
+
+test("linux buildContent returns a real per-cron crontab line, not a placeholder", () => {
+  const cron = mkCron("inbox", "0 21 * * *");
+  const content = linuxAdapter.buildContent(cron, "abc123", "/wb/a", { jspaceBinary: "/bin/jspace", home: "/home/u", path: "/bin" });
+  expect(content).toContain("cron run --dir '/wb/a' --id 'inbox'");
+  expect(content).toContain("# com.jspace.cron.abc123.inbox");
+});
