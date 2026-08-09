@@ -469,3 +469,39 @@ test("cron harness outside capabilities -> harness.unknown warning", () => {
   const r = doctorWorkbench(root, stubDeps({ loadCrons: badLoad }));
   expect(codes(r)).toContain("harness.unknown");
 });
+
+// ---- Pi branch (D4: honest boundary + optional extension hint) ----
+
+function setCronsHarness(harness: string): void {
+  writeFileSync(
+    join(root, ".jspace", "cron.json"),
+    JSON.stringify({ schema_version: 1, crons: [{ id: "a", schedule: "0 9 * * *", harness, prompt: "p", enabled: true }] }, null, 2),
+  );
+}
+
+test("active pi harness with pi CLI present -> info hint (harness.pi_mcp_adapter), not a warning", () => {
+  setCronsHarness("pi");
+  const r = doctorWorkbench(root, stubDeps({ harnessBinOnPath: (n) => n === "pi" }));
+  expect(codes(r)).toContain("harness.pi_mcp_adapter");
+  expect(codes(r)).not.toContain("harness.bin_missing");
+  expect(r.exitCode ?? 0).toBe(0); // info never blocks
+  const diag = (r.data as { diagnostics: { code: string; severity: string; message: string }[] }).diagnostics.find((d) => d.code === "harness.pi_mcp_adapter");
+  expect(diag?.severity).toBe("info");
+  expect(diag?.message).toContain("npm executes package code"); // inline supply-chain warning
+  expect(diag?.message).toContain("harness-pi.md");
+});
+
+test("active pi harness without pi CLI -> bin_missing warning (no fake extension hint)", () => {
+  setCronsHarness("pi");
+  const r = doctorWorkbench(root, stubDeps({ harnessBinOnPath: () => false }));
+  expect(codes(r)).toContain("harness.bin_missing");
+  expect(codes(r)).not.toContain("harness.pi_mcp_adapter");
+});
+
+test("non-active pi is not probed (active-only, no cross-harness noise)", () => {
+  setCronsHarness("claude");
+  const probed = new Set<string>();
+  doctorWorkbench(root, stubDeps({ harnessBinOnPath: (n) => (probed.add(n), true) }));
+  expect([...probed]).toEqual(["claude"]);
+  expect(codes(doctorWorkbench(root, stubDeps({ harnessBinOnPath: () => true })))).not.toContain("harness.pi_mcp_adapter");
+});

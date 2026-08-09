@@ -82,3 +82,22 @@ test("cursor adapter fails on headless argv (IDE-only) but exposes a hook path",
   expect(() => cursor.headlessArgv("x", "darwin", "/bin/x")).toThrow(/no headless CLI/);
   expect(cursor.hookFilePath?.("/wb")).toBe("/wb/.cursor/hooks.json");
 });
+
+test("pi capability declares the honest adapter boundary (D4)", () => {
+  const cap = getCapability("pi");
+  // third-party MCP channel, not native
+  expect(cap.mcp).toEqual({ via: "pi_mcp_adapter" });
+  // extension-channel session events (need pi-mcp-adapter), not native hooks
+  expect(cap.sessions.map((s) => s.name)).toEqual(["session_start", "before_agent_start"]);
+  expect(cap.sessions.every((s) => s.source === "extension")).toBe(true);
+  // no Claude-style hooks, no native memory
+  expect(cap.hook_format).toBe("none");
+  expect(cap.native_memory).toBe("none");
+  // user-level skill location (wired by skills install, never init/upgrade)
+  expect(cap.user_install).toEqual(["~/.agents/skills"]);
+  expect(cap.headless).toEqual(["pi", "-p"]);
+});
+
+test("pi adapter headless argv is pi -p <prompt>", () => {
+  expect(getAdapter("pi").headlessArgv("整理 inbox", "darwin", "/bin/pi")).toEqual(["/bin/pi", "-p", "整理 inbox"]);
+});

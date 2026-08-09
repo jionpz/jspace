@@ -3,7 +3,7 @@
 import type { DistributionManifestV1 } from "../core/contracts/distribution.ts";
 export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   schema_version: 1,
-  bundle_version: "1.0.11-18-g2282fc8",
+  bundle_version: "1.0.11",
   files: [
   { path: "templates/workbench/.claude/settings.json", sha256: "3f0ebe9a0cc565ac1f1539a81f09056b733e42205f02ccc7fbcedc06c0be7b56", ownership: "seed" },
   { path: "templates/workbench/.gitignore", sha256: "0f2e16c43f69d5da1cbffb1ff533c71f45eebe132b475471f0c014f6d204fd55", ownership: "seed" },
@@ -19,6 +19,7 @@ export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   { path: "skills/jspace-use/agents/openai.yaml", sha256: "bcfce9990e7f8e1507e729c6c6afe2d93a61f20c34e2d78bb8caad6e3aa0a05c", ownership: "seed" },
   { path: "skills/jspace-use/references/example-first-use.md", sha256: "b48592dc1008b4a711019fe7f00b7bbe4472634488fab340c1e534fe4139789e", ownership: "seed" },
   { path: "skills/jspace-use/references/gbrain.md", sha256: "3824604cc6ecc715db3d09732f9974c5656ae1a7a4eb77eb58e67bcb8898db22", ownership: "seed" },
+  { path: "skills/jspace-use/references/harness-pi.md", sha256: "e7b72bb5ddfcee73496f052c4e8a1ae26b91b3d01901bf4a35bfd5d1a16b8778", ownership: "seed" },
   { path: "skills/jspace-use/references/harnesses.md", sha256: "2c49c4d8f719dce0e6bb3c3eac227fda12caec2b3f3dbd3698899d4e17f6b7d8", ownership: "seed" },
   { path: "skills/jspace-use/references/headless-ops.md", sha256: "a1aef844240e2ac0b07db93321e87026b0a9b59dd4db2e2ea8216ca1eedaaf58", ownership: "seed" },
   { path: "skills/jspace-use/references/registry.md", sha256: "f538046741fe90570821243ea151bfde7d90f9fc2fb44554374ac542b6eb4ffa", ownership: "seed" },
