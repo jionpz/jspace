@@ -1,6 +1,5 @@
 // core/contracts/distribution.test.ts — pure decode tests for the distribution
-// manifest base contract. Only the typed contract is covered here; generation
-// and upgrade semantics belong to Child B.
+// manifest schema; see core/contracts/distribution.ts for the contract.
 // Run: bun test core/contracts/distribution.test.ts
 import { expect, test } from "bun:test";
 import type { DecodeResult } from "./diagnostics.ts";

@@ -30,7 +30,7 @@ else
 fi
 
 # 2. filehub 存入(验证 journal 记录了 committed)
-JOURNALS=$(ls "$TARGET/.jspace/state/ingest/" 2>/dev/null | head -5)
+JOURNALS=$(ls "$TARGET/.jspace/state/ingest/" 2>/dev/null | head -n 5)
 if [ -n "$JOURNALS" ]; then
   for j in "$TARGET"/.jspace/state/ingest/*.json; do
     STATUS=$(python3 -c "import json; print(json.load(open('$j')).get('status',''))" 2>/dev/null)
@@ -45,7 +45,7 @@ else
 fi
 
 # 3. gbrain 页存在(入脑)
-PAGE=$(GBRAIN_HOME="$GBRAIN_HOME" "$GBRAIN" list -n 20 2>/dev/null | head -5)
+PAGE=$(GBRAIN_HOME="$GBRAIN_HOME" "$GBRAIN" list -n 20 2>/dev/null | head -n 5)
 if echo "$PAGE" | grep -q "acme\|供应商报价"; then
   pass "gbrain 页存在"
 else
@@ -62,7 +62,7 @@ else
 fi
 
 # 5. 召回自检
-QUERY_RESULT=$(GBRAIN_HOME="$GBRAIN_HOME" "$GBRAIN" query "acme 供应商 12800" 2>/dev/null | head -10)
+QUERY_RESULT=$(GBRAIN_HOME="$GBRAIN_HOME" "$GBRAIN" query "acme 供应商 12800" 2>/dev/null | head -n 10)
 if echo "$QUERY_RESULT" | grep -q "供应商"; then
   pass "召回自检命中(query 'acme 供应商 12800' 返回目标页)"
 else

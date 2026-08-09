@@ -158,7 +158,7 @@ if [ "$OS" = macos ] && command -v sysctl >/dev/null 2>&1; then
 fi
 # Linux musl：当前 release 仅 glibc，明确报错
 if [ "$OS" = linux ]; then
-    if [ -f /etc/alpine-release ] || { command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | head -1 | grep -qi musl; }; then
+    if [ -f /etc/alpine-release ] || { command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | head -n 1 | grep -qi musl; }; then
         err "当前 release 仅提供 glibc 构建；此系统为 musl（如 Alpine）。请在 glibc 发行版（Ubuntu/Debian/Fedora/Arch…）安装"
     fi
 fi

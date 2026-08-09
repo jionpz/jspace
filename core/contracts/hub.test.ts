@@ -1,4 +1,5 @@
-// core/contracts/hub.test.ts — pure decode tests for the hub v4 contract.
+// core/contracts/hub.test.ts — hub contract tests — schema_version 1 (the HubV4
+// type name is a legacy identifier kept for code history; the schema field is schema_version: 1).
 // Covers valid round-trip, unknown fields, strict boolean primary, duplicate
 // ids, bad references, path traversal and multi-error reporting.
 // Run: bun test core/contracts/hub.test.ts
