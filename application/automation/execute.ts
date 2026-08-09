@@ -8,7 +8,6 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
-  readFileSync,
   statSync,
   unlinkSync,
   writeFileSync,
@@ -21,7 +20,7 @@ import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
 import { loadCrons, resolveCronPrompt, type SkillTargetContext } from "./definitions.ts";
 import { readMaterializedJournal } from "../workspace/journal.ts";
 import { skillRel, skillRoot } from "../workspace/manifest.ts";
-import { writeRun } from "./runs.ts";
+import { lastRun, writeRun } from "./runs.ts";
 import { openOrUpdate, resolveIncidents } from "./incidents.ts";
 import { acquireLock } from "./lock.ts";
 import { win32SpawnTarget } from "./win32-spawn.ts";
@@ -53,17 +52,15 @@ export interface CronRunOptions {
   force: boolean;
 }
 
-function todaySuccess(root: string, cronId: string, logDir: (r: string, c: string) => string): boolean {
-  const dir = logDir(root, cronId);
-  if (!existsSync(dir)) return false;
-  const today = localDate();
-  for (const n of readdirSync(dir)) {
-    if (n.startsWith(today) && n.endsWith(".md")) {
-      const s = readFileSync(join(dir, n), "utf-8");
-      if (s.includes("status: ok")) return true;
-    }
-  }
-  return false;
+function todaySuccess(root: string, cronId: string): boolean {
+  // Machine truth: same-day success is decided from the structured RunRecord,
+  // never the prose log. The prose log is a human payload written *before* the
+  // RunRecord (execute.ts), so trusting it opens a crash window: a log saying
+  // "status: ok" with a missing RunRecord would silently skip the next trigger.
+  const last = lastRun(root, cronId);
+  if (!last) return false;
+  if (!last.startedAt.startsWith(localDate())) return false;
+  return last.status === "ok" && !last.timedOut;
 }
 
 function pruneLogs(root: string, cronId: string, keep: number, logDir: (r: string, c: string) => string): void {
@@ -97,7 +94,7 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   }
 
   // Same-day success skip (launchd catch-up + manual rerun); --force bypasses.
-  if (!opts.force && todaySuccess(root, opts.cronId, deps.logDir)) {
+  if (!opts.force && todaySuccess(root, opts.cronId)) {
     return { lines: [`jspace: ok: cron ${opts.cronId} already succeeded today, skipping`] };
   }
 

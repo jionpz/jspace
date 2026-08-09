@@ -34,6 +34,9 @@ function resolve(key: string, ref: string): string | null {
   if (!clean) return null;
   // <placeholder> patterns (e.g. skills/<jspace-skill>/) are not real paths
   if (clean.includes("<") || clean.includes(">")) return null;
+  // Workbench materialized skills: `.jspace/skills/<name>/…` maps to the
+  // bundled `skills/<name>/…` (same bytes after init/upgrade).
+  if (clean.startsWith(".jspace/skills/")) return clean.replace(/^\.jspace\//, "");
   if (clean.startsWith("skills/")) return clean; // repo/workbench-relative
   // `references/X` and `scripts/X` are relative to the SKILL ROOT, not to the
   // referencing file's directory (e.g. skills/memory-recall/references/discipline.md
@@ -53,6 +56,15 @@ function resolve(key: string, ref: string): string | null {
       const target = posix.normalize(`${skillRoot}/${clean}`);
       return target.startsWith("skills/") ? target : null; // never escape the skills tree
     }
+  }
+  // templates/workbench/* — a bare `references/…` is a template-ROOT-relative
+  // link (e.g. AGENTS.md -> `references/registry.md`). The workbench template
+  // ships no references/ dir, so such a link is dead unless a bundled file at
+  // templates/workbench/references/… actually exists. Note: bare `scripts/…`
+  // refs are prose mentions of the dev-repo generator (scripts/gen-assets.ts),
+  // not paths, and are intentionally not checked here.
+  if (key.startsWith("templates/workbench/") && clean.startsWith("references/")) {
+    return `${key.split("/").slice(0, 2).join("/")}/${clean}`;
   }
   return null; // not a bundle-internal reference
 }
@@ -88,6 +100,23 @@ test("bundle-internal references resolve to an embedded file or dir", () => {
     }
   }
   expect(failures).toEqual([]);
+});
+
+test("workbench templates never reference a bare references/… file (dead-link regression)", () => {
+  // P0-3: AGENTS.md used to link `references/registry.md` / `references/gbrain.md`,
+  // which do not exist in the template root (skills references live under
+  // .jspace/skills/<skill>/references/). A bare references/… in a workbench
+  // template must resolve to a bundled templates/workbench/references/… file —
+  // there is none, so any occurrence fails loudly.
+  const bad: string[] = [];
+  for (const [key, body] of workbenchMds()) {
+    if (!key.startsWith("templates/workbench/")) continue;
+    for (const ref of refsOf(body)) {
+      if (!/^references\//.test(ref.split("#")[0].trim())) continue;
+      bad.push(`${key}: bare references/ link \`${ref}\``);
+    }
+  }
+  expect(bad).toEqual([]);
 });
 
 test("migrated repo docs are not referenced from the materialized tree", () => {

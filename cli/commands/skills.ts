@@ -2,15 +2,16 @@
 // workbench skills into the user-level `~/.agents/skills/` directory. This is
 // the multi-harness uniform location (Claude/Grok/Pi/OpenCode read user-level
 // paths; `~` expands per machine, machine-agnostic, no harness-specific var).
-import { mkdirSync, existsSync, writeFileSync } from "node:fs";
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CommandSpec } from "../../application/commands/command.ts";
 import { installSkills, type InstallDeps, type InstallResult } from "../../application/skills/install.ts";
 import { ASSETS } from "../assets.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
 import { expandTilde } from "../embed.ts";
+import { b } from "./helpers.ts";
 
-function userSkillsRoot(): string {
+export function userSkillsRoot(): string {
   return expandTilde("~/.agents/skills");
 }
 
@@ -19,12 +20,21 @@ function writeWithDirs(abs: string, content: string): void {
   writeFileSync(abs, content, "utf-8");
 }
 
+function readFileOrNull(abs: string): string | null {
+  try {
+    return readFileSync(abs, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
 const installDeps = (dryRun: boolean): InstallDeps => ({
   assetKeys: () => Object.keys(ASSETS),
   assetContent: (k) => ASSETS[k],
   userSkillsRoot,
   writeFile: writeWithDirs,
   exists: existsSync,
+  readFile: readFileOrNull,
   dryRun,
 });
 
@@ -32,10 +42,13 @@ const installSpec: CommandSpec = {
   name: "install",
   summary: "materialize official skills into ~/.agents/skills/ (multi-harness uniform location)",
   features: { dryRun: true },
-  handler: (ctx) => {
+  options: [
+    { name: "--refresh", dest: "refresh", takesValue: false, help: "refresh changed official files (hash-compare; default: fill gaps only, preserve local edits)" },
+  ],
+  handler: (ctx, args) => {
     try {
       const names = SKILLS_MANIFEST.workbench.map((s) => s.name);
-      const r = installSkills(installDeps(ctx.dryRun), names);
+      const r = installSkills(installDeps(ctx.dryRun), names, { refresh: b(args?.refresh) });
       const root = userSkillsRoot();
       const lines = summarizeInstall(r, root, ctx.dryRun);
       return { lines };
@@ -49,13 +62,16 @@ function summarizeInstall(r: InstallResult, root: string, dryRun: boolean): stri
   const lines: string[] = [];
   const verb = dryRun ? "(dry-run) would install" : "installed";
   let totalCreated = 0;
+  let totalUpdated = 0;
   for (const s of r.skills) {
     totalCreated += s.created.length;
+    totalUpdated += s.updated.length;
     const createdDesc = s.created.length > 0 ? ` created=${s.created.length}` : "";
+    const updatedDesc = s.updated.length > 0 ? ` refreshed=${s.updated.length}` : "";
     const skippedDesc = s.skipped.length > 0 ? ` skipped=${s.skipped.length}` : "";
-    lines.push(`${verb} ${s.name}@${join(root, s.name)}${createdDesc}${skippedDesc}`);
+    lines.push(`${verb} ${s.name}@${join(root, s.name)}${createdDesc}${updatedDesc}${skippedDesc}`);
   }
-  if (totalCreated === 0 && !dryRun) lines.push("jspace: ok: all official skills already installed (re-run to refresh missing files)");
+  if (totalCreated === 0 && totalUpdated === 0 && !dryRun) lines.push("jspace: ok: all official skills already installed (re-run to refresh missing files)");
   return lines;
 }
 

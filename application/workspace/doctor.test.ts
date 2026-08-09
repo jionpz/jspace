@@ -125,6 +125,32 @@ test("filehub registered with unfiled _inbox -> filehub.inbox_unfiled", () => {
   expect(codes(r)).toContain("filehub.inbox_unfiled");
 });
 
+test("nested _inbox dir counts as ONE item (top-level semantics; single countInbox impl)", () => {
+  // _inbox/sub/ with 3 files + top.pdf: recursive counting would report 4,
+  // top-level counting reports 2. doctor must agree with `jspace inbox status`
+  // and the context hook (both route through the shared countInbox).
+  writeFileSync(
+    join(root, ".jspace", "hub.json"),
+    JSON.stringify({
+      version: "4",
+      domains: [{ id: "files", path: "workspace/files" }],
+      resources: [{ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] }],
+      projects: [],
+    }),
+  );
+  const fh = join(root, "filehub");
+  mkdirSync(join(fh, "_inbox", "sub"), { recursive: true });
+  writeFileSync(join(fh, "_inbox", "top.pdf"), "x");
+  writeFileSync(join(fh, "_inbox", "sub", "a.pdf"), "x");
+  writeFileSync(join(fh, "_inbox", "sub", "b.pdf"), "x");
+  writeFileSync(join(fh, "_inbox", "sub", "c.pdf"), "x");
+  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
+  const r = doctorWorkbench(root, stubDeps());
+  const diag = (r.data as { diagnostics: { code: string; message: string }[] }).diagnostics.find((d) => d.code === "filehub.inbox_unfiled");
+  expect(diag).toBeDefined();
+  expect(diag!.message).toContain("2 unfiled file(s)");
+});
+
 test("orphan skill dir without journal record -> skills.orphan_dir", () => {
   // a pre-journal leftover (e.g. old jspace-bootstrap dir) with no journal base
   mkdirSync(join(root, ".jspace", "skills", "jspace-bootstrap"), { recursive: true });

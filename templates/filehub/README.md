@@ -14,7 +14,7 @@
 ## 结项归档
 
 项目结项时,把 `projects/<x>/` 整个移入 `archive/<年>/`,并更新所属域 README 的挂接行。
-**必须用户确认**——涉及移动文件,不自动执行。判定与动线见 `.jspace/skills/jspace-use/SKILL.md` 第 8.6 节「退役与回收」;`jspace doctor` 的 `filehub.project_stale`(120 天未动)会提示候选。
+**必须用户确认**——涉及移动文件,不自动执行。判定与动线见 `~/.agents/skills/jspace-use/SKILL.md` 第 8.6 节「退役与回收」(filehub 是独立目录,无工作台的 `.jspace/`;用户级 skills 由 `jspace skills install` 物化后任何位置可读);`jspace doctor` 的 `filehub.project_stale`(120 天未动)会提示候选。
 
 ## 命名
 

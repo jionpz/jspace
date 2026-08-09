@@ -13,6 +13,22 @@ function locateInbox(root: string): string | null {
   return join(dirname(root), `${basename(root)}-inbox`);
 }
 
+/** Single source for inbox-entry counting. Top-level entries only — matches the
+ *  asset-ingest semantics where a subdirectory is filed wholesale as one item;
+ *  dotfiles skipped; capped to avoid a pathological inbox stalling hooks.
+ *  `jspace inbox status`, doctor and the context hook all call this so the three
+ *  never disagree about "how many". */
+export function countInbox(dir: string): number {
+  const MAX_INBOX_ENTRIES = 10000;
+  let n = 0;
+  for (const name of readdirSync(dir)) {
+    if (n >= MAX_INBOX_ENTRIES) break;
+    if (name.startsWith(".")) continue;
+    n += 1;
+  }
+  return n;
+}
+
 /** Read-only inbox listing (no semantic judgment). */
 export function inboxStatus(root: string, json: boolean): CmdResult {
   const inbox = locateInbox(root);

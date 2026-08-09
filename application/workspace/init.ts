@@ -113,7 +113,8 @@ export function initWorkbench(
         ? [`  note: backed up ${backedUp.length} pre-existing file(s) to <name>.jspace-bak: ${backedUp.join(", ")}`]
         : []),
       `Validate: ${validateCmd} doctor --dir ${target}`,
-      "Next: read AGENTS.md, then follow .jspace/skills/jspace-use/SKILL.md",
+      `Next: read AGENTS.md, then follow .jspace/skills/jspace-use/SKILL.md`,
+      `Install user-level skills (multi-harness ~/.agents/skills/, referenced from SKILL.md): ${validateCmd} skills install`,
     ],
   };
 }

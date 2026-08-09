@@ -9,6 +9,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cronRun, type ExecuteDeps } from "./execute.ts";
+import { localDate } from "../time.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
 
@@ -66,6 +67,23 @@ test("same-day success skip: second run is skipped without executing", async () 
   await run({ cronId: "weekly" }, d); // first run writes status: ok
   const res = await run({ cronId: "weekly" }, d);
   expect(res.lines[0]).toContain("already succeeded today");
+});
+
+test("crash window: prose log says ok but RunRecord missing -> NOT skipped", async () => {
+  // Simulate a crash between the prose-log write and the RunRecord write: a
+  // .md says "status: ok" for today, but no structured record exists. Same-day
+  // skip must NOT fire (machine truth = RunRecord, prose log is human payload).
+  const logDir = join(root, ".jspace", "logs", "cron", "weekly");
+  mkdirSync(logDir, { recursive: true });
+  const today = localDate();
+  writeFileSync(
+    join(logDir, `${today}T120000-abcdef12.md`),
+    `# cron weekly\nstatus: ok\n`,
+    "utf-8",
+  );
+  const res = await run({ cronId: "weekly" });
+  expect(res.lines[0]).not.toContain("already succeeded today");
+  expect(res.lines[0]).toContain("(exit 0)"); // executed for real (skip path has no exit marker)
 });
 
 test("lock occupied -> skip (no execution)", async () => {

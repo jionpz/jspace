@@ -3,12 +3,13 @@
 // Each collector is independent and fails quietly: a missing/wrong state
 // degrades to an omitted field, never an error. The gate (gate.ts) decides
 // when to emit anything at all; this module only answers "what is the state".
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { HubV4 } from "../../core/contracts/hub.ts";
 import type { IncidentCollection } from "../automation/incidents.ts";
 import type { PendingWriteEnvelopeV1 } from "../../core/contracts/pending.ts";
 import { readIncidents } from "../automation/incidents.ts";
+import { countInbox } from "../registry/inbox.ts";
 import { readEnvelopes } from "../pending/envelope.ts";
 import { loadHub } from "../workspace/state.ts";
 import { resolveFilehubRoot } from "../registry/filehub-lookup.ts";
@@ -47,21 +48,6 @@ export interface CollectDeps {
   readDomainSummary: (root: string, path: string) => string | null;
 }
 
-function countInboxFiles(dir: string): number {
-  // Top-level entries only — matches `jspace inbox status` so the hook's
-  // "N 份待整理" always agrees with the number the user sees. A directory
-  // counts as one pending item (asset-ingest files it wholesale). Capped to
-  // avoid a pathological inbox stalling the hook.
-  const MAX_INBOX_ENTRIES = 10000;
-  let n = 0;
-  for (const name of readdirSync(dir)) {
-    if (n >= MAX_INBOX_ENTRIES) break;
-    if (name.startsWith(".")) continue;
-    n += 1;
-  }
-  return n;
-}
-
 function readDomainSummary(root: string, path: string): string | null {
   try {
     const raw = readFileSync(join(root, path, "domain.json"), "utf-8");
@@ -84,7 +70,7 @@ const realDeps: CollectDeps = {
     if (fh === null) return 0;
     const inbox = join(fh, "_inbox");
     if (!existsSync(inbox) || !statSync(inbox).isDirectory()) return 0;
-    return countInboxFiles(inbox);
+    return countInbox(inbox);
   },
   readDomainSummary,
 };

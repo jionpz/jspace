@@ -166,3 +166,11 @@ test("init --force into a dir with a user AGENTS.md embeds the JSPACE block, use
   expect(out).toContain(userHeader); // user content preserved verbatim after the block
   rmSync(root, { recursive: true, force: true });
 });
+
+test("init result hints at user-level skills install (P0-4)", () => {
+  const root = mkdtempSync(join(tmpdir(), "jspace-init-hint-"));
+  const r = initWorkbench(root, false, initDeps);
+  expect(r.lines.join("\n")).toContain("skills install");
+  expect(r.lines.join("\n")).toContain("Next:");
+  rmSync(root, { recursive: true, force: true });
+});

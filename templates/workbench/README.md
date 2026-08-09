@@ -35,8 +35,9 @@
 ## 使用
 
 1. 先读 `AGENTS.md`。
-2. 首次使用按 `.jspace/skills/jspace-use/SKILL.md` 使用指南配置 gbrain、接线所选 AI harness,并了解日常路由/维护。
-3. 用 JSpace CLI 校验本目录（`jspace` 为编译二进制，需在 PATH 上；源码检出则运行 `bun run cli/main.ts`）：
+2. 安装用户级 skills(多 harness 统一位置,SKILL.md 引用的 `~/.agents/skills/` 文档在此物化):`jspace skills install`(幂等;`--refresh` 更新过期副本)。
+3. 首次使用按 `.jspace/skills/jspace-use/SKILL.md` 使用指南配置 gbrain、接线所选 AI harness,并了解日常路由/维护。
+4. 用 JSpace CLI 校验本目录（`jspace` 为编译二进制，需在 PATH 上；源码检出则运行 `bun run cli/main.ts`）：
 
 ```bash
 jspace doctor --dir .

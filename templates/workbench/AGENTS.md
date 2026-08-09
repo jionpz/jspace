@@ -36,22 +36,22 @@ Before changing files for non-trivial work, classify the request internally (imp
 
 ## Resource Governance
 
-资源是域内可发现的入口（项目/仓库/URL/provider/容器/笔记等值得再次找到的对象）。schema（entrypoints/binding/primary）与 drift 规则 → `references/registry.md`，不在此复制。
+资源是域内可发现的入口（项目/仓库/URL/provider/容器/笔记等值得再次找到的对象）。schema（entrypoints/binding/primary）与 drift 规则 → `.jspace/skills/jspace-use/references/registry.md`，不在此复制。
 
 ## Registry Access
 
-**注册表 = `.jspace/hub.json`。** 用标准工具直接读；校验用 `jspace doctor --dir .`。注册表是指针而非文件读取器，不复制完整 README/AGENTS/runbook 内容；查找用 `jq .jspace/hub.json`、`find workspace -maxdepth 2 -type f`、`rg`。文件细节见 `references/registry.md`。
+**注册表 = `.jspace/hub.json`。** 用标准工具直接读；校验用 `jspace doctor --dir .`。注册表是指针而非文件读取器，不复制完整 README/AGENTS/runbook 内容；查找用 `jq .jspace/hub.json`、`find workspace -maxdepth 2 -type f`、`rg`。文件细节见 `.jspace/skills/jspace-use/references/registry.md`。
 
 ## Skill Governance
 
-根 `skills/` 归**用户自建**（创建须用户批准）；官方技能在 `.jspace/skills/`（machine-managed，未改随升级刷新、本地改动保留为 skip）、`.claude/skills/`（Claude Code 同字节投影）与 `.agents/skills/`（项目级多 harness 同字节投影），勿手工编辑；提议信号 / 禁区 / 用户确认规则 → jspace-use 第 8 章。
+根 `skills/` 归**用户自建**（创建须用户批准）；官方技能在 `.jspace/skills/`（machine-managed，未改随升级刷新、本地改动保留为 skip）、`.claude/skills/`（Claude Code 同字节投影）与 `.agents/skills/`（项目级多 harness 同字节投影），勿手工编辑；提议信号 / 禁区 / 用户确认规则 → jspace-use 第 8 章。首次使用前运行 `jspace skills install`，把官方 skills 物化到用户级 `~/.agents/skills/`（SKILL.md 里引用的 `~/.agents/skills/<skill>/references/...` 文档在此落地，未安装时打开会 404；`workspace upgrade` 会自动刷新过期副本）。
 
 ## Durable Knowledge Routing
 
 | Knowledge | Destination |
 | --- | --- |
 | Daily operating rule for all agents | Root `AGENTS.md`(本块外是你的内容,块内是 JSpace 规则) |
-| Persistent facts and asset pointers | gbrain（首次启用接线后；见 jspace-use `references/gbrain.md`） |
+| Persistent facts and asset pointers | gbrain（首次启用接线后；见 `.jspace/skills/jspace-use/references/gbrain.md`） |
 | Domain entry point/resource/workflow | `workspace/<domain>/README.md` or `domain.json` |
 | Domain-specific AI boundary | `workspace/<domain>/AGENTS.md` |
 | Repeatable domain procedure | `workspace/<domain>/runbook.md` |

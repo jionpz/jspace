@@ -11,6 +11,7 @@ import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
 import { inspectWorkbench, type InspectEnv } from "../../core/registry/inspect.ts";
 import { primaryPathForResourceType, resolveEffectiveRegistry } from "../../core/registry/effective.ts";
 import { readIncidents } from "../automation/incidents.ts";
+import { countInbox } from "../registry/inbox.ts";
 import { readEnvelopes } from "../pending/envelope.ts";
 import { isFile } from "../fs.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
@@ -37,17 +38,6 @@ export interface CronHealthDeps {
    *  Injected so doctor can check the gbrain MCP skills-dir wiring without
    *  touching the machine-level file itself. */
   readUserClaudeJson?: () => unknown | null;
-}
-
-function countFiles(dir: string): number {
-  let n = 0;
-  for (const name of readdirSync(dir)) {
-    if (name.startsWith(".")) continue;
-    const p = join(dir, name);
-    if (statSync(p).isDirectory()) n += countFiles(p);
-    else n += 1;
-  }
-  return n;
 }
 
 // Retirement thresholds (design §5). Deliberately conservative: mtime is
@@ -176,7 +166,7 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
       if (!existsSync(inboxDir) || !statSync(inboxDir).isDirectory()) {
         diags.push({ severity: "warning", code: "filehub.inbox_missing", path: `filehub.${fhRoot}`, message: `filehub: _inbox missing: ${inboxDir}` });
       } else {
-        const unfiled = countFiles(inboxDir);
+        const unfiled = countInbox(inboxDir);
         if (unfiled > 0) {
           diags.push({ severity: "warning", code: "filehub.inbox_unfiled", path: `filehub.${fhRoot}`, message: `filehub: _inbox has ${unfiled} unfiled file(s); run asset-ingest ("整理一下 inbox")` });
         }
