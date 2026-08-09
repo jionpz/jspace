@@ -22,7 +22,7 @@ import { loadCrons, resolveCronPrompt, type SkillTargetContext } from "./definit
 import { skillRel, skillRoot } from "../fs.ts";
 import { lastRun, writeRun } from "./runs.ts";
 import { openOrUpdate, resolveIncidents } from "./incidents.ts";
-import { acquireLock } from "./lock.ts";
+import { acquireLockWithClock } from "./lock.ts";
 import { harnessArgv } from "../../adapters/harness/argv.ts";
 import { isFile } from "../fs.ts";
 import { localDate, localStamp } from "../time.ts";
@@ -32,9 +32,14 @@ import { localDate, localStamp } from "../time.ts";
 const LOG_TRUNCATE_BYTES = 64_000;
 /** Number of prose logs kept per cron (oldest pruned). */
 const LOG_KEEP = 30;
-/** Lock considered stale after timeout * this (a live run holds the lock for
- *  at most timeoutSec, so 2x is a safe margin for clock skew / slow spawn). */
-const LOCK_STALE_MS_MULTIPLE = 2;
+/** Lock stale tolerance (ms) per second of timeoutSec. A live run holds the
+ *  lock for at most timeoutSec seconds, so 2x (2000ms per second of timeoutSec)
+ *  is a safe margin for clock skew / slow spawn before another process may take
+ *  over. Units matter: acquireLock's staleMs is ms, so timeoutSec × 2000 = 1h
+ *  stale at the default timeoutSec=1800 (NOT timeoutSec × 2ms = 3.6s, which
+ *  would let a second process steal the lock a few seconds after the run
+ *  starts). */
+const LOCK_STALE_MS_PER_TIMEOUT_SEC = 2000;
 
 export interface ExecuteDeps {
   platform: string;
@@ -195,13 +200,14 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
     return { lines: [`jspace: ok: cron ${opts.cronId} already succeeded today, skipping`] };
   }
 
-  // Exclusive single-instance lock (stale after timeout*2). The whole run body
-  // sits in one try/finally so every exit path (incl. thrown guards) releases
-  // the lock, and release() only removes OUR ownership token.
+  // Exclusive single-instance lock (stale after timeoutSec × 2000ms). The whole
+  // run body sits in one try/finally so every exit path (incl. thrown guards)
+  // releases the lock, and release() only removes OUR ownership token. The lock
+  // uses the injected deps.now clock so staleness is deterministic in tests.
   const lockPath = join(root, ".jspace", "logs", "cron", `${opts.cronId}.lock`);
   mkdirSync(join(lockPath, ".."), { recursive: true });
   const token = `${process.pid}:${crypto.randomUUID()}`;
-  const lock = acquireLock(lockPath, token, opts.timeoutSec * LOCK_STALE_MS_MULTIPLE);
+  const lock = acquireLockWithClock(lockPath, token, opts.timeoutSec * LOCK_STALE_MS_PER_TIMEOUT_SEC, deps.now);
   if (lock === null) {
     return { lines: [`jspace: skip: cron ${opts.cronId} already running (lock ${lockPath})`] };
   }

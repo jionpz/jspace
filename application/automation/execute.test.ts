@@ -5,7 +5,7 @@
 // behavior is genuine; harnessBin routes the argv to it.
 // Run: bun test application/automation/execute.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cronRun, type ExecuteDeps } from "./execute.ts";
@@ -94,6 +94,21 @@ test("lock occupied -> skip (no execution)", async () => {
   // age = now - mtime < timeout*2000 -> treat as running
   const res = await run({ cronId: "weekly", timeoutSec: 10 }, deps({ now: () => Date.now() + 5_000 }));
   expect(res.lines[0]).toContain("already running");
+});
+
+test("lock staleness: threshold is timeoutSec*2000ms, not timeoutSec*2ms", async () => {
+  // Integration-level unit-conversion guard: acquireLock's staleMs is ms, so
+  // timeoutSec=1800 must yield a 3_600_000ms (1h) stale threshold. A 3.6s-old
+  // lock must be FRESH (skip); a >1h lock must be stale (taken over). Under the
+  // old bug (timeoutSec*2 = 3.6s threshold) the first case would wrongly steal.
+  const lockPath = join(root, ".jspace", "logs", "cron", "weekly.lock");
+  writeFileSync(lockPath, "99999");
+  const mtime = statSync(lockPath).mtimeMs;
+  const fresh = await run({ cronId: "weekly", timeoutSec: 1800 }, deps({ now: () => mtime + 3_600 }));
+  expect(fresh.lines[0]).toContain("already running");
+  const stale = await run({ cronId: "weekly", timeoutSec: 1800 }, deps({ now: () => mtime + 3_600_001 }));
+  expect(stale.lines[0]).not.toContain("already running");
+  expect(stale.lines[0]).toContain("(exit 0)"); // executed for real after taking over
 });
 
 test("suspect: exit 0 with no output", async () => {

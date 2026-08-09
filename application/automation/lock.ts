@@ -67,3 +67,17 @@ export function acquireLock(path: string, token: string, staleMs: number, fs: Lo
   }
   return null;
 }
+
+/** acquireLock with an injected clock. The default fs reads Date.now, which
+ *  makes staleness wall-clock dependent; execute.ts wires its injected
+ *  ExecuteDeps.now here so integration tests can exercise the stale timeout
+ *  (timeoutSec → staleMs conversion) without sleeping. */
+export function acquireLockWithClock(
+  path: string,
+  token: string,
+  staleMs: number,
+  now: () => number,
+  fs: LockFs = realFs,
+): CronLock | null {
+  return acquireLock(path, token, staleMs, { ...fs, now });
+}
