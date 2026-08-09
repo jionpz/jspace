@@ -16,6 +16,7 @@
   - `.opencode/skills/` - 官方 skill 的 OpenCode 同字节投影（机器托管；同 `.claude/skills/` 纪律）
   - `.agents/skills/` - 官方 skill 的项目级多 harness 同字节投影（机器托管；同 `.claude/skills/` 纪律，用户级 `~/.agents/skills/` 由 `jspace skills install` 物化）
   - `.grok/hooks/jspace.json` - Grok Build 会话 hook（SessionStart/UserPromptSubmit/PreCompact/SessionEnd；seed，未修改随升级刷新，本地修改保留）
+  - `.opencode/plugins/jspace.ts` - OpenCode 会话 plugin（session.created→session-start / session.idle→pending+cron / compacting→context 注入；seed，未修改随升级刷新，本地修改保留）
 - `.jspace/`(JSpace 管理区):
   - `hub.json` - domain/resource/project 注册表(**用户数据**;升级永不覆盖;缺失时重建空注册表)
   - `cron.json` - 声明式 cron 定义(**用户数据**;升级永不覆盖;删除即停用,不复活)
@@ -29,7 +30,7 @@
 | 位置 | 所有权 | 升级行为 |
 | --- | --- | --- |
 | 根 `AGENTS.md` | 块内 = managed / 块外 = user | 只对比并更新 `<!-- JSPACE:START -->…<!-- JSPACE:END -->` 块内文本(整文件备份 + rollback);块外内容永不触碰。块相同 → `no-op` |
-| 根 `README.md`/`.gitignore`/`CLAUDE.md`/`.claude/settings.json`、`.jspace/skills/`、`.claude/skills/`、`.grok/skills/`、`.opencode/skills/`、`.agents/skills/`、`.grok/hooks/jspace.json` | seed(模板) | **未修改**随升级刷新;**本地修改过**的一律保留(显示 `skip`,不阻断) |
+| 根 `README.md`/`.gitignore`/`CLAUDE.md`/`.claude/settings.json`、`.jspace/skills/`、`.claude/skills/`、`.grok/skills/`、`.opencode/skills/`、`.agents/skills/`、`.grok/hooks/jspace.json`、`.opencode/plugins/jspace.ts` | seed(模板) | **未修改**随升级刷新;**本地修改过**的一律保留(显示 `skip`,不阻断) |
 | `.jspace/hub.json`、`.jspace/cron.json` | user(数据) | **永不覆盖**;schema 演进走迁移。hub.json 缺失时升级重建空注册表;cron.json 删除即视为停用,升级不复活 |
 | `.jspace/marker.json`/`local.json`/`logs/`/`state/` | machine(状态) | 机器生成/重写,不进替换范围 |
 

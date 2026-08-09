@@ -3,16 +3,17 @@
 import type { DistributionManifestV1 } from "../core/contracts/distribution.ts";
 export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   schema_version: 1,
-  bundle_version: "1.0.11",
+  bundle_version: "1.0.11-18-g2282fc8",
   files: [
   { path: "templates/workbench/.claude/settings.json", sha256: "3f0ebe9a0cc565ac1f1539a81f09056b733e42205f02ccc7fbcedc06c0be7b56", ownership: "seed" },
   { path: "templates/workbench/.gitignore", sha256: "0f2e16c43f69d5da1cbffb1ff533c71f45eebe132b475471f0c014f6d204fd55", ownership: "seed" },
   { path: "templates/workbench/.grok/hooks/jspace.json", sha256: "236badde2989d2d9318b99374e2e798ed7dae79258a417d032072536b023fcc5", ownership: "seed" },
   { path: "templates/workbench/.jspace/cron.json", sha256: "f63e5ad4e9b965603886956e8997bf59b837ea5d9947d96d3335aa1e79d2b902", ownership: "user" },
   { path: "templates/workbench/.jspace/hub.json", sha256: "56125ed5177d55eae719e876a90cf0299c386c7f571c945c1e6291e808106001", ownership: "user" },
+  { path: "templates/workbench/.opencode/plugins/jspace.ts", sha256: "735df2954b218a396e9db71ee38d4178600834cb6ab7f77471622c284650a5d4", ownership: "seed" },
   { path: "templates/workbench/AGENTS.md", sha256: "efbf8bb669136591e8df8f9dc205f1feb344c67c82805e358d837500a8c22108", ownership: "seed" },
   { path: "templates/workbench/CLAUDE.md", sha256: "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49", ownership: "seed" },
-  { path: "templates/workbench/README.md", sha256: "922f5ec49c995af99c4487a3f89b82adc566a74fd21dc25f0f1b6adc73a433ef", ownership: "seed" },
+  { path: "templates/workbench/README.md", sha256: "a0c93316c3dbbc73396cf55dab33e419c5ece433e101453f8bfdc222a8b30b1a", ownership: "seed" },
   { path: "templates/filehub/README.md", sha256: "2c9b5508d27afa8889f1240ed580d60210ccdd763604021a6c8ca0521a3df2e9", ownership: "managed" },
   { path: "skills/jspace-use/SKILL.md", sha256: "91f6a2251149e175c88f3b765c71da1254ea0b46b720b65b42e1ffcfa93df5b9", ownership: "seed" },
   { path: "skills/jspace-use/agents/openai.yaml", sha256: "bcfce9990e7f8e1507e729c6c6afe2d93a61f20c34e2d78bb8caad6e3aa0a05c", ownership: "seed" },

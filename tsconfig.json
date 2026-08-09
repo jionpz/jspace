@@ -12,5 +12,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["cli/**/*.ts", "scripts/**/*.ts", "core/**/*.ts", "adapters/**/*.ts", "application/**/*.ts"]
+  "include": ["cli/**/*.ts", "scripts/**/*.ts", "core/**/*.ts", "adapters/**/*.ts", "application/**/*.ts", "types/**/*.d.ts"]
 }

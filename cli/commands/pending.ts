@@ -1,7 +1,7 @@
 // cli/commands/pending.ts — `jspace pending` command family.
 import type { CommandSpec } from "../../application/commands/command.ts";
 import { pendingAck, pendingApply, pendingList, pendingStage } from "../../application/pending/use-cases.ts";
-import { b, s } from "./helpers.ts";
+import { b, quiet, s } from "./helpers.ts";
 
 const pendingStageSpec: CommandSpec = {
   name: "stage",
@@ -27,7 +27,11 @@ const pendingApplySpec: CommandSpec = {
   summary: "apply staged envelopes (dedupe -> put; retry -> terminal-failed)",
   features: { dir: true },
   positionals: [{ name: "id", help: "specific envelope id (default: all staged)" }],
-  handler: (ctx, args) => pendingApply(ctx.root, args.id === undefined ? undefined : s(args.id)),
+  options: [{ name: "--quiet", takesValue: false, help: "suppress stdout (keep exit code; for harness hooks)" }],
+  handler: (ctx, args) => {
+    const result = pendingApply(ctx.root, args.id === undefined ? undefined : s(args.id));
+    return b(args.quiet) ? quiet(result) : result;
+  },
 };
 
 const pendingAckSpec: CommandSpec = {

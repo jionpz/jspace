@@ -17,7 +17,7 @@ import { schedulerAdapter } from "../../adapters/scheduler/index.ts";
 import { cronIsInstalledForRoot, schedulerEnv, workbenchTagFor } from "../scheduler.ts";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
-import { b, optS, readFileOrNull, s } from "./helpers.ts";
+import { b, optS, quiet, readFileOrNull, s } from "./helpers.ts";
 
 const cronAddSpec: CommandSpec = {
   name: "add",
@@ -173,7 +173,11 @@ const cronFailuresSpec: CommandSpec = {
   description:
     "One-place session-start surface: recent failures + pending staged gbrain writes (APPLY.json) + per-cron status. Exit 1 when anything needs attention.",
   features: { dir: true, json: true },
-  handler: (ctx) => cronFailures(ctx.root),
+  options: [{ name: "--quiet", takesValue: false, help: "suppress stdout (keep exit code; for harness hooks)" }],
+  handler: (ctx, args) => {
+    const result = cronFailures(ctx.root);
+    return b(args.quiet) ? quiet(result) : result;
+  },
 };
 
 const cronAckSpec: CommandSpec = {

@@ -52,6 +52,7 @@ function walk(dir: string, base: string, out: Map<string, string>): void {
       walk(p, base, out);
     } else {
       if (SKIP_EXT.has(extname(name))) continue;
+      if (name.endsWith(".test.ts")) continue; // test files never embed (e.g. template plugin tests)
       const rel = relative(base, p).split(sep).join("/");
       const baseRel = relative(repoRoot, base).split(sep).join("/");
       out.set(`${baseRel}/${rel}`, readFileSync(p, "utf-8"));

@@ -17,6 +17,13 @@ export const b = (v: unknown): boolean => v === true;
  *  (`s(args.x) || undefined`). */
 export const optS = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined);
 
+/** Suppress stdout lines but keep the exit code + warnings/errors (used by
+ *  harness hooks like OpenCode's session.idle, where output would be noise).
+ *  `lines` stays present (empty) so the renderer stays happy. */
+export function quiet(result: { lines: string[]; exitCode?: number; errors?: string[]; warnings?: string[]; data?: unknown }): { lines: string[]; exitCode?: number; errors?: string[]; warnings?: string[] } {
+  return { lines: [], exitCode: result.exitCode, errors: result.errors, warnings: result.warnings };
+}
+
 export const readFileOrNull = (p: string): string | null => {
   try {
     return readFileSync(p, "utf-8");

@@ -97,6 +97,22 @@ test("init materializes the Grok hook file and the .grok/.opencode skill project
   rmSync(root, { recursive: true, force: true });
 });
 
+test("init materializes the OpenCode plugin", () => {
+  const root = mkdtempSync(join(tmpdir(), "jspace-init-opencode-"));
+  init(root);
+
+  const pluginPath = join(root, ".opencode", "plugins", "jspace.ts");
+  expect(isFile(pluginPath)).toBe(true);
+  const plugin = readFileSync(pluginPath, "utf-8");
+  expect(plugin).toContain("session.created");
+  expect(plugin).toContain("session.idle");
+  expect(plugin).toContain("experimental.session.compacting");
+  expect(plugin).toContain("pending apply --quiet");
+  expect(plugin).toContain("cron check --quiet");
+
+  rmSync(root, { recursive: true, force: true });
+});
+
 test("workbench template hub is v4 and gitignore ignores local state", () => {
   const repo = devRoot();
   const hub = JSON.parse(
