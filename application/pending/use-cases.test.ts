@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { GbrainDeps } from "./apply.ts";
+import type { GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
 import { readEnvelopes, writeEnvelope } from "./envelope.ts";
 import { pendingAck, pendingApply, pendingList, pendingStage } from "./use-cases.ts";
 
@@ -45,11 +45,11 @@ test("stage writes an envelope; list reports it", () => {
   expect((res.data as { envelopes: unknown[] }).envelopes).toHaveLength(1);
 });
 
-test("apply with a stub gbrain puts once and marks applied", () => {
+test("apply with a stub gbrain puts once and marks applied", async () => {
   pendingStage(wb, "assets/foo/doc", contentFile(), "asset-ingest");
   const envId = id();
-  const stub: GbrainDeps = { get: () => ({ ok: false }), put: () => ({ ok: true }) };
-  const res = pendingApply(wb, undefined, stub);
+  const stub: GbrainDeps = { get: async () => ({ ok: false }), put: async () => ({ ok: true }) };
+  const res = await pendingApply(wb, undefined, stub);
   expect(res.lines[0]).toContain("applied 1");
   expect(readEnvelopes(fh).records[0].status).toBe("applied");
   void envId;

@@ -5,15 +5,10 @@
 // exists with DIFFERENT content is never auto-overwritten — it becomes
 // terminal_failed (knowledge pages are append-only; the producer/ack decides).
 // put failures bump retryCount; >= MAX_RETRY -> terminal_failed.
-import { spawnSync } from "node:child_process";
 import { sha256Of } from "../workspace/manifest.ts";
 import type { PendingWriteEnvelopeV1 } from "../../core/contracts/pending.ts";
+import type { GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
 import { readEnvelope, readEnvelopes, writeEnvelope } from "./envelope.ts";
-
-export interface GbrainDeps {
-  get: (slug: string) => { ok: boolean; content?: string };
-  put: (slug: string, content: string) => { ok: boolean; error?: string };
-}
 
 export const MAX_RETRY = 3;
 
@@ -30,8 +25,10 @@ function terminal(fhRoot: string, env: PendingWriteEnvelopeV1, error: string): v
 }
 
 /** Apply staged envelopes. Idempotent and safe: never overwrites an existing
- *  page whose content differs, never re-applies a non-staged envelope. */
-export function applyPending(fhRoot: string, gbrain: GbrainDeps, targetId?: string): ApplyResult {
+ *  page whose content differs, never re-applies a non-staged envelope. async —
+ *  the gbrain port is async (a stalled gbrain resolves as {ok:false} after the
+ *  timeout instead of hanging the caller, issue #8 #8). */
+export async function applyPending(fhRoot: string, gbrain: GbrainDeps, targetId?: string): Promise<ApplyResult> {
   const res: ApplyResult = { applied: [], deduped: [], failed: [], terminal: [], skipped: [] };
   const envs = targetId !== undefined ? [readEnvelope(fhRoot, targetId)] : readEnvelopes(fhRoot).records;
   for (const env of envs) {
@@ -39,7 +36,7 @@ export function applyPending(fhRoot: string, gbrain: GbrainDeps, targetId?: stri
       res.skipped.push(env.id);
       continue;
     }
-    const existing = gbrain.get(env.slug);
+    const existing = await gbrain.get(env.slug);
     // An existing page only dedupes/protects when it carries real content: an
     // empty page (`content === ""`) counts as absent, so a staged write can
     // proceed instead of being misclassified as "existing content differs".
@@ -59,7 +56,7 @@ export function applyPending(fhRoot: string, gbrain: GbrainDeps, targetId?: stri
       }
       continue;
     }
-    const put = gbrain.put(env.slug, env.content);
+    const put = await gbrain.put(env.slug, env.content);
     if (put.ok) {
       writeEnvelope(fhRoot, { ...env, status: "applied" });
       res.applied.push(env.id);
@@ -75,20 +72,4 @@ export function applyPending(fhRoot: string, gbrain: GbrainDeps, targetId?: stri
     }
   }
   return res;
-}
-
-/** Real gbrain CLI adapter (external system). Injected in tests with a stub. */
-export function realGbrain(): GbrainDeps {
-  return {
-    get: (slug) => {
-      const r = spawnSync("gbrain", ["get", slug], { encoding: "utf-8" });
-      return r.status === 0 ? { ok: true, content: r.stdout ?? "" } : { ok: false };
-    },
-    put: (slug, content) => {
-      const r = spawnSync("gbrain", ["put", slug], { input: content, encoding: "utf-8" });
-      return r.status === 0
-        ? { ok: true }
-        : { ok: false, error: `${r.stderr ?? ""}${r.stdout ?? ""}`.trim().slice(0, 300) || "gbrain put failed" };
-    },
-  };
 }

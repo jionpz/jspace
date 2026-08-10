@@ -7,7 +7,8 @@ import type { CmdResult } from "../commands/command.ts";
 import { fail } from "../../core/shared/errors.ts";
 import { resolveFilehubRoot } from "../registry/filehub-lookup.ts";
 import { readEnvelopes, readEnvelope, stageEnvelope, writeEnvelope } from "./envelope.ts";
-import { applyPending, realGbrain, type GbrainDeps } from "./apply.ts";
+import { applyPending } from "./apply.ts";
+import { realGbrain, type GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
 
 /** Producer: stage a gbrain write (lock conflict / deferred apply). */
 export function pendingStage(root: string, slug: string, contentFile: string, producer: string): CmdResult {
@@ -29,10 +30,10 @@ export function pendingList(root: string, json: boolean): CmdResult {
 }
 
 /** Applier: apply staged envelopes (dedupe / put / retry / terminal-failure). */
-export function pendingApply(root: string, id: string | undefined, gbrain: GbrainDeps = realGbrain()): CmdResult {
+export async function pendingApply(root: string, id: string | undefined, gbrain: GbrainDeps = realGbrain()): Promise<CmdResult> {
   const fh = resolveFilehubRoot(root);
   if (!fh) fail(`jspace: no filehub registered for workbench ${root}`);
-  const res = applyPending(fh, gbrain, id);
+  const res = await applyPending(fh, gbrain, id);
   const lines = [
     `jspace: ok: pending apply: applied ${res.applied.length}, deduped ${res.deduped.length}, ` +
       `failed(retryable) ${res.failed.length}, terminal ${res.terminal.length}, skipped ${res.skipped.length}`,

@@ -18,6 +18,11 @@ const SIGKILL_GRACE_MS = 3000;
 export interface SpawnResult {
   exit: number;
   output: string;
+  /** stdout only (NEW — issue #8 #8: gbrain `get` needs the page body without
+   *  stderr noise for dedup hashing). `output` above stays stdout+stderr. */
+  stdout: string;
+  /** stderr only (NEW). */
+  stderr: string;
   timedOut: boolean;
 }
 
@@ -28,6 +33,8 @@ export interface SpawnOpts {
   /** SIGTERM → SIGKILL grace window (default 3000ms). Tests inject a small
    *  value so the SIGKILL path is exercised without waiting. */
   killGraceMs?: number;
+  /** Optional stdin content, written to the child then closed (gbrain put). */
+  input?: string;
 }
 
 /** Windows spawn target for one argv. A .cmd/.bat script cannot be executed
@@ -71,14 +78,18 @@ export function win32SpawnTarget(argv: string[]): Win32Spawn {
 export async function spawnProcess(argv: string[], opts: SpawnOpts): Promise<SpawnResult> {
   const defaultPath = opts.platform === "win32" ? "C:\\Windows\\system32;C:\\Windows" : "/usr/local/bin:/usr/bin:/bin";
   const env = { ...process.env, PATH: process.env.PATH ?? defaultPath };
-  const chunks: Buffer[] = [];
-  let bytes = 0;
-  const push = (d: Buffer): void => {
-    if (bytes >= MAX_OUTPUT_BYTES) return;
+  const outChunks: Buffer[] = [];
+  const errChunks: Buffer[] = [];
+  let outBytes = 0;
+  let errBytes = 0;
+  const cappedPush = (bufs: Buffer[], bytes: number, d: Buffer): number => {
+    if (bytes >= MAX_OUTPUT_BYTES) return bytes;
     const take = Math.min(d.length, MAX_OUTPUT_BYTES - bytes);
-    chunks.push(d.subarray(0, take));
-    bytes += take;
+    bufs.push(d.subarray(0, take));
+    return bytes + take;
   };
+  const pushOut = (d: Buffer): void => { outBytes = cappedPush(outChunks, outBytes, d); };
+  const pushErr = (d: Buffer): void => { errBytes = cappedPush(errChunks, errBytes, d); };
   const spawnTarget = opts.platform === "win32"
     ? win32SpawnTarget(argv)
     : { command: argv[0], args: argv.slice(1), verbatim: false };
@@ -87,10 +98,14 @@ export async function spawnProcess(argv: string[], opts: SpawnOpts): Promise<Spa
     env,
     detached: opts.platform !== "win32",
     windowsVerbatimArguments: spawnTarget.verbatim,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: [opts.input !== undefined ? "pipe" : "ignore", "pipe", "pipe"],
   });
-  child.stdout?.on("data", push);
-  child.stderr?.on("data", push);
+  if (opts.input !== undefined && child.stdin) {
+    child.stdin.write(opts.input);
+    child.stdin.end();
+  }
+  child.stdout?.on("data", pushOut);
+  child.stderr?.on("data", pushErr);
   let killed = false;
   let killTimer: ReturnType<typeof setTimeout> | undefined;
   const timer = setTimeout(() => {
@@ -121,5 +136,7 @@ export async function spawnProcess(argv: string[], opts: SpawnOpts): Promise<Spa
   // timedOut is the timer's own flag, not a wall-clock comparison — a child
   // that exits normally just after the deadline is not mislabeled (issue #8 #5).
   const timedOut = killed;
-  return { exit: exited, output: Buffer.concat(chunks).toString("utf-8"), timedOut };
+  const stdout = Buffer.concat(outChunks).toString("utf-8");
+  const stderr = Buffer.concat(errChunks).toString("utf-8");
+  return { exit: exited, output: `${stdout}${stderr}`, stdout, stderr, timedOut };
 }

@@ -28,8 +28,8 @@ const pendingApplySpec: CommandSpec = {
   features: { dir: true },
   positionals: [{ name: "id", help: "specific envelope id (default: all staged)" }],
   options: [{ name: "--quiet", takesValue: false, help: "suppress stdout (keep exit code; for harness hooks)" }],
-  handler: (ctx, args) => {
-    const result = pendingApply(ctx.root, args.id === undefined ? undefined : s(args.id));
+  handler: async (ctx, args) => {
+    const result = await pendingApply(ctx.root, args.id === undefined ? undefined : s(args.id));
     return b(args.quiet) ? quiet(result) : result;
   },
 };

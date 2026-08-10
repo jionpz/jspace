@@ -91,3 +91,32 @@ test("normal quick exit before timeout -> timedOut=false, exit 0", async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---- issue #8 #8: spawnProcess stdin input + stdout/stderr separation (gbrain
+// put needs stdin; get needs stdout without stderr noise for dedup hashing). ----
+
+test("spawnProcess feeds stdin input (gbrain put path)", async () => {
+  if (process.platform === "win32") return;
+  const dir = mkdtempSync(join(tmpdir(), "jspace-spawn-"));
+  try {
+    const res = await spawnProcess(["/bin/sh", "-c", "cat"], { cwd: dir, platform: "linux", timeoutMs: 5000, input: "hello stdin\n" });
+    expect(res.exit).toBe(0);
+    expect(res.stdout).toContain("hello stdin");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("spawnProcess separates stdout from stderr", async () => {
+  if (process.platform === "win32") return;
+  const dir = mkdtempSync(join(tmpdir(), "jspace-spawn-"));
+  try {
+    const res = await spawnProcess(["/bin/sh", "-c", "echo out; echo err >&2"], { cwd: dir, platform: "linux", timeoutMs: 5000 });
+    expect(res.stdout).toBe("out\n");
+    expect(res.stderr).toBe("err\n");
+    expect(res.output).toContain("out");
+    expect(res.output).toContain("err");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

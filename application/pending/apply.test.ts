@@ -7,7 +7,8 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readEnvelopes, stageEnvelope, writeEnvelope } from "./envelope.ts";
-import { applyPending, type GbrainDeps } from "./apply.ts";
+import { applyPending } from "./apply.ts";
+import type { GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
 
 let fh: string;
 beforeEach(() => {
@@ -17,20 +18,25 @@ afterEach(() => {
   rmSync(fh, { recursive: true, force: true });
 });
 
-function stub(overrides: Partial<GbrainDeps> = {}) {
+type StubOverrides = {
+  get?: (slug: string) => { ok: boolean; content?: string } | Promise<{ ok: boolean; content?: string }>;
+  put?: (slug: string, content: string) => { ok: boolean; error?: string } | Promise<{ ok: boolean; error?: string }>;
+};
+
+function stub(overrides: StubOverrides = {}) {
   const puts: string[] = [];
   const gets: string[] = [];
   return {
     puts,
     gets,
     deps: {
-      get: (slug: string) => {
+      get: async (slug: string) => {
         gets.push(slug);
-        return overrides.get ? overrides.get(slug) : { ok: false };
+        return overrides.get ? await overrides.get(slug) : { ok: false };
       },
-      put: (slug: string, content: string) => {
+      put: async (slug: string, content: string) => {
         puts.push(slug);
-        return overrides.put ? overrides.put(slug, content) : { ok: true };
+        return overrides.put ? await overrides.put(slug, content) : { ok: true };
       },
     } as GbrainDeps,
   };
@@ -40,7 +46,7 @@ function statuses(): string[] {
   return readEnvelopes(fh).records.map((e) => e.status);
 }
 
-test("stage writes a typed APPLY.json envelope (status staged, idempotency key)", () => {
+test("stage writes a typed APPLY.json envelope (status staged, idempotency key)", async () => {
   const env = stageEnvelope(fh, "asset-ingest", "assets/foo/doc", "---\ntype: reference\n---\ncontent");
   expect(env.status).toBe("staged");
   expect(env.idempotencyKey).toHaveLength(64);
@@ -48,86 +54,86 @@ test("stage writes a typed APPLY.json envelope (status staged, idempotency key)"
   expect(readEnvelopes(fh).records).toHaveLength(1);
 });
 
-test("apply succeeds: put called once, envelope applied", () => {
+test("apply succeeds: put called once, envelope applied", async () => {
   stageEnvelope(fh, "asset-ingest", "assets/foo/doc", "content");
   const s = stub();
-  const res = applyPending(fh, s.deps);
+  const res = await applyPending(fh, s.deps);
   expect(s.puts).toEqual(["assets/foo/doc"]);
   expect(res.applied).toHaveLength(1);
   expect(statuses()).toEqual(["applied"]);
 });
 
-test("repeat apply is idempotent: applied envelope is skipped, no extra put", () => {
+test("repeat apply is idempotent: applied envelope is skipped, no extra put", async () => {
   stageEnvelope(fh, "asset-ingest", "assets/foo/doc", "content");
   const s = stub();
-  applyPending(fh, s.deps);
-  const res2 = applyPending(fh, s.deps);
+  await applyPending(fh, s.deps);
+  const res2 = await applyPending(fh, s.deps);
   expect(res2.skipped).toHaveLength(1);
   expect(res2.applied).toHaveLength(0);
   expect(s.puts).toHaveLength(1); // no second write
 });
 
-test("dedupe: page already holds identical content -> applied without put", () => {
+test("dedupe: page already holds identical content -> applied without put", async () => {
   stageEnvelope(fh, "asset-ingest", "assets/foo/doc", "identical page");
   const s = stub({ get: () => ({ ok: true, content: "identical page" }) });
-  const res = applyPending(fh, s.deps);
+  const res = await applyPending(fh, s.deps);
   expect(s.puts).toHaveLength(0);
   expect(res.deduped).toHaveLength(1);
   expect(statuses()).toEqual(["applied"]);
 });
 
-test("existing page with DIFFERENT content is never overwritten -> terminal_failed", () => {
+test("existing page with DIFFERENT content is never overwritten -> terminal_failed", async () => {
   stageEnvelope(fh, "asset-ingest", "assets/foo/doc", "my new content");
   const s = stub({ get: () => ({ ok: true, content: "some other stored content" }) });
-  const res = applyPending(fh, s.deps);
+  const res = await applyPending(fh, s.deps);
   expect(s.puts).toHaveLength(0); // no overwrite
   expect(res.terminal).toHaveLength(1);
   expect(readEnvelopes(fh).records[0].status).toBe("terminal_failed");
   expect(readEnvelopes(fh).records[0].error).toContain("different content");
 });
 
-test("existing EMPTY page counts as absent -> put proceeds (not terminal)", () => {
+test("existing EMPTY page counts as absent -> put proceeds (not terminal)", async () => {
   stageEnvelope(fh, "asset-ingest", "assets/foo/doc", "real content");
   const s = stub({ get: () => ({ ok: true, content: "" }) }); // empty existing page
-  const res = applyPending(fh, s.deps);
+  const res = await applyPending(fh, s.deps);
   expect(s.puts).toEqual(["assets/foo/doc"]);
   expect(res.applied).toHaveLength(1);
   expect(statuses()).toEqual(["applied"]);
 });
 
-test("put failure retries then reaches terminal_failed at MAX_RETRY", () => {
+test("put failure retries then reaches terminal_failed at MAX_RETRY", async () => {
   stageEnvelope(fh, "asset-ingest", "assets/foo/doc", "content");
   const fail = stub({ put: () => ({ ok: false, error: "gbrain lock held" }) });
-  applyPending(fh, fail.deps); // retry 1 -> stays staged
+  await applyPending(fh, fail.deps); // retry 1 -> stays staged
   expect(readEnvelopes(fh).records[0].status).toBe("staged");
   expect(readEnvelopes(fh).records[0].retryCount).toBe(1);
-  applyPending(fh, fail.deps); // retry 2 -> stays staged
+  await applyPending(fh, fail.deps); // retry 2 -> stays staged
   expect(readEnvelopes(fh).records[0].status).toBe("staged");
   expect(readEnvelopes(fh).records[0].retryCount).toBe(2);
-  const res = applyPending(fh, fail.deps); // retry 3 -> terminal_failed
+  const res = await applyPending(fh, fail.deps); // retry 3 -> terminal_failed
   expect(res.terminal).toHaveLength(1);
   expect(readEnvelopes(fh).records[0].status).toBe("terminal_failed");
   expect(readEnvelopes(fh).records[0].retryCount).toBe(3);
   // subsequent applies skip it entirely
-  const again = applyPending(fh, fail.deps);
+  const again = await applyPending(fh, fail.deps);
   expect(again.skipped).toHaveLength(1);
   expect(fail.puts).toHaveLength(3); // no further puts
 });
 
-test("terminal_failed envelope stays terminal until acked (ack is the use-case)", () => {
+test("terminal_failed envelope stays terminal until acked (ack is the use-case)", async () => {
   const env = stageEnvelope(fh, "asset-ingest", "assets/foo/doc", "content");
   writeEnvelope(fh, { ...env, status: "terminal_failed", error: "x" });
   expect(readEnvelopes(fh).records[0].status).toBe("terminal_failed");
   const s = stub();
-  const res = applyPending(fh, s.deps);
+  const res = await applyPending(fh, s.deps);
   expect(res.skipped).toHaveLength(1); // terminal_failed is never re-applied
 });
 
-test("applying a specific id only touches that envelope", () => {
+test("applying a specific id only touches that envelope", async () => {
   const a = stageEnvelope(fh, "asset-ingest", "assets/foo/a", "a");
   const b = stageEnvelope(fh, "asset-ingest", "assets/foo/b", "b");
   const s = stub();
-  const res = applyPending(fh, s.deps, a.id);
+  const res = await applyPending(fh, s.deps, a.id);
   expect(res.applied).toEqual([a.id]);
   expect(readEnvelopes(fh).records.map((e) => e.id).sort()).toEqual([a.id, b.id].sort());
   expect(readEnvelopes(fh).records.find((e) => e.id === b.id)!.status).toBe("staged");
