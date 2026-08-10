@@ -49,5 +49,6 @@ export const cronDeps = {
   linuxCronHealth: () => schedulerAdapter(process.platform)?.health?.(schedulerEnv()) ?? { crontab: false, service: false },
   officialSkillNames: () => SKILLS_MANIFEST.workbench.map((s) => s.name),
   readUserClaudeJson,
+  readHarnessConfig: readFileOrNull,
   harnessBinOnPath: (name: string) => binaryOnPath(name, process.platform),
 };

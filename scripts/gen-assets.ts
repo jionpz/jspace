@@ -5,7 +5,8 @@
 // or skills.
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { extname, join, relative, resolve, sep } from "node:path";
-import { ownershipFor, sha256Of } from "../application/workspace/manifest.ts";
+import { ownershipFor } from "../application/workspace/ownership.ts";
+import { sha256Of } from "../core/shared/hash.ts";
 import { decodeSkillsManifest } from "../core/contracts/skills.ts";
 import { renderAgentsBlocks } from "./skill-frontmatter.ts";
 import { VERSION } from "../cli/version.generated.ts";

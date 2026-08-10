@@ -6,6 +6,7 @@
 // only orchestrates + aggregates severity. JSON output carries the full
 // diagnostics (code/severity/path) so scripts can classify errors.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { CmdResult } from "../commands/command.ts";
 import type { RegistryDiagnostic } from "../../core/contracts/diagnostics.ts";
@@ -19,8 +20,9 @@ import { readEnvelopes } from "../pending/envelope.ts";
 import { isFile } from "../fs.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { readMaterializedJournal } from "../workspace/journal.ts";
-import { SKILL_PROJECTIONS } from "../workspace/manifest.ts";
+import { skillProjections } from "../workspace/manifest.ts";
 import { gbrainServer, gbrainSkillsDirWired } from "../gbrain/wiring.ts";
+import type { HubV4 } from "../../core/contracts/hub.ts";
 import { loadCapabilities } from "../../adapters/harness/registry.ts";
 import { binaryOnPath } from "../../adapters/harness/bin.ts";
 
@@ -44,6 +46,10 @@ export interface CronHealthDeps {
    *  Injected so doctor can check the gbrain MCP skills-dir wiring without
    *  touching the machine-level file itself. */
   readUserClaudeJson?: () => unknown | null;
+  /** Raw text of a harness's machine config (~/.claude.json / ~/.grok/config.toml),
+   *  or null when missing. Used by the multi-harness gbrain wiring check
+   *  (issue #8 #16). */
+  readHarnessConfig?: (path: string) => string | null;
   /** Active-harness binary presence (injectable so tests stay deterministic on
    *  machines without the harness CLI installed). Defaults to a real PATH check. */
   harnessBinOnPath?: (name: string) => boolean;
@@ -344,12 +350,12 @@ function checkSkills(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
   {
     // projection dirs recorded in the journal = were materialized at some point
     const projRecorded = new Map<string, Set<string>>();
-    for (const proj of SKILL_PROJECTIONS) projRecorded.set(proj, new Set());
+    for (const proj of skillProjections()) projRecorded.set(proj, new Set());
     try {
       const j = readMaterializedJournal(root);
       if (j) {
         for (const rel of Object.keys(j.files)) {
-          for (const proj of SKILL_PROJECTIONS) {
+          for (const proj of skillProjections()) {
             const re = new RegExp(`^${proj.replace(/\./g, "\\.")}/([^/]+)(?:/|$)`);
             const m = re.exec(rel);
             if (m) projRecorded.get(proj)!.add(m[1]);
@@ -359,7 +365,7 @@ function checkSkills(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
     } catch {
       // damaged journal: nothing recorded as materialized; diff/upgrade report it
     }
-    for (const proj of SKILL_PROJECTIONS) {
+    for (const proj of skillProjections()) {
       for (const name of cron.officialSkillNames()) {
         const sourceDir = join(root, CONFIG_DIR, "skills", name);
         const projDir = join(root, proj, name);
@@ -417,25 +423,45 @@ function checkSkills(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
 
 /** Long-term-use health (info level, design §5): dormant domains. A "take a
  *  look" nudge, never an assertion — mtime is rewritten by git clone /
- *  cloud-sync, so the threshold stays conservative. */
-function checkDomains(root: string): RegistryDiagnostic[] {
+ *  cloud-sync, so the threshold stays conservative. Registered domains are
+ *  scanned by their hub.json `path` (authority, supports custom --path); a
+ *  workspace/* dir that is NOT a registered domain is flagged as residue
+ *  (issue #8 #14). */
+function checkDomains(root: string, hub: HubV4 | null): RegistryDiagnostic[] {
   const diags: RegistryDiagnostic[] = [];
   const now = Date.now();
+  const registered = new Set((hub?.domains ?? []).map((d) => d.path));
+  for (const d of hub?.domains ?? []) {
+    const p = join(root, d.path);
+    if (!existsSync(p) || !statSync(p).isDirectory()) continue;
+    const last = lastActivityMs(p);
+    if (last === 0) continue; // empty/unreadable: nothing to judge
+    const days = (now - last) / 86_400_000;
+    if (days >= DOMAIN_DORMANT_DAYS) {
+      diags.push({
+        severity: "info",
+        code: "domain.dormant",
+        path: `domain.${d.id}`,
+        message: `domain ${d.path} has not been touched in ${Math.round(days)}d (≥${DOMAIN_DORMANT_DAYS}d); archive/merge or update it — see jspace-use 8.6`,
+      });
+    }
+  }
+  // unregistered workspace/* residue (not in hub.domains[].path, and not an
+  // ancestor of a registered custom-path domain)
   const workspaceDir = join(root, "workspace");
   if (existsSync(workspaceDir) && statSync(workspaceDir).isDirectory()) {
     for (const name of readdirSync(workspaceDir)) {
       if (name.startsWith(".")) continue;
       const p = join(workspaceDir, name);
       if (!statSync(p).isDirectory()) continue;
-      const last = lastActivityMs(p);
-      if (last === 0) continue; // empty/unreadable: nothing to judge
-      const days = (now - last) / 86_400_000;
-      if (days >= DOMAIN_DORMANT_DAYS) {
+      const dirRel = `workspace/${name}`;
+      const registeredOrAncestor = [...registered].some((rp) => rp === dirRel || rp.startsWith(`${dirRel}/`));
+      if (!registeredOrAncestor) {
         diags.push({
-          severity: "info",
-          code: "domain.dormant",
+          severity: "warning",
+          code: "domain.unregistered",
           path: `domain.${name}`,
-          message: `domain workspace/${name} has not been touched in ${Math.round(days)}d (≥${DOMAIN_DORMANT_DAYS}d); archive/merge or update it — see jspace-use 8.6`,
+          message: `${dirRel} is not a registered domain in hub.json; register it ("jspace domain add") or remove the stale directory`,
         });
       }
     }
@@ -443,24 +469,48 @@ function checkDomains(root: string): RegistryDiagnostic[] {
   return diags;
 }
 
-/** gbrain skill-routing wiring (info). gbrain's resolver only auto-detects a
- *  root `skills/` dir; wire it to the workbench's official skills via
- *  GBRAIN_SKILLS_DIR=<wb>/.jspace/skills in ~/.claude.json's gbrain MCP env.
- *  Missing/invalid machine config is not a workbench health problem — the
- *  wire command handles it — so only report when we can read the config and
- *  the value is wrong. */
+/** Is a TOML config's `<server_key>` section already pointing GBRAIN_SKILLS_DIR
+ *  at the workbench skills dir? (grok's config.toml, issue #8 #16.) */
+function tomlSkillsDirWired(toml: string, serverKey: string, wbSkillsDir: string): boolean {
+  const lines = toml.split("\n");
+  const section = lines.findIndex((l) => l.trim() === `[${serverKey}]`);
+  if (section === -1) return false;
+  const m = toml.match(/GBRAIN_SKILLS_DIR\s*=\s*["']([^"']*)["']/);
+  return m !== null && m[1] === wbSkillsDir;
+}
+
+/** gbrain skill-routing wiring (info), for EVERY native-MCP harness that has a
+ *  declared config path (capabilities.mcp_config — single source, issue #8 #16).
+ *  gbrain's resolver only auto-detects a root `skills/` dir; the wire commands
+ *  inject GBRAIN_SKILLS_DIR=<wb>/.jspace/skills into each harness's gbrain MCP
+ *  server env. Missing/invalid machine config is not a workbench health problem
+ *  — the wire command handles it — so only report when we can read the config
+ *  and the value is wrong. */
 function checkGBrain(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
   const diags: RegistryDiagnostic[] = [];
   const wbSkillsDir = join(root, CONFIG_DIR, "skills");
-  const doc = cron.readUserClaudeJson?.() ?? null;
-  if (doc !== null) {
-    const server = gbrainServer(doc);
-    if (server !== null && !gbrainSkillsDirWired(server, wbSkillsDir)) {
+  const home = homedir();
+  for (const [name, cap] of Object.entries(loadCapabilities().harnesses)) {
+    const cfg = cap.mcp_config;
+    if (cfg === null) continue; // no wire path declared — nothing to verify
+    if (cap.mcp === undefined || !("native" in cap.mcp) || !cap.mcp.native) continue; // adapter-MCP harnesses skip
+    const cfgPath = cfg.path.replace("~", home);
+    const raw = cron.readHarnessConfig?.(cfgPath);
+    if (raw === null || raw === undefined) continue; // unreadable -> wire cmd guides
+    const wired =
+      cfg.format === "toml"
+        ? tomlSkillsDirWired(raw, cfg.server_key, wbSkillsDir)
+        : (() => {
+            const server = gbrainServer(JSON.parse(raw));
+            return server !== null && gbrainSkillsDirWired(server, wbSkillsDir);
+          })();
+    if (!wired) {
+      const cmd = name === "claude" ? "jspace gbrain wire" : `jspace harness wire --harness ${name}`;
       diags.push({
         severity: "info",
         code: "gbrain.skillsdir_unwired",
         path: "gbrain",
-        message: `gbrain resolver not pointed at this workbench's official skills (${wbSkillsDir}); run jspace gbrain wire to wire GBRAIN_SKILLS_DIR`,
+        message: `gbrain resolver for ${name} not pointed at this workbench's official skills (${wbSkillsDir}); run ${cmd} to wire GBRAIN_SKILLS_DIR`,
       });
     }
   }
@@ -583,7 +633,7 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
     ...checkPending(reads),
     ...checkIngest(root),
     ...checkSkills(root, cron),
-    ...checkDomains(root),
+    ...checkDomains(root, reads.hub.status === "ok" ? reads.hub.value : null),
     ...checkGBrain(root, cron),
     ...checkCrons(root, cron),
     ...checkHarness(root, cron),

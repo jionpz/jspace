@@ -31,6 +31,11 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "mcp": {
         "native": true
       },
+      "mcp_config": {
+        "path": "~/.claude.json",
+        "format": "json",
+        "server_key": "mcpServers.gbrain"
+      },
       "workbench_projection": [
         ".claude/skills"
       ],
@@ -78,6 +83,11 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "mcp": {
         "native": true
       },
+      "mcp_config": {
+        "path": "~/.grok/config.toml",
+        "format": "toml",
+        "server_key": "mcp_servers.gbrain"
+      },
       "workbench_projection": [
         ".grok/skills"
       ],
@@ -116,6 +126,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "mcp": {
         "native": true
       },
+      "mcp_config": null,
       "workbench_projection": [
         ".opencode/skills"
       ],
@@ -150,6 +161,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "mcp": {
         "via": "pi_mcp_adapter"
       },
+      "mcp_config": null,
       "workbench_projection": [],
       "user_install": [
         "~/.agents/skills"
@@ -177,6 +189,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "mcp": {
         "native": true
       },
+      "mcp_config": null,
       "workbench_projection": [],
       "user_install": [],
       "hook_format": "cursor_hooks_json",
@@ -200,6 +213,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "mcp": {
         "native": true
       },
+      "mcp_config": null,
       "workbench_projection": [],
       "user_install": [],
       "hook_format": "none",

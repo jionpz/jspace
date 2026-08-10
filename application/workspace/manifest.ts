@@ -7,35 +7,12 @@ import { sha256Of } from "../../core/shared/hash.ts";
 import { skillRel, skillRoot } from "../fs.ts";
 import { workbenchProjectionDirs } from "../../adapters/harness/registry.ts";
 export { sha256Of, skillRel, skillRoot };
+import { ownershipFor, recreateOnMissing } from "./ownership.ts";
+export { ownershipFor, recreateOnMissing };
 import type {
   AssetOwnership,
   DistributionManifestV1,
 } from "../../core/contracts/distribution.ts";
-
-/** Ownership by bundle-key prefix. Three tiers drive diff/upgrade:
- *  - seed: user-customizable templates (README/.gitignore/.claude settings +
- *    bundled skills). Upgrade refreshes an unmodified file and preserves a
- *    locally modified one (skip, non-blocking). AGENTS.md is also seed, but
- *    diffBundle special-cases it: JSpace owns only the JSPACE block inside
- *    the user's file, so only the block is ever refreshed (block-update).
- *  - user: user data under .jspace/ (hub.json registry, cron.json definitions).
- *    Upgrade never overwrites them; schema evolution goes through migration.
- *  - managed: reserved force-replace class (currently unused). Upgrade
- *    refreshes and --accept-conflicts force-overwrites a local edit. */
-export function ownershipFor(key: string): AssetOwnership {
-  if (key.startsWith("skills/")) return "seed";
-  if (key.startsWith("templates/workbench/.jspace/")) return "user";
-  if (key.startsWith("templates/workbench/")) return "seed";
-  return "managed";
-}
-
-/** User data files are recreated by upgrade when missing AND this returns true.
- *  hub.json missing = broken registry (doctor errors) -> recreate an empty one
- *  for recovery. cron.json missing = deliberate "no cron" state (the user
- *  deleted the file) -> respect the deletion and never recreate it. */
-export function recreateOnMissing(rel: string): boolean {
-  return rel !== ".jspace/cron.json";
-}
 
 /** Harness-specific skill projection dirs (workbench-relative). Official skills
  *  materialize to `.jspace/skills/` (harness-agnostic source of truth) plus one
@@ -47,8 +24,13 @@ export function recreateOnMissing(rel: string): boolean {
  *
  * Derived from capabilities.yaml (per-harness workbench_projection + the shared
  *  projection) so a new harness projection flows into materialization and
- *  doctor's drift checks without touching this file (single source of truth). */
-export const SKILL_PROJECTIONS: readonly string[] = workbenchProjectionDirs();
+ *  doctor's drift checks without touching this file (single source of truth).
+ * Lazy function (not an eager module-level const) so importing this module does
+ *  not force the harness registry / capabilities.generated.ts at load
+ *  (issue #8 #17 bootstrap-loop defense). */
+export function skillProjections(): readonly string[] {
+  return workbenchProjectionDirs();
+}
 
 /** Map a bundle manifest key to every workbench-relative path it materializes
  *  to. Empty array = not materialized into the workbench (filehub is created
@@ -59,7 +41,7 @@ export function materializedRels(key: string): string[] {
   if (key.startsWith("templates/workbench/")) return [key.slice("templates/workbench/".length)];
   if (key.startsWith("skills/")) {
     const name = key.slice("skills/".length);
-    return [skillRel(name), ...SKILL_PROJECTIONS.map((p) => `${p}/${name}`)];
+    return [skillRel(name), ...skillProjections().map((p) => `${p}/${name}`)];
   }
   return [];
 }

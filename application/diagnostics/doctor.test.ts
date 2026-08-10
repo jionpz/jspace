@@ -48,6 +48,8 @@ const stubDeps = (over: Partial<CronHealthDeps> = {}): CronHealthDeps => ({
   // deterministic: the test workbenches schedule claude, but the CI runner may
   // not have the claude binary — stub bin presence so harness checks are stable.
   harnessBinOnPath: () => true,
+  // no machine harness config is read unless a test injects one (issue #8 #16)
+  readHarnessConfig: () => null,
   ...over,
 });
 
@@ -369,12 +371,22 @@ function makeFileWithMtime(rel: string, daysAgo: number): void {
 }
 
 test("dormant domain -> domain.dormant (info); fresh domain -> none", () => {
-  // a workspace/<d> whose only file is 120 days old
+  // a registered domain whose only file is 120 days old
   mkdirSync(join(root, "workspace", "old-domain"), { recursive: true });
   makeFileWithMtime("workspace/old-domain/README.md", 120);
-  // a fresh domain
+  // a fresh registered domain
   mkdirSync(join(root, "workspace", "fresh-domain"), { recursive: true });
   makeFileWithMtime("workspace/fresh-domain/README.md", 2);
+  // dormant scan is hub-authoritative (issue #8 #14): register both
+  writeFileSync(
+    join(root, ".jspace", "hub.json"),
+    JSON.stringify({
+      schema_version: 1,
+      domains: [{ id: "old-domain", path: "workspace/old-domain" }, { id: "fresh-domain", path: "workspace/fresh-domain" }],
+      resources: [],
+      projects: [],
+    }),
+  );
 
   const c = codes(doctorWorkbench(root, stubDeps()));
   expect(c).toContain("domain.dormant");
@@ -386,6 +398,10 @@ test("dormant domain -> domain.dormant (info); fresh domain -> none", () => {
 test("boundary: domain just under threshold -> no domain.dormant", () => {
   mkdirSync(join(root, "workspace", "edge-domain"), { recursive: true });
   makeFileWithMtime("workspace/edge-domain/README.md", 89); // < 90d
+  writeFileSync(
+    join(root, ".jspace", "hub.json"),
+    JSON.stringify({ schema_version: 1, domains: [{ id: "edge-domain", path: "workspace/edge-domain" }], resources: [], projects: [] }),
+  );
   expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("domain.dormant");
 });
 
@@ -427,14 +443,21 @@ test("gbrain skillsdir unwired -> gbrain.skillsdir_unwired (info); wired -> none
   // stub returns null by default -> no diagnostic (machine config absent is not a wb problem)
   expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("gbrain.skillsdir_unwired");
 
-  // unwired: gbrain server env points elsewhere
-  const unwired = doctorWorkbench(root, stubDeps({ readUserClaudeJson: () => gbrainWiredDoc("/other/skills") }));
+  // unwired: gbrain server env points elsewhere (read via the harness-config seam)
+  const claudeCfg = (skillsDir: string): string => JSON.stringify(gbrainWiredDoc(skillsDir));
+  const unwired = doctorWorkbench(
+    root,
+    stubDeps({ readHarnessConfig: (p) => (p.includes(".claude.json") ? claudeCfg("/other/skills") : null) }),
+  );
   expect(codes(unwired)).toContain("gbrain.skillsdir_unwired");
   const diags = (unwired.data as { diagnostics: { code: string; severity: string }[] }).diagnostics;
   expect(diags.find((d) => d.code === "gbrain.skillsdir_unwired")?.severity).toBe("info");
 
   // wired: env matches this workbench's .jspace/skills
-  const wired = doctorWorkbench(root, stubDeps({ readUserClaudeJson: () => gbrainWiredDoc(join(root, ".jspace", "skills")) }));
+  const wired = doctorWorkbench(
+    root,
+    stubDeps({ readHarnessConfig: (p) => (p.includes(".claude.json") ? claudeCfg(join(root, ".jspace", "skills")) : null) }),
+  );
   expect(codes(wired)).not.toContain("gbrain.skillsdir_unwired");
 });
 
@@ -504,4 +527,53 @@ test("non-active pi is not probed (active-only, no cross-harness noise)", () => 
   doctorWorkbench(root, stubDeps({ harnessBinOnPath: (n) => (probed.add(n), true) }));
   expect([...probed]).toEqual(["claude"]);
   expect(codes(doctorWorkbench(root, stubDeps({ harnessBinOnPath: () => true })))).not.toContain("harness.pi_mcp_adapter");
+});
+
+test("dormant custom-path domain + unregistered workspace dir (issue #8 #14)", () => {
+  // registered domain at a custom hub path (not workspace/<id>)
+  const domainDir = join(root, "workspace", "deep", "custom");
+  mkdirSync(domainDir, { recursive: true });
+  const f = join(domainDir, "README.md");
+  writeFileSync(f, "stale");
+  const old = new Date(Date.now() - 100 * 86_400_000); // 100 days ago
+  utimesSync(f, old, old);
+  writeFileSync(
+    join(root, ".jspace", "hub.json"),
+    JSON.stringify({ schema_version: 1, domains: [{ id: "custom", path: "workspace/deep/custom" }], resources: [], projects: [] }),
+  );
+  // unregistered residue directory (workspace/deep is an ANCESTOR of the
+  // registered domain, so only the sibling below is flagged)
+  mkdirSync(join(root, "workspace", "stale"), { recursive: true });
+  const r = doctorWorkbench(root, stubDeps());
+  const c = codes(r);
+  expect(c).toContain("domain.dormant");
+  expect(c).toContain("domain.unregistered");
+  const diags = (r.data as { diagnostics: { code: string; message: string }[] }).diagnostics;
+  expect(diags.find((d) => d.code === "domain.dormant")!.message).toContain("workspace/deep/custom");
+  expect(diags.find((d) => d.code === "domain.unregistered")!.message).toContain("workspace/stale");
+  expect(diags.some((d) => d.code === "domain.unregistered" && d.message.includes("workspace/deep"))).toBe(false);
+});
+
+test("multi-harness gbrain wiring via capabilities.mcp_config (issue #8 #16)", () => {
+  const wbSkillsDir = join(root, ".jspace", "skills");
+  // claude: ~/.claude.json mcpServers.gbrain env unwired -> unwired diag
+  const claudeUnwired = stubDeps({
+    readHarnessConfig: (p) => (p.includes(".claude.json") ? JSON.stringify({ mcpServers: { gbrain: { command: "gbrain", env: {} } } }) : null),
+  });
+  expect(codes(doctorWorkbench(root, claudeUnwired))).toContain("gbrain.skillsdir_unwired");
+  // claude wired -> none
+  const claudeWired = stubDeps({
+    readHarnessConfig: (p) => (p.includes(".claude.json") ? JSON.stringify({ mcpServers: { gbrain: { command: "gbrain", env: { GBRAIN_SKILLS_DIR: wbSkillsDir } } } }) : null),
+  });
+  expect(codes(doctorWorkbench(root, claudeWired))).not.toContain("gbrain.skillsdir_unwired");
+  // grok: config.toml env points elsewhere -> unwired
+  const grokUnwired = stubDeps({
+    readHarnessConfig: (p) => (p.includes("config.toml") ? "[mcp_servers.gbrain]\ncommand = 'gbrain'\nenv = { GBRAIN_SKILLS_DIR = '/wrong/skills' }\n" : null),
+  });
+  expect(codes(doctorWorkbench(root, grokUnwired))).toContain("gbrain.skillsdir_unwired");
+  // grok wired -> none
+  const grokWired = stubDeps({
+    readHarnessConfig: (p) => (p.includes("config.toml") ? `[mcp_servers.gbrain]\ncommand = 'gbrain'\nenv = { GBRAIN_SKILLS_DIR = '${wbSkillsDir}' }\n` : null),
+  });
+  expect(codes(doctorWorkbench(root, grokWired))).not.toContain("gbrain.skillsdir_unwired");
 });

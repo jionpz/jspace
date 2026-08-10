@@ -58,6 +58,7 @@ harnesses:
       - { name: SessionStart, source: hook }
       - { name: UserPromptSubmit, source: hook }
     mcp: { native: true }
+    mcp_config: { path: "~/.claude.json", format: json, server_key: "mcpServers.gbrain" }
     workbench_projection: [".claude/skills"]
     user_install: []
     hook_format: claude_settings_json
@@ -83,6 +84,7 @@ harnesses:
       - { name: PreCompact, source: hook }
       - { name: SessionEnd, source: hook }
     mcp: { native: true }
+    mcp_config: { path: "~/.grok/config.toml", format: toml, server_key: "mcp_servers.gbrain" }
     workbench_projection: [".grok/skills"]
     user_install: []
     hook_format: grok_hooks_json
@@ -106,6 +108,7 @@ harnesses:
       - { name: session.idle, source: plugin }
       - { name: experimental.session.compacting, source: plugin }
     mcp: { native: true }
+    mcp_config: null
     workbench_projection: [".opencode/skills"]
     user_install: []
     hook_format: opencode_plugin_ts
@@ -125,6 +128,7 @@ harnesses:
       - { name: session_start, source: extension }
       - { name: before_agent_start, source: extension }
     mcp: { via: pi_mcp_adapter }
+    mcp_config: null
     workbench_projection: []
     user_install: ["~/.agents/skills"]
     hook_format: none
@@ -143,6 +147,7 @@ harnesses:
     sessions:
       - { name: sessionStart, source: hook }
     mcp: { native: true }
+    mcp_config: null
     workbench_projection: []
     user_install: []
     hook_format: cursor_hooks_json
@@ -160,6 +165,7 @@ harnesses:
     argv_flags: {}
     sessions: []
     mcp: { native: true }
+    mcp_config: null
     workbench_projection: []
     user_install: []
     hook_format: none
