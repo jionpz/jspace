@@ -94,3 +94,4 @@ export function readRuns(root, cronId): { records: RunRecord[]; issues: Contract
 - Collapsing distinct diagnostic classes (invalid / unbound / missing / drift) into one generic "registry broken".
 - Swallowing `fail()` and returning exit 0.
 - Throwing raw `Error` with no `jspace: ` user prefix (state-machine errors are the exception; the CLI layer wraps them).
+- Lowering a handler exception into a `warning` with no `exitCode` — that still exits 0 and scripts/CI misjudge success. Business/IO failures (write EACCES, read failure) must go to `errors` + `exitCode: 1`; `warnings` is only for non-fatal conditions. A handler `catch` that maps exceptions to warnings is the exact shape that caused issue #8 #9 in three command families (skills/harness/gbrain).

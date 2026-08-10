@@ -19,7 +19,7 @@
 
 ## Required Patterns
 
-- **CommandSpec single source**: every command's name/aliases/options/positionals/help/handler come from one `CommandSpec` in `cli/commands/registry.ts`; handlers bind to `application/*/use-cases.ts`.
+- **CommandSpec single source**: every command's name/aliases/options/positionals/help/handler come from one `CommandSpec` in `cli/commands/registry.ts`; handlers bind to `application/*/use-cases.ts`. Repeatable options (`repeatable: true`) need an explicit `dest` when the handler reads a plural key — without it the parser emits the singular key (`--tag` → `args.tag`) and the handler reading `args.tags` silently gets `undefined` (tags never persisted, exit 0; issue #8 #2).
 - **`--dir` is the workbench root convention** for every command (feature `dir: true`); `init` also accepts a legacy positional target for backward compatibility — both together is an ambiguous error (exit 2). Do not add new positional-path commands.
 - **Version string contract** (`scripts/gen-version.ts`): non-release builds carry the commit delta via `git describe --tags` (e.g. `1.0.9-2-g7cef2bc`) so `--version` distinguishes a tag-point build from leading commits — do NOT re-add `--abbrev=0` (it reintroduces binary/source drift). Release builds are overwritten to the clean tag by `JSPACE_BUILD_VERSION` (CI). `compareVersions` parses `[.+-]`-separated leading numerics, so suffixed versions compare equal to their tag.
 - **Typed contract first**: any new schema gets `core/contracts/<name>.ts` (decoder, diagnostics pattern) + round-trip tests before use cases consume it.
