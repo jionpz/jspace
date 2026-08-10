@@ -27,6 +27,8 @@
 
 四大支柱：**路由**（任何 harness 从同一入口进对的域）、**记忆**（会话起点注入、终点写回、精准召回）、**资产**（自动归档、长期整齐）、**定时**（系统调度 + 无头 harness）。
 
+**第五条:自省**（2026-08-10 补）——前四条负责"把事做成"，但纪律会无声腐化：该写回的没写、新项目没挂接、指针悄悄断掉、模糊项每周被跳过，这些都不报错。因此每周一次取证式自省（`workbench-retro` skill + 周日 cron），审计纪律执行、流程卡点与规则修订候选，产出分级建议清单（只提议不改）。**"越用越强"需要三个飞轮同时转:记忆、资产、以及工作流自身的进化。**
+
 **粘合原则：记忆存"事实与指针"，资产存"文件本体"。** AI 消化一份文件的产出是两笔：文件归位（资产层）+ 事实与指针入脑（记忆层）。不做重资产的全量二进制 embedding——召回靠"事实命中 → 指针取件 → 现场打开"，而不是把 PPT 塞进向量库。
 
 域与项目的关系：**域**是工作台里的长期工作区（`workspace/<domain>/`，轻上下文），**项目**是资产层的一级组织（`projects/<项目>/`，重资产）。域 README 登记本域进行中的项目并指向其资产目录，跟踪一个新项目 = 资产层建项目目录 + 域 README 挂一行 + 记忆层建实体。
@@ -87,11 +89,13 @@
 - **M4 ✅** 记忆精度打磨：校准召回 + 端到端验收（"问一句，找到那个文件里的那个数"；不重设 M2 已锁 slug 骨架）。示例环境验收通过（2026-08-03：2 份示例资料经 asset-ingest 入库→gbrain reference 页→四条中文语义查询含语义变体/负对照/×3 重跑/search·query 双路径全 top-1 + 指针定位「12800 / 示例值」）。weekly-report / memory-consolidate 契约解锁（模板 `enabled: true`，契约内联 prompt；gbrain.md 新增 dated memory record 周快照纪律）。可复跑验收协议见 `skills/memory-recall/references/memory-acceptance.md`。
   - 待真实使用验证：机器端 `jspace cron install` 与首次 `cron run`（install 前 rehearsal gate）；语料增长后按 `skills/memory-recall/references/memory-acceptance.md` 复跑协议。
 - **M5 ✅** 分发（R7）：模板去个人化、打包安装已提前落地（v1.0.1/一键安装/update/CI 6 平台全绿）。本机模拟双机演练通过（2026-08-03）：A `gbrain export` → B 独立 brain `import`+embedding 重建 → B 侧四条中文查询 top-1 与 A 一致 → **指针换机解析成立**（`rel_path` 相对 filehub 根，换机按「目标机根 + rel_path」重解析）→「问一句」闭环引用机器 B 路径。记忆层可移植假设验证成立；**开放问题 #1 关闭**（结论基于本机模拟，真实第二机待实际使用）。指针纪律落 `rel_path`（asset-ingest 写页 + memory-recall 换机解析 + MEMORY-ACCEPTANCE 扩展节）。
+- **M6 ✅** 飞轮补全与漂移硬化（2026-08-10）：审查发现「建造质量远超使用里程」——记忆与资产有机制但转速近零，**工作流自省完全缺失**，且已建好的厚度没到使用现场（分发链过时、受管块外躺着 205 行旧模板全文）。交付：① `workbench-retro` skill（六条取证式检查 + 分级建议 + 只提议不改红线）+ 周日 cron，补上第三个飞轮；② weekly-report / memory-consolidate 契约从 `cron.json` 内联 prompt **升格为 upgrade 受管 skill**（user 数据冻结死角消除），新 init 的四个 cron 全为 `kind: skill`；③ jspace-use §8.7 项目生命周期 checklist（含「project id 用 ascii、资产目录保留中文、经 `--asset-rel-path` 绑定」的命名约定）；④ doctor 三个静默漂移检查（`agentsmd.stale_outside_block` / `skills.bundle_stale` / `registry.project_unlinked`）。官方 skill 4 → 7。**开放问题 #3 全部闭合**（真实定时触发观察确认）。
+  - 待真实使用验证：首次无头 `workbench-retro` cron（2026-08-16 周日 23:00）；写回腿的习惯养成（当前 gbrain 写入仍全部来自 cron，0 条来自日常会话）。
 - 顺序理由：cron 的第一批任务操作资产层，故 M2 在 M3 前；里程碑随真实使用可重排，重排时更新本文件。
 
 ## 开放问题
 
 1. **gbrain 多机**："同一份记忆"依赖文本规范源假设——**已于 M5 关闭（2026-08-03，本机模拟双机）**：A export → B import 重建 + embedding 重建 + 中文召回 top-1 与 A 一致 + 指针换机解析成立（`rel_path` 相对 filehub 根）。结论：假设成立、双字段指针采用；**真实第二机演练待实际使用**（本机模拟效力有限：同机/同 OS/同 embedding 可达；新机 setup 教训=init 即配 embedding）。图谱边/backlink 保留未验证（本语料无互链，边以正文 wikilink 承载）。
 2. **文件管理中心选址与存量迁移**——**已闭合（2026-08-03）**：根=本机 filehub 目录（如 `~/filehub`，每机一个根，注册进 hub.json 的 `type: filehub` resource primary path）；同步策略=内容走网盘/Obsidian Sync（重资产不进 git），根目录本身可由网盘同步或暂不同步，换机按「目标机根 + rel_path」重解析（M5 已验证）；存量收编=增量（新走 inbox，旧按项目/领域按需），runbook 见 `skills/asset-ingest/references/migration.md`；真实使用时代入 runbook 验证。
-3. **无头执行的运维**——**已闭合（2026-08-03）**：失败可见性硬化——`jspace cron failures`（alias `check`，聚合 cron-failed + pending 暂存写 + 各 cron 状态，需关注退出码 1）+ 工作台 SessionStart hook 自动检查（其他 harness 手动）+ doctor 摘要；账号/配额模型沉淀于 `skills/jspace-use/references/headless-ops.md`（cc-switch 代理 + failover、耗尽处置、敏感边界）；真实运行验证通过（成功路径 3 任务 real run ok；失败路径真实诱导 → cron-failed → check/doctor 闭环）。真实定时触发（非 rehearsal）待自然观察。
+3. **无头执行的运维**——**已闭合（2026-08-03）**：失败可见性硬化——`jspace cron failures`（alias `check`，聚合 cron-failed + pending 暂存写 + 各 cron 状态，需关注退出码 1）+ 工作台 SessionStart hook 自动检查（其他 harness 手动）+ doctor 摘要；账号/配额模型沉淀于 `skills/jspace-use/references/headless-ops.md`（cc-switch 代理 + failover、耗尽处置、敏感边界）；真实运行验证通过（成功路径 3 任务 real run ok；失败路径真实诱导 → cron-failed → check/doctor 闭环）。**真实定时触发已于 2026-08-10 观察确认**：launchd 自 08-07 起每日自然触发（08-07 21:14 inbox-tidy 失败 API 520 → incident 开 → 08-08 21:01 成功并 ack → 08-09 21:06 weekly-report / 22:11 memory-consolidate → 08-10 21:02 inbox-tidy 成功），证据在 `.jspace/logs/cron/` 与 `.jspace/state/runs|incidents/`，`jspace cron check` 汇总一致。本条**全部闭合**。
 4. **office 文件解析深度**——**已闭合（2026-08-03，#4 深度抽取交付）**：零依赖抽取器 `skills/asset-ingest/scripts/office-extract.py`（xlsx 逐表 / pptx 逐页，幻影行过滤 + 每 sheet 行数上限），深度路径=伴生 `.extract.md` 落 asset 层 + 页内 Key Facts 策展（含关键数字 + 引文）；示例验收 top-1（关键数字命中）。细则 `references/deep-extract.md`；可复跑协议 `skills/memory-recall/references/memory-acceptance.md`「office 深度抽取扩展(#4)」。
