@@ -87,6 +87,7 @@ gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbr
 - **asset-ingest**: 资料入库 | 整理 inbox | 归位资料 | 把这份资料入库
 - **memory-recall**: 问一句 | 找那个文件 | 那个数 | 精准召回 | recall | find the file
 - **memory-writeback**: 收工 | 写回记忆 | 记一下本次进展 | 本次进展 | end of work | session end | writeback
+- **workbench-retro**: 周自省 | 复盘 | 本周回顾 | 工作流体检 | retro | workbench retro | 纪律检查
 <!-- TRELLIS-BRAIN-OPS:END -->
 > 区间内由 `scripts/gen-assets.ts` 从 SKILL.md frontmatter `triggers` 渲染生成,勿手工编辑;改 triggers 后重跑 gen-assets。
 

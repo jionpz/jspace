@@ -25,6 +25,13 @@
       "version": "1",
       "scope": "workbench",
       "dependencies": ["asset-ingest", "jspace-use"]
+    },
+    {
+      "name": "workbench-retro",
+      "version": "1",
+      "scope": "workbench",
+      "dependencies": ["jspace-use", "memory-writeback", "asset-ingest"],
+      "entrypoints": ["weekly"]
     }
   ],
   "global": [

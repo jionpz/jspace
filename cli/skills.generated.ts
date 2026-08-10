@@ -35,6 +35,19 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
         "asset-ingest",
         "jspace-use"
       ]
+    },
+    {
+      "name": "workbench-retro",
+      "version": "1",
+      "scope": "workbench",
+      "dependencies": [
+        "jspace-use",
+        "memory-writeback",
+        "asset-ingest"
+      ],
+      "entrypoints": [
+        "weekly"
+      ]
     }
   ],
   "global": [

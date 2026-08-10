@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "bundle_version": "1.0.11-39-gb9eb378",
+  "bundle_version": "1.0.11-42-g6f2262e",
   "files": [
     {
       "path": "templates/workbench/.claude/settings.json",
@@ -24,7 +24,7 @@
     },
     {
       "path": "templates/workbench/.jspace/cron.json",
-      "sha256": "f63e5ad4e9b965603886956e8997bf59b837ea5d9947d96d3335aa1e79d2b902",
+      "sha256": "7e242fd86b4f64d8bd8ec67eb709a8550e88aef413ca2b6a5074121feed09532",
       "ownership": "user"
     },
     {
@@ -39,7 +39,7 @@
     },
     {
       "path": "templates/workbench/AGENTS.md",
-      "sha256": "5be4e47a1e8bfeed8bb2cf7f45f57179b47d7cfaa09ad54e945eb16f4f744251",
+      "sha256": "39aabef6ca4915553f9b3ce1a4e321faf0b781e3f33c721b9f794cb1aee98626",
       "ownership": "seed"
     },
     {
@@ -59,7 +59,7 @@
     },
     {
       "path": "skills/jspace-use/SKILL.md",
-      "sha256": "f323af0f2ecc2a06e992dc09210e89a068303f71ecab1804caa1b8344ae22c24",
+      "sha256": "7af064fb627d4e390e46560f566326867027192bfe43f3528aa66844dfa4cc19",
       "ownership": "seed"
     },
     {
@@ -74,7 +74,7 @@
     },
     {
       "path": "skills/jspace-use/references/gbrain.md",
-      "sha256": "3824604cc6ecc715db3d09732f9974c5656ae1a7a4eb77eb58e67bcb8898db22",
+      "sha256": "a5294ad500ef541b236625144950af47d879f5c310178e10088a2c7c67530e27",
       "ownership": "seed"
     },
     {
@@ -195,6 +195,21 @@
     {
       "path": "skills/memory-writeback/references/writeback.md",
       "sha256": "c400085d86a0ab9d252b0a97e533ec3fe93f4aa89cae0d7e80b6fa4e452babad",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/workbench-retro/SKILL.md",
+      "sha256": "5d762b33d125fe5acb07508a82993a5e3e41081c8740999592bae43bcb1f2e2d",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/workbench-retro/references/checks.md",
+      "sha256": "937f5d24a6a69461607a3b384cb868f26217839e9598b6f231396fd0da9e3c1c",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/workbench-retro/references/example-retro.md",
+      "sha256": "35ae3516c0e4c5b2a8407c10ef41f5c2ee010670062f23adf60781d05232fe89",
       "ownership": "seed"
     }
   ]

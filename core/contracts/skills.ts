@@ -32,7 +32,7 @@ export interface SkillEntry {
 
 export interface SkillsManifestV1 {
   schema_version: 1;
-  workbench: SkillEntry[]; // 4 required workbench skills
+  workbench: SkillEntry[]; // bundled + materialized workbench skills
   global: SkillEntry[]; // machine-global optional skills (harness-config)
 }
 

@@ -13,7 +13,7 @@
 
 - `.trellis/` —— 本开发仓库使用的 **Trellis 开发工作流框架**（vendored，Claude Code 等 harness 的任务规划/执行/检查机制），**不是 jspace 运行时组件**，不影响 CLI 产物或 JWorkspace。
 - `templates/workbench/` —— 工作台模板源（CLI 生成 JWorkspace 的种子资产，含各 harness 接线 seed `.claude/` `.grok/` `.opencode/` `.cursor/`）。
-- `skills/` —— 官方技能源码（4 个：jspace-use / asset-ingest / memory-recall / memory-writeback），经 `scripts/gen-assets.ts` 嵌入二进制。
+- `skills/` —— 官方技能源码（5 个：jspace-use / asset-ingest / memory-recall / memory-writeback / workbench-retro），经 `scripts/gen-assets.ts` 嵌入二进制。
 - `core/` `application/` `adapters/` `scripts/` —— CLI 分层源码：契约 / 领域用例 / harness·scheduler·process·fs 适配 / 生成与校验脚本（gen-assets / check-skills / check-harness-consistency / check-manifest-integrity）。`adapters/harness/capabilities.yaml` 是 harness 支持集的单一事实源。
 
 ## 快速开始

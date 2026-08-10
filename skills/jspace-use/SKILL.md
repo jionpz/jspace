@@ -27,7 +27,7 @@ triggers:
 
 ## 何时用 / 何时不用
 - ✅ 用:新工作台首次启用 / 日常「怎么用工作台 / 怎么路由 / 怎么维护诊断」/ registry 坏 / gbrain 缺失或未接线 / 故障排查。
-- ❌ 不用:配置**机器级**多-harness 全局治理文档(`~/.agents/agents.md` 单源接线)→ `harness-config`;日常把资料入库 → `asset-ingest`;用户问句召回 → `memory-recall`;会话收工写回 → `memory-writeback`。
+- ❌ 不用:配置**机器级**多-harness 全局治理文档(`~/.agents/agents.md` 单源接线)→ `harness-config`;日常把资料入库 → `asset-ingest`;用户问句召回 → `memory-recall`;会话收工写回 → `memory-writeback`;每周纪律自省 → `workbench-retro`。
 - **前提**:至少一个 harness(Pi/Claude Code/Codex/Cursor)已装且可用;本指南不装 harness。
 
 ## 1. 工作台模型
@@ -102,6 +102,7 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 | 日常资料入库 / 整理 inbox | `asset-ingest` |
 | 用户问句精准召回 | `memory-recall` |
 | 会话结束收工写回 | `memory-writeback` |
+| 每周自省(纪律审计 / 规则修订提议) | `workbench-retro` |
 | 周快照 | memory-consolidate cron |
 
 - **registry broken / gbrain missing / upgrade 异常 / 自检命令**:先跑 `jspace doctor --dir .` 看诊断;`jspace workspace diff --dry-run` 看差异;`jspace workspace upgrade --rollback <id>` 回退已应用升级。无头运维(账号/配额/failover/失败可见性)→ `~/.agents/skills/jspace-use/references/headless-ops.md`;命令级排障 → CLI `--help`。

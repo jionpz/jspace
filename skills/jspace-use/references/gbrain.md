@@ -13,7 +13,7 @@ jspace gbrain wire --dir <工作台>   # 把 GBRAIN_SKILLS_DIR=<工作台>/.jspa
 ```
 
 - 接线后**重启 claude 会话**(MCP 重连)让 `gbrain serve` 以新 env 启动。
-- 验证:`GBRAIN_SKILLS_DIR=<工作台>/.jspace/skills gbrain check-resolvable` 应报官方 4 skill reachable。
+- 验证:`GBRAIN_SKILLS_DIR=<工作台>/.jspace/skills gbrain check-resolvable` 应报官方 5 skill reachable。
 - `jspace doctor` 的 `gbrain.skillsdir_unwired`(info)会提示未接线。
 
 ## CLI surface
