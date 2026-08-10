@@ -90,8 +90,44 @@ test("installed task not in cron.json -> cron.stale_task", () => {
   expect(codes(r)).not.toContain("cron.not_installed"); // "a" is installed
 });
 
-test("invalid schedule -> cron.file_unreadable (schedule now validated at decode, P2-5)", () => {
-  setCrons([
+// ---- cron.inline_prompt_legacy: contract frozen in user-owned cron.json ------
+// cron.json is user data (upgrade never overwrites it), so a contract written
+// into `prompt` is frozen at the version that shipped when the workbench was
+// created. When the cron id names a bundled skill, the same contract lives in
+// the upgrade-managed skill layer.
+function writeCronsRaw(crons: unknown[]): void {
+  writeFileSync(join(root, ".jspace", "cron.json"), JSON.stringify({ schema_version: 1, crons }, null, 2));
+}
+
+test("inline-prompt cron whose id names a bundled skill -> cron.inline_prompt_legacy (info)", () => {
+  writeCronsRaw([{ id: "memory-writeback", schedule: "0 22 * * 0", harness: "claude", prompt: "frozen contract text", enabled: false }]);
+  const r = doctorWorkbench(root, stubDeps());
+  expect(codes(r)).toContain("cron.inline_prompt_legacy");
+  const diags = (r.data as { diagnostics: { code: string; severity: string }[] }).diagnostics;
+  expect(diags.find((d) => d.code === "cron.inline_prompt_legacy")?.severity).toBe("info");
+  expect(r.exitCode ?? 0).toBe(0); // info never fails doctor
+});
+
+test("same cron migrated to a skill target -> no cron.inline_prompt_legacy", () => {
+  writeCronsRaw([
+    {
+      id: "memory-writeback",
+      schedule: "0 22 * * 0",
+      harness: "claude",
+      target: { kind: "skill", skill: "memory-writeback", entrypoint: "weekly", input: "thin trigger" },
+      enabled: false,
+    },
+  ]);
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("cron.inline_prompt_legacy");
+});
+
+test("custom inline-prompt cron (id is not a bundled skill) -> no cron.inline_prompt_legacy", () => {
+  // the intended escape hatch: prose prompts for one-off jobs must stay silent
+  writeCronsRaw([{ id: "my-own-job", schedule: "0 7 * * 1", harness: "claude", prompt: "do my thing", enabled: false }]);
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("cron.inline_prompt_legacy");
+});
+
+test("invalid schedule -> cron.file_unreadable (schedule now validated at decode, P2-5)", () => {  setCrons([
     { id: "ok", schedule: "0 21 * * *", enabled: true },
     { id: "bad", schedule: "*/5 * * * *", enabled: true },
   ]);

@@ -48,6 +48,31 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
       "entrypoints": [
         "weekly"
       ]
+    },
+    {
+      "name": "weekly-report",
+      "version": "1",
+      "scope": "workbench",
+      "dependencies": [
+        "jspace-use",
+        "asset-ingest",
+        "memory-consolidate"
+      ],
+      "entrypoints": [
+        "weekly"
+      ]
+    },
+    {
+      "name": "memory-consolidate",
+      "version": "1",
+      "scope": "workbench",
+      "dependencies": [
+        "jspace-use",
+        "memory-writeback"
+      ],
+      "entrypoints": [
+        "weekly"
+      ]
     }
   ],
   "global": [

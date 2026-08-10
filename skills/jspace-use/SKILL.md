@@ -103,7 +103,8 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 | 用户问句精准召回 | `memory-recall` |
 | 会话结束收工写回 | `memory-writeback` |
 | 每周自省(纪律审计 / 规则修订提议) | `workbench-retro` |
-| 周快照 | memory-consolidate cron |
+| 本周项目周报(人读汇总) | `weekly-report` |
+| 周记忆巩固(周快照 + state 回写) | `memory-consolidate` |
 
 - **registry broken / gbrain missing / upgrade 异常 / 自检命令**:先跑 `jspace doctor --dir .` 看诊断;`jspace workspace diff --dry-run` 看差异;`jspace workspace upgrade --rollback <id>` 回退已应用升级。无头运维(账号/配额/failover/失败可见性)→ `~/.agents/skills/jspace-use/references/headless-ops.md`;命令级排障 → CLI `--help`。
 
@@ -135,6 +136,8 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 
 - **session start 契约**:跑 `jspace cron check`,把失败与 pending 暂存写(`<filehub>/.jspace-logs/*.APPLY.json`)上报用户。
 - **定义即代码**:定义在 `.jspace/cron.json`(声明式:schedule + harness + prompt),git 同步、应用前 review。
+- **契约归 skill,不写内联 prompt**:官方周期任务用 `target: {kind: "skill", skill: <名>, entrypoint: "weekly"}`,`input` 只留一句薄引导——契约正文在 SKILL.md(随 `workspace upgrade` 刷新)。**内联长 prompt 会被永久冻结**:`cron.json` 是 user 数据,升级永不覆盖。
+- **存量迁移**:老工作台的 `weekly-report` / `memory-consolidate` 若仍是内联 prompt,`jspace doctor` 会报 `cron.inline_prompt_legacy`(info)。改法:把该 cron 的 `prompt` 字段换成上面的 `target` 结构(自定义 cron 不受影响,内联 prompt 是它们的正常形态)。
 - **rehearsal gate**:机器侧 `jspace cron install` 前,先 `jspace cron run` 各任务一次验证契约。
 - **运维细节** → `~/.agents/skills/jspace-use/references/headless-ops.md`(无头代理/账号/配额/失败可见性)。
 

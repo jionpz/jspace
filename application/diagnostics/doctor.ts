@@ -32,6 +32,11 @@ export interface CronLike {
   schedule: string;
   harness?: string; // read by checkHarness (active harness set)
   enabled: boolean;
+  /** Present when the cron drives a bundled skill instead of an inline prose
+   *  prompt. Read by the legacy-inline-prompt migration check: a contract kept
+   *  in cron.json (user data, never overwritten by upgrade) is frozen forever,
+   *  while a skill target keeps it in the upgrade-managed skill layer. */
+  target?: { skill: string };
 }
 
 export interface CronHealthDeps {
@@ -538,6 +543,23 @@ function checkCrons(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
   }
   const installedIds = new Set(cron.installedCronIds(root));
   if (crons.length > 0) {
+    // Legacy inline-prompt contract: cron.json is user data (upgrade never
+    // overwrites it), so a contract written into `prompt` is frozen at the
+    // version that shipped when the workbench was created. When the cron id
+    // matches a bundled skill, the same contract lives in the upgrade-managed
+    // skill layer — suggest the migration. Custom crons (ids that are not
+    // official skill names) are the intended escape hatch and never match.
+    const officialSkills = new Set(cron.officialSkillNames());
+    for (const c of crons) {
+      if (!c.target && officialSkills.has(c.id)) {
+        diags.push({
+          severity: "info",
+          code: "cron.inline_prompt_legacy",
+          path: `cron.${c.id}`,
+          message: `cron ${c.id} carries an inline prompt while bundled skill ${c.id} owns the same contract; switch to target: {kind: "skill", skill: "${c.id}", entrypoint: "weekly"} so the contract follows jspace workspace upgrade`,
+        });
+      }
+    }
     for (const c of crons) {
       if (c.enabled && !installedIds.has(c.id)) {
         diags.push({ severity: "warning", code: "cron.not_installed", path: `cron.${c.id}`, message: `cron ${c.id} enabled but not installed (run jspace cron install)` });

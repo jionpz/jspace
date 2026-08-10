@@ -8,7 +8,7 @@
 
 - `cli/`：JSpace CLI（TypeScript/bun 源码，`bun run cli/main.ts` 运行；`bun run build` 产出 `bin/jspace` 编译二进制）。命令面：`init` / `doctor` / `domain` / `resource` / `project` / `registry` / `filehub` / `cron` / `ingest` / `pending` / `workspace diff|upgrade` / `context session-start|turn|pre-compact|session-end` / `harness wire` / `gbrain wire` / `skills install`。核心实现分层：`core/`（契约）→ `application/`（领域用例）→ `adapters/`（harness/scheduler/process/fs 适配）→ `scripts/`（生成与校验）。
 - `templates/workbench/`：工作台模板，包含 `.jspace/hub.json`、工作台 `AGENTS.md`、各 harness 接线 seed（`.claude/settings.json` / `.grok/hooks/jspace.json` / `.opencode/plugins/jspace.ts` / `.cursor/hooks.json`）。
-- `skills/`：官方技能源码，经 `scripts/gen-assets.ts` 嵌入二进制。当前 5 个——`jspace-use`（使用指南）、`asset-ingest`（资料转知识资产）、`memory-recall`（精准召回）、`memory-writeback`（收工写回）、`workbench-retro`（每周纪律自省）。均物化进工作台 `.jspace/skills/<name>/`，并同字节投影到 `.claude/skills/` `.grok/skills/` `.opencode/skills/` `.agents/skills/`（多 harness 共享，见 `adapters/harness/capabilities.yaml`）。
+- `skills/`：官方技能源码，经 `scripts/gen-assets.ts` 嵌入二进制。当前 7 个——`jspace-use`（使用指南）、`asset-ingest`（资料转知识资产）、`memory-recall`（精准召回）、`memory-writeback`（收工写回）、`workbench-retro`（每周纪律自省）、`weekly-report`（周报）、`memory-consolidate`（周记忆巩固）。均物化进工作台 `.jspace/skills/<name>/`，并同字节投影到 `.claude/skills/` `.grok/skills/` `.opencode/skills/` `.agents/skills/`（多 harness 共享，见 `adapters/harness/capabilities.yaml`）。周期任务的输出契约归 skill 层（`cron.json` 用 `target: {kind: "skill"}`，不写内联长 prompt——cron.json 是 user 数据，升级不覆盖，内联契约会被冻结）。
 
 本仓库根目录**不维护** `hub.json` / `workspace/` 日常注册表；这些只存在于 `templates/workbench/`，由 `jspace init` 实例化。模板已去个人化（无 `__DEV_ROOT__` 类占位符）：工作台模板 + skills 由 `scripts/gen-assets.ts` 嵌入编译二进制（`cli/assets.generated.ts` / `manifest.generated.ts` / `skills.generated.ts`），init/upgrade 物化到用户目录。
 

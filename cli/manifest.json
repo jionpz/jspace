@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "bundle_version": "1.0.11-42-g6f2262e",
+  "bundle_version": "1.0.11-43-ged6b288",
   "files": [
     {
       "path": "templates/workbench/.claude/settings.json",
@@ -24,7 +24,7 @@
     },
     {
       "path": "templates/workbench/.jspace/cron.json",
-      "sha256": "7e242fd86b4f64d8bd8ec67eb709a8550e88aef413ca2b6a5074121feed09532",
+      "sha256": "637c7d073c7de7e91ef042a9c3be4056084c6e2b0a2796780e24dff3da276ae9",
       "ownership": "user"
     },
     {
@@ -39,7 +39,7 @@
     },
     {
       "path": "templates/workbench/AGENTS.md",
-      "sha256": "39aabef6ca4915553f9b3ce1a4e321faf0b781e3f33c721b9f794cb1aee98626",
+      "sha256": "ead1b05c3851b3c07927b4a43be60de7048da17554b8403e19f8ec12c46de4d0",
       "ownership": "seed"
     },
     {
@@ -59,7 +59,7 @@
     },
     {
       "path": "skills/jspace-use/SKILL.md",
-      "sha256": "7af064fb627d4e390e46560f566326867027192bfe43f3528aa66844dfa4cc19",
+      "sha256": "0ae2b0748ff50e9b34781efefd8ad244b05bb0df292d358efc7a089b117b6cee",
       "ownership": "seed"
     },
     {
@@ -210,6 +210,16 @@
     {
       "path": "skills/workbench-retro/references/example-retro.md",
       "sha256": "35ae3516c0e4c5b2a8407c10ef41f5c2ee010670062f23adf60781d05232fe89",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/weekly-report/SKILL.md",
+      "sha256": "b6e273b13d7dd61dd5b8e538bbc981b10544a9c5dde0cc9ecab5fee4537f5e4b",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/memory-consolidate/SKILL.md",
+      "sha256": "31b989649eedf415f664f345acf1112005df27c981fd70e9d4ed28cefdd289d5",
       "ownership": "seed"
     }
   ]
