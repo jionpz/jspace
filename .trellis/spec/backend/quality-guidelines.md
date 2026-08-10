@@ -42,6 +42,7 @@
 - Fault-injection via injected deps (ingest journal fs ops, pending envelope gbrain stub).
 - Contract round-trip + decode-issue tests for every decoder.
 - Scheduler behavior: pure `planReconciliation` tests + argv round-trip through the real parser; no real scheduler apply in tests.
+- Regression tests call the real production path under test (public adapter methods, parse the actual output) — never hand-craft the internal payload with the expected values baked in. A test that assembles `schtasksArgs(...)`/`JSON.stringify` by hand stays green while the shipped method (`buildContent`) emits a mismatched task handle → false-green masked a Windows cron bug (issue #8 #1).
 
 ## Code Review Checklist
 
