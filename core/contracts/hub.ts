@@ -159,6 +159,7 @@ function decodeResources(value: unknown, domainIds: Set<string>, issues: IssueCo
     return resources;
   }
   const resourceIds = new Set<string>();
+  let filehubCount = 0; // issue #8 #10: the asset root (type=filehub) must be unique
   value.forEach((item, i) => {
     const prefix = `hub.resources[${i}]`;
     if (!isRecord(item)) {
@@ -170,6 +171,12 @@ function decodeResources(value: unknown, domainIds: Set<string>, issues: IssueCo
     const id = readRequiredString(item, "id", prefix, "hub.resource.id.invalid", issues);
     const type = readRequiredString(item, "type", prefix, "hub.resource.type.invalid", issues);
     const domain = readRequiredString(item, "domain", prefix, "hub.resource.domain.invalid", issues);
+    if (type !== undefined && type === "filehub") {
+      filehubCount += 1;
+      if (filehubCount > 1) {
+        issues.add("hub.resource.filehub.unique", `${prefix}.type`, "at most one filehub resource is allowed (the asset root must be unique)");
+      }
+    }
     if (id !== undefined) {
       if (!isId(id)) {
         issues.add("hub.resource.id.invalid", `${prefix}.id`, `id must match ${ID_PATTERN}`);

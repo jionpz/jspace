@@ -2,6 +2,7 @@
 // effective registry. Path entrypoints are projected to resolved | unbound | missing.
 // A path-existence callback is injectable so resolution is deterministic in tests.
 import { existsSync } from "node:fs";
+import { fail } from "../shared/errors.ts";
 import type { Domain, Entrypoint, HubV4, Project, Resource, UrlEntrypoint } from "../contracts/hub.ts";
 import type { LocalStateV1 } from "../contracts/local.ts";
 
@@ -82,18 +83,24 @@ export function resolveEffectiveRegistry(
 /**
  * Configured primary path for a resource type, or null when none is usable by a
  * consumer. Resolved and bound-but-missing both return the configured value
- * (consumers existence-check themselves); unbound returns null.
+ * (consumers existence-check themselves); unbound returns null. Fails loud on
+ * multiple resources of a singleton type (filehub) — every consumer resolves
+ * only the first, so drift must never silently pick one (issue #8 #10).
  */
 export function primaryPathForResourceType(reg: EffectiveRegistry, type: string): string | null {
+  let foundPath: string | null = null;
+  let foundAny = false;
   for (const r of reg.resources) {
     if (r.type !== type) continue;
     for (const ep of r.entrypoints) {
       if (ep.kind === "path" && ep.primary === true) {
-        return ep.resolution === "unbound" ? null : ep.resolved_path;
+        if (foundAny) fail(`multiple ${type} resources registered; the asset root must be unique`);
+        foundAny = true;
+        foundPath = ep.resolution === "unbound" ? null : ep.resolved_path;
       }
     }
   }
-  return null;
+  return foundPath;
 }
 
 /** Only a path that actually exists on this machine; used for verification. */

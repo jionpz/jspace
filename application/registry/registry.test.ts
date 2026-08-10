@@ -1,7 +1,7 @@
 // application/registry/registry.test.ts — registry use-case JSON schema + dry-run.
 // Run: bun test application/registry/registry.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initWorkbench } from "../workspace/init.ts";
@@ -82,4 +82,22 @@ test("domain remove --dry-run reports plan without mutating", () => {
   const { lines } = domainRemove(root, "sales", false, true);
   expect(lines[0]).toContain("would remove domain: sales");
   expect(JSON.stringify(loadHub(root))).toBe(before);
+});
+
+test("domain add rolls back the skeleton when the hub write fails (issue #8 #13)", () => {
+  if (process.platform === "win32") return; // chmod-based write failure differs on Windows
+  // make .jspace unwritable so writeHubAtomic's temp write throws EACCES
+  chmodSync(join(root, ".jspace"), 0o555);
+  try {
+    expect(() => domainAdd(root, "work", undefined, ["t"], undefined, false)).toThrow();
+  } finally {
+    chmodSync(join(root, ".jspace"), 0o755); // restore so afterEach can clean up
+  }
+  expect(existsSync(join(root, "workspace", "work"))).toBe(false); // skeleton rolled back, no orphan
+});
+
+test("resource add rejects a second filehub resource (issue #8 #10)", () => {
+  domainAdd(root, "files", undefined, undefined, undefined, false);
+  resourceAdd(root, "fh", "files", "filehub", "/tmp/fh", undefined, undefined, undefined, false);
+  expect(() => resourceAdd(root, "fh2", "files", "filehub", "/tmp/fh2", undefined, undefined, undefined, false)).toThrow(/filehub resource is already registered/);
 });

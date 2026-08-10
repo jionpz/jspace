@@ -122,3 +122,15 @@ test("two-machine fixture: same logical ids, different resolved paths", () => {
   expect(primaryPathForResourceType(regA, "filehub")).toBe("/mnt/a/filehub");
   expect(primaryPathForResourceType(regB, "filehub")).toBe("/mnt/b/filehub");
 });
+
+test("issue #8 #10: primaryPathForResourceType fails on a duplicate filehub resource", () => {
+  const two: HubV4 = {
+    ...validHub(),
+    resources: [
+      ...validHub().resources,
+      { id: "fh2", type: "filehub", domain: "files", entrypoints: [{ id: "p", kind: "path", binding: "fh2-p", primary: true }] },
+    ],
+  };
+  const reg = resolveEffectiveRegistry(two, local({ "filehub-primary": "/a/fh", "fh2-p": "/b/fh" }), { pathExists: () => true });
+  expect(() => primaryPathForResourceType(reg, "filehub")).toThrow(/must be unique/);
+});

@@ -64,6 +64,16 @@ test("two workbenches with the same cron id never collide", () => {
   expect(ops2).toEqual([{ action: "delete", taskId: "wb1.a" }]);
 });
 
+test("Sunday dow 7 and 0 converge (no re-update, issue #8 #11)", () => {
+  // win32 schtasks XML round-trips Sunday as 0 while a user cron may write 7
+  const desired = [d("tag.inbox", "inbox", "0 21 * * 7")];
+  const installed = [i("tag.inbox", "inbox", "0 21 * * 0")];
+  expect(planReconciliation(desired, installed)).toEqual([]); // identical cron, no update
+  // a genuinely different schedule still updates
+  const changed = [d("tag.inbox", "inbox", "0 22 * * 0")];
+  expect(planReconciliation(changed, installed).map((o) => o.action)).toEqual(["update"]);
+});
+
 test("P0: win32 buildDesired content /tn === desired.taskId (service↔adapter single handle)", () => {
   // buildDesired takes taskId from adapter.identity() and content from
   // adapter.buildContent() — the /tn the adapter emits must equal the taskId

@@ -14,6 +14,13 @@ import {
 
 export { workbenchTag, type DesiredTask, type InstalledTask, type SchedulerOp };
 
+/** cron treats 0 and 7 both as Sunday; the win32 schtasks XML round-trip always
+ *  emits 0, so a cron written `* * * 7` would otherwise re-update on every
+ *  install. Normalize Sunday to 0 before comparing (issue #8 #11). */
+function canonicalSchedule(s: string): string {
+  return s.split(" ").map((f, i) => (i === 4 && f === "7" ? "0" : f)).join(" ");
+}
+
 /** Pure: desired vs installed → ops. Match by taskId (already workbench-tagged);
  *  identical schedule+argv is a no-op; changed → update; desired-only → create;
  *  installed-only (disabled/deleted/stale) → delete. */
@@ -24,7 +31,7 @@ export function planReconciliation(desired: DesiredTask[], installed: InstalledT
     const inst = byId.get(d.taskId);
     if (!inst) {
       ops.push({ action: "create", taskId: d.taskId, content: d.content });
-    } else if (inst.schedule !== d.schedule || inst.argv !== d.argv) {
+    } else if (canonicalSchedule(inst.schedule) !== canonicalSchedule(d.schedule) || inst.argv !== d.argv) {
       ops.push({ action: "update", taskId: d.taskId, content: d.content });
     }
     // else no-op

@@ -134,7 +134,14 @@ export function domainAdd(
     rollbackDomainSkeleton(domainDir, nearestExisting, created);
     rejectErrors(check.issues.map((i) => i.message));
   }
-  writeHubAtomic(root, hub);
+  try {
+    writeHubAtomic(root, hub);
+  } catch (e) {
+    // skeleton written but the registry write failed — roll back the skeleton so
+    // no orphan directory + missing hub record remains (issue #8 #13).
+    rollbackDomainSkeleton(domainDir, nearestExisting, created);
+    throw e;
+  }
   return { lines: [`jspace: ok: added domain: ${domainId} (${domainPath})`] };
 }
 

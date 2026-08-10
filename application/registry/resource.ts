@@ -68,6 +68,12 @@ export function resourceAdd(
 
   if (!hub.domains.some((d) => d.id === domain)) fail(`no such domain: ${domain}`);
   if (hub.resources.some((r) => r.id === id)) fail(`duplicate resource id: ${id}`);
+  if (resourceType === "filehub" && hub.resources.some((r) => r.type === "filehub")) {
+    // issue #8 #10: the asset root (type=filehub) is a singleton — every consumer
+    // (inbox/ingest/pending/primary) resolves the first, so a second would silently
+    // shadow nothing and drift writes to the wrong vault.
+    fail("a filehub resource is already registered; the asset root must be unique (remove it before adding a new one)");
+  }
 
   const local = loadLocal(root) ?? freshLocal();
   let entrypoint: PathEntrypoint | UrlEntrypoint;

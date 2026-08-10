@@ -68,6 +68,17 @@ test("empty domains/resources/projects arrays are valid", () => {
   expect(value.projects).toEqual([]);
 });
 
+test("issue #8 #10: at most one filehub resource is allowed", () => {
+  const two = {
+    ...validHub(),
+    resources: [
+      ...validHub().resources,
+      { id: "fh2", type: "filehub", domain: "files", entrypoints: [{ id: "p", kind: "path", binding: "fh2-p", primary: true }] },
+    ],
+  };
+  expectIssue(two, "hub.resource.filehub.unique");
+});
+
 test("primary field accepts true/false/missing; resource needs exactly one true", () => {
   // false and missing are valid field *values* when a true primary exists
   expectOk({
