@@ -474,3 +474,32 @@ test("failed apply leaves a journal that --rollback restores", () => {
   expect(journal.status).toBe("rolled_back");
   rmSync(root, { recursive: true, force: true });
 });
+
+test("rollback rejects a non-UUID id before touching any journal path (issue #8 #15)", () => {
+  const root = tmp();
+  try {
+    expect(() => workspaceUpgrade(root, { rollbackId: "../../../tmp/pwn", dryRun: false, acceptConflicts: true }, upgradeDeps)).toThrow(/expected a UUID/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("rollback rejects a tampered journal plan rel with .. (issue #8 #15)", () => {
+  const root = tmp();
+  try {
+    const id = "11111111-2222-4333-8444-555555555555";
+    const upgradeDir = join(root, ".jspace", "state", "upgrades", id);
+    mkdirSync(upgradeDir, { recursive: true });
+    writeFileSync(join(upgradeDir, "journal.json"), JSON.stringify({
+      schema_version: 1,
+      id,
+      from_version: "1.0.5",
+      to_version: "1.0.6",
+      status: "failed",
+      plan: [{ action: "create", rel: "../../../.ssh/authorized_keys" }],
+    }) + "\n");
+    expect(() => workspaceUpgrade(root, { rollbackId: id, dryRun: false, acceptConflicts: true }, upgradeDeps)).toThrow(/unsafe rel/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -51,15 +51,16 @@ const emptyDeps = { manifest: { schema_version: 1 as const, bundle_version: "v1.
 test("workspace upgrade rollback: damaged/missing journal fails loud, never a silent no-op", () => {
   const root = wb();
   writeMarker(root);
-  const journalPath = join(root, ".jspace", "state", "upgrades", "up-1", "journal.json");
+  const rid = "6f3c5a20-0000-4000-8000-000000000009"; // real rollback ids are UUIDs
+  const journalPath = join(root, ".jspace", "state", "upgrades", rid, "journal.json");
   // missing -> explicit error
-  expect(() => workspaceUpgrade(root, { dryRun: false, acceptConflicts: false, rollbackId: "up-1" }, emptyDeps)).toThrow(/no upgrade journal/);
+  expect(() => workspaceUpgrade(root, { dryRun: false, acceptConflicts: false, rollbackId: rid }, emptyDeps)).toThrow(/no upgrade journal/);
   // damaged JSON -> explicit error
   writeFile(journalPath, "{ not json");
-  expect(() => workspaceUpgrade(root, { dryRun: false, acceptConflicts: false, rollbackId: "up-1" }, emptyDeps)).toThrow(/not valid JSON/);
+  expect(() => workspaceUpgrade(root, { dryRun: false, acceptConflicts: false, rollbackId: rid }, emptyDeps)).toThrow(/not valid JSON/);
   // invalid shape (wrong version) -> explicit error
-  writeFile(journalPath, JSON.stringify({ schema_version: 9, id: "up-1", from_version: "v1", to_version: "v2", plan: [], status: "applied" }));
-  expect(() => workspaceUpgrade(root, { dryRun: false, acceptConflicts: false, rollbackId: "up-1" }, emptyDeps)).toThrow(/damaged/);
+  writeFile(journalPath, JSON.stringify({ schema_version: 9, id: rid, from_version: "v1", to_version: "v2", plan: [], status: "applied" }));
+  expect(() => workspaceUpgrade(root, { dryRun: false, acceptConflicts: false, rollbackId: rid }, emptyDeps)).toThrow(/damaged/);
   rmSync(root, { recursive: true, force: true });
 });
 

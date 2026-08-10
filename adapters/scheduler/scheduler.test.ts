@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { taskIdFor, workbenchTag } from "./types.ts";
 import { buildPlist } from "./darwin.ts";
 import { parseSchedule } from "../../core/shared/schedule.ts";
-import { linuxAdapter, crontabBlock, replaceManagedBlock, parseManagedLine, extractTagBlock, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
+import { linuxAdapter, crontabBlock, crontabLine, replaceManagedBlock, parseManagedLine, extractTagBlock, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
 import { darwinAdapter, plistPath, parsePlistName, plistBelongsToTag } from "./darwin.ts";
 import { schtasksArgs, isWindowsInstallable, parseOpContent, parseSchtasksXml, win32Adapter } from "./win32.ts";
 import { planReconciliation } from "../../application/automation/scheduler.ts";
@@ -335,6 +335,23 @@ test("linux buildContent returns a real per-cron crontab line, not a placeholder
   const content = linuxAdapter.buildContent(cron, "abc123", "/wb/a", { jspaceBinary: "/bin/jspace", home: "/home/u", path: "/bin" });
   expect(content).toContain("cron run --dir '/wb/a' --id 'inbox'");
   expect(content).toContain("# com.jspace.cron.abc123.inbox");
+});
+
+test("crontabLine rejects newline/CR/NUL in values (newline injection, issue #8 #12)", () => {
+  const cron = mkCron("inbox", "0 21 * * *");
+  expect(() => crontabLine(cron, "tagA", "/wb\n/etc/passwd", "/bin/jspace", "/bin", "/home/u")).toThrow(/newline|CR|NUL/);
+  expect(() => crontabLine(cron, "tagA", "/wb", "/bin/jspace", "/bin", "/home/u\nx")).toThrow(/newline|CR|NUL/);
+});
+
+test("crontabLine -> parseManagedLine round-trips roots with ' % and spaces (issue #8 #12)", () => {
+  for (const root of ["/wb/acme's", "/wb/100%", "/wb/with space"]) {
+    const cron = mkCron("inbox", "0 21 * * *");
+    const line = crontabLine(cron, "tagA", root, "/bin/jspace", "/bin", "/home/u");
+    const parsed = parseManagedLine(line, "tagA");
+    expect(parsed).not.toBeNull();
+    expect(parsed!.cronId).toBe("inbox");
+    expect(parsed!.argv).toBe(`cron run --id inbox --dir ${root}`); // unquoted back -> matches desired
+  }
 });
 
 // ---- P2-1: linux applyBatch whole-block semantics (direct, injected IO) ----

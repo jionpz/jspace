@@ -40,6 +40,17 @@ export interface Win32Spawn {
   verbatim: boolean;
 }
 
+/** Escape one argv element for a cmd.exe command line (.cmd/.bat target). cmd
+ *  metacharacters (& | < > ^ % !) are command operators at the top level, so an
+ *  arg containing any of them — or whitespace, or a quote — is wrapped in double
+ *  quotes, where cmd treats them as literals; embedded `"` are doubled (cmd's
+ *  quoted-string escape). Without this a cron prompt like `hello&calc.exe` is
+ *  executed by cmd, never reaching the model (issue #8 #3). */
+function cmdEscapeArg(a: string): string {
+  if (!/[\s&|<>^%!"]/.test(a)) return a;
+  return `"${a.replace(/"/g, `""`)}"`;
+}
+
 /** Build the spawn target for one win32 argv. Non-scripts pass through; .cmd/.bat
  *  are wrapped in `cmd.exe /d /s /c ""<script>" <args>""` — the doubled outer
  *  quotes make cmd treat the whole tail as one command line without re-splitting. */
@@ -48,9 +59,9 @@ export function win32SpawnTarget(argv: string[]): Win32Spawn {
   if (!/\.(cmd|bat)$/i.test(first)) {
     return { command: first, args: argv.slice(1), verbatim: false };
   }
-  const quoteIf = (a: string): string => (/\s/.test(a) && !/^"/.test(a) ? `"${a}"` : a);
-  // script path is always quoted so `cmd /s /c` keeps it as one token
-  const cmdline = [`"${first}"`, ...argv.slice(1).map(quoteIf)].join(" ");
+  // script path is always quoted so `cmd /s /c` keeps it as one token; every
+  // arg is cmd-escaped (metacharacters neutralized by quoting)
+  const cmdline = [`"${first}"`, ...argv.slice(1).map(cmdEscapeArg)].join(" ");
   return { command: "cmd.exe", args: ["/d", "/s", "/c", `"${cmdline}"`], verbatim: true };
 }
 

@@ -28,6 +28,22 @@ test(".bat script -> same cmd.exe wrapping", () => {
   expect(t.args[3]).toBe('""C:\\tools\\run.bat" arg"');
 });
 
+test(".cmd arg with cmd metacharacters is quoted (no cmd injection, issue #8 #3)", () => {
+  // `hello&whoami` without quoting would make cmd run whoami after hello — the
+  // injected command never reaches the model.
+  const t = win32SpawnTarget(["claude.cmd", "-p", "hello&whoami"]);
+  expect(t.args[3]).toBe('""claude.cmd" -p "hello&whoami""');
+  const redir = win32SpawnTarget(["claude.cmd", "-p", "sum > out.txt"]);
+  expect(redir.args[3]).toContain('"sum > out.txt"');
+});
+
+test(".cmd arg with embedded quote is doubled inside the quoted arg (issue #8 #3)", () => {
+  const t = win32SpawnTarget(["claude.cmd", "-p", '" & whoami']);
+  // embedded " -> "" ; the whole arg is then wrapped in quotes
+  expect(t.args[3]).toContain('""" & whoami"');
+  expect(t.args[3]).not.toContain('-p " & whoami"'); // raw (injectable) form must not appear
+});
+
 test(".exe/.com and plain binaries pass through verbatim=false (Node quotes args)", () => {
   const exe = win32SpawnTarget(["C:\\bin\\claude.exe", "-p", "hi there"]);
   expect(exe.command).toBe("C:\\bin\\claude.exe");

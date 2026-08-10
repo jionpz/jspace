@@ -4,11 +4,12 @@
 // the plan (target/slug/project/index) and the gbrain page content; the CLI owns
 // the mechanical steps (stage copy, advance, commit remove-source, compensation).
 import { copyFileSync, unlinkSync } from "node:fs";
-import { isAbsolute, relative, join } from "node:path";
+import { isAbsolute, relative, join, resolve } from "node:path";
 import type { CmdResult } from "../commands/command.ts";
 import { fail } from "../../core/shared/errors.ts";
 import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
 import { resolveFilehubRoot } from "../registry/filehub-lookup.ts";
+import { isWithin } from "../registry/helpers.ts";
 import type { IngestStep } from "../../core/contracts/ingest.ts";
 import {
   advanceIngest,
@@ -26,6 +27,24 @@ import { resolveProjectId } from "./project.ts";
 
 const REAL_OPS: IngestFileOps = { copyFile: copyFileSync, unlink: unlinkSync };
 
+/** IngestFileOps whose unlink is confined to the filehub root — a tampered or
+ *  hand-edited journal whose source/target points outside must never make the
+ *  CLI delete an arbitrary file (issue #8 #4). begin already requires the
+ *  source to live under <filehub>/_inbox; this is defense in depth at every
+ *  unlink (complete source removal + fail staged-target compensation). */
+function filehubOps(root: string): IngestFileOps {
+  const fh = resolveFilehubRoot(root);
+  if (!fh) fail(`jspace: no filehub registered for workbench ${root}; run "jspace filehub init" first`);
+  return {
+    copyFile: copyFileSync,
+    unlink: (p) => {
+      const abs = isAbsolute(p) ? p : resolve(p);
+      if (!isWithin(abs, fh)) fail(`refusing to remove a file outside the filehub: ${p}`);
+      unlinkSync(p);
+    },
+  };
+}
+
 export interface IngestBeginArgs {
   file: string;
   target: string;
@@ -40,6 +59,14 @@ export interface IngestBeginArgs {
 export function ingestBegin(root: string, args: IngestBeginArgs): CmdResult {
   const fh = resolveFilehubRoot(root);
   if (!fh) fail(`jspace: no filehub registered for workbench ${root}; run "jspace filehub init" first`);
+  // issue #8 #4: the source must already be staged in the filehub inbox —
+  // ingesting from an arbitrary path would copy sensitive files (e.g. a private
+  // key) into a possibly-synced filehub. Resolve to an absolute path for the journal.
+  const inboxDir = join(fh, "_inbox");
+  const sourceAbs = resolve(args.file);
+  if (!isWithin(sourceAbs, inboxDir)) {
+    fail(`source must be inside the filehub inbox (${inboxDir}): ${args.file}`);
+  }
   const target = isAbsolute(args.target) ? args.target : join(fh, args.target);
   const relPath = relative(fh, target);
   if (relPath.startsWith("..") || isAbsolute(relPath)) {
@@ -50,7 +77,7 @@ export function ingestBegin(root: string, args: IngestBeginArgs): CmdResult {
   const proj = resolveProjectId(hub, args.project);
   const res = beginIngest(
     root,
-    { source: args.file, target, relPath, slug: args.slug, projectId: proj.id, indexEntry: args.indexLine },
+    { source: sourceAbs, target, relPath, slug: args.slug, projectId: proj.id, indexEntry: args.indexLine },
     REAL_OPS,
   );
   const lines: string[] = [];
@@ -84,7 +111,7 @@ export function ingestBegin(root: string, args: IngestBeginArgs): CmdResult {
  *  reports the reason and the exact retry command — never a fake `source removed`. */
 export function ingestAdvance(root: string, id: string, step: IngestStep): CmdResult {
   if (step === "committed") {
-    const res = completeIngest(root, id, REAL_OPS);
+    const res = completeIngest(root, id, filehubOps(root));
     if (res.kind === "cleanup-pending") {
       return {
         exitCode: 1,
@@ -97,13 +124,13 @@ export function ingestAdvance(root: string, id: string, step: IngestStep): CmdRe
     }
     return { lines: [`jspace: ok: ingest ${id} -> committed (source removed)`] };
   }
-  advanceIngest(root, id, step, REAL_OPS);
+  advanceIngest(root, id, step, filehubOps(root));
   return { lines: [`jspace: ok: ingest ${id} -> ${step}`] };
 }
 
 /** Mark failed with compensation for the step in progress. */
 export function ingestFail(root: string, id: string, reason: string): CmdResult {
-  const j = failIngest(root, id, reason, REAL_OPS);
+  const j = failIngest(root, id, reason, filehubOps(root));
   const lines = [`jspace: ingest ${id} failed at ${j.failedStep ?? "?"}: ${reason}`];
   if (j.failedStep === "staged") {
     lines.push("  compensated: removed staged target copy; source stays in inbox (no orphan)");
@@ -113,7 +140,7 @@ export function ingestFail(root: string, id: string, reason: string): CmdResult 
 
 /** Explicitly abandon a staged ingest (source stays in inbox). */
 export function ingestRollback(root: string, id: string): CmdResult {
-  rollbackIngest(root, id, REAL_OPS);
+  rollbackIngest(root, id, filehubOps(root));
   return { lines: [`jspace: ok: ingest ${id} rolled back (staged copy removed, source stays in inbox)`] };
 }
 

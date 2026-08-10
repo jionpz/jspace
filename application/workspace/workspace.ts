@@ -3,10 +3,11 @@
 // cli module. Filesystem writes go through injected writeFile for testability
 // (failure injection) and are preceded by backup + journal in .jspace/state/.
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fail } from "../../core/shared/errors.ts";
 import type { CmdResult } from "../commands/command.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
+import { portabilityIssues } from "../../core/contracts/paths.ts";
 import { readMarker, writeMarkerAtomic, writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { decodeUpgradeJournal, type UpgradeJournalV1 } from "../../core/contracts/upgrade.ts";
@@ -145,8 +146,32 @@ function readUpgradeJournal(root: string, id: string): UpgradeJournal {
   return d.value;
 }
 
+/** A rollback id is a UUID and every journal plan rel is a safe portable path —
+ *  `--rollback ../../..` or a tampered journal must never read/write outside the
+ *  workbench (issue #8 #15). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Local isWithin (mirrors application/registry/helpers.ts) — inlined to avoid
+ *  a workspace↔registry import cycle (registry already imports workspace/state). */
+function isWithin(child: string, parent: string): boolean {
+  const r = relative(parent, child);
+  return r === "" || (!r.startsWith("..") && !isAbsolute(r));
+}
+
+function validateRollbackRels(root: string, journal: UpgradeJournalV1): void {
+  const rootAbs = resolve(root);
+  for (const step of journal.plan) {
+    const issues = portabilityIssues(step.rel);
+    if (issues.length) fail(`upgrade journal plan has an unsafe rel path "${step.rel}": ${issues.join("; ")}`);
+    if (!isWithin(resolve(rootAbs, step.rel), rootAbs)) fail(`upgrade journal rel escapes the workbench: ${step.rel}`);
+  }
+}
+
 function rollbackUpgrade(root: string, id: string, deps: UpgradeDeps): CmdResult {
+  // id must be a UUID before it is used to build a journal path (traversal)
+  if (!UUID_RE.test(id)) fail(`invalid rollback id: ${id} (expected a UUID)`);
   const journal = readUpgradeJournal(root, id);
+  validateRollbackRels(root, journal);
   const backupDir = join(root, CONFIG_DIR, "state", "upgrades", id);
   for (const step of journal.plan) {
     const beforePath = join(backupDir, "before", step.rel);

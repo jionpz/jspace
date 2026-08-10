@@ -3,9 +3,9 @@
 // temp fixture only — never a real filehub).
 // Run: bun test application/ingest/use-cases.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { readJournals } from "./journal.ts";
 import { ingestAdvance, ingestBegin, ingestFail, ingestList, ingestRollback, ingestStatus } from "./use-cases.ts";
 
@@ -60,6 +60,40 @@ test("unregistered project derives id + warns", () => {
   const res = ingestBegin(wb, { file: src, target: join(projDir, "x.txt"), slug: "assets/foo/x", project: "Acme 报价" });
   expect(res.lines.some((l) => l.includes("warn: project Acme 报价 is not registered"))).toBe(true);
   expect(readJournals(wb).records[0].projectId).toBe("acme"); // Latin prefix slugs; pure CJK uses hash fallback (see project.test.ts)
+});
+
+test("begin rejects a source outside the filehub inbox (issue #8 #4)", () => {
+  const outside = join(wb, "outside.txt"); // in the workbench but NOT under filehub/_inbox
+  writeFileSync(outside, "secret\n", "utf-8");
+  const target = join(projDir, "x.txt");
+  expect(() => ingestBegin(wb, { file: outside, target, slug: "assets/foo/x", project: "foo" })).toThrow(/filehub inbox/);
+});
+
+test("begin stores an absolute source in the journal (issue #8 #4)", () => {
+  const src = sourceFile();
+  ingestBegin(wb, { file: src, target: join(projDir, "x.txt"), slug: "assets/foo/x", project: "foo" });
+  expect(isAbsolute(readJournals(wb).records[0].source)).toBe(true);
+});
+
+test("complete refuses to unlink a tampered source outside the filehub (issue #8 #4)", () => {
+  const src = sourceFile();
+  ingestBegin(wb, { file: src, target: join(projDir, "x.txt"), slug: "assets/foo/x", project: "foo" });
+  const id = journalId();
+  ingestAdvance(wb, id, "gbrain");
+  ingestAdvance(wb, id, "index");
+  // tamper the journal: point source at a file outside the filehub
+  const outside = join(wb, "outside.txt");
+  writeFileSync(outside, "secret\n", "utf-8");
+  const journalPath = join(wb, ".jspace", "state", "ingest", `${id}.json`);
+  const j = JSON.parse(readFileSync(journalPath, "utf-8"));
+  j.source = outside;
+  writeFileSync(journalPath, JSON.stringify(j), "utf-8");
+  // the unlink guard surfaces as a cleanup-pending result (source NOT removed)
+  const res = ingestAdvance(wb, id, "committed");
+  expect(existsSync(outside)).toBe(true); // the out-of-filehub file was NOT deleted
+  expect(res.exitCode).toBe(1);
+  expect(res.lines.join("\n")).toContain("source NOT removed");
+  expect(JSON.parse(readFileSync(journalPath, "utf-8")).failureReason).toContain("outside the filehub");
 });
 
 test("full chain begin→gbrain→index→committed removes source from inbox", () => {

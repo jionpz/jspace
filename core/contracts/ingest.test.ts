@@ -51,6 +51,15 @@ test("unknown fields are rejected", () => {
   expectIssue({ ...valid(), extra: 1 }, "ingest.unknown-field");
 });
 
+test("issue #8 #4: source/target must be absolute, no traversal in source/target/relPath", () => {
+  expectIssue({ ...valid(), source: "relative/inbox/doc.txt" }, "ingest.source.absolute");
+  expectIssue({ ...valid(), target: "relative/target.txt" }, "ingest.target.absolute");
+  expectIssue({ ...valid(), source: "/inbox/../etc/passwd" }, "ingest.source.traversal");
+  expectIssue({ ...valid(), target: "/filehub/../.ssh/id_rsa" }, "ingest.target.traversal");
+  expectIssue({ ...valid(), relPath: "projects/../../.ssh/id_rsa" }, "ingest.relPath.traversal");
+  expectIssue({ ...valid(), relPath: "./projects/foo/x.txt" }, "ingest.relPath.traversal");
+});
+
 test("failed journal with optional fields decodes", () => {
   const j: IngestJournalV1 = {
     ...valid(),

@@ -26,6 +26,37 @@ function shq(s: string): string {
   return "'" + s.replace(/'/g, `'\\''`) + "'";
 }
 
+/** POSIX single-quote unquote of a `shq`-produced token: `'a'\''b'` -> a'b.
+ *  Also restores crontab's `\%` -> `%` (crontabLine escapes % at line level). */
+function unshq(v: string): string {
+  const inner = v.slice(1, -1);
+  return inner.replace(/'\\''/g, "'").replace(/\\%/g, "%");
+}
+
+/** Length of the leading single-quoted token at s (POSIX: `'\''` is a literal
+ *  quote), or -1 when malformed. Lets the parser find `--dir '...'` / `--id '...'`
+ *  values even when the value itself contains `'` (shq escapes it). */
+function quotedTokenLen(s: string): number {
+  if (s[0] !== "'") return -1;
+  let i = 1;
+  while (i < s.length) {
+    if (s[i] === "'" && s[i + 1] === "\\" && s[i + 2] === "'" && s[i + 3] === "'") { i += 4; continue; }
+    if (s[i] === "'") return i + 1; // closing quote
+    i += 1;
+  }
+  return -1;
+}
+
+/** Refuse control characters that would let a value split the crontab line into
+ *  a new cron entry (newline injection, issue #8 #12). */
+function rejectControlChars(...vals: string[]): void {
+  for (const v of vals) {
+    if (/[\n\r\u0000]/.test(v)) {
+      fail(`crontab values must not contain newline/CR/NUL: ${JSON.stringify(v)}`);
+    }
+  }
+}
+
 /** One managed crontab line for a cron (schedule + quoted jspace run). Shared
  *  by buildContent (per-cron install content) and crontabBlock (whole-block). */
 export function crontabLine(
@@ -37,10 +68,11 @@ export function crontabLine(
   home: string,
 ): string {
   const d = parseSchedule(c.schedule);
+  const log = join(root, ".jspace", "logs", "cron", `crontab-${c.id}.log`);
+  rejectControlChars(root, path, home, jspaceBin, c.id, log);
   const dom = d.Day ?? "*";
   const mon = d.Month ?? "*";
   const dow = d.Weekday ?? "*";
-  const log = join(root, ".jspace", "logs", "cron", `crontab-${c.id}.log`);
   const line =
     `${d.Minute} ${d.Hour} ${dom} ${mon} ${dow}  ` +
     `cd ${shq(root)} && PATH=${shq(path)} HOME=${shq(home)} ${shq(jspaceBin)} cron run --dir ${shq(root)} --id ${shq(c.id)} ` +
@@ -129,24 +161,41 @@ const defaultIO: CrontabIO = {
   },
 };
 
+/** Read the single-quoted value of `--<opt> '...'` in a crontab run segment,
+ *  properly unquoting `'\''` and restoring `\%`. Null when absent/malformed. */
+function optionQuoted(s: string, opt: string): string | null {
+  const at = s.indexOf(opt);
+  if (at === -1) return null;
+  const rest = s.slice(at + opt.length).trimStart();
+  const len = quotedTokenLen(rest);
+  if (len === -1) return null;
+  return unshq(rest.slice(0, len));
+}
+
 /** Parse one managed-block crontab line into an InstalledTask, or null when it
  *  belongs to another workbench (tag mismatch) or is unparseable. Extracts the
  *  real schedule (first 5 fields) and reconstructs argv in buildDesired's
  *  canonical form (`cron run --id <id> --dir <root>`) so planReconciliation
- *  can no-op on identical state. Tag is parsed correctly from
- *  `com.jspace.cron.<tag>.<id>` (index 3, not 2 — segment 2 is the literal
- *  "cron"; the old split(".")[2] never matched and killed change detection). */
+ *  can no-op on identical state. Single-quoted values are scanned with the
+ *  POSIX rule (`'\''` -> literal quote, `\%` -> `%`) so paths containing `'`,
+ *  `%` or spaces round-trip instead of forcing an update every install
+ *  (issue #8 #12). Tag is parsed correctly from `com.jspace.cron.<tag>.<id>`. */
 export function parseManagedLine(line: string, tag: string): InstalledTask | null {
-  const m = line.match(
-    /^(\S+ \S+ \S+ \S+ \S+)  cd '([^']*)' .*? cron run (?:--dir '([^']*)' --id '([^']+)'|--id '([^']+)' --dir '([^']*)').*? # (com\.jspace\.cron\.\S+)$/,
-  );
-  if (!m) return null;
-  const id = m[4] ?? m[5];
-  const dir = m[3] ?? m[6];
-  const taskId = m[7];
+  const scheduleM = line.trimStart().match(/^(\S+ \S+ \S+ \S+ \S+)\s+/);
+  if (!scheduleM) return null;
+  const schedule = scheduleM[1];
+  const runAt = line.indexOf("cron run");
+  if (runAt === -1) return null;
+  const tail = line.slice(runAt + "cron run".length);
+  const taskM = line.match(/# (com\.jspace\.cron\.\S+)\s*$/);
+  if (!taskM) return null;
+  const taskId = taskM[1];
   const parsedTag = taskId.replace(/^com\.jspace\.cron\./, "").split(".")[0];
   if (parsedTag !== tag) return null; // another workbench's crons — never touch
-  return { taskId, cronId: id, schedule: m[1], argv: `cron run --id ${id} --dir ${dir}` };
+  const dir = optionQuoted(tail, "--dir");
+  const id = optionQuoted(tail, "--id");
+  if (dir === null || id === null) return null;
+  return { taskId, cronId: id, schedule, argv: `cron run --id ${id} --dir ${dir}` };
 }
 
 export const linuxAdapter: SchedulerAdapter & { io?: CrontabIO } = {

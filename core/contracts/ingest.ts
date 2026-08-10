@@ -19,6 +19,7 @@ import {
   success,
   type DecodeResult,
 } from "./diagnostics.ts";
+import { isAbsolutePath } from "./paths.ts";
 
 export const INGEST_STEPS = ["staged", "gbrain", "index", "committed"] as const;
 export type IngestStep = (typeof INGEST_STEPS)[number];
@@ -76,6 +77,24 @@ export function decodeIngestJournal(input: unknown): DecodeResult<IngestJournalV
     issues.add("ingest.indexEntry.invalid", "ingest.indexEntry", "indexEntry must be a string");
   }
   if (id !== undefined) readUuid(issues, "ingest.id.invalid", "ingest.id", id);
+  // issue #8 #4 — contract-level defense: source/target are absolute and none of
+  // source/target/relPath traverse (a tampered journal must not make `--complete`
+  // unlink an arbitrary file or a hand-edited relPath hide the real target).
+  const hasDotDot = (p: string): boolean => p.split(/[\\/]/).some((s) => s === "." || s === "..");
+  const src = input.source as string | undefined;
+  const tgt = input.target as string | undefined;
+  const rel = input.relPath as string | undefined;
+  if (typeof src === "string" && src.length > 0) {
+    if (!isAbsolutePath(src)) issues.add("ingest.source.absolute", "ingest.source", `source must be an absolute path: ${src}`);
+    if (hasDotDot(src)) issues.add("ingest.source.traversal", "ingest.source", `source must not contain . or .. segments: ${src}`);
+  }
+  if (typeof tgt === "string" && tgt.length > 0) {
+    if (!isAbsolutePath(tgt)) issues.add("ingest.target.absolute", "ingest.target", `target must be an absolute path: ${tgt}`);
+    if (hasDotDot(tgt)) issues.add("ingest.target.traversal", "ingest.target", `target must not contain . or .. segments: ${tgt}`);
+  }
+  if (typeof rel === "string" && rel.length > 0 && hasDotDot(rel)) {
+    issues.add("ingest.relPath.traversal", "ingest.relPath", `relPath must not contain . or .. segments: ${rel}`);
+  }
   if (!issues.ok) return failure(issues.issues);
   return success({
     schema_version: 1,
