@@ -1,6 +1,6 @@
 ---
 name: harness-config
-description: "**机器级**多-harness 全局治理接线:检测已装 harness(Pi/Claude Code/Codex/Cursor)、装自身到用户根、建/维护单源治理文档 ~/.agents/agents.md、把各 harness 全局文件(symlink/@import/.mdc 指针)接到它、只读核对会话级配置(gbrain MCP/注入/hooks)。Use when 配置 harness、统一多-harness 入口、全局治理文档缺失/陈旧。Do NOT use for 单个 JSpace 工作台首配(→jspace-use)。"
+description: "**机器级**多-harness 全局治理接线:检测已装 harness(Pi/Claude Code/Grok Build/OpenCode/Cursor)、装自身到用户根、建/维护单源治理文档 ~/.agents/agents.md、把各 harness 全局文件(symlink/@import/.mdc 指针)接到它、只读核对会话级配置(gbrain MCP/注入/hooks)。Use when 配置 harness、统一多-harness 入口、全局治理文档缺失/陈旧。Do NOT use for 单个 JSpace 工作台首配(→jspace-use)。"
 triggers:
   - "configure harness"
   - "harness config"

@@ -16,6 +16,7 @@
   - `.opencode/skills/` - 官方 skill 的 OpenCode 同字节投影（机器托管；同 `.claude/skills/` 纪律）
   - `.agents/skills/` - 官方 skill 的项目级多 harness 同字节投影（机器托管；同 `.claude/skills/` 纪律，用户级 `~/.agents/skills/` 由 `jspace skills install` 物化）
   - `.grok/hooks/jspace.json` - Grok Build 会话 hook（SessionStart/UserPromptSubmit/PreCompact/SessionEnd；seed，未修改随升级刷新，本地修改保留）
+  - `.cursor/hooks.json` - Cursor 会话 hook（sessionStart；seed，未修改随升级刷新，本地修改保留）
   - `.opencode/plugins/jspace.ts` - OpenCode 会话 plugin（session.created→session-start / session.idle→pending+cron / compacting→context 注入；seed，未修改随升级刷新，本地修改保留）
 - `.jspace/`(JSpace 管理区):
   - `hub.json` - domain/resource/project 注册表(**用户数据**;升级永不覆盖;缺失时重建空注册表)

@@ -75,7 +75,7 @@ SessionStart hook(`.claude/settings.json`)注入 `<current-state>`(域/pending/c
 
 ## 5. 资源与资产
 
-- **hub.json 增删查**:`jspace domain add` / `jspace resource add` / `jspace domain list` / `jspace resource list`;schema(hub v4 / local / marker)与 drift 规则 → `~/.agents/skills/jspace-use/references/registry.md`。
+- **hub.json 增删查**:`jspace domain add` / `jspace resource add` / `jspace domain list` / `jspace resource list`;schema(hub schema_version 1 / local / marker)与 drift 规则 → `~/.agents/skills/jspace-use/references/registry.md`。
 - **filehub 协议**:`jspace filehub init <根> --register`;跟踪新项目三步(资产层 index → 域 README 挂接 → 记忆层实体)见 `README.md`「资产管理」+ `~/.agents/skills/jspace-use/references/registry.md` + `asset-ingest`。
 - 重资产归位与入库 → `asset-ingest` skill(本指南不重复其流程)。
 
@@ -132,7 +132,7 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 
 ### 8.4 cron
 
-- **session start 契约**:跑 `jspace cron check`,把失败与 pending 暂存写(`.jspace-logs/*.APPLY.json`)上报用户。
+- **session start 契约**:跑 `jspace cron check`,把失败与 pending 暂存写(`<filehub>/.jspace-logs/*.APPLY.json`)上报用户。
 - **定义即代码**:定义在 `.jspace/cron.json`(声明式:schedule + harness + prompt),git 同步、应用前 review。
 - **rehearsal gate**:机器侧 `jspace cron install` 前,先 `jspace cron run` 各任务一次验证契约。
 - **运维细节** → `~/.agents/skills/jspace-use/references/headless-ops.md`(无头代理/账号/配额/失败可见性)。

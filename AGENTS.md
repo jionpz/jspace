@@ -50,9 +50,9 @@
    - `bun run cli/main.ts init /tmp/jspace-smoke`
    - `bun run cli/main.ts doctor --dir /tmp/jspace-smoke`
    - 在 `/tmp/jspace-smoke` 内演练 registry 命令（`domain`/`resource` 的 list/add/remove）
-4. `hub.json` schema 见 `templates/workbench/.jspace/hub.json` 和 `skills/jspace-use/references/registry.md`：资源主路径必须是绝对路径，且恰好一个 `primary: true`。
+4. `hub.json` schema 见 `templates/workbench/.jspace/hub.json` 和 `skills/jspace-use/references/registry.md`：资源主路径经 `local.bindings` 绑定（hub.json 存 binding 引用，绝对路径是本机 `local.json` 真理，恰好一个 `primary: true`）。
 5. 命名统一：项目、CLI、技能、模板、文档、domain 统一使用 `jspace`。
-6. 首次开发、未上线：**无兼容性负担**——schema/CLI/模板可直接演进，不做迁移/弃用通道；版本化承诺推迟到分发（R7）。
+6. 已上线分发（v1.0.11，M5）：schema/CLI/模板演进走迁移与升级通道，不静默破坏；`jspace update` 一键安装/自更新。
 7. 真实工作台升级约定（未分发、本地自用）：模板/CLI 更新后，既有工作台优先 `jspace workspace upgrade`（非破坏——未修改的 seed/skill 随升级刷新、本地编辑保留为 `skip`）；仅在需要完全重建时才清空重 init（`rm -rf <workbench>` 再 `jspace init <workbench>`，或清掉旧残留 `hub.json`/`.jspace.json` 后 `init --force`）。`init` 对已有工作台会拒绝（用 upgrade）；遇旧布局残留 init 会 fail 提示清除。
 
 ## Confirmation Rules

@@ -41,7 +41,7 @@ The workbench ships no registry CLI inside itself; run the JSpace CLI:
 jspace doctor --dir .      # 编译二进制在 PATH;源码检出则 bun run cli/main.ts
 ```
 
-Missing external resource paths are warnings, not blocking errors. Beyond `jspace doctor`, any future registry tooling must be described as future behavior until implemented.
+Missing external resource paths are warnings, not blocking errors. `jspace domain / resource / project` 的 `list / add / remove` 已实现（见下）；本文件不再描述未实现的 registry CLI。
 
 Manual fallback(POSIX;Windows 用 PowerShell `ConvertFrom-Json` 替代 `jq`):
 

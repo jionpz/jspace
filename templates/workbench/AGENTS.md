@@ -76,7 +76,7 @@ Before finishing a work session, quietly check whether anything should be preser
 
 ## Scheduled Tasks (cron)
 
-**Session start 跑 `jspace cron check`**，上报失败与 pending 暂存写（`.jspace-logs/*.APPLY.json`）；定义在 `.jspace/cron.json`。运维细节 → jspace-use 第 8 章。
+**Session start 跑 `jspace cron check`**，上报失败与 pending 暂存写（`<filehub>/.jspace-logs/*.APPLY.json`）；定义在 `.jspace/cron.json`。运维细节 → jspace-use 第 8 章。
 
 ## Brain operations
 

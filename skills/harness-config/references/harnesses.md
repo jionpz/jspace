@@ -1,6 +1,6 @@
 # Harness wiring reference(接线与推荐配置)
 
-> 面向 **4 个 AI harness**:Pi / Claude Code / Codex / Cursor。单一事实源 = **用户根目录** `~/.agents/agents.md`(治理文档,内容分层与安全红线见 `governance.md`)。
+> 面向 **5 个 AI harness**:Pi / Claude Code / Grok Build / OpenCode / Cursor（codex cron 兼容）。单一事实源 = **用户根目录** `~/.agents/agents.md`(治理文档,内容分层与安全红线见 `governance.md`)。
 > 本文所有配置规则均以 **官方当前文档查证为准**(核查日期 2026-08-02,官方来源见各节末尾);与既有假设不一致处以官方文档为准并注明差异。
 > 符号:`<gbrain>` = gbrain 二进制路径,按 `$GBRAIN_BIN` → `command -v gbrain`(Windows `where gbrain`) → `~/.bun/bin/gbrain` 解析(Windows:`%USERPROFILE%\.bun\bin\gbrain.exe`);**MCP command 建议用绝对路径**(非登录 shell 可能找不到 PATH;Windows 下必须全路径)。
 > 接线目标由 `scripts/detect.sh` 检测决定(installed 接线 / not_found 跳过)。会话级配置(gbrain MCP、session 注入)只核对报告,不修改既有配置。

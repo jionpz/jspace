@@ -48,7 +48,7 @@ created: YYYY-MM-DD
 ## 同步
 
 - 内容走**网盘整目录同步**或 **Obsidian Sync**,不进工作台 git。
-- `.jspace/hub.json` 里注册的本机绝对路径是「本机真理」,按机器各自维护(`jspace doctor` 对缺失路径仅告警)。
+- filehub 主路径经 `local.bindings` 绑定(绝对路径是本机真理,按机器各自维护);`jspace doctor` 对缺失路径仅告警。
 
 ## 使用
 

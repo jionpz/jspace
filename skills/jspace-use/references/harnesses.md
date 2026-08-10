@@ -1,6 +1,6 @@
 # Harness wiring reference
 
-> 完整推荐配置、全局治理文档(`~/.agents/agents.md`)接线与逐 harness 差异见 **`harness-config` skill**;本文件是 JSpace 工作台对 harness 支持集的**权威声明**(单一来源,由 `adapters/harness/capabilities.yaml` render——**勿手工编辑本表**)。
+> 完整推荐配置、全局治理文档(`~/.agents/agents.md`)接线与逐 harness 差异见 **`harness-config` skill**;本文件是 JSpace 工作台对 harness 支持集的**权威声明**(单一来源,与 `adapters/harness/capabilities.yaml` 保持一致)。
 > **`harness-config` 是机器级全局 skill**,**不随本工作台物化**(不在 `skills/` 下);需要时按其 Phase 1 自装到 `~/.agents/skills/harness-config` 后再用,勿假设工作台已内置。
 > `<gbrain>` = gbrain 二进制绝对路径,按 `$GBRAIN_BIN` → `command -v gbrain`(Windows `where gbrain`) → `~/.bun/bin/gbrain` 解析(Windows:`%USERPROFILE%\.bun\bin\gbrain.exe`)。
 
@@ -12,7 +12,7 @@
 
 | harness | headless(cron) | sessions | mcp | hook_format | native_memory | lifecycle: start/end/fallback/crash |
 |---|---|---|---|---|---|---|
-| claude | `claude -p …` | SessionStart / UserPromptSubmit | native | claude_settings_json | none | best_effort / best_effort / manual / best_effort |
+| claude | `claude -p …` | SessionStart / UserPromptSubmit | native | claude_settings_json | none | best_effort / manual / manual / best_effort |
 | grok | `grok -p …` | SessionStart / UserPromptSubmit / PreCompact / SessionEnd | native | grok_hooks_json | full | best_effort / best_effort / manual / best_effort |
 | opencode | `opencode run …` | session.created / session.idle / experimental.session.compacting | native | opencode_plugin_ts | none | best_effort / best_effort / manual / best_effort |
 | pi | `pi -p …` | session_start / before_agent_start（扩展事件） | via: pi_mcp_adapter | none | none | best_effort / best_effort / manual / best_effort |

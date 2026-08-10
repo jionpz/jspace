@@ -78,7 +78,7 @@ bun run cli/main.ts doctor --dir ~/jworkspace
 - `jspace pending` — gbrain 写暂存:`pending stage`(锁冲突)、`pending apply`(锁空闲落 live,幂等)、`pending ack`(terminal_failed 确认)。锁冲突写不失败。
 - `jspace workspace diff / upgrade` — 工作台升级计划与执行(managed 内容刷新、本地修改保冲突)。
 - `jspace context` — harness hook 上下文注入:`context session-start|turn|pre-compact|session-end`(默认 hook JSON envelope;`--plain` 纯文本;session-start 另支持 `--envelope cursor`)。被 `.claude/settings.json` / `.grok/hooks/` / `.cursor/hooks.json` 等消费。
-- `jspace domain / resource / project / filehub` — 域与资源注册表操作;`jspace skills install` 物化用户级官方技能;`jspace gbrain wire` 注入 gbrain MCP env;`jspace harness wire --harness <x>` 写各 harness 配置。
+- `jspace domain / resource / project / filehub` — 域与资源注册表操作;`jspace skills install` 物化用户级官方技能;`jspace gbrain wire` 注入 gbrain MCP env;`jspace harness wire --harness <x>` 写各 harness 配置（当前支持 grok；claude 用 `jspace gbrain wire`）。
 
 ## 目录结构
 
