@@ -268,7 +268,14 @@ test("P0: win32 reconciliation converges — desired identity == inspect handle 
   const tag = "tagA";
   const cron = mkCron("inbox", "0 21 * * *");
   const taskId = win32Adapter.identity(tag, cron.id).taskId;
-  const content = JSON.stringify(schtasksArgs(cron, "C:\\bin\\jspace.exe", "C:\\wb", taskId)!);
+  // Content must come from the real adapter path (was: hand-crafted schtasksArgs
+  // that bypassed buildContent and masked the /tn task-name mismatch — issue #8 #1).
+  const content = win32Adapter.buildContent(cron, tag, "C:\\wb", { jspaceBinary: "C:\\bin\\jspace.exe", home: "C:\\Users\\u", path: "C:\\bin" });
+  // buildContent must emit the SAME task-name handle identity()/inspect() use —
+  // a mismatch means inspect() never finds the created task (always re-create,
+  // uninstall orphans it).
+  const argv = JSON.parse(content) as string[];
+  expect(argv[argv.indexOf("/tn") + 1]).toBe(taskId);
   const desired = [{ taskId, cronId: cron.id, schedule: cron.schedule, argv: "cron run --id inbox --dir C:\\wb", content }];
   const installed = [{ taskId: "JSpaceCron_tagA_inbox", cronId: "inbox", schedule: "0 21 * * *", argv: "cron run --id inbox --dir C:\\wb" }];
   expect(planReconciliation(desired, installed)).toEqual([]); // identical -> no-op, NOT create+delete
@@ -276,6 +283,18 @@ test("P0: win32 reconciliation converges — desired identity == inspect handle 
   expect(planReconciliation(changed, installed)).toEqual([{ action: "update", taskId, content }]); // changed -> update
   expect(planReconciliation([], installed)).toEqual([{ action: "delete", taskId }]); // removed -> delete
   expect(planReconciliation(desired, [])).toEqual([{ action: "create", taskId, content }]); // new -> create
+});
+
+test("P0: win32 buildContent /tn is the inspect/uninstall task-name handle (DAILY + WEEKLY)", () => {
+  const tag = "tagA";
+  const env = { jspaceBinary: "C:\\bin\\jspace.exe", home: "C:\\Users\\u", path: "C:\\bin" };
+  for (const [id, schedule] of [["inbox", "0 21 * * *"], ["weekly", "0 9 * * 7"]] as const) {
+    const cron = mkCron(id, schedule);
+    const argv = JSON.parse(win32Adapter.buildContent(cron, tag, "C:\\wb", env)) as string[];
+    const tn = argv[argv.indexOf("/tn") + 1];
+    expect(tn).toBe(win32Adapter.identity(tag, id).taskId); // single source of the task-name handle
+    expect(tn).toMatch(/^JSpaceCron_tagA_/); // queryTasks()/inspect()/uninstallAll() prefix
+  }
 });
 
 test("P0: darwin reconciliation converges — plist identity == inspect parse", () => {

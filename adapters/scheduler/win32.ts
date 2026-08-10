@@ -10,11 +10,20 @@ import { taskIdFor, workbenchTag, type InstalledTask, type SchedulerAdapter, typ
 function queryTasks(tag: string): string[] {
   const res = spawnSync("schtasks", ["/query", "/fo", "csv", "/nh"], { encoding: "utf-8" });
   const out = res.status === 0 ? (res.stdout ?? "") : "";
-  const prefix = `JSpaceCron_${tag}_`;
+  const prefix = win32TaskName(tag, ""); // JSpaceCron_<tag>_ — inspect/uninstall prefix
   return out
     .split(/\r?\n/)
     .map((l) => l.split(",")[0].replace(/^"|"$/g, ""))
     .filter((n) => n.startsWith(prefix));
+}
+
+/** Win32 schtasks real task-name handle — single source used by identity()
+ *  (desired side), buildContent() (/tn of the /create args), queryTasks()
+ *  prefix and inspect() cronId split. The POSIX dotted taskIdFor stays the
+ *  logical cross-platform id; the underscore form survives the cmd metadata
+ *  the schtasks task-name field mangles dots into. */
+function win32TaskName(tag: string, cronId: string): string {
+  return `JSpaceCron_${tag}_${cronId}`;
 }
 
 /** schtasks XML <DaysOfWeek> child element names -> cron weekday (0=Sunday). */
@@ -114,11 +123,11 @@ export const win32Adapter: SchedulerAdapter = {
   identity(tag: string, cronId: string): SchedulerIdentity {
     // schtasks real task-name handle (matches inspect() / queryTasks()); the
     // logical id keeps the POSIX dotted form for stable cross-platform identity.
-    return { logicalId: taskIdFor(tag, cronId), taskId: `JSpaceCron_${tag}_${cronId}` };
+    return { logicalId: taskIdFor(tag, cronId), taskId: win32TaskName(tag, cronId) };
   },
 
   buildContent(cron: CronDefinition, tag: string, root: string, env: SchedulerEnv): string {
-    const tn = taskIdFor(tag, cron.id);
+    const tn = win32TaskName(tag, cron.id);
     const args = schtasksArgs(cron, env.jspaceBinary, root, tn);
     if (!args) fail(`cron ${cron.id}: schedule "${cron.schedule}" not supported on Windows (MVP: DAILY/WEEKLY with month=*)`);
     return JSON.stringify(args);
@@ -130,7 +139,7 @@ export const win32Adapter: SchedulerAdapter = {
       const parsed = res.status === 0 ? parseSchtasksXml(res.stdout ?? "") : null;
       return {
         taskId: n,
-        cronId: n.slice(`JSpaceCron_${tag}_`.length),
+        cronId: n.slice(win32TaskName(tag, "").length),
         schedule: parsed?.schedule ?? "",
         argv: parsed?.argv ?? "",
       };

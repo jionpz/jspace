@@ -2,6 +2,10 @@
 // Run: bun test application/automation/scheduler.test.ts
 import { expect, test } from "bun:test";
 import { planReconciliation, workbenchTag, type DesiredTask, type InstalledTask } from "./scheduler.ts";
+import { buildDesired } from "./scheduler-service.ts";
+import { win32Adapter } from "../../adapters/scheduler/win32.ts";
+import type { SchedulerEnv } from "../../adapters/scheduler/types.ts";
+import type { CronDefinition } from "../../core/contracts/cron.ts";
 
 const d = (taskId: string, cronId: string, schedule = "0 21 * * *", argv = "jspace cron run --id x"): DesiredTask =>
   ({ taskId, cronId, schedule, argv, content: `content:${taskId}` });
@@ -58,4 +62,18 @@ test("two workbenches with the same cron id never collide", () => {
   const wb1Desired = [d("wb2.a", "a")]; // removing wb1's cron, keeping wb2
   const ops2 = planReconciliation(wb1Desired, wb1Only);
   expect(ops2).toEqual([{ action: "delete", taskId: "wb1.a" }]);
+});
+
+test("P0: win32 buildDesired content /tn === desired.taskId (service↔adapter single handle)", () => {
+  // buildDesired takes taskId from adapter.identity() and content from
+  // adapter.buildContent() — the /tn the adapter emits must equal the taskId
+  // inspect()/uninstallAll() recognize, or install forever re-creates and
+  // uninstall orphans the task (issue #8 #1).
+  const tag = "tagA";
+  const cron: CronDefinition = { id: "inbox", schedule: "0 21 * * *", harness: "claude", prompt: "x", enabled: true };
+  const env: SchedulerEnv = { jspaceBinary: "C:\\bin\\jspace.exe", home: "C:\\Users\\u", path: "C:\\bin" };
+  const desired = buildDesired([cron], tag, "C:\\wb", env, win32Adapter);
+  expect(desired).toHaveLength(1);
+  const argv = JSON.parse(desired[0].content) as string[];
+  expect(argv[argv.indexOf("/tn") + 1]).toBe(desired[0].taskId);
 });
