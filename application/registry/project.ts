@@ -18,6 +18,7 @@ export function projectList(root: string, json: boolean): CmdResult {
   if (json) {
     return { lines: [], data: { projects: hub.projects } };
   }
+  if (hub.projects.length === 0) return { lines: ["jspace: ok: no projects"] };
   return { lines: hub.projects.map((p) => `${p.id}  ${p.domain}  ${p.status}`) };
 }
 

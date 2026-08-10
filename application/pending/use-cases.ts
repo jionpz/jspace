@@ -13,7 +13,7 @@ import { realGbrain, type GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
 /** Producer: stage a gbrain write (lock conflict / deferred apply). */
 export function pendingStage(root: string, slug: string, contentFile: string, producer: string): CmdResult {
   const fh = resolveFilehubRoot(root);
-  if (!fh) fail(`jspace: no filehub registered for workbench ${root}`);
+  if (!fh) fail(`no filehub registered for workbench ${root}`);
   if (!existsSync(contentFile)) fail(`content file not found: ${contentFile}`);
   const content = readFileSync(contentFile, "utf-8");
   const env = stageEnvelope(fh, producer, slug, content);
@@ -32,7 +32,7 @@ export function pendingList(root: string, json: boolean): CmdResult {
 /** Applier: apply staged envelopes (dedupe / put / retry / terminal-failure). */
 export async function pendingApply(root: string, id: string | undefined, gbrain: GbrainDeps = realGbrain()): Promise<CmdResult> {
   const fh = resolveFilehubRoot(root);
-  if (!fh) fail(`jspace: no filehub registered for workbench ${root}`);
+  if (!fh) fail(`no filehub registered for workbench ${root}`);
   const res = await applyPending(fh, gbrain, id);
   const lines = [
     `jspace: ok: pending apply: applied ${res.applied.length}, deduped ${res.deduped.length}, ` +
@@ -48,7 +48,7 @@ export async function pendingApply(root: string, id: string | undefined, gbrain:
 /** Acknowledge a terminal-failed envelope (evidence retained, stops alerting). */
 export function pendingAck(root: string, id: string): CmdResult {
   const fh = resolveFilehubRoot(root);
-  if (!fh) fail(`jspace: no filehub registered for workbench ${root}`);
+  if (!fh) fail(`no filehub registered for workbench ${root}`);
   const env = readEnvelope(fh, id);
   if (env.status !== "terminal_failed") fail(`envelope ${id} is ${env.status}; only terminal_failed can be acked`);
   writeEnvelope(fh, { ...env, status: "acked" });

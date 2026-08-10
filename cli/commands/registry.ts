@@ -55,7 +55,8 @@ const doctorSpec: CommandSpec = {
   name: "doctor",
   summary: "validate an existing JSpace workbench registry",
   features: { dir: true, json: true },
-  handler: (ctx) => doctorWorkbench(ctx.root, cronDeps),
+  options: [{ name: "--verbose", dest: "verbose", takesValue: false, help: "also print info-level diagnostics (human mode)" }],
+  handler: (ctx, args) => doctorWorkbench(ctx.root, cronDeps, b(args.verbose)),
 };
 
 export const COMMANDS: CommandSpec[] = [

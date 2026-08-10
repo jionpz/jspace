@@ -22,7 +22,7 @@ import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { readMaterializedJournal } from "../workspace/journal.ts";
 import { skillProjections } from "../workspace/manifest.ts";
 import { gbrainServer, gbrainSkillsDirWired } from "../gbrain/wiring.ts";
-import type { HubV4 } from "../../core/contracts/hub.ts";
+import type { HubV1 } from "../../core/contracts/hub.ts";
 import { loadCapabilities } from "../../adapters/harness/registry.ts";
 import { binaryOnPath } from "../../adapters/harness/bin.ts";
 
@@ -427,7 +427,7 @@ function checkSkills(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
  *  scanned by their hub.json `path` (authority, supports custom --path); a
  *  workspace/* dir that is NOT a registered domain is flagged as residue
  *  (issue #8 #14). */
-function checkDomains(root: string, hub: HubV4 | null): RegistryDiagnostic[] {
+function checkDomains(root: string, hub: HubV1 | null): RegistryDiagnostic[] {
   const diags: RegistryDiagnostic[] = [];
   const now = Date.now();
   const registered = new Set((hub?.domains ?? []).map((d) => d.path));
@@ -590,7 +590,9 @@ function checkHarness(root: string, cron: CronHealthDeps): RegistryDiagnostic[] 
   const caps = loadCapabilities();
   const binOnPath = cron.harnessBinOnPath ?? ((name: string) => binaryOnPath(name, process.platform));
   const active = new Set<string>();
-  for (const c of crons) if (c.harness) active.add(c.harness);
+  // only ENABLED crons decide harness-bin health — a disabled cron whose harness
+  // is missing must not alarm (issue #8 #22).
+  for (const c of crons) if (c.harness && c.enabled) active.add(c.harness);
   for (const name of active) {
     const cap = caps.harnesses[name];
     if (!cap) {
@@ -615,8 +617,9 @@ function checkHarness(root: string, cron: CronHealthDeps): RegistryDiagnostic[] 
   return diags;
 }
 
-/** `jspace doctor` — orchestrate the read-only checks and aggregate by severity. */
-export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
+/** `jspace doctor` — orchestrate the read-only checks and aggregate by severity.
+ *  `verbose` prints info-level diagnostics in human mode (default: only counted). */
+export function doctorWorkbench(root: string, cron: CronHealthDeps, verbose = false): CmdResult {
   const reads = readWorkbenchState(root);
   const env: InspectEnv = {
     root,
@@ -642,11 +645,10 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps): CmdResult {
   const errors = diags.filter((d) => d.severity === "error").map((d) => d.message);
   const warnings = diags.filter((d) => d.severity === "warning").map((d) => d.message);
   const infos = diags.filter((d) => d.severity === "info").map((d) => d.message);
+  const summary = `jspace: doctor ${errors.length > 0 ? "failed" : "ok"}: ${errors.length} error(s), ${warnings.length} warning(s), ${infos.length} info`;
   return {
     exitCode: errors.length > 0 ? 1 : undefined,
-    lines: [
-      `jspace: doctor ${errors.length > 0 ? "failed" : "ok"}: ${errors.length} error(s), ${warnings.length} warning(s), ${infos.length} info`,
-    ],
+    lines: verbose ? [summary, ...infos] : [summary],
     data: { diagnostics: diags, errors, warnings, infos },
     errors,
     warnings,

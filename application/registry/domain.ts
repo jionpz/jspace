@@ -31,6 +31,7 @@ export function domainList(root: string, json: boolean): CmdResult {
   if (json) {
     return { lines: [], data: { domains: hub.domains } };
   }
+  if (hub.domains.length === 0) return { lines: ["jspace: ok: no domains"] };
   return { lines: hub.domains.map((d) => `${d.id}  ${d.path}`) };
 }
 

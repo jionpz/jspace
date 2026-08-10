@@ -34,7 +34,7 @@ const REAL_OPS: IngestFileOps = { copyFile: copyFileSync, unlink: unlinkSync };
  *  unlink (complete source removal + fail staged-target compensation). */
 function filehubOps(root: string): IngestFileOps {
   const fh = resolveFilehubRoot(root);
-  if (!fh) fail(`jspace: no filehub registered for workbench ${root}; run "jspace filehub init" first`);
+  if (!fh) fail(`no filehub registered for workbench ${root}; run "jspace filehub init" first`);
   return {
     copyFile: copyFileSync,
     unlink: (p) => {
@@ -58,7 +58,7 @@ export interface IngestBeginArgs {
  *  idempotently instead of re-staging. */
 export function ingestBegin(root: string, args: IngestBeginArgs): CmdResult {
   const fh = resolveFilehubRoot(root);
-  if (!fh) fail(`jspace: no filehub registered for workbench ${root}; run "jspace filehub init" first`);
+  if (!fh) fail(`no filehub registered for workbench ${root}; run "jspace filehub init" first`);
   // issue #8 #4: the source must already be staged in the filehub inbox —
   // ingesting from an arbitrary path would copy sensitive files (e.g. a private
   // key) into a possibly-synced filehub. Resolve to an absolute path for the journal.
