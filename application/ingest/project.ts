@@ -2,7 +2,7 @@
 // Uses a registered hub project id when the caller names one; otherwise derives
 // a stable id and signals it was not registered (caller should prompt to
 // register). This keeps filehub path, index and gbrain slug on one id.
-import type { HubV4 } from "../../core/contracts/hub.ts";
+import type { HubV1 } from "../../core/contracts/hub.ts";
 import { sha256Of } from "../workspace/manifest.ts";
 
 export interface ProjectResolution {
@@ -21,7 +21,7 @@ export function deriveProjectId(name: string): string {
 }
 
 /** Registered id when hub declares a project with that id; else derived. */
-export function resolveProjectId(hub: HubV4 | null, name: string): ProjectResolution {
+export function resolveProjectId(hub: HubV1 | null, name: string): ProjectResolution {
   const id = (name ?? "").trim();
   if (id && hub && Array.isArray(hub.projects) && hub.projects.some((p) => p.id === id)) {
     return { id, registered: true };

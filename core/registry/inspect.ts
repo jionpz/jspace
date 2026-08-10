@@ -10,14 +10,14 @@ import {
   type RegistryDiagnostic,
 } from "../contracts/diagnostics.ts";
 import { HUB_FILE, LOCAL_FILE, MARKER_FILE } from "../contracts/files.ts";
-import type { HubV4 } from "../contracts/hub.ts";
+import type { HubV1 } from "../contracts/hub.ts";
 import type { LocalStateV1 } from "../contracts/local.ts";
 import type { WorkbenchMarkerV1 } from "../contracts/workbench.ts";
 import { resolveEffectiveRegistry } from "./effective.ts";
 
 export interface InspectEnv {
   root: string;
-  hub: FileRead<HubV4>;
+  hub: FileRead<HubV1>;
   marker: FileRead<WorkbenchMarkerV1>;
   local: FileRead<LocalStateV1>;
   pathExists: (p: string) => boolean;

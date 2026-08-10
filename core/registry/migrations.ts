@@ -5,11 +5,12 @@
 // (read -> transform -> write) that preserves user domains/resources/projects.
 // If no migration is registered for a version gap, upgrade fails WITHOUT
 // touching the file — the user must migrate manually.
+import { HUB_SCHEMA_VERSION as HUB_SCHEMA_VERSION_NUM } from "../contracts/hub.ts";
 
-/** Current portable hub schema version (matches core/contracts/hub.ts). The
- *  version axis is the unified numeric `schema_version` (P2-2 dropped the
- *  legacy string `version` axis). */
-export const HUB_SCHEMA_VERSION = "1";
+/** Current portable hub schema version — single numeric constant from the
+ *  contract (issue #8 #26); string-coerced here because the migration table is
+ *  keyed by from-version string. */
+export const HUB_SCHEMA_VERSION = String(HUB_SCHEMA_VERSION_NUM);
 
 export type HubTransform = (raw: Record<string, unknown>) => Record<string, unknown>;
 

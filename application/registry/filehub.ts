@@ -17,7 +17,7 @@ import { isFile } from "../fs.ts";
 export interface FilehubDeps {
   resolvePath: (p: string) => string;
   expandTilde: (p: string) => string;
-  filehubReadme: (devRootStr: string) => string;
+  filehubReadme: () => string;
   devRoot: () => string;
   /** workbench root for --register (current cwd) */
   wbRoot: string;
@@ -134,7 +134,7 @@ export function filehubInit(
     mkdirSync(join(root, d), { recursive: true });
   }
   if (!isFile(readme)) {
-    writeFileSync(readme, deps.filehubReadme(deps.devRoot()), "utf-8");
+    writeFileSync(readme, deps.filehubReadme(), "utf-8");
     lines.push(`jspace: ok: initialized filehub at ${root}`);
   } else {
     lines.push(`jspace: ok: filehub already initialized at ${root} (skeleton kept, nothing overwritten)`);

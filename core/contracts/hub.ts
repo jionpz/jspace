@@ -55,12 +55,16 @@ export interface Project {
   status: "active" | "archived";
 }
 
-export interface HubV4 {
+export interface HubV1 {
   schema_version: 1;
   domains: Domain[];
   resources: Resource[];
   projects: Project[];
 }
+
+/** Canonical numeric hub schema version — single constant shared by the decoder
+ *  and core/registry/migrations (issue #8 #26). */
+export const HUB_SCHEMA_VERSION = 1;
 
 function decodeDomains(value: unknown, domainIds: Set<string>, issues: IssueCollector): Domain[] {
   const domains: Domain[] = [];
@@ -288,7 +292,7 @@ function decodeProjects(value: unknown, domainIds: Set<string>, issues: IssueCol
   return projects;
 }
 
-export function decodeHub(input: unknown): DecodeResult<HubV4> {
+export function decodeHub(input: unknown): DecodeResult<HubV1> {
   const issues = new IssueCollector();
   if (!isRecord(input)) {
     issues.add("hub.root.type", "hub", "hub.json root must be an object");
@@ -299,7 +303,7 @@ export function decodeHub(input: unknown): DecodeResult<HubV4> {
   // Schema version: the unified numeric `schema_version: 1` (matches every
   // other contract). The legacy string `version: "4"` form is deliberately NOT
   // accepted — unified schema (P2-2) dropped the legacy read path.
-  readVersion(issues, "hub.version.unsupported", "hub.schema_version", input.schema_version, [1]);
+  readVersion(issues, "hub.version.unsupported", "hub.schema_version", input.schema_version, [HUB_SCHEMA_VERSION]);
 
   const domainIds = new Set<string>();
   const domains = decodeDomains(input.domains, domainIds, issues);

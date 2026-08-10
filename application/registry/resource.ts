@@ -4,7 +4,7 @@ import { isAbsolute } from "node:path";
 import { fail } from "../../core/shared/errors.ts";
 import type { CmdResult } from "../commands/command.ts";
 import { isId } from "../../core/contracts/ids.ts";
-import type { HubV4, PathEntrypoint, Resource, UrlEntrypoint } from "../../core/contracts/hub.ts";
+import type { HubV1, PathEntrypoint, Resource, UrlEntrypoint } from "../../core/contracts/hub.ts";
 import {
   PairedWriteError,
   writeHubAndLocal,
@@ -40,6 +40,7 @@ export function resourceList(root: string, json: boolean): CmdResult {
     }));
     return { lines: [], data: { resources: payload } };
   }
+  if (effective.resources.length === 0) return { lines: ["jspace: ok: no resources"] };
   return {
     lines: effective.resources.map((r) => {
       const entrypoints = r.entrypoints
@@ -106,7 +107,7 @@ export function resourceAdd(
 }
 
 export function resourceRemove(root: string, id: string, dryRun: boolean): CmdResult {
-  const hub: HubV4 = loadHub(root);
+  const hub: HubV1 = loadHub(root);
   const index = findIndex(hub.resources, id);
   if (index === null) fail(`no such resource: ${id}`);
   if (dryRun) {

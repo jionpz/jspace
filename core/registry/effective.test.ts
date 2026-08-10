@@ -4,7 +4,7 @@
 // logical identity, different resolved paths.
 // Run: bun test core/registry/effective.test.ts
 import { expect, test } from "bun:test";
-import type { HubV4 } from "../contracts/hub.ts";
+import type { HubV1 } from "../contracts/hub.ts";
 import type { LocalStateV1 } from "../contracts/local.ts";
 import {
   primaryPathForResourceType,
@@ -12,7 +12,7 @@ import {
   resolvedPrimaryPathForResourceType,
 } from "./effective.ts";
 
-function validHub(): HubV4 {
+function validHub(): HubV1 {
   return {
     schema_version: 1,
     domains: [{ id: "files", path: "workspace/files" }],
@@ -124,7 +124,7 @@ test("two-machine fixture: same logical ids, different resolved paths", () => {
 });
 
 test("issue #8 #10: primaryPathForResourceType fails on a duplicate filehub resource", () => {
-  const two: HubV4 = {
+  const two: HubV1 = {
     ...validHub(),
     resources: [
       ...validHub().resources,

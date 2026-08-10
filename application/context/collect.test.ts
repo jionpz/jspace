@@ -1,7 +1,7 @@
 // application/context/collect.test.ts — workbench state collection.
 // Run: bun test application/context/collect.test.ts
 import { expect, test } from "bun:test";
-import type { HubV4 } from "../../core/contracts/hub.ts";
+import type { HubV1 } from "../../core/contracts/hub.ts";
 import type { PendingWriteEnvelopeV1 } from "../../core/contracts/pending.ts";
 import { collectWorkbenchState, type CollectDeps } from "./collect.ts";
 
@@ -34,7 +34,7 @@ function env(over: Partial<PendingWriteEnvelopeV1>): PendingWriteEnvelopeV1 {
   };
 }
 
-const hubWith = (domains: { id: string; path: string }[]): HubV4 => ({
+const hubWith = (domains: { id: string; path: string }[]): HubV1 => ({
   schema_version: 1,
   domains,
   resources: [],

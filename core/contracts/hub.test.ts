@@ -1,13 +1,13 @@
-// core/contracts/hub.test.ts — hub contract tests — schema_version 1 (the HubV4
+// core/contracts/hub.test.ts — hub contract tests — schema_version 1 (the HubV1
 // type name is a legacy identifier kept for code history; the schema field is schema_version: 1).
 // Covers valid round-trip, unknown fields, strict boolean primary, duplicate
 // ids, bad references, path traversal and multi-error reporting.
 // Run: bun test core/contracts/hub.test.ts
 import { expect, test } from "bun:test";
 import type { DecodeResult } from "./diagnostics.ts";
-import { decodeHub, type HubV4 } from "./hub.ts";
+import { decodeHub, type HubV1 } from "./hub.ts";
 
-function validHub(): HubV4 {
+function validHub(): HubV1 {
   return {
     schema_version: 1,
     domains: [
@@ -38,7 +38,7 @@ function codesOf(result: DecodeResult<unknown>): string[] {
   return result.ok ? [] : result.issues.map((i) => i.code);
 }
 
-function expectOk(input: unknown): HubV4 {
+function expectOk(input: unknown): HubV1 {
   const result = decodeHub(input);
   expect(result.ok, JSON.stringify(result, null, 2)).toBe(true);
   if (result.ok) return result.value;

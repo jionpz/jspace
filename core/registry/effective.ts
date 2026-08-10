@@ -3,7 +3,7 @@
 // A path-existence callback is injectable so resolution is deterministic in tests.
 import { existsSync } from "node:fs";
 import { fail } from "../shared/errors.ts";
-import type { Domain, Entrypoint, HubV4, Project, Resource, UrlEntrypoint } from "../contracts/hub.ts";
+import type { Domain, Entrypoint, HubV1, Project, Resource, UrlEntrypoint } from "../contracts/hub.ts";
 import type { LocalStateV1 } from "../contracts/local.ts";
 
 export type PathExists = (p: string) => boolean;
@@ -31,7 +31,7 @@ export interface EffectiveResource {
 export interface EffectiveProject extends Project {}
 
 export interface EffectiveRegistry {
-  hub: HubV4;
+  hub: HubV1;
   local: LocalStateV1 | null;
   domains: Domain[];
   resources: EffectiveResource[];
@@ -45,7 +45,7 @@ export interface ResolveOptions {
 }
 
 export function resolveEffectiveRegistry(
-  hub: HubV4,
+  hub: HubV1,
   local: LocalStateV1 | null,
   opts: ResolveOptions = {},
 ): EffectiveRegistry {

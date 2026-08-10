@@ -3,7 +3,7 @@
 // Run: bun test core/registry/inspect.test.ts
 import { expect, test } from "bun:test";
 import type { FileRead, RegistryDiagnostic } from "../contracts/diagnostics.ts";
-import type { HubV4 } from "../contracts/hub.ts";
+import type { HubV1 } from "../contracts/hub.ts";
 import type { LocalStateV1 } from "../contracts/local.ts";
 import type { WorkbenchMarkerV1 } from "../contracts/workbench.ts";
 import { inspectWorkbench, type InspectEnv } from "./inspect.ts";
@@ -11,7 +11,7 @@ import { inspectWorkbench, type InspectEnv } from "./inspect.ts";
 const ROOT = "/workbench";
 const FH = "/filehub";
 
-function validHub(): HubV4 {
+function validHub(): HubV1 {
   return {
     schema_version: 1,
     domains: [{ id: "files", path: "workspace/files" }],
@@ -42,7 +42,7 @@ interface FakeFs {
 }
 
 interface EnvOverrides {
-  hub?: FileRead<HubV4>;
+  hub?: FileRead<HubV1>;
   marker?: FileRead<WorkbenchMarkerV1>;
   local?: FileRead<LocalStateV1>;
   fs?: Partial<FakeFs>;

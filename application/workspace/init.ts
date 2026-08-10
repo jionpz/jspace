@@ -25,7 +25,7 @@ export interface InitDeps {
   isCompiled: () => boolean;
   devRoot: () => string;
   /** Materialize the embedded workbench template + skills into target. */
-  materialize: (target: string, devRootStr: string) => void;
+  materialize: (target: string) => void;
   /** Bundle manifest, used to seed the materialization journal. */
   manifest: DistributionManifestV1;
 }
@@ -78,7 +78,7 @@ export function initWorkbench(
   }
 
   mkdirSync(target, { recursive: true });
-  deps.materialize(target, deps.devRoot());
+  deps.materialize(target);
   // .jspace/logs/ is a preallocated slot for execution logs (cron / headless);
   // materialize only writes files, so an empty dir must be created here.
   mkdirSync(join(target, CONFIG_DIR, "logs"), { recursive: true });

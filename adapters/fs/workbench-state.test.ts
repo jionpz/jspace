@@ -6,7 +6,7 @@ import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HubV4 } from "../../core/contracts/hub.ts";
+import type { HubV1 } from "../../core/contracts/hub.ts";
 import type { LocalStateV1 } from "../../core/contracts/local.ts";
 import type { WorkbenchMarkerV1 } from "../../core/contracts/workbench.ts";
 import {
@@ -17,7 +17,7 @@ import {
   writeJsonAtomic,
 } from "./workbench-state.ts";
 
-function validHub(): HubV4 {
+function validHub(): HubV1 {
   return {
     schema_version: 1,
     domains: [{ id: "files", path: "workspace/files" }],
@@ -113,7 +113,7 @@ test("writeHubAndLocal commits hub and local together", () => {
 
 test("writeHubAndLocal asserts encoded state decodes before writing", () => {
   const root = tempWorkbench();
-  const invalid = { ...validHub(), domains: [{ id: "Bad ID", path: "workspace/x" }] } as unknown as HubV4;
+  const invalid = { ...validHub(), domains: [{ id: "Bad ID", path: "workspace/x" }] } as unknown as HubV1;
   expect(() => writeHubAndLocal(root, invalid, validLocal())).toThrow(/invariant/);
   expect(existsSync(join(root, ".jspace", "hub.json"))).toBe(false);
   rmSync(root, { recursive: true, force: true });

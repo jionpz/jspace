@@ -11,8 +11,6 @@ import { SKILLS_MANIFEST } from "./skills.generated.ts";
 import { replaceAgentsBlock } from "../application/workspace/agents-block.ts";
 import { materializedRels } from "../application/workspace/manifest.ts";
 
-export const PLACEHOLDER = "__DEV_ROOT__";
-
 /** True when running as a standalone compiled executable. bun embeds its FS at
  *  /$bunfs/ on POSIX and on a drive-letter mount (B:\~BUN\...) on Windows. */
 export function isCompiled(): boolean {
@@ -71,20 +69,13 @@ function readExisting(target: string, rel: string): string | null {
   }
 }
 
-/** JSON-escape a replacement value (backslashes/quotes) so a Windows path
- *  injected into a .json template produces valid JSON (e.g. B:\~BUN\bin). */
-function jsonEscape(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-}
-
 /**
- * Write the embedded tree into `target`, replacing __DEV_ROOT__ placeholders.
- * JSON assets escape the replacement (Windows paths contain backslashes that
- * would otherwise produce invalid JSON). Official skills materialize into the
+ * Write the embedded tree into `target`. Official skills materialize into the
  * hidden .jspace/skills/ (root `skills/` is reserved for user-created skills);
- * filehub is created on demand by `filehub init`.
+ * filehub is created on demand by `filehub init`. (Templates carry no path
+ * placeholders — issue #8 #27 removed the dead __DEV_ROOT__ substitution.)
  */
-export function materializeTree(target: string, devRootStr: string): void {
+export function materializeTree(target: string): void {
   if (!hasAssets("templates/workbench/")) {
     fail("workbench template assets missing in embedded bundle");
   }
@@ -106,11 +97,10 @@ export function materializeTree(target: string, devRootStr: string): void {
     if (rels.length === 0) {
       throw new Error(`unexpected asset key: ${key}`);
     }
-    const replacement = key.endsWith(".json") ? jsonEscape(devRootStr) : devRootStr;
     for (const rel of rels) {
       const out = join(target, rel);
       mkdirSync(dirname(out), { recursive: true });
-      let bytes = content.replaceAll(PLACEHOLDER, replacement);
+      let bytes = content;
       if (rel === "AGENTS.md") {
         // JSpace owns only the JSPACE block inside AGENTS.md, never the whole file.
         // When a user file already exists (e.g. --force into a non-empty dir),
@@ -124,11 +114,11 @@ export function materializeTree(target: string, devRootStr: string): void {
 }
 
 /** The embedded filehub root README (templates/filehub/README.md). */
-export function filehubReadme(devRootStr: string): string {
+export function filehubReadme(): string {
   const key = "templates/filehub/README.md";
   const content = ASSETS[key];
   if (content === undefined) {
     fail(`filehub template missing in embedded bundle: ${key} (run bun run scripts/gen-assets.ts)`);
   }
-  return content.replaceAll(PLACEHOLDER, devRootStr);
+  return content;
 }

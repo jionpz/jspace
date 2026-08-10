@@ -5,7 +5,7 @@
 // when to emit anything at all; this module only answers "what is the state".
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { HubV4 } from "../../core/contracts/hub.ts";
+import type { HubV1 } from "../../core/contracts/hub.ts";
 import type { IncidentCollection } from "../automation/incidents.ts";
 import type { PendingWriteEnvelopeV1 } from "../../core/contracts/pending.ts";
 import type { ContractIssue } from "../../core/contracts/diagnostics.ts";
@@ -42,7 +42,7 @@ export interface WorkbenchState {
 }
 
 export interface CollectDeps {
-  readHub: (root: string) => HubV4;
+  readHub: (root: string) => HubV1;
   hubOk: (root: string) => boolean;
   resolveFilehubRoot: (root: string) => string | null;
   readEnvelopes: (fhRoot: string) => { records: PendingWriteEnvelopeV1[]; issues: ContractIssue[] };

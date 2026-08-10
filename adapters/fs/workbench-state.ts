@@ -2,8 +2,11 @@
 // Owns JSON reads, deterministic atomic writes, and paired hub/local mutation
 // with best-effort compensation. CLI consumers never parse raw JSON here.
 import {
+  closeSync,
   existsSync,
+  fsyncSync,
   mkdirSync,
+  openSync,
   readFileSync,
   renameSync,
   unlinkSync,
@@ -16,7 +19,7 @@ import {
   type FileRead,
 } from "../../core/contracts/diagnostics.ts";
 import { HUB_FILE, LOCAL_FILE, MARKER_FILE } from "../../core/contracts/files.ts";
-import { decodeHub, type HubV4 } from "../../core/contracts/hub.ts";
+import { decodeHub, type HubV1 } from "../../core/contracts/hub.ts";
 import { decodeLocal, type LocalStateV1 } from "../../core/contracts/local.ts";
 import { decodeMarker, type WorkbenchMarkerV1 } from "../../core/contracts/workbench.ts";
 import { isFile } from "../../core/shared/fs.ts";
@@ -52,7 +55,7 @@ function readContract<T>(
     : { status: "invalid", issues: decoded.issues };
 }
 
-const readHub = (root: string): FileRead<HubV4> =>
+const readHub = (root: string): FileRead<HubV1> =>
   readContract(root, HUB_FILE, "hub.json.parse", "hub", decodeHub);
 const readLocal = (root: string): FileRead<LocalStateV1> =>
   readContract(root, LOCAL_FILE, "local.json.parse", "local", decodeLocal);
@@ -61,7 +64,7 @@ export const readMarker = (root: string): FileRead<WorkbenchMarkerV1> =>
 
 export interface WorkbenchStateReads {
   root: string;
-  hub: FileRead<HubV4>;
+  hub: FileRead<HubV1>;
   marker: FileRead<WorkbenchMarkerV1>;
   local: FileRead<LocalStateV1>;
 }
@@ -92,19 +95,33 @@ function cleanupTemps(paths: string[]): void {
   }
 }
 
-/** Atomic single-file write: temp sibling + rename. */
+/** Atomic single-file write: temp sibling + fsync + rename. A temp orphan is
+ *  cleaned up on rename failure (issue #8 #19). */
 export function writeBytesAtomic(p: string, content: string): void {
   mkdirSync(dirname(p), { recursive: true });
   const tmp = tmpSibling(p);
-  writeFileSync(tmp, content, "utf-8");
-  renameSync(tmp, p);
+  let fd: number | undefined;
+  try {
+    fd = openSync(tmp, "w");
+    writeFileSync(fd, content, "utf-8");
+    fsyncSync(fd); // durable before the rename publishes the new state
+    closeSync(fd);
+    fd = undefined;
+    renameSync(tmp, p);
+  } catch (e) {
+    if (fd !== undefined) {
+      try { closeSync(fd); } catch { /* best-effort */ }
+    }
+    try { unlinkSync(tmp); } catch { /* best-effort: no orphan tmp */ }
+    throw e;
+  }
 }
 
 export function writeJsonAtomic(p: string, value: unknown): void {
   writeBytesAtomic(p, formatJson(value));
 }
 
-export function writeHubAtomic(root: string, hub: HubV4): void {
+export function writeHubAtomic(root: string, hub: HubV1): void {
   writeJsonAtomic(join(root, HUB_FILE), hub);
 }
 
@@ -141,7 +158,7 @@ function restoreFromOriginal(p: string, original: string | null): Error | null {
  * Power loss can still leave an orphan binding or unbound reference — doctor
  * makes both visible; no strong cross-file transaction is claimed.
  */
-export function writeHubAndLocal(root: string, hub: HubV4, local: LocalStateV1): void {
+export function writeHubAndLocal(root: string, hub: HubV1, local: LocalStateV1): void {
   const hubPath = join(root, HUB_FILE);
   const localPath = join(root, LOCAL_FILE);
   const hubContent = formatJson(hub);

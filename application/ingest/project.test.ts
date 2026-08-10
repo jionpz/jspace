@@ -1,10 +1,10 @@
 // application/ingest/project.test.ts — project id resolution.
 // Run: bun test application/ingest/project.test.ts
 import { expect, test } from "bun:test";
-import type { HubV4 } from "../../core/contracts/hub.ts";
+import type { HubV1 } from "../../core/contracts/hub.ts";
 import { deriveProjectId, resolveProjectId } from "./project.ts";
 
-function hubWith(projects: HubV4["projects"]): HubV4 {
+function hubWith(projects: HubV1["projects"]): HubV1 {
   return { schema_version: 1 as const, domains: [], resources: [], projects };
 }
 
