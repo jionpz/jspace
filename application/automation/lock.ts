@@ -33,17 +33,27 @@ const realFs: LockFs = {
   now: Date.now,
 };
 
+/** Is this error "another process already holds the lock" (O_EXCL create
+ *  failed)? Real fs throws ErrnoException with code EEXIST; test fakes sometimes
+ *  throw message-only — match both. Anything else (ENOSPC/EIO on write, EACCES
+ *  on open) is NOT contention and must never be treated as a held lock. */
+function isEexist(e: unknown): boolean {
+  const err = e as { code?: string; message?: string };
+  return err?.code === "EEXIST" || (typeof err?.message === "string" && err.message.includes("EEXIST"));
+}
+
 /** Acquire an exclusive lock; null when another holder's fresh lock is present.
- *  A stale lock (older than staleMs) is removed and the create retried once. */
+ *  A stale lock (older than staleMs) is removed and the create retried once.
+ *  A post-create write failure (ENOSPC/EIO) removes our own 0-byte poison lock
+ *  and propagates — it is not contention (issue #8 #7). */
 export function acquireLock(path: string, token: string, staleMs: number, fs: LockFs = realFs): CronLock | null {
   for (let attempt = 0; attempt < 2; attempt++) {
+    let created = false;
+    let fd: number | undefined;
     try {
-      const fd = fs.openSync(path, "wx");
-      try {
-        fs.writeSync(fd, token);
-      } finally {
-        fs.closeSync(fd);
-      }
+      fd = fs.openSync(path, "wx");
+      created = true;
+      fs.writeSync(fd, token);
       return {
         held: true,
         release: () => {
@@ -54,7 +64,16 @@ export function acquireLock(path: string, token: string, staleMs: number, fs: Lo
           }
         },
       };
-    } catch {
+    } catch (e) {
+      if (!isEexist(e)) {
+        // open failed for a reason other than contention, or the file was OURS
+        // but the token write failed — a 0-byte poison lock must not linger and
+        // block every process for staleMs. Clean it up, then propagate.
+        if (created) {
+          try { fs.unlinkSync(path); } catch { /* already gone */ }
+        }
+        throw e;
+      }
       // EEXIST — someone holds a lock; only break ours if it is stale.
       try {
         const age = fs.now() - fs.statSync(path).mtimeMs;
@@ -62,6 +81,10 @@ export function acquireLock(path: string, token: string, staleMs: number, fs: Lo
         fs.unlinkSync(path); // stale — drop and retry the exclusive create
       } catch {
         return null; // lock vanished mid-check or unreadable
+      }
+    } finally {
+      if (fd !== undefined) {
+        try { fs.closeSync(fd); } catch { /* best-effort */ }
       }
     }
   }

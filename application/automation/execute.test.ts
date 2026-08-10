@@ -10,6 +10,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cronRun, type ExecuteDeps } from "./execute.ts";
 import { localDate } from "../time.ts";
+import { lastRun } from "./runs.ts";
+import { readIncidents } from "./incidents.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
 
@@ -148,4 +150,73 @@ test("lock is released after success AND failure (no stale lock left)", async ()
   chmodSync(slow, 0o755);
   await run({ cronId: "weekly", timeoutSec: 1 }, deps({ harnessBin: slow }));
   expect(existsSync(lock)).toBe(false); // failure/timeout path releases via finally
+});
+
+// ---- #6: inbox batch guard must not fake-success when the batch log is
+// absent/unchanged (issue #8 #6) — batch-stale opens an incident, ok is only
+// legitimate when the file actually changed during the run. ----
+
+const hasBatchStaleIncident = (cronId: string) =>
+  readIncidents(root).records.some((i) => i.cronId === cronId && i.failureClass === "batch-stale");
+
+// inbox-tidy is a skill-target cron: resolveCronPrompt compiles asset-ingest's
+// SKILL.md from the manifest, so the default (empty SKILLS + null readFile) fails
+// at the compile gate before the batch guard. Provide the asset-ingest entry.
+const ASSET_INGEST: SkillsManifestV1 = { schema_version: 1, workbench: [{ name: "asset-ingest", version: "1.0.0", scope: "workbench", dependencies: [], entrypoints: ["batch"] }], global: [] };
+const inboxDeps = (over: Partial<ExecuteDeps> = {}): ExecuteDeps => deps({
+  skillsManifest: ASSET_INGEST,
+  readFile: (p) => (p.endsWith("SKILL.md") ? "# asset-ingest\n" : null),
+  ...over,
+});
+
+test("inbox-tidy with no filehub -> batch-stale incident, not ok (issue #8 #6)", async () => {
+  const res = await run({ cronId: "inbox-tidy" }, inboxDeps()); // filehubRoot: () => null → batchLog === null
+  expect(lastRun(root, "inbox-tidy")!.batchChanged).toBe(false);
+  expect(hasBatchStaleIncident("inbox-tidy")).toBe(true);
+  expect(res.lines[0]).not.toContain("already succeeded today");
+});
+
+test("inbox-tidy with filehub but batch log never appeared -> batch-stale (issue #8 #6)", async () => {
+  const fh = mkdtempSync(join(tmpdir(), "jspace-exec-fh-"));
+  try {
+    const res = await run({ cronId: "inbox-tidy" }, inboxDeps({ filehubRoot: () => fh }));
+    expect(lastRun(root, "inbox-tidy")!.batchChanged).toBe(false);
+    expect(hasBatchStaleIncident("inbox-tidy")).toBe(true);
+    expect(res.lines[0]).not.toContain("already succeeded today");
+  } finally {
+    rmSync(fh, { recursive: true, force: true });
+  }
+});
+
+test("inbox-tidy with unchanged batch log -> batch-stale (issue #8 #6)", async () => {
+  const fh = mkdtempSync(join(tmpdir(), "jspace-exec-fh-"));
+  try {
+    const batchLog = join(fh, ".jspace-logs", "inbox-batch.md");
+    mkdirSync(join(batchLog, ".."), { recursive: true });
+    writeFileSync(batchLog, "before\n", "utf-8");
+    const res = await run({ cronId: "inbox-tidy" }, inboxDeps({ filehubRoot: () => fh })); // fakeHarness doesn't touch it
+    expect(lastRun(root, "inbox-tidy")!.batchChanged).toBe(false);
+    expect(hasBatchStaleIncident("inbox-tidy")).toBe(true);
+    expect(res.lines[0]).not.toContain("already succeeded today");
+  } finally {
+    rmSync(fh, { recursive: true, force: true });
+  }
+});
+
+test("inbox-tidy with batch log updated by the harness -> ok (positive control, issue #8 #6)", async () => {
+  const fh = mkdtempSync(join(tmpdir(), "jspace-exec-fh-"));
+  try {
+    const batchLog = join(fh, ".jspace-logs", "inbox-batch.md");
+    mkdirSync(join(batchLog, ".."), { recursive: true });
+    writeFileSync(batchLog, "before\n", "utf-8");
+    const batchHarness = join(root, "batch-harness");
+    writeFileSync(batchHarness, `#!/bin/sh\necho ran >> '${batchLog}'\nexit 0\n`, "utf-8");
+    chmodSync(batchHarness, 0o755);
+    const res = await run({ cronId: "inbox-tidy" }, inboxDeps({ filehubRoot: () => fh, harnessBin: batchHarness }));
+    expect(lastRun(root, "inbox-tidy")!.batchChanged).toBe(true);
+    expect(hasBatchStaleIncident("inbox-tidy")).toBe(false);
+    expect(res.lines[0]).toContain("(exit 0)");
+  } finally {
+    rmSync(fh, { recursive: true, force: true });
+  }
 });

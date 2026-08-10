@@ -230,9 +230,15 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
     const status: "ok" | "suspect" | "failed" = exitOk ? (suspect ? "suspect" : "ok") : "failed";
 
     let batchChanged = true;
-    if (isInboxTask && batchLog !== null && isFile(batchLog)) {
-      const st = statSync(batchLog);
-      batchChanged = st.mtimeMs !== batchBefore.mtime || st.size !== batchBefore.size;
+    if (isInboxTask) {
+      if (batchLog !== null && isFile(batchLog)) {
+        const st = statSync(batchLog);
+        batchChanged = st.mtimeMs !== batchBefore.mtime || st.size !== batchBefore.size;
+      } else {
+        // 无 filehub 或 batch 日志从未出现 → 无法验证批次变化，强制 stale，
+        // 否则假成功记 ok（issue #8 #6）。
+        batchChanged = false;
+      }
     }
 
     const { runId, logPath } = recordRun(root, opts, argv, exited, status, timedOut, batchChanged, output, deps);

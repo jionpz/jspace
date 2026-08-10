@@ -9,6 +9,12 @@ import { spawn, spawnSync } from "node:child_process";
  *  dropped at the tail so a runaway cron can't OOM the CLI. */
 const MAX_OUTPUT_BYTES = 1_048_576;
 
+/** POSIX: after SIGTERM, how long to wait before SIGKILL. A harness that
+ *  registers a SIGTERM handler and keeps running must still die — otherwise the
+ *  CLI hangs on child exit, the lock is never released, and ~1h later a second
+ *  `cron run` sees the lock as stale and double-runs (issue #8 #5). */
+const SIGKILL_GRACE_MS = 3000;
+
 export interface SpawnResult {
   exit: number;
   output: string;
@@ -19,6 +25,9 @@ export interface SpawnOpts {
   cwd: string;
   platform: string;
   timeoutMs: number;
+  /** SIGTERM → SIGKILL grace window (default 3000ms). Tests inject a small
+   *  value so the SIGKILL path is exercised without waiting. */
+  killGraceMs?: number;
 }
 
 /** Windows spawn target for one argv. A .cmd/.bat script cannot be executed
@@ -71,14 +80,24 @@ export async function spawnProcess(argv: string[], opts: SpawnOpts): Promise<Spa
   });
   child.stdout?.on("data", push);
   child.stderr?.on("data", push);
-  const started = Date.now();
+  let killed = false;
+  let killTimer: ReturnType<typeof setTimeout> | undefined;
   const timer = setTimeout(() => {
+    killed = true;
     if (opts.platform === "win32") {
       try {
         spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"]);
       } catch { /* ignore */ }
     } else {
-      try { process.kill(-child.pid!, "SIGTERM"); } catch { try { child.kill("SIGKILL"); } catch { /* ignore */ } }
+      try {
+        process.kill(-child.pid!, "SIGTERM");
+        // grace period: a harness that ignores SIGTERM must still die
+        killTimer = setTimeout(() => {
+          try { process.kill(-child.pid!, "SIGKILL"); } catch { /* already gone */ }
+        }, opts.killGraceMs ?? SIGKILL_GRACE_MS);
+      } catch {
+        try { child.kill("SIGKILL"); } catch { /* ignore */ }
+      }
     }
   }, opts.timeoutMs);
 
@@ -87,6 +106,9 @@ export async function spawnProcess(argv: string[], opts: SpawnOpts): Promise<Spa
     child.on("exit", (code) => resolveExit(code ?? 1));
   });
   clearTimeout(timer);
-  const timedOut = Date.now() - started > opts.timeoutMs;
+  if (killTimer !== undefined) clearTimeout(killTimer);
+  // timedOut is the timer's own flag, not a wall-clock comparison — a child
+  // that exits normally just after the deadline is not mislabeled (issue #8 #5).
+  const timedOut = killed;
   return { exit: exited, output: Buffer.concat(chunks).toString("utf-8"), timedOut };
 }

@@ -87,3 +87,19 @@ test("release on a vanished lock is a no-op (no throw)", () => {
   delete fs.files["lock"];
   expect(() => lock.release()).not.toThrow();
 });
+
+test("post-create write failure removes the poison lock and propagates (not EEXIST)", () => {
+  // openSync("wx") succeeded (lock file is OURS) but the token write fails with
+  // a real non-contention error (ENOSPC). This must NOT be treated as "another
+  // holder" — the 0-byte poison lock is removed and the error is rethrown, so
+  // every process is not blocked for staleMs (issue #8 #7).
+  const fs = fakeFs();
+  fs.writeSync = () => {
+    const e = new Error("ENOSPC: no space left on device");
+    (e as { code?: string }).code = "ENOSPC";
+    throw e;
+  };
+  expect(() => acquireLock("lock", "me", 1000, fs)).toThrow(/ENOSPC/);
+  expect(fs.files).toEqual({}); // poison lock cleaned up
+  expect(fs.existsSync("lock")).toBe(false);
+});

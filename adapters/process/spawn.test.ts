@@ -3,7 +3,10 @@
 // Real cmd.exe round-trip is CI-verified on the Windows runner.
 // Run: bun test application/automation/win32-spawn.test.ts
 import { expect, test } from "bun:test";
-import { win32SpawnTarget } from "./spawn.ts";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawnProcess, win32SpawnTarget } from "./spawn.ts";
 
 test(".cmd script -> cmd.exe /d /s /c, doubled-quoted tail, verbatim", () => {
   const t = win32SpawnTarget(["C:\\bin\\claude.cmd", "-p", "prompt", "--allowedTools", "Bash,Read"]);
@@ -33,4 +36,42 @@ test(".exe/.com and plain binaries pass through verbatim=false (Node quotes args
   const noExt = win32SpawnTarget(["claude", "-p", "x"]);
   expect(noExt.command).toBe("claude");
   expect(noExt.verbatim).toBe(false);
+});
+
+// ---- #5: timeout must SIGKILL a harness that ignores SIGTERM (else the CLI
+// hangs on child exit → lock never released → double-run after the stale
+// window), and timedOut must be the timer's own flag, not a wall-clock race.
+// POSIX process-group signals only — win32 uses taskkill /F (already forced).
+
+test("ignore-SIGTERM harness is SIGKILLed after the grace window (timedOut=true, no hang)", async () => {
+  if (process.platform === "win32") return; // process-group SIGTERM/SIGKILL is POSIX-only
+  const dir = mkdtempSync(join(tmpdir(), "jspace-spawn-"));
+  const script = join(dir, "ignore-term.sh");
+  writeFileSync(script, "#!/bin/sh\ntrap '' TERM\nwhile true; do sleep 1; done\n");
+  chmodSync(script, 0o755);
+  try {
+    const started = Date.now();
+    const res = await spawnProcess(["/bin/sh", script], { cwd: dir, platform: "linux", timeoutMs: 200, killGraceMs: 150 });
+    const elapsed = Date.now() - started;
+    expect(res.timedOut).toBe(true); // the timer did fire
+    expect(res.exit).not.toBe(0); // SIGKILLed, not a clean exit
+    expect(elapsed).toBeLessThan(3000); // did not hang waiting for a TERM-ignoring child
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("normal quick exit before timeout -> timedOut=false, exit 0", async () => {
+  if (process.platform === "win32") return;
+  const dir = mkdtempSync(join(tmpdir(), "jspace-spawn-"));
+  const script = join(dir, "quick.sh");
+  writeFileSync(script, "#!/bin/sh\nexit 0\n");
+  chmodSync(script, 0o755);
+  try {
+    const res = await spawnProcess(["/bin/sh", script], { cwd: dir, platform: "linux", timeoutMs: 5000, killGraceMs: 150 });
+    expect(res.timedOut).toBe(false);
+    expect(res.exit).toBe(0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
