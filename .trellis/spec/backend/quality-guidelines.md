@@ -34,6 +34,8 @@
 - Bootstrap never default-executes remote pipe installs (`curl|bash` / `irm|iex`): download to a temp file, show source/checksum, require explicit user confirmation.
 - Automated tests never mutate real home harness config, real scheduler, real gbrain store, or real filehub — always temp fixtures + injected stubs.
 - gbrain is an external system; JSpace does not bypass its serve lock (conflicts are staged as pending envelopes).
+- **Path-bounded destructive ops**: every unlink is confined to its owning root (filehub/workspace). Ingest validates the source lives in `<filehub>/_inbox` at `begin` AND re-checks a (possibly tampered) journal path at every unlink; `--rollback` ids are UUIDs and journal rel paths pass `portabilityIssues` (issues #8 #4/#15).
+- **Shell/cmd injection**: `.cmd/.bat` spawn targets escape every arg for cmd (`"`→`""`, wrap in quotes so `& | < > ^ % !` stay literal); the crontab writer rejects newline/CR/NUL and its parser is symmetric with the writer (unshq restores `'\''` and `\%`) (issues #8 #3/#12).
 
 ## Testing Requirements
 
