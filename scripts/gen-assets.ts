@@ -3,12 +3,13 @@
 // (DistributionManifestV1 with sha256 + ownership). Embedded by bun build
 // --compile for a self-contained binary. Regenerate after editing templates
 // or skills.
-import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { extname, join, relative, resolve, sep } from "node:path";
 import { ownershipFor, sha256Of } from "../application/workspace/manifest.ts";
 import { decodeSkillsManifest } from "../core/contracts/skills.ts";
 import { renderAgentsBlocks } from "./skill-frontmatter.ts";
 import { VERSION } from "../cli/version.generated.ts";
+import { manifestPaths, staleManifestPaths } from "./asset-integrity.ts";
 
 const repoRoot = resolve(import.meta.dir, "..");
 
@@ -62,6 +63,26 @@ function walk(dir: string, base: string, out: Map<string, string>): void {
 
 const assets = new Map<string, string>();
 for (const s of SOURCES) walk(join(repoRoot, s), join(repoRoot, s), assets);
+
+// Source-integrity guard (issue #6): every path the previous committed
+// manifest declared must still be producible by this walk. A committed manifest
+// whose source is gone holds stale bytes that a fresh clone's gen-assets would
+// silently drop (the .opencode/plugins/jspace.ts loss — gitignored source kept
+// its bundle entry until the next regen removed it). Fail loudly instead. An
+// INTENTIONAL removal (e.g. dropping a skill) hits this too: rerun with
+// GEN_ASSETS_ALLOW_MISSING=1 to regenerate-and-drop the stale entries, then
+// commit the regenerated files.
+const manifestPath = join(repoRoot, "cli", "manifest.generated.ts");
+if (!process.env.GEN_ASSETS_ALLOW_MISSING) {
+  const oldPaths = existsSync(manifestPath) ? manifestPaths(readFileSync(manifestPath, "utf-8")) : [];
+  const stale = staleManifestPaths(oldPaths, assets.keys());
+  if (stale.length > 0) {
+    console.error("gen-assets: stale manifest paths with no source on disk (source deleted without regenerating):");
+    for (const p of stale) console.error(`  ${p}`);
+    console.error("If the removal was intentional, rerun with GEN_ASSETS_ALLOW_MISSING=1, then commit the regenerated files.");
+    process.exit(1);
+  }
+}
 
 const body = [...assets.entries()]
   .map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v)},`)

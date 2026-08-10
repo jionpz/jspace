@@ -44,6 +44,25 @@ jobs:
           bun run scripts/gen-assets.ts
           git diff --exit-code -- cli/assets.generated.ts cli/manifest.generated.ts cli/skills.generated.ts adapters/harness/capabilities.generated.ts
 
+      # P0 (issue #6): every path the committed manifest declares must exist on
+      # disk. Catches a template source that got gitignored/dropped while the
+      # generated bundle still holds its bytes (the .opencode plugin loss) — the
+      # source-integrity guard inside gen-assets already fails on regen; this is
+      # the same invariant asserted directly against the committed manifest.
+      - name: Manifest-declared template paths exist on disk
+        run: bun -e '
+          const fs = require("node:fs");
+          const ts = fs.readFileSync("cli/manifest.generated.ts", "utf-8");
+          const paths = [...ts.matchAll(/path: "([^"]+)"/g)].map((m) => m[1]);
+          const missing = paths.filter((p) => !fs.existsSync(p));
+          if (missing.length > 0) {
+            console.error("missing template file(s) declared in manifest:");
+            for (const p of missing) console.error("  " + p);
+            process.exit(1);
+          }
+          console.log("manifest declares " + paths.length + " path(s), all exist on disk");
+        '
+
       # P1-1: catch a bumped package.json with a stale cli/version.generated.ts.
       # Not a full `gen-version && diff` — dev builds embed `git describe`'s
       # commit delta (`1.0.11-2-g…`), which legitimately differs from the
