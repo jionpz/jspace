@@ -11,6 +11,7 @@ export const piAdapter: HarnessAdapter = {
   name: "pi",
   capability,
   headlessArgv(prompt, _platform, bin) {
-    return [bin, "-p", prompt];
+    // `-p` prefix from the capability-declared headless prefix (single source).
+    return [bin, ...(capability.headless ?? []).slice(1), prompt];
   },
 };

@@ -12,7 +12,8 @@ export const grokAdapter: HarnessAdapter = {
   capability,
   headlessArgv(prompt, _platform, bin) {
     const f = capability.argv_flags;
-    const argv = [bin, "-p", prompt];
+    // `-p` prefix from the capability-declared headless prefix (single source).
+    const argv = [bin, ...(capability.headless ?? []).slice(1), prompt];
     if (f.output !== undefined) argv.push(f.output, f.output_value!);
     if (f.permission !== undefined) argv.push(f.permission, f.tools_value!);
     return argv;

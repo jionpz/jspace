@@ -10,6 +10,7 @@ export const codexAdapter: HarnessAdapter = {
   name: "codex",
   capability,
   headlessArgv(prompt, _platform, bin) {
-    return [bin, "exec", prompt];
+    // `exec` prefix from the capability-declared headless prefix (single source).
+    return [bin, ...(capability.headless ?? []).slice(1), prompt];
   },
 };

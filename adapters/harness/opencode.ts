@@ -10,8 +10,12 @@ const capability = getCapability("opencode");
 export const opencodeAdapter: HarnessAdapter = {
   name: "opencode",
   capability,
+  // Consume the capability-declared headless prefix (["opencode", "run"]) so the
+  // yaml stays the single source of truth; opencode takes the prompt positionally.
   headlessArgv(prompt, _platform, bin) {
-    return [bin, prompt];
+    // headless is non-null for headless-capable harnesses (registry validates);
+    // ?? [] guards the null type (cursor) even though cursor never reaches here.
+    return [bin, ...(capability.headless ?? []).slice(1), prompt];
   },
   hookFilePath(workbench) {
     return join(workbench, ".opencode", "plugins", "jspace.ts");

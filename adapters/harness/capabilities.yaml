@@ -99,6 +99,9 @@ harnesses:
     headless: ["opencode", "run"]
     argv_flags: {}
     sessions:
+      # session.created injects the workbench context as a no-reply user message
+      # (client.session.prompt with noReply: true) — real injection, not a
+      # fire-and-forget spawn; compacting re-injects it at compaction time.
       - { name: session.created, source: plugin }
       - { name: session.idle, source: plugin }
       - { name: experimental.session.compacting, source: plugin }
