@@ -205,7 +205,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "hook_format": "none",
       "native_memory": "none",
       "lifecycle": {
-        "session_start": "best_effort",
+        "session_start": "manual",
         "session_end": "manual",
         "fallback": "manual",
         "crash_recovery": "best_effort"

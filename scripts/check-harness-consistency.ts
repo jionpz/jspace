@@ -15,13 +15,29 @@
 //   5. skills/jspace-use/SKILL.md reference area covers every harness-*.md
 //   6. hand-written harness lists in templates/AGENTS.md + docs/PLATFORMS.md +
 //      harnesses.md contain the full support set (display-name mapping)
+//   7. every adapter hookFilePath points at an existing template (P2.14)
+//   8. every headless-capable harness's headlessArgv prefix == capabilities
+//      headless.slice(1) (P2.14; the P0 unification made this a lockable seam)
+//   9. lifecycle grades match the real wiring matrix (P2.14; hardcoded
+//      expectation table — a grade upgrade without wiring turns red)
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { getAdapter } from "../adapters/harness/index.ts";
+import { harnessArgv } from "../adapters/harness/argv.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const REF_DIR = join(ROOT, "skills/jspace-use/references");
 const caps = Bun.YAML.parse(readFileSync(join(ROOT, "adapters/harness/capabilities.yaml"), "utf-8")) as {
-  harnesses: Record<string, { documented?: boolean; cron_harness_enum_value?: string | null; mcp?: { via?: string } }>;
+  harnesses: Record<
+    string,
+    {
+      documented?: boolean;
+      cron_harness_enum_value?: string | null;
+      headless?: string[] | null;
+      mcp?: { via?: string };
+      lifecycle?: { session_start?: string; session_end?: string; fallback?: string; crash_recovery?: string };
+    }
+  >;
 };
 
 const SUPPORT_DISPLAY_NAMES = ["Claude Code", "Grok Build", "OpenCode", "Pi", "Cursor", "Codex"];
@@ -133,6 +149,51 @@ for (const s of surfaces) {
   const content = readFileSync(join(ROOT, s.path), "utf-8");
   const missing = s.mustInclude.filter((n) => !content.includes(n));
   check(`6.${s.label}`, missing.length === 0, missing.length ? `${s.path} missing support-set names: ${missing.join(", ")}` : `contains all support names`);
+}
+
+// ---- 7. every adapter hookFilePath points at an existing template ----------
+for (const [h] of Object.entries(caps.harnesses)) {
+  const a = getAdapter(h);
+  if (!a.hookFilePath) continue;
+  const p = a.hookFilePath(join(ROOT, "templates/workbench"));
+  if (p === null) {
+    check(`7.${h}-hookfile`, false, `${h} hookFilePath returned null for the template root`);
+    continue;
+  }
+  check(`7.${h}-hookfile`, existsSync(p), `${h} hookFilePath template exists (${p.replace(ROOT + "/", "")})`);
+}
+
+// ---- 8. headlessArgv prefix == capabilities.headless.slice(1) --------------
+for (const [h, cap] of Object.entries(caps.harnesses)) {
+  if (!cap.headless || cap.headless.length === 0) continue; // cursor: no headless CLI
+  const argv = harnessArgv(h, "p", "darwin", "/bin/x");
+  const prefix = ["/bin/x", ...cap.headless.slice(1)];
+  check(
+    `8.${h}-headless-argv`,
+    JSON.stringify(argv.slice(0, prefix.length)) === JSON.stringify(prefix),
+    `headlessArgv prefix == capabilities.headless.slice(1) (${cap.headless.join(" ")})`,
+  );
+}
+
+// ---- 9. lifecycle grades match the real wiring matrix ------------------------
+// Expectation table: a grade must reflect actual wiring. best_effort only where
+// a real mechanism exists (grok SessionEnd hook; session_start mechanisms on the
+// five session harnesses; crash_recovery on the CLI/headless-capable ones).
+// Anything not listed defaults to manual — an unlisted "upgrade to best_effort
+// without wiring" turns red here.
+const LIFECYCLE_EXPECTED: Record<string, Record<string, string>> = {
+  session_start: { claude: "best_effort", grok: "best_effort", opencode: "best_effort", pi: "best_effort", cursor: "best_effort" },
+  session_end: { grok: "best_effort" }, // grok template declares SessionEnd; all others manual
+  fallback: {},
+  crash_recovery: { claude: "best_effort", grok: "best_effort", opencode: "best_effort", pi: "best_effort", codex: "best_effort" },
+};
+for (const dim of ["session_start", "session_end", "fallback", "crash_recovery"]) {
+  const expected = LIFECYCLE_EXPECTED[dim];
+  for (const [h, cap] of Object.entries(caps.harnesses)) {
+    const want = expected[h] ?? "manual";
+    const got = cap.lifecycle?.[dim as keyof typeof cap.lifecycle] ?? "manual";
+    check(`9.${dim}.${h}`, got === want, `${h} ${dim}=${got} (expect ${want})`);
+  }
 }
 
 if (failures.length > 0) {

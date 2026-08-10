@@ -34,3 +34,10 @@ export function sessionEndEnvelope(context: string): string {
     hookSpecificOutput: { hookEventName: "SessionEnd", additionalContext: context },
   });
 }
+
+/** Cursor sessionStart envelope — Cursor expects TOP-LEVEL `additional_context`
+ *  (not Claude/Grok's hookSpecificOutput shape; verified against cursor.com
+ *  hooks docs). Injected into the conversation's initial system context. */
+export function cursorSessionStartEnvelope(context: string): string {
+  return JSON.stringify({ additional_context: context });
+}

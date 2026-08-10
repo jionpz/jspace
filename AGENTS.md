@@ -6,12 +6,15 @@
 
 本仓库只维护以下内容：
 
-- `cli/`：JSpace CLI（TypeScript/bun 源码，`bun run cli/main.ts` 运行；`bun run build` 产出 `bin/jspace` 编译二进制），提供 `init`（生成工作台）和 `doctor`（校验工作台）。
-- `templates/workbench/`：工作台模板，包含 `.jspace/hub.json`、工作台 `AGENTS.md`、初始 domains。
-- `skills/jspace-use/`：使用指南技能（源码；`jspace init` 物化进工作台 `.jspace/skills/jspace-use/`，覆盖首次启用 + 日常使用/路由/记忆/资产/维护诊断）。
-- `skills/asset-ingest/`：资料转知识资产技能（源码；物化进工作台 `.jspace/skills/asset-ingest/`，归位 + gbrain reference + 中文语义召回）。
+- `cli/`：JSpace CLI（TypeScript/bun 源码，`bun run cli/main.ts` 运行；`bun run build` 产出 `bin/jspace` 编译二进制）。命令面：`init` / `doctor` / `domain` / `resource` / `project` / `registry` / `filehub` / `cron` / `ingest` / `pending` / `workspace diff|upgrade` / `context session-start|turn|pre-compact|session-end` / `harness wire` / `gbrain wire` / `skills install`。核心实现分层：`core/`（契约）→ `application/`（领域用例）→ `adapters/`（harness/scheduler/process/fs 适配）→ `scripts/`（生成与校验）。
+- `templates/workbench/`：工作台模板，包含 `.jspace/hub.json`、工作台 `AGENTS.md`、各 harness 接线 seed（`.claude/settings.json` / `.grok/hooks/jspace.json` / `.opencode/plugins/jspace.ts` / `.cursor/hooks.json`）。
+- `skills/`：官方技能源码，经 `scripts/gen-assets.ts` 嵌入二进制。当前 4 个——`jspace-use`（使用指南）、`asset-ingest`（资料转知识资产）、`memory-recall`（精准召回）、`memory-writeback`（收工写回）。均物化进工作台 `.jspace/skills/<name>/`，并同字节投影到 `.claude/skills/` `.grok/skills/` `.opencode/skills/` `.agents/skills/`（多 harness 共享，见 `adapters/harness/capabilities.yaml`）。
 
-本仓库根目录**不维护** `hub.json` / `workspace/` 日常注册表；这些只存在于 `templates/workbench/`，由 `jspace init` 实例化。模板中用占位符 `__DEV_ROOT__` 记录本仓库绝对路径，初始化时由 CLI 替换。
+本仓库根目录**不维护** `hub.json` / `workspace/` 日常注册表；这些只存在于 `templates/workbench/`，由 `jspace init` 实例化。模板已去个人化（无 `__DEV_ROOT__` 类占位符）：工作台模板 + skills 由 `scripts/gen-assets.ts` 嵌入编译二进制（`cli/assets.generated.ts` / `manifest.generated.ts` / `skills.generated.ts`），init/upgrade 物化到用户目录。
+
+## Harness 接线（单一事实源）
+
+支持集与接线在 `adapters/harness/capabilities.yaml`（Claude Code / Grok Build / OpenCode / Pi / Cursor + codex cron 兼容）——headless argv、session 事件、生命周期分级、skill 投影均由它驱动；`scripts/gen-assets.ts` 渲染成 `capabilities.generated.ts` 嵌入二进制。防漂移：`scripts/check-harness-consistency.ts`（capabilities ↔ 代码/文档/模板）、`scripts/check-manifest-integrity.ts`（manifest 源文件存在 + 被跟踪 + 不被忽略）。**改 harness 接线只改 capabilities.yaml + 对应 seed 模板，不散改 adapter。**
 
 ## Product Vision
 
@@ -62,8 +65,10 @@ Ask before:
 
 ## Quality Checks
 
-- TS CLI 可执行（`bun run cli/main.ts --version`），`bunx tsc --noEmit` 通过。
-- 模板渲染后 `jspace doctor` 通过（缺少的外部资源路径按 warning 处理）。
+- TS 可执行（`bun run cli/main.ts --version`），`bunx tsc --noEmit` 通过，`bun test` 全过。
+- 改动 `templates/workbench/` / `skills/` / `adapters/harness/capabilities.yaml` 后必须重跑 `bun run scripts/gen-assets.ts` 并提交生成的 `cli/*.generated.ts` / `adapters/harness/capabilities.generated.ts`（嵌入二进制资产；残留 diff = 失败）。
+- `bun run scripts/check-skills.ts`（skill 引用/render/freshness）、`scripts/check-harness-consistency.ts`（harness 接线漂移）、`scripts/check-manifest-integrity.ts`（manifest 源文件存在 + 被跟踪 + 不被忽略）全过。
+- `GEN_ASSETS_ALLOW_MISSING` 只接受 `"1"`/`"true"`：仅当**故意删除**源文件（如弃用某 skill）时用于 regenerate-and-drop，CI 不设置。
 - 本仓库根目录没有残留 `hub.json` / `workspace/` 日常注册表。
 - 命名检查：项目、CLI、技能、模板、文档、domain 统一使用 `jspace`。
 

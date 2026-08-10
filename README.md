@@ -12,8 +12,9 @@
 ## 目录约定
 
 - `.trellis/` —— 本开发仓库使用的 **Trellis 开发工作流框架**（vendored，Claude Code 等 harness 的任务规划/执行/检查机制），**不是 jspace 运行时组件**，不影响 CLI 产物或 JWorkspace。
-- `templates/workbench/` —— 工作台模板源（CLI 生成 JWorkspace 的种子资产）。
-- `skills/` —— 官方技能源码，经 `scripts/gen-assets.ts` 嵌入二进制。
+- `templates/workbench/` —— 工作台模板源（CLI 生成 JWorkspace 的种子资产，含各 harness 接线 seed `.claude/` `.grok/` `.opencode/` `.cursor/`）。
+- `skills/` —— 官方技能源码（4 个：jspace-use / asset-ingest / memory-recall / memory-writeback），经 `scripts/gen-assets.ts` 嵌入二进制。
+- `core/` `application/` `adapters/` `scripts/` —— CLI 分层源码：契约 / 领域用例 / harness·scheduler·process·fs 适配 / 生成与校验脚本（gen-assets / check-skills / check-harness-consistency / check-manifest-integrity）。`adapters/harness/capabilities.yaml` 是 harness 支持集的单一事实源。
 
 ## 快速开始
 
@@ -76,15 +77,22 @@ bun run cli/main.ts doctor --dir ~/jworkspace
 - `jspace ingest` — 资料入库 journal:`ingest begin`(暂存副本+journal)→ `advance --gbrain` → `advance --index` → `advance --complete`(移除 source);任一步失败 `ingest fail <id> --reason <原因>`(补偿,source 留 inbox 无孤儿);中断 `ingest list` 续跑。commit 的 source 移除未证明完成时 journal 保持 `failed/failedStep=committed`(`list` 标注 `failed/cleanup-pending`)——用同一 `advance <id> --complete` 幂等收尾,不虚报 source 已删。
 - `jspace pending` — gbrain 写暂存:`pending stage`(锁冲突)、`pending apply`(锁空闲落 live,幂等)、`pending ack`(terminal_failed 确认)。锁冲突写不失败。
 - `jspace workspace diff / upgrade` — 工作台升级计划与执行(managed 内容刷新、本地修改保冲突)。
+- `jspace context` — harness hook 上下文注入:`context session-start|turn|pre-compact|session-end`(默认 hook JSON envelope;`--plain` 纯文本;session-start 另支持 `--envelope cursor`)。被 `.claude/settings.json` / `.grok/hooks/` / `.cursor/hooks.json` 等消费。
+- `jspace domain / resource / project / filehub` — 域与资源注册表操作;`jspace skills install` 物化用户级官方技能;`jspace gbrain wire` 注入 gbrain MCP env;`jspace harness wire --harness <x>` 写各 harness 配置。
 
 ## 目录结构
 
 - `GOAL.md` - 最终目标（North Star），所有迭代的对齐物
-- `cli/` - CLI 源码（TypeScript/bun；`bin/jspace` 为 `bun run build` 编译产物）
-- `templates/workbench/` - 工作台模板
-- `skills/jspace-use/` - 使用指南技能（源码；`jspace init` 物化进工作台 `.jspace/skills/`，覆盖首次启用 + 日常使用/维护）
+- `cli/` - CLI 源码与命令（TypeScript/bun；`bin/jspace` 为 `bun run build` 编译产物）
+- `core/` - 契约层（cron/skills/manifest 等 schema + decode）
+- `application/` - 领域用例（automation/context/ingest/pending/workspace/registry…）
+- `adapters/` - harness（capabilities.yaml 单一事实源）/ scheduler / process / fs 适配
+- `scripts/` - 生成与校验（gen-assets / gen-version / check-skills / check-harness-consistency / check-manifest-integrity）
+- `templates/` - 工作台模板源（`workbench/` + `filehub/`）
+- `skills/` - 官方技能源码（物化进工作台 `.jspace/skills/`）
+- `types/` - ambient 类型（如 `@opencode-ai/plugin` 的轻量 shim）
 - `AGENTS.md` - 开发模式操作规则
 
 ## 开发模式
 
-本仓库默认就是开发模式。非平凡改动先走 Trellis；改完 CLI 后用临时目录做一次 `init` + `doctor` 验证。模板用 `__DEV_ROOT__` 占位符记录本仓库路径，`jspace init` 时会替换为实际绝对路径。
+本仓库默认就是开发模式。非平凡改动先走 Trellis；改完 CLI 后用临时目录做一次 `init` + `doctor` 验证。改模板/skills/capabilities 后必须重跑 `bun run scripts/gen-assets.ts`（嵌入二进制资产并提交 generated 文件）。PR/push 质量门禁见 `.github/workflows/verify.yml`：tsc、bun test、资产完整性（`check-manifest-integrity`）、skill 自检、harness 一致性、全链集成。

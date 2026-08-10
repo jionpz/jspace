@@ -36,17 +36,23 @@ Thumbs.db
 .claude/
 .agents/
 .opencode/
+.grok/
 .cursor/
 
 # But the workbench template ships real assets under harness config dirs —
 # these are seed templates (hooks / plugins) and must be committed, not ignored
 # like the regenerable machine-level config above. A dropped exception here
 # silently loses the template file from git while the generated bundle keeps its
-# bytes (issue #6: the .opencode plugin was lost this way).
+# bytes (issue #6: the .opencode plugin was lost this way). Add a
+# `!templates/workbench/.<harness>/` + `/**` pair when a new harness seed ships.
 !templates/workbench/.claude/
-!templates/workbench/.claude/settings.json
+!templates/workbench/.claude/**
 !templates/workbench/.opencode/
-!templates/workbench/.opencode/plugins/jspace.ts
+!templates/workbench/.opencode/**
+!templates/workbench/.grok/
+!templates/workbench/.grok/**
+!templates/workbench/.cursor/
+!templates/workbench/.cursor/**
 
 # Trellis — only spec/ is versioned. tasks/ (incl. archives) and workspace/
 # (session journals) stay local-only: they contain real personal paths and the

@@ -53,7 +53,9 @@ function walk(dir: string, base: string, out: Map<string, string>): void {
       walk(p, base, out);
     } else {
       if (SKIP_EXT.has(extname(name))) continue;
-      if (name.endsWith(".test.ts")) continue; // test files never embed (e.g. template plugin tests)
+      // test files never embed: TS unit tests + self-contained python tests
+      // (verify.yml runs the python tests from the repo path, not the bundle)
+      if (/\.test\.(ts|py)$/.test(name)) continue;
       const rel = relative(base, p).split(sep).join("/");
       const baseRel = relative(repoRoot, base).split(sep).join("/");
       out.set(`${baseRel}/${rel}`, readFileSync(p, "utf-8"));
@@ -73,7 +75,13 @@ for (const s of SOURCES) walk(join(repoRoot, s), join(repoRoot, s), assets);
 // GEN_ASSETS_ALLOW_MISSING=1 to regenerate-and-drop the stale entries, then
 // commit the regenerated files.
 const manifestPath = join(repoRoot, "cli", "manifest.generated.ts");
-if (!process.env.GEN_ASSETS_ALLOW_MISSING) {
+/** Only "1"/"true" enable the missing-source bypass; "0"/"false"/unset stay
+ *  strict (issue #7 P2.13 — JS truthiness would otherwise let "false" through). */
+function missingAllowed(): boolean {
+  const v = process.env.GEN_ASSETS_ALLOW_MISSING;
+  return v === "1" || v === "true";
+}
+if (!missingAllowed()) {
   const oldPaths = existsSync(manifestPath) ? manifestPaths(readFileSync(manifestPath, "utf-8")) : [];
   const stale = staleManifestPaths(oldPaths, assets.keys());
   if (stale.length > 0) {

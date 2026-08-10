@@ -8,7 +8,7 @@
 | 维度 | 值 | 说明 |
 |---|---|---|
 | cron 无头 | ❌ **无 headless CLI**（IDE） | `cursorAdapter.headlessArgv` → `fail("cursor has no headless CLI")`；`cron.harness` 不接受 cursor |
-| 会话 hook | ✅ `sessionStart`（`~/.cursor/hooks.json`，`additional_context` 注入） | best_effort |
+| 会话 hook | ✅ `sessionStart`（项目级 `.cursor/hooks.json` seed，`additional_context` 注入会话初始上下文） | best_effort |
 | MCP | ✅ 原生（`~/.cursor/mcp.json` 用户级 / `.cursor/mcp.json` 项目级，project overrides user） | |
 | 会话注入 | Rules `.mdc`（项目级）+ Cursor 原生读 AGENTS.md/CLAUDE.md | 用户级无规则文件（Cursor UI 存 User Rules） |
 | skills 投影 | `.agents/skills/`（共享） | 工作台级 |
@@ -27,7 +27,7 @@
 ```
 
   用户级 `~/.cursor/mcp.json` 或项目级 `.cursor/mcp.json`（project overrides user）。若 `~/.cursor` 不存在，创建 `~/.cursor/mcp.json`；Cursor 重启后可能在 MCP 设置里要求审批 server。
-- **session-start 注入**：至少保证 MCP wiring；如需会话级 context 注入，用 `.cursor/rules/*.mdc`（项目级）或 Rules 文件。`~/.cursor/hooks.json` 的 `sessionStart` 事件可输出 `{"additional_context":"<text>"}` 注入会话初始上下文。
+- **session-start 注入**：至少保证 MCP wiring；如需会话级 context 注入，用 `.cursor/rules/*.mdc`（项目级）或 Rules 文件。项目级 `.cursor/hooks.json`（seed，check into VCS）的 `sessionStart` 事件输出顶层 `{"additional_context":"<text>"}` 注入会话初始上下文——命令为 `jspace context session-start --envelope cursor 2>/dev/null || true`（Cursor 从项目级 + 用户级 `~/.cursor/hooks.json` 多层级加载；用户级可覆盖/追加，但工作台 seed 落项目级）。
 - **无 headless**：cron 不能用 cursor 跑（`cron run --harness cursor` → `fail`）。
 
 ## 能力边界（诚实声明）

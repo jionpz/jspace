@@ -20,6 +20,7 @@ import {
   turnEnvelope,
   preCompactEnvelope,
   sessionEndEnvelope,
+  cursorSessionStartEnvelope,
 } from "../../application/context/envelope.ts";
 import { readHookPrompt } from "../../application/context/hook-input.ts";
 
@@ -36,14 +37,23 @@ const sessionStartSpec: CommandSpec = {
   name: "session-start",
   summary: "emit the session-start workbench context (hook JSON, or --plain text)",
   features: { dir: true },
-  options: [{ name: "--plain", takesValue: false, help: "output plain text instead of the hook JSON envelope" }],
+  options: [
+    { name: "--plain", takesValue: false, help: "output plain text instead of the hook JSON envelope" },
+    {
+      name: "--envelope",
+      takesValue: true,
+      metavar: "claude|cursor",
+      help: "hook envelope shape (default claude; cursor = top-level additional_context)",
+    },
+  ],
   handler: (ctx: CmdContext, args: Record<string, unknown>) => {
     try {
       const g = gate("session-start", undefined, ctx.root);
       if (!g.emit) return { lines: [] }; // not a workbench / hooks off: silent exit 0
       const state = collectWorkbenchState(g.root);
       const text = renderSessionStart(state, g.root);
-      return { lines: [plain(args) ? text : sessionStartEnvelope(text)] };
+      if (plain(args)) return { lines: [text] };
+      return { lines: [args.envelope === "cursor" ? cursorSessionStartEnvelope(text) : sessionStartEnvelope(text)] };
     } catch (e) {
       return failLines(e);
     }
