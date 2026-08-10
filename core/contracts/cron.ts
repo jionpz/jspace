@@ -3,7 +3,7 @@
 // cron.json owns portable cron definitions; CronRunInvocation is the single
 // contract shared by the CLI codec and every scheduler backend (backend argv is
 // serialized from it and must parse back through the real parser — closes audit
-// F1). Decoder mirrors the diagnostics pattern from hub/local.
+// (batch-run identity). Decoder mirrors the diagnostics pattern from hub/local.
 //
 // schema_version stays 1: the optional `target` field is additive, so existing
 // v1 files (with `prompt`) decode unchanged. A pre-Child-D binary reading a

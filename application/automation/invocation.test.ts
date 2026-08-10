@@ -1,5 +1,5 @@
 // application/automation/invocation.test.ts — CronRunInvocation argv round-trip.
-// Closes audit F1: the argv scheduler backends serialize (via invocationArgv)
+// Closes the batch-identity audit: the argv scheduler backends serialize (via invocationArgv)
 // must parse back through the real parser. Run: bun test application/automation/invocation.test.ts
 import { expect, test } from "bun:test";
 import { parse, type CommandSpec } from "../commands/command.ts";

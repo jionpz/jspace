@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jspace context session-start 2>/dev/null || true",
+            "command": "jspace context session-start",
             "timeout": 10
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jspace context session-start 2>/dev/null || true",
+            "command": "jspace context session-start",
             "timeout": 10
           }
         ]
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jspace context session-start 2>/dev/null || true",
+            "command": "jspace context session-start",
             "timeout": 10
           }
         ]
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jspace context turn 2>/dev/null || true",
+            "command": "jspace context turn",
             "timeout": 5
           }
         ]

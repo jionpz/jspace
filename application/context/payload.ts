@@ -71,7 +71,7 @@ export function renderTurn(state: WorkbenchState): string {
   return "";
 }
 
-/** Pre-compact passive reminder (D2/方案 a): the session is about to compact;
+/** Pre-compact passive reminder (only nudge, never auto-write): the session is about to compact;
  *  surface the state that could be lost + remind that write-back stays explicit
  *  (never auto). This is an injection, NOT a gbrain write — the discipline is
  *  "你说收工才写". */

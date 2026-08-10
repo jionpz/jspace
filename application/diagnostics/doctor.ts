@@ -525,7 +525,7 @@ function checkCrons(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
  *  capability (grok/opencode/pi/cursor) would warn "not installed" for harnesses
  *  the user never selected — noise, not signal. The check surfaces (a) an
  *  unknown harness key (capabilities drift), (b) a missing binary for a headless
- *  harness the workbench actually schedules, and (c) the Pi adapter hint (D4):
+ *  harness the workbench actually schedules, and (c) the Pi adapter hint (honest boundary):
  *  pi has no native MCP — when the pi CLI is present we nudge the optional
  *  pi-mcp-adapter extension with an inline supply-chain warning (never auto-
  *  install; npm packages execute on install). */
@@ -550,7 +550,7 @@ function checkHarness(root: string, cron: CronHealthDeps): RegistryDiagnostic[] 
     if (cap.headless !== null && !binOnPath(name)) {
       diags.push({ severity: "warning", code: "harness.bin_missing", path: `harness.${name}`, message: `cron harness ${name} binary not found on PATH; scheduled runs will fail (install the harness CLI)` });
     }
-    // Pi adapter hint (D4): honest boundary + install path. Info-level (not a
+    // Pi adapter hint (honest boundary): install path only, never auto-install. Info-level (not a
     // health problem — CLI access to gbrain works without the extension), and
     // the supply-chain warning rides along so a copy-pasted install is checked.
     if (name === "pi" && binOnPath(name)) {

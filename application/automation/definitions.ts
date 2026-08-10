@@ -1,6 +1,6 @@
 // application/automation/definitions.ts — cron definition repository + schedule
 // validation (moved from cli/cron.ts). Typed via core/contracts/cron.ts. Also
-// hosts skill-target compilation/validation for cron definitions (Child D).
+// hosts skill-target compilation/validation for cron definitions.
 import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fail } from "../../core/shared/errors.ts";
@@ -47,7 +47,7 @@ export function saveCrons(root: string, data: CronsFile): void {
   writeBytesAtomic(join(root, CRON_FILE), JSON.stringify(data, null, 2) + "\n");
 }
 
-// ---- skill-target cron compilation / validation (Child D, RD5) ----
+// ---- skill-target cron compilation / validation ----
 
 /** Everything validate/compile needs about the workbench; injected by the cli
  *  layer so application never imports the generated cli/*.generated.ts and
@@ -73,7 +73,7 @@ export type SkillTargetResult = { ok: true; prompt: string } | { ok: false; fix:
  *  skill is unknown, its SKILL.md is missing, the entrypoint is not declared,
  *  or the materialized skill is stale vs the running bundle (diffBundle action
  *  is anything but no-op — update/conflict/create/stale, all fixable by
- *  `workspace upgrade` because skills are managed since Child D). */
+ *  `workspace upgrade` because skills are managed). */
 export function compileSkillTarget(target: CronSkillTarget, wbRoot: string, ctx: SkillTargetContext): SkillTargetResult {
   const entry = ctx.skillsManifest.workbench.find((s) => s.name === target.skill);
   if (!entry) {

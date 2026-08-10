@@ -1,5 +1,5 @@
 // core/contracts/cron.test.ts — pure decode tests for CronDefinition,
-// including the optional skill target (Child D). Existing v1 files with
+// including the optional skill target (the skill-target cron feature). Existing v1 files with
 // `prompt` stay valid; target crons use exactly-one-of(prompt, target).
 // Run: bun test core/contracts/cron.test.ts
 import { expect, test } from "bun:test";

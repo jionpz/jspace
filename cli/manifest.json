@@ -1,0 +1,201 @@
+{
+  "schema_version": 1,
+  "bundle_version": "1.0.11-20-gd47a830",
+  "files": [
+    {
+      "path": "templates/workbench/.claude/settings.json",
+      "sha256": "4e50230a79475feaf16089518129a9e276647cc2197f6e6ad23f5ad7f5a25a99",
+      "ownership": "seed"
+    },
+    {
+      "path": "templates/workbench/.cursor/hooks.json",
+      "sha256": "d3314899e4a15cfc891967b63852df1e999ce5998d9a8bd3a3cae41d5a651487",
+      "ownership": "seed"
+    },
+    {
+      "path": "templates/workbench/.gitignore",
+      "sha256": "0f2e16c43f69d5da1cbffb1ff533c71f45eebe132b475471f0c014f6d204fd55",
+      "ownership": "seed"
+    },
+    {
+      "path": "templates/workbench/.grok/hooks/jspace.json",
+      "sha256": "1ba9f20f143e87384eeadcc61a631f6cf9b1dc998dd59a9a87035c0b54c6d467",
+      "ownership": "seed"
+    },
+    {
+      "path": "templates/workbench/.jspace/cron.json",
+      "sha256": "f63e5ad4e9b965603886956e8997bf59b837ea5d9947d96d3335aa1e79d2b902",
+      "ownership": "user"
+    },
+    {
+      "path": "templates/workbench/.jspace/hub.json",
+      "sha256": "56125ed5177d55eae719e876a90cf0299c386c7f571c945c1e6291e808106001",
+      "ownership": "user"
+    },
+    {
+      "path": "templates/workbench/.opencode/plugins/jspace.ts",
+      "sha256": "23d79a228580c3be51a287e485de5248fa3afe938c94da921a23f0e85a7bcbef",
+      "ownership": "seed"
+    },
+    {
+      "path": "templates/workbench/AGENTS.md",
+      "sha256": "9932cce47bcf2335d90547073d7a71c317abf5ec36a72fae410ff3a4588bc8fb",
+      "ownership": "seed"
+    },
+    {
+      "path": "templates/workbench/CLAUDE.md",
+      "sha256": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+      "ownership": "seed"
+    },
+    {
+      "path": "templates/workbench/README.md",
+      "sha256": "a0c93316c3dbbc73396cf55dab33e419c5ece433e101453f8bfdc222a8b30b1a",
+      "ownership": "seed"
+    },
+    {
+      "path": "templates/filehub/README.md",
+      "sha256": "2c9b5508d27afa8889f1240ed580d60210ccdd763604021a6c8ca0521a3df2e9",
+      "ownership": "managed"
+    },
+    {
+      "path": "skills/jspace-use/SKILL.md",
+      "sha256": "4300a71881ec3a76116468b17ecf1b343bb688aede51ed8ea0db9d94e9422e8c",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/jspace-use/agents/openai.yaml",
+      "sha256": "bcfce9990e7f8e1507e729c6c6afe2d93a61f20c34e2d78bb8caad6e3aa0a05c",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/jspace-use/references/example-first-use.md",
+      "sha256": "b48592dc1008b4a711019fe7f00b7bbe4472634488fab340c1e534fe4139789e",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/jspace-use/references/gbrain.md",
+      "sha256": "3824604cc6ecc715db3d09732f9974c5656ae1a7a4eb77eb58e67bcb8898db22",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/jspace-use/references/harness-claude.md",
+      "sha256": "f105143e84dca9519785375dae580be0ed0b6bde5fbd71bb888f6ce2683be4a0",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/jspace-use/references/harness-cursor.md",
+      "sha256": "d235f65069449e10229fb130e6d40c9dcb2559112ecec6ad5ea322b477870792",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/jspace-use/references/harness-grok.md",
+      "sha256": "c6ee0624be3cccf2a26b4e8e433b87abb23b04d08217fff92c674c71bfa2b798",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/jspace-use/references/harness-opencode.md",
+      "sha256": "69ac27d62e57a0216bb35958518901b4d9768e947952a1fb091b1fd9baf4daa0",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/jspace-use/references/harness-pi.md",
+      "sha256": "43ef5c6ae72bfda048839f1ac21b4e60af99457bff06eb20236e68b489627c28",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/jspace-use/references/harnesses.md",
+      "sha256": "90c85925d61f1177931c497416c99ac257cbce9eba9cb667a8534253574f5404",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/jspace-use/references/headless-ops.md",
+      "sha256": "a1aef844240e2ac0b07db93321e87026b0a9b59dd4db2e2ea8216ca1eedaaf58",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/jspace-use/references/registry.md",
+      "sha256": "f538046741fe90570821243ea151bfde7d90f9fc2fb44554374ac542b6eb4ffa",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/asset-ingest/SKILL.md",
+      "sha256": "4b3216561dded391f58b5c595893da6aa3475435d4dd296122487acd496b6b3f",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/asset-ingest/references/batch.md",
+      "sha256": "8e98250cf8f14779fbb4627a22f61051fae487c19d1eccb561f0f909dd0d8744",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/asset-ingest/references/deep-extract.md",
+      "sha256": "72f6712eba14589676957dd3390278b351b1f42e74fffc4572cbff90ca37a24b",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/asset-ingest/references/example-ingest.md",
+      "sha256": "9deb8ecdd05c412c72ee5a7521a00963fefe8c12b99043ac2474ef9ce6f09225",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/asset-ingest/references/filing.md",
+      "sha256": "a20677c6600a899041fac285762fcbc9b32962bbf56699624b51e0024b63d623",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/asset-ingest/references/gbrain-write.md",
+      "sha256": "9cd06d1e4ca49463e9da5126e5be8fce1af7e99b8cc07eb38d88ade9bd79ad81",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/asset-ingest/references/migration.md",
+      "sha256": "e308540e3f7cc5773e21e62f85a7f3b7a75b8efa84cf82c7458d4021316409ec",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/asset-ingest/scripts/extract.py",
+      "sha256": "058ddee53fd9b0227e03aaa1443cca31e443aa652e51b53f3ffe3b4328dfa9e0",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/asset-ingest/scripts/office-extract.py",
+      "sha256": "d70f82ff2dd6649700d1368e3939efa43a2324bdb026105331a90f736ac17db5",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/memory-recall/SKILL.md",
+      "sha256": "42e8f6a584ecf047211738d7775e808d70e84e91ef2bb2133b28ac422d665f60",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/memory-recall/references/discipline.md",
+      "sha256": "cbaba0508eb48aa922c1d92c195019acc83b242d291ca9e012297bba65222b75",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/memory-recall/references/example-recall.md",
+      "sha256": "bde1887dfea508282873cc83263f099038708eca740ffc1539f461caf62f861e",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/memory-recall/references/memory-acceptance.md",
+      "sha256": "bed211d892e95a1d40244db9a0acd99264ef96d2244917a6792e95988b7a174f",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/memory-writeback/SKILL.md",
+      "sha256": "146d3986d316441e45f42405aceffbfb0f2fa412576825078be764e22029904b",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/memory-writeback/references/example-writeback.md",
+      "sha256": "b1c2f14db0c89e677ce5770099bf1ad512a2b6c3dbe25113ac66d32a927e1181",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/memory-writeback/references/writeback.md",
+      "sha256": "c400085d86a0ab9d252b0a97e533ec3fe93f4aa89cae0d7e80b6fa4e452babad",
+      "ownership": "seed"
+    }
+  ]
+}

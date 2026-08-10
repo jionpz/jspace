@@ -22,7 +22,7 @@ export type SkillScope = (typeof SKILL_SCOPES)[number];
 
 export interface SkillEntry {
   name: string; // ID_PATTERN; unique across workbench+global
-  version: string; // declarative version (R6); staleness is detected by content diff at runtime
+  version: string; // declarative version; staleness is detected by content diff at runtime
   scope: SkillScope; // workbench = bundled + materialized; global = machine-level, not bundled
   dependencies: string[]; // cross-skill references (e.g. memory-recall -> asset-ingest)
   entrypoints?: string[]; // semantic entries a cron skill target may invoke (e.g. asset-ingest: batch)

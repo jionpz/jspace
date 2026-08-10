@@ -1,7 +1,7 @@
-// cli/lifecycle-and-safety.test.ts — harness lifecycle matrix honesty (AC-D3/D7)
-// and first-use pipe-install / gbrain safety checks (AC-D5). These guard the
+// cli/lifecycle-and-safety.test.ts — harness lifecycle matrix honesty
+// and first-use pipe-install / gbrain safety checks. These guard the
 // materialized skill docs that describe harness capabilities and remote
-// installs; they live apart from reachability (Child D M7/M8).
+// installs; they live apart from reachability.
 // Run: bun test cli/lifecycle-and-safety.test.ts
 import { expect, test } from "bun:test";
 import { ASSETS } from "./assets.generated.ts";
@@ -15,7 +15,7 @@ function workbenchMds(): Array<[string, string]> {
   });
 }
 
-test("lifecycle matrix is the authoritative single source (AC-D3/D7)", () => {
+test("lifecycle matrix is the authoritative single source", () => {
   const matrix = ASSETS["skills/jspace-use/references/harnesses.md"];
   expect(matrix, "lifecycle matrix must be bundled").toBeDefined();
   // canonical grade definitions live in harnesses.md (capabilities render source)
@@ -27,7 +27,7 @@ test("lifecycle matrix is the authoritative single source (AC-D3/D7)", () => {
   expect(matrix).toContain("harness-<name>.md");
 });
 
-test("no unqualified harness 'automatically' claims in the materialized tree (AC-D3)", () => {
+test("no unqualified harness 'automatically' claims in the materialized tree", () => {
   for (const [key, body] of workbenchMds()) {
     for (const line of body.split("\n")) {
       if (!/\bautomatically\b/i.test(line)) continue;
@@ -37,7 +37,7 @@ test("no unqualified harness 'automatically' claims in the materialized tree (AC
   }
 });
 
-test("first-use pipe installs are guarded, never default-executed (AC-D5)", () => {
+test("first-use pipe installs are guarded, never default-executed", () => {
   const skill = ASSETS["skills/jspace-use/SKILL.md"];
   const lines = skill.split("\n");
   let checked = 0;
@@ -51,7 +51,7 @@ test("first-use pipe installs are guarded, never default-executed (AC-D5)", () =
   expect(checked, "expected at least one pipe install line to guard").toBeGreaterThan(0);
 });
 
-test("gbrain version range + upgrade health check are declared (AC-D5)", () => {
+test("gbrain version range + upgrade health check are declared", () => {
   const gbrain = ASSETS["skills/jspace-use/references/gbrain.md"];
   expect(gbrain, "gbrain reference must be bundled").toBeDefined();
   expect(gbrain).toContain("版本兼容");

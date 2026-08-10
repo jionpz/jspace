@@ -1,7 +1,7 @@
 // application/ingest/project.ts — resolve a stable project id for asset-ingest.
 // Uses a registered hub project id when the caller names one; otherwise derives
 // a stable id and signals it was not registered (caller should prompt to
-// register). This keeps filehub path, index and gbrain slug on one id (R2).
+// register). This keeps filehub path, index and gbrain slug on one id.
 import type { HubV4 } from "../../core/contracts/hub.ts";
 import { sha256Of } from "../workspace/manifest.ts";
 

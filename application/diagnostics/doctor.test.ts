@@ -470,7 +470,7 @@ test("cron harness outside capabilities -> harness.unknown warning", () => {
   expect(codes(r)).toContain("harness.unknown");
 });
 
-// ---- Pi branch (D4: honest boundary + optional extension hint) ----
+// ---- Pi branch (honest boundary + optional extension hint) ----
 
 function setCronsHarness(harness: string): void {
   writeFileSync(

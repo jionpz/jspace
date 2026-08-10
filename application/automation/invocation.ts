@@ -1,7 +1,7 @@
 // application/automation/invocation.ts — CronRunInvocation <-> argv codec.
 // The single source for how scheduler backends serialize a run request; the CLI
 // codec parses that argv back through the real parser (contract test pins the
-// round-trip — closes audit F1).
+// round-trip — closes the batch-identity audit).
 import type { CronRunInvocation } from "../../core/contracts/cron.ts";
 
 /** Serialize an invocation to the `cron run` argv a scheduler should install.

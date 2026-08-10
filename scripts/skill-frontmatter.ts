@@ -82,7 +82,7 @@ function replaceBlock(content: string, begin: string, end: string, body: string)
 }
 
 /**
- * Single-source-of-truth guard for skill names (D3). Each workbench skill's
+ * Single-source-of-truth guard for skill names. Each workbench skill's
  * SKILL.md frontmatter `name` must equal its skills-manifest.json entry name;
  * drift between the two (packing key vs rendered name) is a generation-time
  * error, never a silent bundle split. gen-assets calls this through

@@ -1,4 +1,4 @@
-// adapters/harness/argv.test.ts — headless harness argv shapes (Child D M7).
+// adapters/harness/argv.test.ts — headless harness argv shapes.
 // These pin the "automated" claim for claude in the lifecycle/argv matrices:
 // shapes + permission whitelist must not drift silently.
 // Run: bun test adapters/harness/argv.test.ts

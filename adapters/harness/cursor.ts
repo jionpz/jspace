@@ -1,4 +1,4 @@
-// adapters/harness/cursor.ts — Cursor harness adapter (D6: retained as a session
+// adapters/harness/cursor.ts — Cursor harness adapter (retained as a session
 // harness). Cursor is IDE-only: no headless CLI, so it can never be a cron
 // harness. Its session-start hook (sessionStart, additional_context injection)
 // is a session channel only; nothing else is wired here.

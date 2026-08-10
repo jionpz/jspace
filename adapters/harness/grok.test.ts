@@ -13,7 +13,7 @@ test("grok capability declares the four wired session events", () => {
   // every wired event is a hook-channel event (no plugin/extension)
   expect(cap.sessions.every((s) => s.source === "hook")).toBe(true);
   expect(cap.hook_format).toBe("grok_hooks_json");
-  expect(cap.native_memory).toBe("full"); // T1: native memory exists but gbrain stays authoritative (D1/B)
+  expect(cap.native_memory).toBe("full"); // native memory exists but gbrain stays authoritative (bridge keeps gbrain authoritative)
 });
 
 test("grok headless argv shape", () => {

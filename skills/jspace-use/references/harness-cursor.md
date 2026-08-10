@@ -27,7 +27,7 @@
 ```
 
   用户级 `~/.cursor/mcp.json` 或项目级 `.cursor/mcp.json`（project overrides user）。若 `~/.cursor` 不存在，创建 `~/.cursor/mcp.json`；Cursor 重启后可能在 MCP 设置里要求审批 server。
-- **session-start 注入**：至少保证 MCP wiring；如需会话级 context 注入，用 `.cursor/rules/*.mdc`（项目级）或 Rules 文件。项目级 `.cursor/hooks.json`（seed，check into VCS）的 `sessionStart` 事件输出顶层 `{"additional_context":"<text>"}` 注入会话初始上下文——命令为 `jspace context session-start --envelope cursor 2>/dev/null || true`（Cursor 从项目级 + 用户级 `~/.cursor/hooks.json` 多层级加载；用户级可覆盖/追加，但工作台 seed 落项目级）。
+- **session-start 注入**：至少保证 MCP wiring；如需会话级 context 注入，用 `.cursor/rules/*.mdc`（项目级）或 Rules 文件。项目级 `.cursor/hooks.json`（seed，check into VCS）的 `sessionStart` 事件输出顶层 `{"additional_context":"<text>"}` 注入会话初始上下文——命令为 `jspace context session-start --envelope cursor`（纯命令，无 shell 语法；CLI 内部吞错 exit 0。Cursor 从项目级 + 用户级 `~/.cursor/hooks.json` 多层级加载；用户级可覆盖/追加，但工作台 seed 落项目级）。
 - **无 headless**：cron 不能用 cursor 跑（`cron run --harness cursor` → `fail`）。
 
 ## 能力边界（诚实声明）

@@ -1,4 +1,4 @@
-// adapters/harness/grok.ts — Grok Build harness adapter (T1; bridge per D1/B).
+// adapters/harness/grok.ts — Grok Build harness adapter (bridge: gbrain stays authoritative).
 // Hook file generation lands in P2; this adapter only owns the capability-driven
 // argv + hook file path shape today.
 import { join } from "node:path";

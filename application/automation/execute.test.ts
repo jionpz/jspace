@@ -65,7 +65,7 @@ test("dry-run returns the would-run argv without executing", async () => {
 });
 
 test("harnessOverride routes the argv to the override harness (grok probe seam)", async () => {
-  // `jspace cron run <cron> --harness grok` (P2 AC7): the cron defines claude,
+  // `jspace cron run <cron> --harness grok`: the cron defines claude,
   // the override forces grok's argv shape without editing cron.json. Dry-run so
   // no real grok spawn — this pins the "argv 组装" CI seam for a new harness.
   const res = await cronRun(root, { cronId: "weekly", timeoutSec: 10, force: false, dryRun: true, harnessOverride: "grok" }, deps());

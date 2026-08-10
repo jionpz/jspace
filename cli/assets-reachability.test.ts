@@ -1,10 +1,10 @@
 // cli/assets-reachability.test.ts — materialized workbench reference reachability
-// (RD2 / AC-D2) + manifest/bundle consistency (RD1, harness-config global scope).
+// (skill-target reachability) + manifest/bundle consistency (harness-config global scope).
 // Scans every bundled .md that materializes into the workbench
 // (templates/workbench/* + skills/**), resolves bundle-internal references
 // (skills/…, references/…, scripts/…) and rejects dead repo-docs references.
 // Lifecycle-matrix / bootstrap-safety wording checks live in
-// cli/lifecycle-and-safety.test.ts (Child D M7/M8).
+// cli/lifecycle-and-safety.test.ts (lifecycle-matrix / bootstrap-safety wording).
 // Run: bun test cli/assets-reachability.test.ts
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";

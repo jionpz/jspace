@@ -86,7 +86,7 @@ function pass(label: string): void {
     const agents = readFileSync(agentsPath, "utf-8");
 
     // Brain operations rows must equal frontmatter triggers, joined the same way gen-assets joins.
-    // readWorkbenchSkills also enforces the D3 single-source invariant: every
+    // readWorkbenchSkills also enforces the single-source invariant: every
     // workbench SKILL.md frontmatter name must match its manifest entry name.
     let workbenchFms: ReturnType<typeof readWorkbenchSkills>;
     try {

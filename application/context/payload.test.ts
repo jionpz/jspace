@@ -73,7 +73,7 @@ test("broken hub -> alert line in current-state and top-priority next-action", (
   expect(t).toContain("hub.json 缺失或损坏");
 });
 
-test("pre-compact emits a passive reminder + state, recommends explicit actions only (D2/方案 a)", () => {
+test("pre-compact emits a passive reminder + state, recommends explicit actions only (never auto-writes)", () => {
   const state: WorkbenchState = { ...empty, pendingCount: 1, pendingProducers: ["asset-ingest"] };
   const r = renderPreCompact(state, "/wb");
   expect(r).toContain("会话即将 compaction");

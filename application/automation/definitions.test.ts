@@ -1,5 +1,5 @@
 // application/automation/definitions.test.ts — skill-target cron compilation &
-// validation (Child D, RD5/AC-D4). Pure: manifest/bundle/fs are injected.
+// validation. Pure: manifest/bundle/fs are injected.
 // Run: bun test application/automation/definitions.test.ts
 import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";

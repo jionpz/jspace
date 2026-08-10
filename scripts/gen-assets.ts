@@ -9,12 +9,12 @@ import { ownershipFor, sha256Of } from "../application/workspace/manifest.ts";
 import { decodeSkillsManifest } from "../core/contracts/skills.ts";
 import { renderAgentsBlocks } from "./skill-frontmatter.ts";
 import { VERSION } from "../cli/version.generated.ts";
-import { manifestPaths, staleManifestPaths } from "./asset-integrity.ts";
+import { readManifestJson, staleManifestPaths } from "./asset-integrity.ts";
 
 const repoRoot = resolve(import.meta.dir, "..");
 
 // skills-manifest.json is the single source for which skills ship in the
-// binary. gen-assets embeds every workbench-scoped skill dir (F2: this pulls
+// binary. gen-assets embeds every workbench-scoped skill dir (this pulls
 // memory-recall/writeback into the bundle) and asserts each exists on disk so
 // the manifest never drifts from the skills/ tree.
 const skillsRaw = JSON.parse(readFileSync(join(repoRoot, "skills-manifest.json"), "utf-8")) as unknown;
@@ -74,7 +74,7 @@ for (const s of SOURCES) walk(join(repoRoot, s), join(repoRoot, s), assets);
 // INTENTIONAL removal (e.g. dropping a skill) hits this too: rerun with
 // GEN_ASSETS_ALLOW_MISSING=1 to regenerate-and-drop the stale entries, then
 // commit the regenerated files.
-const manifestPath = join(repoRoot, "cli", "manifest.generated.ts");
+const manifestJsonPath = join(repoRoot, "cli", "manifest.json");
 /** Only "1"/"true" enable the missing-source bypass; "0"/"false"/unset stay
  *  strict (issue #7 P2.13 — JS truthiness would otherwise let "false" through). */
 function missingAllowed(): boolean {
@@ -82,7 +82,11 @@ function missingAllowed(): boolean {
   return v === "1" || v === "true";
 }
 if (!missingAllowed()) {
-  const oldPaths = existsSync(manifestPath) ? manifestPaths(readFileSync(manifestPath, "utf-8")) : [];
+  // Read the previous round's committed manifest from the pure JSON twin
+  // (issue #7 P3.16) — no TS regex, no comment/quote fragile matching.
+  const oldPaths = existsSync(manifestJsonPath)
+    ? readManifestJson(manifestJsonPath).files.map((f) => f.path)
+    : [];
   const stale = staleManifestPaths(oldPaths, assets.keys());
   if (stale.length > 0) {
     console.error("gen-assets: stale manifest paths with no source on disk (source deleted without regenerating):");
@@ -124,6 +128,26 @@ ${manifestBody}
 `;
 writeFileSync(join(repoRoot, "cli", "manifest.generated.ts"), manifestOutput, "utf-8");
 console.log(`wrote cli/manifest.generated.ts (${assets.size} files, ${manifestOutput.length} bytes)`);
+
+// Pure-JSON twin of the bundle manifest (issue #7 P3.16): checks (gen-assets
+// stale guard, check-manifest-integrity, manifest-integrity.test) parse this
+// instead of regexing the TS — no comment/quote fragile matching. Not embedded
+// in the binary; the .ts version carries the type + import graph.
+const manifestJson = JSON.stringify(
+  {
+    schema_version: 1,
+    bundle_version: VERSION,
+    files: [...assets.entries()].map(([k, v]) => ({
+      path: k,
+      sha256: sha256Of(v),
+      ownership: ownershipFor(k),
+    })),
+  },
+  null,
+  2,
+);
+writeFileSync(join(repoRoot, "cli", "manifest.json"), manifestJson + "\n", "utf-8");
+console.log(`wrote cli/manifest.json (${assets.size} files)`);
 
 // SkillsManifest embedded for runtime validation (validateSkillTarget reads
 // which skills are required + their versions).

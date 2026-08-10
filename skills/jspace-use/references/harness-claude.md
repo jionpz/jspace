@@ -15,7 +15,7 @@
 
 ## 接线（init 后现状）
 
-- **hooks**：`templates/workbench/.claude/settings.json` seed——SessionStart（matcher `startup|clear|compact`）+ UserPromptSubmit（`turn`），命令带 `2>/dev/null || true` 保证 hook 永不阻塞会话。
+- **hooks**：`templates/workbench/.claude/settings.json` seed——SessionStart（matcher `startup|clear|compact`）+ UserPromptSubmit（`turn`），命令为纯 `jspace context ...`（无 shell 语法；CLI 内部吞错 exit 0，hook 永不阻塞会话）。
 - **skill discovery**：官方 skill 同字节投影到 `.jspace/skills/`（源）+ `.claude/skills/` + `.agents/skills/`，Claude Code 原生 skill 选择器（`Skill` 工具、`/jspace-use`）可发现。升级创建 `.claude/skills/` 后需**重启 claude 会话**（Claude Code 只监听会话启动时已存在的 skill 目录）。
 - **MCP**：`~/.claude.json` -> `mcpServers.gbrain`：
 

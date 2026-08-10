@@ -1,4 +1,4 @@
-// application/ingest/use-cases.ts — `jspace ingest` use cases (Child E).
+// application/ingest/use-cases.ts — `jspace ingest` use cases.
 // Thin wrappers over the journal state machine (application/ingest/journal.ts)
 // with real fs ops and filehub/project resolution. The semantic skill supplies
 // the plan (target/slug/project/index) and the gbrain page content; the CLI owns

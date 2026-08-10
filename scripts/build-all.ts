@@ -2,7 +2,7 @@
 // bin/. Mirrors the GitHub Actions matrix. x64 uses `-baseline` (AVX-less) EXCEPT
 // Windows: the baseline bun runtime download is blocked on GH Windows runners, so
 // the released windows-x64 binary is the non-baseline `bun-windows-x64` target —
-// build-all must produce the SAME target as CI (single authority, AC9).
+// build-all must produce the SAME target as CI (single authority).
 // Run after `bun run scripts/gen-assets.ts`, or use `bun run build:all`.
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";

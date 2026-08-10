@@ -1,4 +1,4 @@
-// application/ingest/project.test.ts — project id resolution (Child E, R2).
+// application/ingest/project.test.ts — project id resolution.
 // Run: bun test application/ingest/project.test.ts
 import { expect, test } from "bun:test";
 import type { HubV4 } from "../../core/contracts/hub.ts";

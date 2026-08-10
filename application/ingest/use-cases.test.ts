@@ -121,7 +121,7 @@ test("rollback abandons a staged ingest; source stays, target removed", () => {
   expect(readJournals(wb).records[0].status).toBe("failed");
 });
 
-// ---- cleanup-pending recovery (R1) ----
+// ---- cleanup-pending recovery ----
 
 /** Replace the source file with a directory so a real unlinkSync throws on every
  *  platform — forces the cleanup-pending path through the real fs ops. */

@@ -1,4 +1,4 @@
-// application/pending/use-cases.ts — `jspace pending` use cases (Child E, AC11).
+// application/pending/use-cases.ts — `jspace pending` use cases.
 // Stage (producer), list, apply (applier) and ack staged gbrain writes stored as
 // typed envelopes in `<filehub>/.jspace-logs/`. Mechanical; the skill calls these
 // when a gbrain write conflicts with the serve lock.

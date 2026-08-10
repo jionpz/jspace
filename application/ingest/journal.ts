@@ -1,5 +1,5 @@
 // application/ingest/journal.ts — ingest journal repository + state machine +
-// compensation. Machine truth for asset-ingest recovery (Child E, F4): a file's
+// compensation. Machine truth for asset-ingest recovery: a file's
 // source stays in the inbox until `--complete` removes it, and a failure before
 // the gbrain page is written compensates by removing the staged target copy, so
 // no orphan file exists and nothing is silently lost.

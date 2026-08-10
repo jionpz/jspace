@@ -16,6 +16,13 @@ jobs:
   build:
     name: "jspace-${{ matrix.arch }} (${{ matrix.os }})"
     runs-on: "${{ matrix.os }}"
+    # P3 (issue #7): cross-compile is network/compile heavy — cap it. Concurrency
+    # groups by tag+matrix cell so a stale push never cancels a publishing tag's
+    # in-flight compile (cancel-in-progress false = queue, not kill).
+    timeout-minutes: 30
+    concurrency:
+      group: build-${{ github.ref }}-${{ matrix.os }}-${{ matrix.arch }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
@@ -102,6 +109,7 @@ jobs:
   # `bun test` must be green before any tag builds are published.
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -122,6 +130,7 @@ jobs:
     needs: [build, test]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
@@ -152,6 +161,7 @@ jobs:
     needs: release
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: "${{ matrix.os }}"
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:

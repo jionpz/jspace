@@ -3,7 +3,7 @@
   "hooks": {
     "sessionStart": [
       {
-        "command": "jspace context session-start --envelope cursor 2>/dev/null || true",
+        "command": "jspace context session-start --envelope cursor",
         "timeout": 10
       }
     ]

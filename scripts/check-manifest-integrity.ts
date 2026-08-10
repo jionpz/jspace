@@ -9,14 +9,14 @@
 // Run BEFORE any gen-assets (asserts the committed manifest), in CI and locally.
 // Run: bun run scripts/check-manifest-integrity.ts
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { manifestPaths } from "./asset-integrity.ts";
+import { readManifestJson } from "./asset-integrity.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 
-const manifestTs = readFileSync(join(ROOT, "cli/manifest.generated.ts"), "utf-8");
-const paths = manifestPaths(manifestTs);
+// Read the committed cli/manifest.json (pure JSON twin — issue #7 P3.16).
+const paths = readManifestJson(join(ROOT, "cli/manifest.json")).files.map((f) => f.path);
 const failures: string[] = [];
 
 for (const p of paths) {

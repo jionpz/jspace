@@ -49,7 +49,7 @@ export interface ExecuteDeps {
   logDir: (root: string, cronId: string) => string;
   /** clock in ms since epoch (injectable for deterministic timeouts). */
   now: () => number;
-  /** skill-target validation/compile context (Child D); injected so application
+  /** skill-target validation/compile context; injected so application
    *  never imports the generated cli/*.generated.ts. */
   skillsManifest: SkillsManifestV1;
   bundleManifest: DistributionManifestV1;
@@ -100,12 +100,12 @@ function pruneLogs(root: string, cronId: string, keep: number, logDir: (r: strin
 }
 
 /** Inbox-tidy batch guard: skills/asset-ingest must exist and the batch log must
- *  change during the run. F3: the batch log lives at
+ *  change during the run. The batch log lives at
  *  <filehub>/.jspace-logs/inbox-batch.md — the same path the asset-ingest skill
  *  writes — not the workbench .jspace/logs/. inbox-tidy detection no longer reads
  *  prose prompt text (prompt is optional for skill-target crons): key off the
  *  cron id or the asset-ingest target so the guard survives the prompt→target
- *  migration (F3 not regressed). */
+ *  migration (batch-log format not regressed). */
 function validateInboxGuard(
   cron: CronDefinition,
   root: string,

@@ -4,7 +4,7 @@
 // identity only. Machine-local path values live in local.json (core/contracts/local.ts).
 // Schema version uses the unified numeric `schema_version: number` form (same
 // as every other contract); the legacy string `version: "4"` form is no longer
-// accepted and decodes as damaged (M5 之后的模板已经升级,无兼容性负担).
+// accepted and decodes as damaged (templates are already post-upgrade, no compat path).
 import {
   checkNoUnknownFields,
   failure,

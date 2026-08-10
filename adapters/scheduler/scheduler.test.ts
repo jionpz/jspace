@@ -1,5 +1,5 @@
 // adapters/scheduler/scheduler.test.ts — scheduler adapter pure functions +
-// cross-workbench tag isolation (AC1) + reconciliation identity.
+// cross-workbench tag isolation + reconciliation identity.
 // Run: bun test adapters/scheduler/scheduler.test.ts
 import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";

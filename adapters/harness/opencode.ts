@@ -1,4 +1,4 @@
-// adapters/harness/opencode.ts — OpenCode harness adapter (T2.5; plugin-driven).
+// adapters/harness/opencode.ts — OpenCode harness adapter (plugin-driven).
 // Plugin file materialization lands in P3; this adapter owns the capability-
 // driven argv (headless = `opencode run <prompt>`, positional) + plugin path.
 import { join } from "node:path";

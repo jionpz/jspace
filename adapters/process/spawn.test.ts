@@ -1,6 +1,6 @@
 // application/automation/win32-spawn.test.ts — Windows .cmd/.bat spawn-target
 // builder (executor must route scripts through cmd.exe, not shell-quote them).
-// Real cmd.exe round-trip is CI-verified on the Windows runner (AC9 matrix).
+// Real cmd.exe round-trip is CI-verified on the Windows runner.
 // Run: bun test application/automation/win32-spawn.test.ts
 import { expect, test } from "bun:test";
 import { win32SpawnTarget } from "./spawn.ts";

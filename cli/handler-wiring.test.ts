@@ -96,7 +96,7 @@ test("cron status via the parser returns per-cron lines", () => {
   expect(lines.join("\n")).toContain("a: never run");
 });
 
-test("invocationArgv round-trips through the real cron run parser (audit F1)", () => {
+test("invocationArgv round-trips through the real cron run parser (batch-identity audit)", () => {
   const cases = [
     { workbench: "/some/wb", cronId: "nightly" },
     { workbench: "/some wb with spaces", cronId: "a", force: true, timeoutSec: 900 },

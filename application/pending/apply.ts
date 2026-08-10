@@ -1,4 +1,4 @@
-// application/pending/apply.ts — pending envelope applier (Child E, AC11).
+// application/pending/apply.ts — pending envelope applier.
 // Applies staged gbrain writes when the lock frees; repeated apply is
 // idempotent (non-staged envelopes are skipped, and a page already holding the
 // identical content is marked applied without a second write). A page that

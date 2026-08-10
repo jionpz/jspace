@@ -1,5 +1,5 @@
 // adapters/harness/opencode-plugin.test.ts — OpenCode plugin event dispatch
-// (pure handlers from the template, inject/cron mocked). Pins the D3 + P1.7
+// (pure handlers from the template, inject/cron mocked). Pins the no-auto-write + P1.7
 // (issue #7) contract: session.idle surfaces cron failures as a visible
 // reminder and NEVER auto-flushes staged writes (idle must not be more
 // aggressive than Claude/Grok) and never write-backs; session.created injects

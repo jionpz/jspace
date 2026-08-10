@@ -1,7 +1,10 @@
 // cli/commands/context.ts — `jspace context` — emit workbench context for the
-// harness session-start / per-turn hooks. Wired into .claude/settings.json as
-// `jspace context session-start` / `jspace context turn` with `2>/dev/null || true`
-// so any failure degrades to exit 0 (a hook must never block the session).
+// harness session-start / per-turn hooks. Wired into .claude/settings.json /
+// .grok/hooks/jspace.json / .cursor/hooks.json as a bare `jspace context ...`
+// command (no shell syntax — issue #7 P3.18: `2>/dev/null || true` is bash-only
+// and breaks Windows PowerShell). The CLI swallows errors itself: every handler
+// degrades to an empty line + exit 0 (failLines) and a non-workbench / disabled
+// hook gate emits nothing — a hook must never block the session on any platform.
 // Business logic lives in application/context/{gate,collect,payload,envelope};
 // stdin hook-prompt reading lives in application/context/hook-input.ts. This
 // file only maps args -> use case (no process.exit; the CmdResult exitCode
@@ -86,8 +89,8 @@ const turnSpec: CommandSpec = {
 };
 
 /** Grok PreCompact / SessionEnd passive reminder hook: surface the state that
- *  could be lost + remind that write-back stays explicit (D2/方案 a — never
- *  auto-writes gbrain). Shares the session-start gate (session lifecycle event). */
+ *  could be lost + remind that write-back stays explicit (never auto-writes
+ *  gbrain). Shares the session-start gate (session lifecycle event). */
 function sessionReminderSpec(
   name: string,
   summary: string,

@@ -83,7 +83,7 @@ test("cursor adapter fails on headless argv (IDE-only) but exposes a hook path",
   expect(cursor.hookFilePath?.("/wb")).toBe("/wb/.cursor/hooks.json");
 });
 
-test("pi capability declares the honest adapter boundary (D4)", () => {
+test("pi capability declares the honest adapter boundary", () => {
   const cap = getCapability("pi");
   // third-party MCP channel, not native
   expect(cap.mcp).toEqual({ via: "pi_mcp_adapter" });

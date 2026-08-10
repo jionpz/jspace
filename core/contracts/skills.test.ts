@@ -1,6 +1,6 @@
 // core/contracts/skills.test.ts — pure decode tests for the SkillsManifest
 // contract. Only the typed contract is covered here; bundling/materialization
-// belongs to Child D's gen-assets + init integration.
+// belongs to the skill-target feature's gen-assets + init integration.
 // Run: bun test core/contracts/skills.test.ts
 import { expect, test } from "bun:test";
 import type { DecodeResult } from "./diagnostics.ts";
