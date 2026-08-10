@@ -58,6 +58,7 @@ gbrain reference 页的 `Pointer` 指向资产本体;文件被移动/改名/未�
 gbrain list --type reference -n 20                 # 取样本(≤5 个,优先本周新增)
 gbrain get <slug>                                   # 读 Pointer / rel_path 字段
 test -f "<Pointer>" && echo OK || echo BROKEN
+gbrain stats                                        # pages_by_type:看有无白名单外的 type
 ```
 
 **判读**
@@ -65,8 +66,9 @@ test -f "<Pointer>" && echo OK || echo BROKEN
 - `test -f` 失败但 `rel_path` 能经「本机 filehub 根 + rel_path」解析到实际文件 → **指针待重解析**(换机场景,非损坏)。
 - 两者都失败 → **断指针**。
 - 页缺 `rel_path` 字段 → **纪律缺口**(写侧没按 M5 纪律写)。
+- **type 契约外值**:`gbrain stats` 的 `pages_by_type` 出现 `lesson|note|decision|reference|smoke` 之外的值(如 `concept`/`project`)→ **写侧未按 gbrain.md 的 type 语义写**。这条由 retro 承担而不是 `jspace doctor`:doctor 是离线结构化诊断、不碰 gbrain 运行时;retro 本就在读 gbrain,顺手即可判。
 
-**分级**:待重解析 / 断指针 → 立即可做;纪律缺口 → 需你决策(是否回写侧修 asset-ingest)。
+**分级**:待重解析 / 断指针 → 立即可做;纪律缺口 / type 契约外值 → 需你决策(是否回写侧修 asset-ingest 或 memory-* 的写页模板)。
 
 ---
 
@@ -155,7 +157,7 @@ rg -n '无法判定|跳过|模糊' <filehub>/.jspace-logs/inbox-batch.md | tail 
 - [检查 X] 缺:<什么证据> → 补法:<怎么拿到>
 
 ## 基线数据(供跨周对比)
-- state 页本周更新数 / 未挂接项目数 / 断指针数 / inbox 停滞数 / cron 失败数
+- state 页本周更新数 / 未挂接项目数 / 断指针数 / inbox 停滞数 / cron 失败数 / 契约外 type 页数
 ```
 
 「基线数据」是跨周对比的锚——单周的数字没意义,连续几周的走向才说明飞轮在加速还是在锈住。

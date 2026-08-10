@@ -3,7 +3,7 @@
 import type { DistributionManifestV1 } from "../core/contracts/distribution.ts";
 export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   schema_version: 1,
-  bundle_version: "1.0.11-44-g416576d",
+  bundle_version: "1.0.11-45-g4bc58aa",
   files: [
   { path: "templates/workbench/.claude/settings.json", sha256: "4e50230a79475feaf16089518129a9e276647cc2197f6e6ad23f5ad7f5a25a99", ownership: "seed" },
   { path: "templates/workbench/.cursor/hooks.json", sha256: "d3314899e4a15cfc891967b63852df1e999ce5998d9a8bd3a3cae41d5a651487", ownership: "seed" },
@@ -45,7 +45,7 @@ export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   { path: "skills/memory-writeback/references/example-writeback.md", sha256: "b1c2f14db0c89e677ce5770099bf1ad512a2b6c3dbe25113ac66d32a927e1181", ownership: "seed" },
   { path: "skills/memory-writeback/references/writeback.md", sha256: "c400085d86a0ab9d252b0a97e533ec3fe93f4aa89cae0d7e80b6fa4e452babad", ownership: "seed" },
   { path: "skills/workbench-retro/SKILL.md", sha256: "5d762b33d125fe5acb07508a82993a5e3e41081c8740999592bae43bcb1f2e2d", ownership: "seed" },
-  { path: "skills/workbench-retro/references/checks.md", sha256: "937f5d24a6a69461607a3b384cb868f26217839e9598b6f231396fd0da9e3c1c", ownership: "seed" },
+  { path: "skills/workbench-retro/references/checks.md", sha256: "3377a4e040f505919412574dcca617a49a2c810f24c0aa1ac90be313b98437b5", ownership: "seed" },
   { path: "skills/workbench-retro/references/example-retro.md", sha256: "35ae3516c0e4c5b2a8407c10ef41f5c2ee010670062f23adf60781d05232fe89", ownership: "seed" },
   { path: "skills/weekly-report/SKILL.md", sha256: "b6e273b13d7dd61dd5b8e538bbc981b10544a9c5dde0cc9ecab5fee4537f5e4b", ownership: "seed" },
   { path: "skills/memory-consolidate/SKILL.md", sha256: "31b989649eedf415f664f345acf1112005df27c981fd70e9d4ed28cefdd289d5", ownership: "seed" },

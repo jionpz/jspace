@@ -47,6 +47,10 @@ export interface CronHealthDeps {
   /** Official workbench skill names (SKILLS_MANIFEST.workbench). Injected from
    *  cli so doctor stays free of the embedded-bundle module. */
   officialSkillNames: () => string[];
+  /** Skill names whose materialized copy differs from the running bundle.
+   *  Injected from cli for the same reason as officialSkillNames (diffBundle
+   *  needs BUNDLE_MANIFEST). Omitted => the check is skipped silently. */
+  bundleStaleSkills?: (root: string) => string[];
   /** Parsed ~/.claude.json (user machine config), or null when missing/invalid.
    *  Injected so doctor can check the gbrain MCP skills-dir wiring without
    *  touching the machine-level file itself. */
@@ -67,6 +71,17 @@ type WorkbenchReads = ReturnType<typeof readWorkbenchState>;
 // These are info-level "take a look", never an assertion that something died.
 const DOMAIN_DORMANT_DAYS = 90;
 const PROJECT_STALE_DAYS = 120;
+
+/** End marker of the JSpace managed block in the workbench AGENTS.md. Content
+ *  after it is user-owned: upgrade never rewrites it, so only doctor can
+ *  surface a pre-block-era template dump left behind there. */
+const BLOCK_END = "<!-- JSPACE:END -->";
+
+/** Official skill names that no longer ship. A mention outside the managed
+ *  block is proof of stale template residue (jspace-bootstrap was renamed to
+ *  jspace-use in v1.0.9). Kept next to the same list used by the legacy
+ *  root-copy check. */
+const RETIRED_SKILL_NAMES = ["jspace-bootstrap"] as const;
 
 /** Newest mtime (epoch ms) under a directory tree, or 0 when unreadable/empty.
  *  Missing dir degrades to 0 (never throws — diagnostics are read-only). */
@@ -190,14 +205,34 @@ function checkInbox(reads: WorkbenchReads): RegistryDiagnostic[] {
       diags.push({ severity: "warning", code: "filehub.inbox_unfiled", path: `filehub.${fhRoot}`, message: `filehub: _inbox has ${unfiled} unfiled file(s); run asset-ingest ("整理一下 inbox")` });
     }
   }
-  // stale filehub projects (candidate for archive/<年>/)
+  // stale filehub projects (candidate for archive/<年>/) + unlinked projects
+  // (asset dir exists but no hub record). The existing registry checks only go
+  // registry -> disk ("is the registered path there?"); this is the reverse
+  // direction, which is how the common drift actually happens: a project folder
+  // gets created in the file hub and nothing ever registers it, so
+  // weekly-report's project discovery silently misses it.
+  // Compared against hub.projects[].asset_rel_path only — the domain README
+  // project table is prose, and regex-parsing a markdown table would be fragile
+  // and false-positive prone. That half is covered by the jspace-use 8.7
+  // checklist; doctor guards the machine-decidable half.
   const now = Date.now();
+  const registeredAssetPaths = new Set(
+    (reads.hub.status === "ok" ? reads.hub.value.projects ?? [] : []).map((p) => p.asset_rel_path),
+  );
   const projectsDir = join(fhRoot, "projects");
   if (existsSync(projectsDir) && statSync(projectsDir).isDirectory()) {
     for (const name of readdirSync(projectsDir)) {
       if (name.startsWith(".")) continue;
       const p = join(projectsDir, name);
       if (!statSync(p).isDirectory()) continue;
+      if (!registeredAssetPaths.has(`projects/${name}`)) {
+        diags.push({
+          severity: "info",
+          code: "registry.project_unlinked",
+          path: `filehub.projects.${name}`,
+          message: `filehub project ${name} is not registered in hub.json; weekly-report discovers projects from the registry and the domain README, so an unlinked project stays invisible — see jspace-use 8.7 (jspace project add <ascii-id> --asset-rel-path projects/${name})`,
+        });
+      }
       const last = lastActivityMs(p);
       if (last === 0) continue;
       const days = (now - last) / 86_400_000;
@@ -405,7 +440,7 @@ function checkSkills(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
   // would otherwise be invisible forever. User-created root skills (any other
   // name) are untouched, per the "root skills/ is user-created" contract.
   {
-    const official = new Set([...cron.officialSkillNames(), "jspace-bootstrap"]);
+    const official = new Set([...cron.officialSkillNames(), ...RETIRED_SKILL_NAMES]);
     const rootSkills = join(root, "skills");
     if (existsSync(rootSkills) && statSync(rootSkills).isDirectory()) {
       for (const name of readdirSync(rootSkills)) {
@@ -418,6 +453,56 @@ function checkSkills(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
           code: "skills.legacy_root_copy",
           path: `skills.${name}`,
           message: `legacy copy of official skill in root skills/: skills/${name} (official skills live under .jspace/skills/; if not user-created, remove it manually)`,
+        });
+      }
+    }
+  }
+
+  // Materialized skills vs the running bundle. skills.projection_drift above
+  // only compares workbench-internal copies against .jspace/skills/; nothing
+  // told the user that .jspace/skills/ itself lags the installed binary. The
+  // cron path already fails on this (compileSkillTarget -> "skill X is out of
+  // date"), so a stale workbench surfaced only when a cron happened to run.
+  // info, not warning: a locally edited skill legitimately shows as a conflict
+  // under the ownership model — nagging about it would punish normal use.
+  {
+    const stale = cron.bundleStaleSkills?.(root) ?? [];
+    if (stale.length > 0) {
+      diags.push({
+        severity: "info",
+        code: "skills.bundle_stale",
+        path: "skills",
+        message: `official skill(s) differ from the running bundle: ${stale.join(", ")}; run jspace workspace upgrade (it refreshes unmodified copies here and in ~/.agents/skills, and preserves local edits as skip/conflict)`,
+      });
+    }
+  }
+
+  // Stale content OUTSIDE the JSPACE managed block. The block-outside region is
+  // user-owned — upgrade never touches it — so a pre-block-era template dump
+  // survives forever, injecting a second, contradictory copy of the rules into
+  // every session. Only doctor can surface it. Zero-false-positive by design:
+  // an AGENTS.md with no JSPACE block is a user-authored file and is not
+  // scanned at all; inside a block-bearing file only machine-generated markers
+  // and retired official skill names count (never a semantic judgement).
+  {
+    const agentsPath = join(root, "AGENTS.md");
+    const body = isFile(agentsPath) ? readFileSync(agentsPath, "utf-8") : null;
+    const endIdx = body?.indexOf(BLOCK_END) ?? -1;
+    if (body !== null && endIdx !== -1) {
+      const outside = body.slice(endIdx + BLOCK_END.length);
+      const hits: string[] = [];
+      for (const marker of ["TRELLIS-BRAIN-OPS:BEGIN", "TRELLIS-SKILL-GOV:BEGIN"]) {
+        if (outside.includes(marker)) hits.push(`generated block ${marker}`);
+      }
+      for (const retired of RETIRED_SKILL_NAMES) {
+        if (outside.includes(retired)) hits.push(`retired skill name ${retired}`);
+      }
+      if (hits.length > 0) {
+        diags.push({
+          severity: "warning",
+          code: "agentsmd.stale_outside_block",
+          path: "AGENTS.md",
+          message: `AGENTS.md carries stale template residue outside the JSPACE block (${hits.join(", ")}); that region is yours — jspace never rewrites it, so a pre-block-era copy keeps injecting contradictory rules. Back the file up, then delete everything after ${BLOCK_END} that you did not write`,
         });
       }
     }

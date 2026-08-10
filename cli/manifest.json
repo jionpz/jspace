@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "bundle_version": "1.0.11-44-g416576d",
+  "bundle_version": "1.0.11-45-g4bc58aa",
   "files": [
     {
       "path": "templates/workbench/.claude/settings.json",
@@ -204,7 +204,7 @@
     },
     {
       "path": "skills/workbench-retro/references/checks.md",
-      "sha256": "937f5d24a6a69461607a3b384cb868f26217839e9598b6f231396fd0da9e3c1c",
+      "sha256": "3377a4e040f505919412574dcca617a49a2c810f24c0aa1ac90be313b98437b5",
       "ownership": "seed"
     },
     {

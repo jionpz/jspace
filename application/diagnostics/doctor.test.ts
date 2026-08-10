@@ -469,6 +469,101 @@ test("stale filehub project -> filehub.project_stale (info); fresh -> none", () 
   const stale = c.filter((x) => x === "filehub.project_stale");
   expect(stale).toHaveLength(1); // only old-project, not active-project
 });
+
+// ---- registry.project_unlinked: the reverse direction (disk -> registry) ----
+// The pre-existing registry checks all go registry -> disk. The drift that
+// actually happens is the other way: a folder appears in the file hub and
+// nothing registers it, so weekly-report's project discovery misses it.
+
+/** Register a filehub at <root>/filehub with the given hub projects[]. */
+function withFilehub(projects: unknown[]): string {
+  mkdirSync(join(root, "workspace", "files"), { recursive: true });
+  writeFileSync(
+    join(root, ".jspace", "hub.json"),
+    JSON.stringify({
+      schema_version: 1,
+      domains: [{ id: "files", path: "workspace/files" }],
+      resources: [{ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] }],
+      projects,
+    }),
+  );
+  const fh = join(root, "filehub");
+  mkdirSync(join(fh, "projects"), { recursive: true });
+  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ schema_version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
+  return fh;
+}
+
+test("filehub project with no hub record -> registry.project_unlinked (info)", () => {
+  const fh = withFilehub([]);
+  mkdirSync(join(fh, "projects", "acme"), { recursive: true });
+  writeFileSync(join(fh, "projects", "acme", "index.md"), "x");
+  const r = doctorWorkbench(root, stubDeps());
+  expect(codes(r)).toContain("registry.project_unlinked");
+  const diags = (r.data as { diagnostics: { code: string; severity: string }[] }).diagnostics;
+  expect(diags.find((d) => d.code === "registry.project_unlinked")?.severity).toBe("info");
+  expect(r.exitCode ?? 0).toBe(0);
+});
+
+test("registered project (ascii id bound to a free-form asset dir) -> no registry.project_unlinked", () => {
+  // the 8.7 naming convention: id is ascii, the asset dir keeps its human name
+  const fh = withFilehub([{ id: "tiyanying-52", domain: "files", asset_rel_path: "projects/52期体验营", status: "active" }]);
+  mkdirSync(join(fh, "projects", "52期体验营"), { recursive: true });
+  writeFileSync(join(fh, "projects", "52期体验营", "index.md"), "x");
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("registry.project_unlinked");
+});
+
+// ---- agentsmd.stale_outside_block: pre-block-era template residue ----------
+// Everything after JSPACE:END is user-owned, so upgrade never rewrites it and a
+// stale template dump there survives forever, injecting a second contradictory
+// copy of the rules into every session.
+
+const MANAGED_BLOCK = `<!-- JSPACE:START -->\n# JSpace 工作台\n<!-- TRELLIS-BRAIN-OPS:BEGIN -->\n- **jspace-use**: x\n<!-- TRELLIS-BRAIN-OPS:END -->\n<!-- JSPACE:END -->\n`;
+
+test("stale generated marker outside the managed block -> agentsmd.stale_outside_block", () => {
+  writeFileSync(join(root, "AGENTS.md"), `${MANAGED_BLOCK}\n# 旧模板全文\n<!-- TRELLIS-BRAIN-OPS:BEGIN -->\n- **jspace-bootstrap**: x\n<!-- TRELLIS-BRAIN-OPS:END -->\n`);
+  const r = doctorWorkbench(root, stubDeps());
+  expect(codes(r)).toContain("agentsmd.stale_outside_block");
+  const diags = (r.data as { diagnostics: { code: string; severity: string }[] }).diagnostics;
+  expect(diags.find((d) => d.code === "agentsmd.stale_outside_block")?.severity).toBe("warning");
+});
+
+test("retired skill name outside the block -> agentsmd.stale_outside_block", () => {
+  writeFileSync(join(root, "AGENTS.md"), `${MANAGED_BLOCK}\n我的个人规则:参考 jspace-bootstrap 的做法\n`);
+  expect(codes(doctorWorkbench(root, stubDeps()))).toContain("agentsmd.stale_outside_block");
+});
+
+test("markers only INSIDE the block -> no agentsmd.stale_outside_block", () => {
+  // the managed block legitimately carries the generated Brain-ops sub-block
+  writeFileSync(join(root, "AGENTS.md"), `${MANAGED_BLOCK}\n# 我自己写的规则\n每天先看看日历。\n`);
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("agentsmd.stale_outside_block");
+});
+
+test("AGENTS.md without a JSPACE block is never scanned (user-authored file)", () => {
+  // no managed block => the whole file is the user's; flagging it would be noise
+  writeFileSync(join(root, "AGENTS.md"), "# 我的 AGENTS\n<!-- TRELLIS-BRAIN-OPS:BEGIN -->\n- x\n");
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("agentsmd.stale_outside_block");
+});
+
+// ---- skills.bundle_stale: materialized skills vs the running bundle --------
+// skills.projection_drift only compares workbench-internal copies against
+// .jspace/skills/; nothing told the user that .jspace/skills/ itself lags the
+// installed binary (the cron path failed on it, doctor stayed silent).
+
+test("bundleStaleSkills reports names -> skills.bundle_stale (info)", () => {
+  const r = doctorWorkbench(root, stubDeps({ bundleStaleSkills: () => ["asset-ingest", "jspace-use"] }));
+  expect(codes(r)).toContain("skills.bundle_stale");
+  const diags = (r.data as { diagnostics: { code: string; severity: string; message: string }[] }).diagnostics;
+  const d = diags.find((x) => x.code === "skills.bundle_stale");
+  expect(d?.severity).toBe("info"); // a locally edited skill is a legitimate conflict, not a fault
+  expect(d?.message).toContain("asset-ingest");
+  expect(r.exitCode ?? 0).toBe(0);
+});
+
+test("bundleStaleSkills empty or not injected -> no skills.bundle_stale", () => {
+  expect(codes(doctorWorkbench(root, stubDeps({ bundleStaleSkills: () => [] })))).not.toContain("skills.bundle_stale");
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("skills.bundle_stale"); // dep omitted
+});
+
 // ---- gbrain skills-dir wiring (info level) ----
 
 const gbrainWiredDoc = (skillsDir: string): unknown => ({

@@ -8,6 +8,10 @@ import { loadCrons, parseSchedule } from "../../application/automation/definitio
 import { schedulerAdapter } from "../../adapters/scheduler/index.ts";
 import { installedCronIdsForRoot, schedulerEnv } from "../scheduler.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
+import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
+import { diffBundle } from "../../application/workspace/manifest.ts";
+import { readMaterializedJournal } from "../../application/workspace/journal.ts";
+import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { binaryOnPath } from "../../adapters/harness/bin.ts";
 
 export const s = (v: unknown): string => (typeof v === "string" ? v : "");
@@ -42,12 +46,35 @@ export function readUserClaudeJson(): unknown | null {
   }
 }
 
+/** Official skills whose materialized copy no longer matches the running
+ *  bundle. Lives here (not in doctor) because it needs BUNDLE_MANIFEST — doctor
+ *  stays free of the generated modules and takes this as an injected dep. */
+export function bundleStaleSkills(root: string): string[] {
+  const prefix = `${CONFIG_DIR}/skills/`;
+  const names = new Set<string>();
+  try {
+    const recorded = readMaterializedJournal(root)?.files ?? {};
+    for (const e of diffBundle(root, BUNDLE_MANIFEST, { readFile: readFileOrNull, recorded })) {
+      if (e.action === "no-op") continue;
+      if (!e.rel.startsWith(prefix)) continue;
+      const name = e.rel.slice(prefix.length).split("/")[0];
+      if (name) names.add(name);
+    }
+  } catch {
+    // damaged journal / unreadable workbench: diff + upgrade report it; a
+    // read-only diagnostic must never throw.
+    return [];
+  }
+  return [...names].sort();
+}
+
 export const cronDeps = {
   loadCrons,
   parseSchedule,
   installedCronIds: installedCronIdsForRoot,
   linuxCronHealth: () => schedulerAdapter(process.platform)?.health?.(schedulerEnv()) ?? { crontab: false, service: false },
   officialSkillNames: () => SKILLS_MANIFEST.workbench.map((s) => s.name),
+  bundleStaleSkills,
   readUserClaudeJson,
   readHarnessConfig: readFileOrNull,
   harnessBinOnPath: (name: string) => binaryOnPath(name, process.platform),
