@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "bundle_version": "1.0.11-43-ged6b288",
+  "bundle_version": "1.0.11-44-g416576d",
   "files": [
     {
       "path": "templates/workbench/.claude/settings.json",
@@ -59,7 +59,7 @@
     },
     {
       "path": "skills/jspace-use/SKILL.md",
-      "sha256": "0ae2b0748ff50e9b34781efefd8ad244b05bb0df292d358efc7a089b117b6cee",
+      "sha256": "b0b16dd7e71e3cc7701de64e518030202775b8d20b8b27926d0c5ba07bc44e73",
       "ownership": "seed"
     },
     {

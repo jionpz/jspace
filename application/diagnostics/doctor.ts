@@ -206,7 +206,7 @@ function checkInbox(reads: WorkbenchReads): RegistryDiagnostic[] {
           severity: "info",
           code: "filehub.project_stale",
           path: `filehub.projects.${name}`,
-          message: `filehub project ${name} untouched for ${Math.round(days)}d (≥${PROJECT_STALE_DAYS}d); archive to archive/<年>/ if closed — see jspace-use 8.6`,
+          message: `filehub project ${name} untouched for ${Math.round(days)}d (≥${PROJECT_STALE_DAYS}d); archive to archive/<年>/ if closed — see jspace-use 8.7 (project lifecycle) / 8.6`,
         });
       }
     }

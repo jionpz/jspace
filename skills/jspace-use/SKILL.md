@@ -158,6 +158,58 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 
 **`jspace doctor` 的体检诊断**:`domain.dormant` / `filehub.project_stale` 按上表阈值报 `info` 级(非 error——它只是提示"看一眼",mtime 会被 git clone / 网盘同步重写,阈值取保守值防误报)。
 
+### 8.7 项目生命周期(立项 / 结项)
+
+项目横跨三层(资产层本体 / 控制平面挂接 / 记忆层实体),漏一层就会漂移——**最常见的坏味是「filehub 里有项目,域 README 和 registry 都不知道」**,后果是 `weekly-report` 的项目发现源失效。按下面两张清单走,别凭记忆。
+
+#### 命名约定(先定这个,否则第 ④ 步会卡)
+
+| 面 | 取值 | 例 |
+|---|---|---|
+| **project id**(机器标识) | ascii slug,`[a-z0-9-]`;用于 gbrain slug、`ingest --project`、registry | `tiyanying-52` |
+| **资产目录名**(人读) | 自由,可中文;经 `--asset-rel-path` 绑到 id | `projects/52期体验营/` |
+
+两者由 `jspace project add <id> --asset-rel-path projects/<中文名>` 绑定 —— **不必为了注册把目录改成英文**。
+
+> **存量项目的中文 slug 不迁移**:在本约定确立前建的 gbrain 页(如 `project/<中文名>/state`、`assets/<中文名>/<语义名>`)**保留原样,不要重命名**。理由有二:① 记忆层是 append-only 的历史,重命名的代价大于收益;② `memory-recall` 的可复跑验收基线正是建立在这些 slug 上,迁移会让基线失效。**新项目一律用 ascii id**,新旧并存是可接受的过渡态。
+
+#### 立项(四步,缺一不可)
+
+```bash
+# ① 资产层:建项目目录与 dashboard
+mkdir -p <filehub>/projects/<项目名> && $EDITOR <filehub>/projects/<项目名>/index.md   # 现状 / 关键文件表 / 下一步
+# ② 控制平面:域 README 项目表挂一行
+$EDITOR workspace/<domain>/README.md      # | <项目名> | filehub/projects/<项目名>/ | 进行中 |
+# ③ 记忆层:建实体(起始 state 页)
+gbrain put project/<id>/state < <正文>    # 固定 slug,后续覆盖更新
+# ④ registry 注册(稳定 slug、消除 ingest warning)
+jspace project add <id> --asset-rel-path projects/<项目名>
+```
+
+- ④ 可延后但别忘:不注册时 `jspace ingest begin --project <x>` 会报 `warn: project ... is not registered`(不阻塞,slug 稳定性略降)。
+- ③ 的正文起手只需三行:这个项目是什么 / 现在到哪了 / 下一步。别等"想清楚"再写。
+
+#### 结项(三步)
+
+```bash
+# ① 资产层:移入年度归档
+mv <filehub>/projects/<项目名> <filehub>/archive/<年>/
+# ② 控制平面:域 README 项目表改状态或删行(指向新路径)
+# ③ 记忆层:state 页写结项终态(保留不删——历史记录)
+gbrain put project/<id>/state < <终态正文>
+```
+
+**移动/删除是破坏性操作,执行前必须问用户**(§8.6 确认列同款)。
+
+#### 与 doctor 体检项的对应
+
+| doctor 诊断 | 含义 | 处置 |
+|---|---|---|
+| `filehub.project_stale`(info) | `projects/<x>/` ≥120 天未动 | 若已结项 → 走上面「结项」三步 |
+| `filehub.inbox_unfiled`(warning) | `_inbox/` 有未归位文件 | → `asset-ingest`(「整理一下 inbox」) |
+| `domain.dormant`(info) | 域 ≥90 天未更新且无活跃资源 | → §8.6 退役表 |
+
+
 ## 按需深入(条件读指针)
 
 - 治理细节(域/资源/skill 创建规则、cron 运维)→ 第 8 章
