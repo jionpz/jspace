@@ -81,6 +81,12 @@ export function readRuns(root, cronId): { records: RunRecord[]; issues: Contract
 }
 ```
 
+## Process / Scheduler Reliability Guards
+
+- **O_EXCL lock**: a post-create write failure (ENOSPC/EIO) is NOT contention — remove your own 0-byte poison lock and propagate, or every process skips for the whole staleMs and the real error is hidden behind a fake "already running" (issue #8 #7).
+- **Fail-closed verification**: when a guard cannot verify success (inbox batch log missing / no filehub), report the failure (`batch-stale` incident), never default to success — a guard that defaults to "changed=true" records fake ok runs (issue #8 #6).
+- **Timeout termination**: POSIX timeout must escalate SIGTERM → SIGKILL after a grace window — a harness that ignores SIGTERM otherwise hangs the CLI, the lock is never released, and ~1h later a second run double-executes. `timedOut` is the timer's own flag, not a wall-clock comparison (issue #8 #5).
+
 ## API / CLI Error Responses
 
 - `jspace: error: <message>` + non-zero exit for user errors.
