@@ -17,6 +17,7 @@ import { parse, type CmdContext, type CmdResult, type CommandSpec } from "../app
 import { COMMANDS } from "./commands/registry.ts";
 import { invocationArgv } from "../application/automation/invocation.ts";
 import { CliError } from "../core/shared/errors.ts";
+import { loadHub } from "../application/workspace/state.ts";
 
 const initDeps = { resolvePath, expandTilde, isCompiled, devRoot, materialize: materializeTree, manifest: BUNDLE_MANIFEST };
 const ROOT: CommandSpec = { name: "", summary: "", children: COMMANDS };
@@ -149,4 +150,24 @@ test("init --dir creates a real workbench (marker present)", () => {
   expect(res?.errors ?? []).toHaveLength(0);
   expect(existsSync(join(target, ".jspace", "marker.json"))).toBe(true);
   rmSync(target, { recursive: true, force: true });
+});
+
+test("domain add --tag lands tags in hub (issue #8 #2)", () => {
+  run(["domain", "add", "work", "--tag", "alpha", "--tag", "beta"]);
+  const hub = loadHub(wb);
+  const d = hub.domains.find((x) => x.id === "work");
+  expect(d?.tags).toEqual(["alpha", "beta"]);
+});
+
+test("domain add --tag dedupes through cleanTags (issue #8 #2)", () => {
+  run(["domain", "add", "work", "--tag", "work", "--tag", "work"]);
+  const hub = loadHub(wb);
+  expect(hub.domains.find((x) => x.id === "work")?.tags).toEqual(["work"]);
+});
+
+test("resource add --tag lands tags in hub (issue #8 #2)", () => {
+  run(["domain", "add", "work"]);
+  run(["resource", "add", "proj", "--domain", "work", "--path", join(wb, "assets"), "--tag", "x"]);
+  const hub = loadHub(wb);
+  expect(hub.resources.find((r) => r.id === "proj")?.tags).toEqual(["x"]);
 });

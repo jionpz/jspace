@@ -8,9 +8,8 @@
 import { readFileSync, writeFileSync, copyFileSync, mkdirSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { CommandSpec, CmdContext } from "../../application/commands/command.ts";
+import type { CommandSpec, CmdContext, CmdResult } from "../../application/commands/command.ts";
 import { wireGrokSkillsDir, grokConfigPath, type GrokWireDeps, type GrokWireResult } from "../../application/gbrain/grok-wiring.ts";
-import { optS, s } from "./helpers.ts";
 
 function readFileOrNull(p: string): string | null {
   try {
@@ -52,17 +51,19 @@ function grokWireDeps(dryRun: boolean): GrokWireDeps {
   };
 }
 
-function grokWireHandler(ctx: CmdContext): { lines: string[]; exitCode?: number; warnings?: string[] } {
+/** `harness wire grok` handler — exported for tests with injected deps (write
+ *  failures must surface as errors + exit 1, never a silent exit 0 — issue #8 #9). */
+export function grokWireHandler(ctx: CmdContext, deps: GrokWireDeps = grokWireDeps(ctx.dryRun)): CmdResult {
   const path = grokConfigPath(homedir());
   let result: GrokWireResult;
   try {
-    result = wireGrokSkillsDir(grokWireDeps(ctx.dryRun), ctx.root);
+    result = wireGrokSkillsDir(deps, ctx.root);
   } catch (e) {
-    return { lines: [], warnings: [`harness wire grok: ${e instanceof Error ? e.message : String(e)}`] };
+    return { lines: [], errors: [`harness wire grok: ${e instanceof Error ? e.message : String(e)}`], exitCode: 1 };
   }
 
   if (!result.ok) {
-    return { lines: [`jspace: error: ${result.reason}`], exitCode: 1 };
+    return { lines: [], errors: [result.reason], exitCode: 1 };
   }
   switch (result.status) {
     case "already-wired":
@@ -93,19 +94,16 @@ export const harnessSpec: CommandSpec = {
       name: "wire",
       summary: "inject GBRAIN_SKILLS_DIR into a harness's gbrain MCP server env",
       features: { dir: true, dryRun: true },
-      options: [{ name: "--harness", takesValue: true, required: true, help: "harness to wire (grok)" }],
-      handler: (ctx, args) => {
-        const harness = s(args.harness);
-        if (harness === "grok") return grokWireHandler(ctx);
-        if (harness === "") {
-          return { lines: ["jspace: error: the following arguments are required: --harness"], exitCode: 2 };
-        }
-        const hint = optS(harness);
-        return {
-          lines: [`jspace: error: unsupported harness for harness wire: ${hint} (supported: grok; claude uses jspace gbrain wire)`],
-          exitCode: 1,
-        };
-      },
+      options: [
+        {
+          name: "--harness",
+          takesValue: true,
+          required: true,
+          validate: (v) => (v === "grok" ? null : `unsupported harness for harness wire: ${v} (supported: grok; claude uses jspace gbrain wire)`),
+          help: "harness to wire (grok)",
+        },
+      ],
+      handler: (ctx) => grokWireHandler(ctx),
     },
   ],
 };

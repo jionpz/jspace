@@ -7,7 +7,7 @@
 import { readFileSync, writeFileSync, copyFileSync, mkdirSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { CommandSpec, CmdContext } from "../../application/commands/command.ts";
+import type { CommandSpec, CmdContext, CmdResult } from "../../application/commands/command.ts";
 import {
   claudeJsonPath,
   wireSkillsDir,
@@ -59,14 +59,15 @@ const wireDeps = (dryRun: boolean): WireDeps => ({
   dryRun,
 });
 
-function wireHandler(ctx: CmdContext): { lines: string[]; exitCode?: number; warnings?: string[] } {
-  const deps = wireDeps(ctx.dryRun);
+/** `gbrain wire` handler — exported for tests with injected deps (write
+ *  failures must surface as errors + exit 1, never a silent exit 0 — issue #8 #9). */
+export function wireHandler(ctx: CmdContext, deps: WireDeps = wireDeps(ctx.dryRun)): CmdResult {
   const path = claudeJsonPath(homedir());
   let result: WireResult;
   try {
     result = wireSkillsDir(deps, ctx.root);
   } catch (e) {
-    return { lines: [], warnings: [`gbrain wire: ${e instanceof Error ? e.message : String(e)}`] };
+    return { lines: [], errors: [`gbrain wire: ${e instanceof Error ? e.message : String(e)}`], exitCode: 1 };
   }
 
   switch (result.status) {
@@ -83,11 +84,11 @@ function wireHandler(ctx: CmdContext): { lines: string[]; exitCode?: number; war
         ],
       };
     case "no-claude-json":
-      return { lines: [`jspace: error: ${result.reason ?? `${path} not found`}`], exitCode: 1 };
+      return { lines: [], errors: [result.reason ?? `${path} not found`], exitCode: 1 };
     case "no-gbrain-server":
-      return { lines: [`jspace: error: ${result.reason ?? "no gbrain MCP server"}`], exitCode: 1 };
+      return { lines: [], errors: [result.reason ?? "no gbrain MCP server"], exitCode: 1 };
     case "invalid-claude-json":
-      return { lines: [`jspace: error: ${result.reason ?? `${path} is not valid JSON`}`], exitCode: 1 };
+      return { lines: [], errors: [result.reason ?? `${path} is not valid JSON`], exitCode: 1 };
   }
 }
 

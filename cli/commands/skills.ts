@@ -4,7 +4,7 @@
 // paths; `~` expands per machine, machine-agnostic, no harness-specific var).
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { CommandSpec } from "../../application/commands/command.ts";
+import type { CommandSpec, CmdContext, CmdResult } from "../../application/commands/command.ts";
 import { installSkills, type InstallDeps, type InstallResult } from "../../application/skills/install.ts";
 import { ASSETS } from "../assets.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
@@ -38,6 +38,23 @@ const installDeps = (dryRun: boolean): InstallDeps => ({
   dryRun,
 });
 
+/** `skills install` handler — exported for tests with injected deps (write
+ *  failures must surface as errors + exit 1, never a silent exit 0 — issue #8 #9). */
+export function installHandler(
+  ctx: CmdContext,
+  args: { refresh?: unknown },
+  deps: InstallDeps = installDeps(ctx.dryRun),
+): CmdResult {
+  try {
+    const names = SKILLS_MANIFEST.workbench.map((s) => s.name);
+    const r = installSkills(deps, names, { refresh: b(args?.refresh) });
+    const root = userSkillsRoot();
+    return { lines: summarizeInstall(r, root, ctx.dryRun) };
+  } catch (e) {
+    return { lines: [], errors: [`skills install: ${e instanceof Error ? e.message : String(e)}`], exitCode: 1 };
+  }
+}
+
 const installSpec: CommandSpec = {
   name: "install",
   summary: "materialize official skills into ~/.agents/skills/ (multi-harness uniform location)",
@@ -45,17 +62,7 @@ const installSpec: CommandSpec = {
   options: [
     { name: "--refresh", dest: "refresh", takesValue: false, help: "refresh changed official files (hash-compare; default: fill gaps only, preserve local edits)" },
   ],
-  handler: (ctx, args) => {
-    try {
-      const names = SKILLS_MANIFEST.workbench.map((s) => s.name);
-      const r = installSkills(installDeps(ctx.dryRun), names, { refresh: b(args?.refresh) });
-      const root = userSkillsRoot();
-      const lines = summarizeInstall(r, root, ctx.dryRun);
-      return { lines };
-    } catch (e) {
-      return { lines: [], warnings: [`skills install: ${e instanceof Error ? e.message : String(e)}`] };
-    }
-  },
+  handler: installHandler,
 };
 
 function summarizeInstall(r: InstallResult, root: string, dryRun: boolean): string[] {

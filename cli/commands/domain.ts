@@ -17,7 +17,7 @@ const domainAddSpec: CommandSpec = {
   features: { dir: true, dryRun: true },
   options: [
     { name: "--path", takesValue: true, help: "relative path inside the workbench (default: workspace/<id>)" },
-    { name: "--tag", takesValue: true, repeatable: true, help: "domain tag (repeatable)" },
+    { name: "--tag", dest: "tags", takesValue: true, repeatable: true, help: "domain tag (repeatable)" },
     { name: "--purpose", takesValue: true, help: "domain purpose" },
   ],
   handler: (ctx, args) =>

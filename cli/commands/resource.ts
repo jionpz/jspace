@@ -20,7 +20,7 @@ const resourceAddSpec: CommandSpec = {
     { name: "--type", takesValue: true, help: "resource type (default: project)" },
     { name: "--path", takesValue: true, group: "ep", help: "absolute path entrypoint" },
     { name: "--url", takesValue: true, group: "ep", help: "url entrypoint" },
-    { name: "--tag", takesValue: true, repeatable: true, help: "resource tag (repeatable)" },
+    { name: "--tag", dest: "tags", takesValue: true, repeatable: true, help: "resource tag (repeatable)" },
     { name: "--notes", takesValue: true, help: "resource notes" },
   ],
   groups: [
