@@ -8,10 +8,11 @@
 //                      with noReply: true — OpenCode has no system-prompt
 //                      channel, so the context lands as a visible user message,
 //                      the closest SessionStart equivalent this platform offers)
-//   session.idle     → pending apply --quiet + cron check --quiet
-//                      (flush the user's staged queue + cron failure surface;
-//                       NO memory-writeback — idle fires every turn and an auto
-//                       write would write garbage; write-back stays explicit)
+//   session.idle     → surface cron failures as a visible no-reply message
+//                      (jspace cron check; exit != 0 → inject detail). NO auto
+//                      flush of staged writes — idle must not be more aggressive
+//                      than Claude/Grok (issue #7 P1.7): write-back AND staged
+//                      flush stay user-triggered (D3, no auto write)
 //   experimental.session.compacting
 //                    → jspace context session-start --plain pushed into the
 //                      compaction context (Grok-native memory_flush equivalent;
@@ -22,18 +23,6 @@
 import type { Plugin } from "@opencode-ai/plugin";
 
 const SESSION_START_TIMEOUT_MS = 8000;
-
-/** Fire-and-forget spawn with cwd = the workbench. Never awaited (idle fires
- *  every turn and a blocking spawn would stall the event loop); exit code is
- *  deliberately ignored (hook noise). */
-const spawn = (cmd: string[], cwd: string): void => {
-  try {
-    const proc = Bun.spawn(cmd, { cwd, stdout: "ignore", stderr: "ignore" });
-    void proc.exited;
-  } catch {
-    // jspace missing / workbench gone: silent — a hook must never block.
-  }
-};
 
 /** Run `jspace context session-start --plain` with a hard timeout + stdin
  *  ignored + exit-code check. Returns "" when jspace is missing, hangs, or
@@ -56,17 +45,38 @@ async function runSessionStart(cwd: string): Promise<string> {
   }
 }
 
+/** Run `jspace cron check` (no --quiet: idle only surfaces when there is
+ *  something to report) with a hard timeout + stdin ignored. Returns the exit
+ *  code + output; the caller decides whether to surface it. */
+async function runCronCheck(cwd: string): Promise<{ exit: number; output: string }> {
+  try {
+    const proc = Bun.spawn(["jspace", "cron", "check"], {
+      cwd,
+      stdout: "pipe",
+      stderr: "ignore",
+      stdin: "ignore",
+      signal: AbortSignal.timeout(SESSION_START_TIMEOUT_MS),
+    });
+    const exit = await proc.exited;
+    const output = await new Response(proc.stdout).text();
+    return { exit, output };
+  } catch {
+    // jspace missing / timed out: nothing to report.
+    return { exit: 0, output: "" };
+  }
+}
+
 /** Pure event dispatch (no Bun, no client): given the deps, return the event
- *  handler. Separated so the plugin's branches are unit-testable with a mock
- *  inject + mock spawn (no real process, no Bun.spawn in tests). */
+ *  handler. Separated so the plugin's branches are unit-testable with mock
+ *  inject + mock cron check (no real process, no Bun.spawn in tests). */
 export interface EventDeps {
   /** session.created → inject session-start context (awaited; self-capped by the
    *  runner's timeout so it can't stall the event loop indefinitely). */
   injectSessionStart: (sessionID: string) => Promise<void>;
-  /** session.idle → fire-and-forget spawns (never awaited). */
-  spawn: (cmd: string[], cwd: string) => void;
-  /** Workbench root (PluginInput.directory) used for idle spawns. */
-  wbRoot: string;
+  /** session.idle → surface cron failures as a visible reminder (no auto flush
+   *  of staged writes — P1.7: idle must not be more aggressive than Claude/Grok,
+   *  staged writes stay user-triggered). */
+  checkCron: (sessionID: string) => Promise<void>;
 }
 
 export function createEventHandler(deps: EventDeps) {
@@ -75,14 +85,8 @@ export function createEventHandler(deps: EventDeps) {
       const sessionID = event.properties?.sessionID;
       if (sessionID) await deps.injectSessionStart(sessionID);
     } else if (event.type === "session.idle") {
-      // pending apply flushes the user's *explicitly staged* writes — an
-      // intent-from-user flush, never an auto write-back. It is idempotent and
-      // a cheap no-op when nothing is staged (the envelope repo resolves the
-      // filehub internally — the plugin stays a thin emitter, no registry
-      // lookup here). cron check surfaces failures (exit 1 when anything needs
-      // attention). Both --quiet: suppress stdout in the session.
-      deps.spawn(["jspace", "pending", "apply", "--quiet"], deps.wbRoot);
-      deps.spawn(["jspace", "cron", "check", "--quiet"], deps.wbRoot);
+      const sessionID = event.properties?.sessionID;
+      if (sessionID) await deps.checkCron(sessionID);
     }
   };
 }
@@ -116,8 +120,22 @@ export const JSpacePlugin: Plugin = async ({ directory, client }) => {
           // injection failure: silent — the session continues without the context.
         }
       },
-      spawn,
-      wbRoot,
+      checkCron: async (sessionID) => {
+        // Surface cron failures when there are any (exit != 0) — never on a
+        // clean check, so idle doesn't spam. The reminder is a no-reply message:
+        // visible, actionable, still just context (no write to gbrain).
+        const { exit, output } = await runCronCheck(wbRoot);
+        if (exit !== 0 && output.trim().length > 0) {
+          try {
+            await client.session.prompt({
+              path: { id: sessionID },
+              body: { parts: [{ type: "text", text: output }], noReply: true },
+            });
+          } catch {
+            // injection failure: silent — the session continues.
+          }
+        }
+      },
     }),
     "experimental.session.compacting": createCompactingHandler(() => runSessionStart(wbRoot)),
   };

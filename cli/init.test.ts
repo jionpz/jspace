@@ -107,8 +107,9 @@ test("init materializes the OpenCode plugin", () => {
   expect(plugin).toContain("session.created");
   expect(plugin).toContain("session.idle");
   expect(plugin).toContain("experimental.session.compacting");
-  expect(plugin).toContain("pending apply --quiet");
-  expect(plugin).toContain("cron check --quiet");
+  expect(plugin).toContain("cron check");
+  // P1.7: idle must NOT auto-flush staged writes (no pending apply in the plugin)
+  expect(plugin).not.toContain("pending apply");
 
   rmSync(root, { recursive: true, force: true });
 });

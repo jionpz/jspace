@@ -11,7 +11,7 @@
 | 会话 hook | ✅ SessionStart / UserPromptSubmit（`.claude/settings.json`，`jspace context session-start` / `turn`） | best_effort（交互式 + 无头 `claude -p` 均触发——实测确认） |
 | MCP | ✅ 原生（`~/.claude.json` `mcpServers.gbrain`） | stdio `command + args` |
 | skills 投影 | `.claude/skills/` + `.agents/skills/`（工作台级）+ `~/.agents/skills/`（用户级） | 工作台级 init/upgrade 物化；用户级 `jspace skills install` |
-| 生命周期分级 | session-start best_effort / session-end best_effort / fallback manual / crash best_effort | 见 capabilities.lifecycle |
+| 生命周期分级 | session-start best_effort / session-end manual / fallback manual / crash best_effort | 见 capabilities.lifecycle |
 
 ## 接线（init 后现状）
 

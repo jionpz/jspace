@@ -11,7 +11,7 @@
 | 会话事件 | ✅ `session.created` / `session.idle` / `experimental.session.compacting`（`.opencode/plugins/jspace.ts`） | best_effort（plugin 是否被 OpenCode 自动发现 + 事件真实触发**未实测**） |
 | MCP | ✅ 原生 | |
 | skills 投影 | `.opencode/skills/`（工作台级）+ `.agents/skills/`（共享） | init/upgrade 物化 |
-| 生命周期分级 | session-start best_effort / session-end best_effort / fallback manual / crash best_effort | 见 capabilities.lifecycle |
+| 生命周期分级 | session-start best_effort / session-end manual / fallback manual / crash best_effort | 见 capabilities.lifecycle |
 
 ## 接线（init 后现状）
 
@@ -19,13 +19,13 @@
 
 | 事件 | 动作 | 纪律 |
 |---|---|---|
-| `session.created` | `jspace context session-start` | session-start 注入 |
-| `session.idle` | `jspace pending apply --quiet` + `jspace cron check --quiet` | **flush 用户显式 stage 的队列 + cron 失败面**；idle 每 turn fire，**不**自动 memory-writeback（D3：自动写会写废） |
+| `session.created` | `client.session.prompt`（`noReply: true`）注入 `jspace context session-start --plain` 文本 | session-start 注入；OpenCode 无 system-prompt 通道，注入以可见 user message 落历史 |
+| `session.idle` | `jspace cron check`（非 quiet），exit != 0 时把输出经 `noReply` 注入为可见提醒 | **失败面可见**；idle **不**自动 flush staged 写（P1.7：与 Claude/Grok 一致，staged flush + write-back 都用户显式触发）；不自动 memory-writeback（D3） |
 | `experimental.session.compacting` | `jspace context session-start --plain` push 进 compaction context | 只注入 context，不写 gbrain |
 
-所有 spawn `Bun.spawn` fire-and-forget（不 await，避免阻塞每 turn 事件循环），失败静默——hook/plugin 永不阻塞会话。`cwd = directory`（workbench 根）。
+所有 spawn 带 guard（8s 超时 + `stdin: ignore` + 退出码检查），失败静默返回空——hook/plugin 永不阻塞会话。`cwd = directory`（workbench 根）。
 
-`jspace pending apply --quiet` / `jspace cron check --quiet` 的 `--quiet` 由 JSpace CLI 提供（抑制 stdout，保留 exit code）。
+`jspace cron check` 的退出码语义：exit != 0 表示有需要 attention 的项（失败 + pending staged writes）；`--quiet` 变体抑制 stdout 但保留 exit code（JSpace CLI 提供）。
 
 ## 待真实 OpenCode 会话验证（best_effort 边界）
 

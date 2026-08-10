@@ -14,7 +14,7 @@
 | 会话事件 | ⚠️ `session_start` / `before_agent_start`（扩展事件，需 pi-mcp-adapter） | 未实测，标 best_effort |
 | hooks.json | ❌ 无 | 注入靠 context/SYSTEM 文件 + 扩展事件 |
 | skills 投影 | `~/.agents/skills/`（用户级） | `jspace skills install` 物化；Pi 认该目录 |
-| 生命周期分级 | session-start best_effort / session-end best_effort / fallback manual / crash best_effort | 见 capabilities.lifecycle |
+| 生命周期分级 | session-start best_effort / session-end manual / fallback manual / crash best_effort | 见 capabilities.lifecycle |
 
 ## gbrain 接入：两条路
 

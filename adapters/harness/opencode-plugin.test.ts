@@ -1,35 +1,35 @@
 // adapters/harness/opencode-plugin.test.ts — OpenCode plugin event dispatch
-// (pure handlers from the template, spawn/inject mocked). Pins the D3 contract:
-// session.idle flushes pending + cron check, NEVER memory-writeback; and the
-// P0 (issue #7) injection contract: session.created injects the session-start
-// context via the client prompt (noReply), never fire-and-forget stdout.
+// (pure handlers from the template, inject/cron mocked). Pins the D3 + P1.7
+// (issue #7) contract: session.idle surfaces cron failures as a visible
+// reminder and NEVER auto-flushes staged writes (idle must not be more
+// aggressive than Claude/Grok) and never write-backs; session.created injects
+// the session-start context via the client prompt (noReply).
 // Run: bun test adapters/harness/opencode-plugin.test.ts
 import { expect, test } from "bun:test";
 import { createEventHandler, createCompactingHandler } from "../../templates/workbench/.opencode/plugins/jspace.ts";
 
-const WB = "/wb";
-
 function makeDeps(overrides: Partial<Parameters<typeof createEventHandler>[0]> = {}) {
-  const spawns: { cmd: string[]; cwd: string }[] = [];
   const injected: string[] = [];
+  const cronChecked: string[] = [];
   const deps = {
     injectSessionStart: async (sessionID: string) => {
       injected.push(sessionID);
     },
-    spawn: (cmd: string[], cwd: string) => spawns.push({ cmd, cwd }),
-    wbRoot: WB,
+    checkCron: async (sessionID: string) => {
+      cronChecked.push(sessionID);
+    },
     ...overrides,
   };
-  return { deps, spawns, injected };
+  return { deps, injected, cronChecked };
 }
 
 test("session.created injects session-start context with the session id", async () => {
-  const { deps, spawns, injected } = makeDeps();
+  const { deps, injected, cronChecked } = makeDeps();
   const handler = createEventHandler(deps);
   await handler({ event: { type: "session.created", properties: { sessionID: "sess-123" } } });
   expect(injected).toEqual(["sess-123"]);
-  // no idle spawns on created
-  expect(spawns).toEqual([]);
+  // created must not trigger a cron check
+  expect(cronChecked).toEqual([]);
 });
 
 test("session.created without session id is a no-op (nothing to inject)", async () => {
@@ -39,25 +39,29 @@ test("session.created without session id is a no-op (nothing to inject)", async 
   expect(injected).toEqual([]);
 });
 
-test("session.idle -> pending apply --quiet + cron check --quiet (no writeback)", async () => {
-  const { deps, spawns } = makeDeps();
+test("session.idle surfaces cron failures for the session (no auto flush, no writeback)", async () => {
+  const { deps, injected, cronChecked } = makeDeps();
   const handler = createEventHandler(deps);
-  await handler({ event: { type: "session.idle" } });
-  const cmds = spawns.map((c) => c.cmd.join(" "));
-  expect(cmds).toContain("jspace pending apply --quiet");
-  expect(cmds).toContain("jspace cron check --quiet");
-  // D3 hard constraint: idle NEVER triggers a write-back / session-end
-  expect(cmds.some((c) => /writeback|memory-writeback|session-end/i.test(c))).toBe(false);
-  expect(spawns.every((c) => c.cwd === WB)).toBe(true);
+  await handler({ event: { type: "session.idle", properties: { sessionID: "sess-456" } } });
+  expect(cronChecked).toEqual(["sess-456"]);
+  // P1.7: idle must NOT flush staged writes (no pending apply) and never write-back
+  expect(injected).toEqual([]);
 });
 
-test("unrelated event types are ignored (no inject, no spawn)", async () => {
-  const { deps, spawns, injected } = makeDeps();
+test("session.idle without session id is a no-op (nothing to surface)", async () => {
+  const { deps, cronChecked } = makeDeps();
+  const handler = createEventHandler(deps);
+  await handler({ event: { type: "session.idle" } });
+  expect(cronChecked).toEqual([]);
+});
+
+test("unrelated event types are ignored (no inject, no cron check)", async () => {
+  const { deps, injected, cronChecked } = makeDeps();
   const handler = createEventHandler(deps);
   await handler({ event: { type: "chat.message" } });
   await handler({ event: { type: "session.compacted" } });
-  expect(spawns).toEqual([]);
   expect(injected).toEqual([]);
+  expect(cronChecked).toEqual([]);
 });
 
 test("compacting pushes non-empty session-start context", async () => {

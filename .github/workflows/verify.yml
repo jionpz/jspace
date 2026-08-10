@@ -1,6 +1,11 @@
 # PR/push quality gate: type-check, unit tests, generated-asset freshness,
 # contract decode and temp-workbench integration. Runs on every push to main
 # and every PR (independent of the tag-driven build/release matrix).
+#
+# Order (issue #7 P1.5): committed-manifest integrity runs BEFORE any gen-assets
+# so it asserts the committed state, not the freshly-written one; the freshness
+# step then proves the committed generated files are up to date. Static guards
+# (version/docs/harness) precede the heavier tsc/test/python/full-chain tail.
 name: verify
 
 on:
@@ -21,47 +26,20 @@ jobs:
       - name: Install deps
         run: bun install --frozen-lockfile
 
-      - name: Type check
-        run: bunx tsc --noEmit
-
-      - name: Unit tests
-        run: bun test
-
-      - name: Cross-skill reference reachability
-        run: bun test cli/assets-reachability.test.ts
-
-      - name: Skill self-checks (C1–C4)
-        run: bun run scripts/check-skills.ts
-
-      - name: Office extraction tests
-        run: python3 skills/asset-ingest/scripts/office-extract.test.py
-
-      - name: Layer-routing / markitdown fallback regression
-        run: python3 skills/asset-ingest/scripts/extract.test.py
+      # P1 (issue #7): the committed manifest's source must exist on disk AND be
+      # git-tracked AND not gitignored — the issue-#6 root cause (a source lost
+      # to gitignore keeps its bundle bytes until the next regen; local guards
+      # pass because the file is still on disk, only a clean clone reds). Runs
+      # before gen-assets so it asserts the committed manifest. The git checks
+      # (ls-files / check-ignore) are the part the old inline path-exists check
+      # could never catch; the fs half replaces that inline regex.
+      - name: Manifest source integrity (committed; exists + tracked + not ignored)
+        run: bun run scripts/check-manifest-integrity.ts
 
       - name: Asset freshness (gen-assets must be a no-op, incl. skills manifest)
         run: |
           bun run scripts/gen-assets.ts
           git diff --exit-code -- cli/assets.generated.ts cli/manifest.generated.ts cli/skills.generated.ts adapters/harness/capabilities.generated.ts
-
-      # P0 (issue #6): every path the committed manifest declares must exist on
-      # disk. Catches a template source that got gitignored/dropped while the
-      # generated bundle still holds its bytes (the .opencode plugin loss) — the
-      # source-integrity guard inside gen-assets already fails on regen; this is
-      # the same invariant asserted directly against the committed manifest.
-      - name: Manifest-declared template paths exist on disk
-        run: bun -e '
-          const fs = require("node:fs");
-          const ts = fs.readFileSync("cli/manifest.generated.ts", "utf-8");
-          const paths = [...ts.matchAll(/path: "([^"]+)"/g)].map((m) => m[1]);
-          const missing = paths.filter((p) => !fs.existsSync(p));
-          if (missing.length > 0) {
-            console.error("missing template file(s) declared in manifest:");
-            for (const p of missing) console.error("  " + p);
-            process.exit(1);
-          }
-          console.log("manifest declares " + paths.length + " path(s), all exist on disk");
-        '
 
       # P1-1: catch a bumped package.json with a stale cli/version.generated.ts.
       # Not a full `gen-version && diff` — dev builds embed `git describe`'s
@@ -92,6 +70,24 @@ jobs:
       - name: Harness consistency (capabilities.yaml ↔ code/docs/templates)
         run: bun run scripts/check-harness-consistency.ts
 
+      - name: Type check
+        run: bunx tsc --noEmit
+
+      - name: Unit tests
+        run: bun test
+
+      - name: Cross-skill reference reachability
+        run: bun test cli/assets-reachability.test.ts
+
+      - name: Skill self-checks (C1–C4)
+        run: bun run scripts/check-skills.ts
+
+      - name: Office extraction tests
+        run: python3 skills/asset-ingest/scripts/office-extract.test.py
+
+      - name: Layer-routing / markitdown fallback regression
+        run: python3 skills/asset-ingest/scripts/extract.test.py
+
       - name: Scheduler argv round-trip + reconciliation smoke (pure, no real scheduler)
         run: bun test application/automation/invocation.test.ts application/automation/scheduler.test.ts adapters/harness/argv.test.ts
 
@@ -115,6 +111,9 @@ jobs:
           bun run cli/main.ts cron run inbox-tidy --dir /tmp/jspace-verify --dry-run | grep "dry-run: would run"
           # P2 AC7: new-harness argv assembles without a real grok binary (argv-only seam)
           bun run cli/main.ts cron run inbox-tidy --dir /tmp/jspace-verify --harness grok --dry-run | grep -- "--allow"
+          # P0 (issue #7): opencode argv includes the `run` subcommand (capability
+          # headless prefix) — assert the assembled argv, no real binary needed
+          bun run cli/main.ts cron run inbox-tidy --dir /tmp/jspace-verify --harness opencode --dry-run | grep -- "opencode run"
           # reconciliation plan preview (no real scheduler apply)
           bun run cli/main.ts cron install --dir /tmp/jspace-verify --dry-run | grep "would apply"
           bun run cli/main.ts cron check --dir /tmp/jspace-verify

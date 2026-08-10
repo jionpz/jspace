@@ -39,7 +39,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "native_memory": "none",
       "lifecycle": {
         "session_start": "best_effort",
-        "session_end": "best_effort",
+        "session_end": "manual",
         "fallback": "manual",
         "crash_recovery": "best_effort"
       },
@@ -124,7 +124,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "native_memory": "none",
       "lifecycle": {
         "session_start": "best_effort",
-        "session_end": "best_effort",
+        "session_end": "manual",
         "fallback": "manual",
         "crash_recovery": "best_effort"
       },
@@ -158,7 +158,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "native_memory": "none",
       "lifecycle": {
         "session_start": "best_effort",
-        "session_end": "best_effort",
+        "session_end": "manual",
         "fallback": "manual",
         "crash_recovery": "best_effort"
       },

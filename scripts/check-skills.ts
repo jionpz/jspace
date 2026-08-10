@@ -141,7 +141,10 @@ function pass(label: string): void {
   ];
   const snapshot = new Map(generated.map((f) => [f, readFileSync(join(repoRoot, f), "utf-8")]));
   try {
-    execSync("bun run scripts/gen-assets.ts", { cwd: repoRoot, stdio: "pipe" });
+    // stdio: "inherit" so a gen-assets failure (e.g. the source-integrity guard
+    // from issue #6/#7) prints its detailed error instead of a vague
+    // "Command failed" (P1.5).
+    execSync("bun run scripts/gen-assets.ts", { cwd: repoRoot, stdio: "inherit" });
     const changed = generated.filter((f) => readFileSync(join(repoRoot, f), "utf-8") !== snapshot.get(f));
     if (changed.length > 0) {
       fail(`C4 generated files are stale (run gen-assets and commit): ${changed.join(", ")}`);

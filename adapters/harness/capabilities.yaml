@@ -64,7 +64,7 @@ harnesses:
     native_memory: none
     lifecycle:
       session_start: best_effort
-      session_end: best_effort
+      session_end: manual
       fallback: manual
       crash_recovery: best_effort
     cron_harness_enum_value: claude
@@ -112,7 +112,7 @@ harnesses:
     native_memory: none
     lifecycle:
       session_start: best_effort
-      session_end: best_effort
+      session_end: manual
       fallback: manual
       crash_recovery: best_effort
     cron_harness_enum_value: opencode
@@ -131,7 +131,7 @@ harnesses:
     native_memory: none
     lifecycle:
       session_start: best_effort
-      session_end: best_effort
+      session_end: manual
       fallback: manual
       crash_recovery: best_effort
     cron_harness_enum_value: pi
