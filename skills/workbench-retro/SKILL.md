@@ -21,7 +21,7 @@ triggers:
 |---|---|---|
 | 看什么 | 本周产生了**什么事实** | 本周**纪律有没有被执行**、流程哪里卡 |
 | 输入 | gbrain 近一周页面 | gbrain + filehub + cron 日志 + registry 结构 |
-| 输出 | `memory/consolidate/<date>` + state 回写 | `memory/retro/<date>` + 建议清单 |
+| 输出 | `records/consolidate/<date>` + state 回写 | `records/retro/<date>` + 建议清单 |
 | 失败模式 | 事实丢失 | 纪律腐化(无声) |
 
 时序:retro 排在 consolidate **之后**,可把巩固页当输入之一——「巩固页说 X 项目本周有活动,但 X 的 state 页 10 天没动」这类交叉信号只有后跑才拿得到。
@@ -57,7 +57,7 @@ find <filehub>/_inbox -type f -mtime +7            # inbox 停滞(检查 5)
 ls .jspace/logs/cron/*/ | tail -20                 # 本周 cron 运行痕迹(检查 4/6)
 
 # 产出
-gbrain put memory/retro/<YYYY-MM-DD> < <报告文件>   # dated memory record,同周覆盖同页
+gbrain put records/retro/<YYYY-MM-DD> < <报告文件>   # dated memory record,同周覆盖同页
 ```
 
 `<filehub>` = `.jspace/hub.json` 中 `type: filehub` 资源的 `primary: true` path(经 `local.json` 绑定解析)。
@@ -67,8 +67,8 @@ gbrain put memory/retro/<YYYY-MM-DD> < <报告文件>   # dated memory record,�
 1. **定窗口**:默认近 7 天;说清起止日期,后续所有判读都相对它。
 2. **取证**:跑六条检查的命令(`~/.agents/skills/workbench-retro/references/checks.md`),**留下实际输出**。任一条拿不到证据 → 记「无法判定」,继续下一条,不中断。
 3. **判读分级**:按决策表把发现归入 立即可做 / 需你决策 / 观察中;每条写明「证据 → 结论」两段,不许只有结论。
-4. **复现升级**:读上周 `memory/retro/<上周日期>` 页,把连续出现的「观察中」提级并标注已复现周数。
-5. **产出**:写 gbrain note 页 `memory/retro/<YYYY-MM-DD>`(`tags: [retro, weekly]`、`project: jspace`;同周重跑覆盖同页,不新建);会话模式同时把清单呈给用户。
+4. **复现升级**:读上周 `records/retro/<上周日期>` 页,把连续出现的「观察中」提级并标注已复现周数。
+5. **产出**:写 gbrain note 页 `records/retro/<YYYY-MM-DD>`(`tags: [retro, weekly]`、`project: jspace`;同周重跑覆盖同页,不新建);会话模式同时把清单呈给用户。
 6. **执行(仅会话模式、仅经确认)**:用户逐项确认后才执行「立即可做」项;**未确认的一律不动**。无头模式跳过本步。
 
 ## 边界(红线)
@@ -91,7 +91,7 @@ gbrain put memory/retro/<YYYY-MM-DD> < <报告文件>   # dated memory record,�
 ## 自检(做完跑这条)
 
 ```bash
-gbrain get memory/retro/<YYYY-MM-DD>   # 页存在;tags 含 retro;每条结论都带证据行
+gbrain get records/retro/<YYYY-MM-DD>   # 页存在;tags 含 retro;每条结论都带证据行
 jspace doctor --dir .                   # 自省过程未把工作台改坏(应与跑之前一致)
 ```
 (报告里出现任何一条没有证据支撑的结论 = 本次自省不合格,重跑第 2 步)

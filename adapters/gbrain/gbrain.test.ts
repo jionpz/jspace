@@ -66,3 +66,41 @@ test("put feeds content via stdin and carries the timeout; get passes no stdin",
   expect(calls[1].argv).toEqual(["gbrain", "get", "assets/foo/doc"]);
   expect(calls[1].opts.input).toBeUndefined();
 });
+
+test("list: builds filter argv and parses TSV rows (slug/type/date/title)", async () => {
+  const { run, calls } = fakeRun(() =>
+    okRes("project/jspace/state\tnote\t2026-08-10\tjspace 当前状态\nproject/wms/state\tnote\t2026-08-05\twms 当前状态\n"),
+  );
+  const g = realGbrain(run, 2000);
+  const r = await g.list({ type: "note", tag: "project", limit: 50 });
+  expect(r.ok).toBe(true);
+  expect(calls[0].argv).toEqual(["gbrain", "list", "--type", "note", "--tag", "project", "--limit", "50"]);
+  expect(calls[0].opts.timeoutMs).toBe(2000);
+  expect(r.rows).toEqual([
+    { slug: "project/jspace/state", updatedAt: "2026-08-10" },
+    { slug: "project/wms/state", updatedAt: "2026-08-05" },
+  ]);
+});
+
+test("list: no filters -> bare gbrain list", async () => {
+  const { run, calls } = fakeRun(() => okRes("a/b\tnote\t2026-08-01\ttitle\n"));
+  const g = realGbrain(run);
+  await g.list();
+  expect(calls[0].argv).toEqual(["gbrain", "list"]);
+});
+
+test("list: exit != 0 or timeout -> ok false with error", async () => {
+  const { run } = fakeRun(() => ({ exit: 1, output: "", stdout: "", stderr: "lock held", timedOut: false }));
+  const g = realGbrain(run);
+  const r = await g.list({ tag: "project" });
+  expect(r.ok).toBe(false);
+  expect(r.error).toContain("lock held");
+});
+
+test("list: empty output -> ok true, zero rows", async () => {
+  const { run } = fakeRun(() => okRes(""));
+  const g = realGbrain(run);
+  const r = await g.list();
+  expect(r.ok).toBe(true);
+  expect(r.rows).toEqual([]);
+});

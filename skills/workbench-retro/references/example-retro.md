@@ -16,7 +16,7 @@ $ gbrain list --type note -n 50
 project/jspace/state          updated 2026-08-09
 project/机器学习/state         updated 2026-08-09
 project/报表模块/state         updated 2026-08-09
-memory/consolidate/2026-08-09 updated 2026-08-09
+records/consolidate/2026-08-09 updated 2026-08-09
 
 $ ls <filehub>/projects/
 52期体验营/  报表模块/
@@ -57,7 +57,7 @@ $ ls .jspace/logs/cron/inbox-tidy/
 ## 第 4 步 · 复现升级
 
 ```bash
-$ gbrain get memory/retro/2026-08-03
+$ gbrain get records/retro/2026-08-03
 (不存在 —— 首次自省,无上周页可对比)
 ```
 → 本次所有「观察中」项均为首次出现,不升级。
@@ -65,8 +65,8 @@ $ gbrain get memory/retro/2026-08-03
 ## 第 5 步 · 产出
 
 ```bash
-$ gbrain put memory/retro/2026-08-10 < /tmp/retro.md
-$ gbrain get memory/retro/2026-08-10        # 验证读回
+$ gbrain put records/retro/2026-08-10 < /tmp/retro.md
+$ gbrain get records/retro/2026-08-10        # 验证读回
 ```
 
 页正文即下面这份报告;会话模式下同时呈给用户。

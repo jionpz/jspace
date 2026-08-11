@@ -51,8 +51,8 @@ python3 .jspace/skills/asset-ingest/scripts/extract.py <文件> --out <伴生文
 3. **策展**（读抽取输出 → 精炼，不 dump）：
    - `Summary`：这份文件是什么。
    - `Key Facts`：收关键数字/表头要点，精炼（≤ ~10 条）；**数字要带出处语境**（如 `[Source: projects/acme/2026-08-03-acme报价.xlsx, Sheet 报价单 B2, 2026-08-03]`）。关键数字进页是「问一句找那个数」的命中保障。
-4. **入脑**（写 gbrain reference 页，既有模板 + 新增）：
-   - frontmatter 不变（`type: reference` / `project` / `tags` / `rel_path`）。
+4. **入脑**（写 gbrain asset 指针页，既有模板 + 新增）：
+   - frontmatter 不变（`type: note` / `project` / `tags: [asset]` / `rel_path`）。
    - `Key Facts` 策展数字；**加一行** `抽取: <伴生文件 rel_path>`（全量数据可重开）。
    - 引文纪律：事实带 `[Source: <本体 rel_path>, YYYY-MM-DD]`（对齐 gbrain ingest 引文）。
 5. **登记**：项目 `index.md` 挂一行（既有；可在行内附注 `.extract.md` 存在）。
@@ -85,6 +85,6 @@ python3 .jspace/skills/asset-ingest/scripts/extract.py <文件> --out <伴生文
 
 ## 纪律
 
-- **伴生 `.extract.md` 是全量存档，页内 Key Facts 是策展**：不要为了「全」把大表 dump 进 reference 页（保持 gbrain 页精简、检索命中质量高）。
+- **伴生 `.extract.md` 是全量存档，页内 Key Facts 是策展**：不要为了「全」把大表 dump 进 asset 指针页（保持 gbrain 页精简、检索命中质量高）。
 - 抽取是派生数据，删除伴生文件安全（页内注记一并撤）。
 - 深度抽取不改变 cron / 无头批量第一遍的「摘要 + 指针」行为。

@@ -9,6 +9,8 @@ import { normalizePortablePath } from "../../core/contracts/paths.ts";
 import { decodeHub, type Project } from "../../core/contracts/hub.ts";
 import { writeHubAtomic } from "../../adapters/fs/workbench-state.ts";
 import { loadHub } from "../workspace/state.ts";
+import { listProjectStates, type ProjectOverview } from "../context/project-states.ts";
+import type { GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
 
 /** Default owning domain: `filehub init --register` creates this when missing. */
 const DEFAULT_DOMAIN = "files";
@@ -20,6 +22,39 @@ export function projectList(root: string, json: boolean): CmdResult {
   }
   if (hub.projects.length === 0) return { lines: ["jspace: ok: no projects"] };
   return { lines: hub.projects.map((p) => `${p.id}  ${p.domain}  ${p.status}`) };
+}
+
+/** Overview view (`project list --status`): every gbrain project state card
+ *  (including code projects not registered in the hub) + hub-registered projects
+ *  without a state card, flagged. gbrain failure degrades to the hub-only list.
+ */
+export async function projectListStatus(root: string, json: boolean, gbrain: GbrainDeps): Promise<CmdResult> {
+  const hub = loadHub(root);
+  const states = await listProjectStates(gbrain);
+
+  // Union: state cards first (recency-sorted by gbrain list), then hub projects
+  // without a card. Code projects with a card but no hub entry appear via the
+  // state-card set.
+  const seen = new Set<string>();
+  const cards: (ProjectOverview & { hubRegistered: boolean; hasStateCard: boolean })[] = [];
+  for (const s of states) {
+    seen.add(s.id);
+    cards.push({ ...s, hubRegistered: hub.projects.some((p) => p.id === s.id), hasStateCard: true });
+  }
+  for (const p of hub.projects) {
+    if (!seen.has(p.id)) cards.push({ id: p.id, what: "", now: "", next: "", related: [], updatedAt: "", hubRegistered: true, hasStateCard: false });
+  }
+
+  if (json) return { lines: [], data: { projects: cards } };
+
+  if (cards.length === 0) return { lines: ["jspace: ok: no projects"] };
+  const lines = cards.map((c) => {
+    if (!c.hasStateCard) return `${c.id}  (无状态卡 — hub 已注册)`;
+    const skeleton = [c.what, c.now].filter((s) => s !== "").join(" — ");
+    const rel = c.related.length > 0 ? `  [相关: ${c.related.join(", ")}]` : "";
+    return `${c.id}  ${skeleton || "(无摘要)"}${rel}`;
+  });
+  return { lines };
 }
 
 export function projectAdd(

@@ -35,7 +35,7 @@
 - 把文件从源目录**移动**到目标目录（不动原件副本，源目录保持干净）。
 
 ### 4. 入脑（复用 gbrain-write.md）
-- 写 gbrain reference 页（slug `assets/<项目|领域>/<语义名>`）：frontmatter（type/source/project/tags/**rel_path**）+ Summary + Key Facts + Pointer。
+- 写 gbrain asset 指针页（slug `assets/<项目|领域>/<语义名>`）：frontmatter（type/source/project/tags: [asset]/**rel_path**）+ Summary + Key Facts + Pointer。
 - excel/ppt 关键数字需要时可走深度抽取（`~/.agents/skills/asset-ingest/references/deep-extract.md`）。
 
 ### 5. 登记

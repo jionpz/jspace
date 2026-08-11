@@ -38,47 +38,99 @@ Minimal contract shared by all harnesses:
 
 ```yaml
 ---
-type: lesson | note | decision | reference | smoke   # pick one
+type: note                                  # all pages are note; classification lives in the slug
 source: codex | claude | hermes | pi | manual
-project: <id>
-tags: [t1, t2]
-embed_skip: true   # required when no embedding is reachable
+project: <id>                               # owning project id (ascii); governance pages use a knowledge domain
+tags: [t1, t2]                              # retrieval routing tags (see memory model below)
+embed_skip: true                            # required when no embedding is reachable
 ---
 ```
 
-## Page type semantics (memory vs knowledge)
+**`type` is always `note`** — it carries no classification. Page role is encoded by the slug namespace (see memory model below) and routed by `tags`.
 
-`type` splits pages into two roles. Keep them distinct — they feed different retrieval paths:
+## Memory model (authoritative)
 
-| type        | role                         | retrieval use           | write pattern |
-|-------------|------------------------------|-------------------------|---------------|
-| reference   | knowledge (asset pointer)    | stable-knowledge Q&A    | append-only   |
-| lesson      | knowledge (reusable)         | stable-knowledge Q&A    | append-only   |
-| decision    | memory + knowledge           | recent injection + Q&A  | fixed slug, overwrite |
-| note        | memory (state/todo/progress) | recent injection        | fixed slug, overwrite |
-| smoke       | discardable                  | never retrieved         | delete after use |
+**Principle: 归属定根, 语义定叶, 写语义唯一.** Classification comes from the slug namespace — one page has exactly one home and one write semantics. `type` is uniform `note`; retrieval is routed by `tags`.
 
-- Memory = current state (progress, todo, last decision); knowledge = stays true and reusable regardless of when it was written.
-- Long-form knowledge bodies live in the file hub; gbrain knowledge pages are summaries + pointers, never full documents.
-- Session-start injection favors recent memory; question answering favors stable knowledge with recent memory mixed in.
+### Six namespaces
+
+| Namespace | Write semantics | Content | Example |
+|---|---|---|---|
+| `project/<id>/state` | fixed slug **overwrite** | project status card: 是什么·到哪了·下一步·执行层指针·相关项目 | `project/jspace/state` |
+| `project/<id>/decisions/<主题>` | **append-only, immutable** | project decision: 决定+理由+日期+关联 | `project/jspace/decisions/不封装gbrain` |
+| `project/<id>/lessons/<主题>` | **append-only, immutable** | project-specific lesson / reusable point | `project/jspace/lessons/中文slug的教训` |
+| `knowledge/<域>/<主题>` | **append-only, immutable** | cross-project reusable knowledge (域 = generic knowledge domain, no project name) | `knowledge/governance/记忆积累全局规则` |
+| `assets/<项目id\|领域>/<语义名>` | overwrite / bump `-vN` | asset pointer page (file body stays in the asset layer) | `assets/tiyanying-52/回访登记` |
+| `records/consolidate\|retro/<date>` | dated slug, same-week overwrite | periodic snapshot / retro — the **time projection** of the other layers | `records/retro/2026-08-10` |
+
+### Three boundary judgments
+
+1. **Belongs to a project** — names a project, changes it, or decides for it → `project/<id>/`. Code projects use the repo ascii slug (`project/wms/state`); business projects use the registered ascii id (`tiyanying-52`). Domain/technical topics never own a `project/` id.
+2. **Promotes to global** — reusable across projects → `knowledge/<域>/<主题>` (域 organizes, never carries a project name). A principle-level red line is knowledge under a governance domain.
+3. **Execution detail never enters gbrain** — task lists / iterations / bugs stay in the project's own framework (Trellis etc.); the state card carries only an **execution-layer pointer** field pointing at that framework, never copying its content.
+
+### State card schema
+
+```markdown
+---
+type: note
+project: <ascii project id>
+tags: [project]
+source: <harness|skill>
+---
+
+# <项目> 现状
+
+## 这个项目是什么·解决什么
+…
+
+## 现在到哪了
+…
+
+## 下一步
+…
+
+## 相关项目
+- [[project/<其他id>/state]]   # intersection wikilink, list when present
+
+## 执行层
+- 框架: Trellis / 其他
+- 入口: <repo path / board URL>
+```
+
+Update = `gbrain put project/<id>/state` overwrites the same slug, never a new page.
+
+### Retrieval routing (type-normalized)
+
+`gbrain list` filters by `--type` / `--tag` only (no slug-prefix filter). With `type` uniform, route by `tags`:
+
+| tags | Pages | Retrieval use |
+|---|---|---|
+| `tags: [project]` | `project/<id>/state` | project injection / overview (`list --tag project`) |
+| `tags: [knowledge]` | `project/<id>/lessons`, `project/<id>/decisions`, `knowledge/` | stable-knowledge Q&A |
+| `tags: [asset]` | `assets/` pointer pages | asset lookup |
+| `tags: [weekly]` | `records/consolidate\|retro/<date>` snapshots | weekly/retro; excluded from recent injection |
+
+- Snapshot pages keep the existing `tags: [weekly]` mitigation (dated pages must not mix into recent injection); consolidate additionally keeps `consolidate`.
+- Recent injection: `gbrain list --type note --tag project -n 50` (state cards), excluding `weekly`. Q&A: `--tag knowledge` / `--tag asset`.
 
 ## Write-back discipline
 
 Two write patterns; never mix them:
 
-1. **Stateful memory — fixed slug, overwrite.** Progress, todos, and current decisions write to one stable slug per project/topic (e.g. `project/<id>/state`). Updating = `gbrain put` the same slug again, not a new page. Keeps "current state" retrievable as one page instead of a noisy history.
-2. **Durable knowledge — append-only.** New lessons, references, and durable decisions are new pages. Never overwrite a knowledge page to reflect today; write a new page or a superseding decision.
+1. **Stateful memory — fixed slug, overwrite.** Progress, todos, and current decisions write to the project state card (`project/<id>/state`). Updating = `gbrain put` the same slug again, not a new page. Keeps "current state" retrievable as one page instead of a noisy history.
+2. **Durable knowledge — append-only.** New lessons, decisions, and knowledge pages are new pages. Never overwrite a durable page to reflect today; write a new page or a superseding decision.
 
 - Every page carries `project` + `tags`; `source` marks provenance.
-- Never invent a slug — derive it from project/topic + a stable identifier.
-- Promotion: when a memory fact becomes durable (e.g. a lesson learned), write a new knowledge page; don't overload the state page.
+- Never invent a slug — derive it from project/topic + a stable identifier (ascii project id).
+- Promotion: when a state fact becomes durable (a lesson, a settled decision), write a `project/<id>/lessons/<主题>` or `project/<id>/decisions/<主题>` page; don't overload the state card.
 
-### Dated memory record (weekly snapshot) — M4 authorized exception
+### Dated memory record (periodic snapshot) — M4 authorized exception
 
-A `note` page with a **date slug** is a periodic snapshot of a topic's memory (e.g. `memory/consolidate/<YYYY-MM-DD>` or a weekly report page). Each period writes a **new page** (dated slug), NOT an overwrite of a fixed slug:
+A `note` page with a **date slug** is a periodic snapshot of the memory layers (`records/consolidate/<YYYY-MM-DD>` / `records/retro/<YYYY-MM-DD>`). Each period writes a **new page** (dated slug), NOT an overwrite of a fixed slug:
 
 - The **current state** is still owned by the fixed-slug `project/<id>/state` page (overwrite). The dated page is the historical record; never let the snapshot page substitute for `project/<id>/state`.
-- Because dated `note` pages accumulate, recent-injection can mix in old snapshots — mitigate with `embed_skip: true` on snapshot pages or a dedicated `tags` value (e.g. `weekly`), and rely on the state page for the "now" view.
+- Because dated `note` pages accumulate, recent-injection can mix in old snapshots — mitigate with `tags: [weekly]` (dedicated tag, as above) and rely on the state card for the "now" view.
 - Same-topic snapshots are idempotent per period: re-running a period overwrites/upserts the same dated slug (never create duplicates).
 
 ## Offline / embedding policy

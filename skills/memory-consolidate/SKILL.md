@@ -20,7 +20,7 @@ triggers:
 
 ## 输出契约(自包含,勿改路径)
 
-1. **周快照页** → gbrain note 页 `memory/consolidate/<YYYY-MM-DD>`
+1. **周快照页** → gbrain note 页 `records/consolidate/<YYYY-MM-DD>`
    - **dated memory record**(gbrain.md 授权的固定-slug 例外):每周**新页**,不是覆盖某个固定 slug。
    - frontmatter:`type: note`、`project: jspace`、`tags: [consolidate, weekly]`、`source: <harness>`
    - 正文:按域/项目归纳近一周关键事实 + 指针。
@@ -29,10 +29,10 @@ triggers:
 
 ### 日期取法(重跑幂等的关键)
 
-`<YYYY-MM-DD>` = **运行日**(与既有页 `memory/consolidate/2026-08-03` / `2026-08-09` 一致)。但运行日命名与「同周覆盖」天然冲突——周日跑完、周二再跑会算出不同日期。所以**重跑前必须先查当周是否已有页**:
+`<YYYY-MM-DD>` = **运行日**(与既有页 `records/consolidate/2026-08-03` / `2026-08-09` 一致)。但运行日命名与「同周覆盖」天然冲突——周日跑完、周二再跑会算出不同日期。所以**重跑前必须先查当周是否已有页**:
 
 ```bash
-gbrain list --type note -n 30 | grep 'memory/consolidate/'   # 找本周(周一~周日)内的已有页
+gbrain list --type note -n 30 | grep 'records/consolidate/'   # 找本周(周一~周日)内的已有页
 ```
 - 本周已有 → **覆盖那一页的 slug**(不用今天的日期)。
 - 本周没有 → 用运行日建页。
@@ -43,9 +43,9 @@ gbrain list --type note -n 30 | grep 'memory/consolidate/'   # 找本周(周一~
 gbrain list -n 50                                    # 近一周页面盘点
 gbrain list --type note -n 30                        # state 页 + 既有 consolidate 页
 gbrain get project/<id>/state                        # 读当前状态(回写前)
-gbrain put memory/consolidate/<日期> < <正文文件>      # 周快照(同周复用同 slug)
+gbrain put records/consolidate/<日期> < <正文文件>      # 周快照(同周复用同 slug)
 gbrain put project/<id>/state < <正文文件>            # state 覆盖
-gbrain get memory/consolidate/<日期>                  # 验证读回
+gbrain get records/consolidate/<日期>                  # 验证读回
 ```
 
 ## 步骤
@@ -72,7 +72,7 @@ gbrain get memory/consolidate/<日期>                  # 验证读回
 ## 自检
 
 ```bash
-gbrain get memory/consolidate/<日期>                          # 页在;tags 含 consolidate+weekly
-gbrain list --type note -n 30 | grep -c 'memory/consolidate'  # 本周只有一页
+gbrain get records/consolidate/<日期>                          # 页在;tags 含 consolidate+weekly
+gbrain list --type note -n 30 | grep -c 'records/consolidate'  # 本周只有一页
 gbrain get project/<id>/state                                 # 涉项项目状态已刷新
 ```

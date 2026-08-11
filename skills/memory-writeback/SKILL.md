@@ -15,7 +15,7 @@ triggers:
 
 会话结束时把本次**持久事实**按纪律写回 gbrain(对应 GOAL「收工」)。**无持久事实 → 静默结束**(对齐 End-of-Work Capture)。
 
-**分工**:asset-ingest = 资产写侧(reference 页);本 skill = 会话事实写侧(state/知识/晋升);memory-recall = 读侧;memory-consolidate = 周快照(cron,本 skill 不写)。
+**分工**:asset-ingest = 资产写侧(asset 指针页);本 skill = 会话事实写侧(state/决策/经验/跨项目知识);memory-recall = 读侧;memory-consolidate = 周快照(cron,本 skill 不写)。
 
 ## 何时用 / 何时不用
 - ✅ 用:收工时把进展/决策/教训/规则写回 gbrain。
@@ -25,23 +25,26 @@ triggers:
 
 | 事实类别 | 目标 slug | 写语义 |
 |---|---|---|
-| 状态记忆(进展/待办/当前决策) | `project/<id>/state` | 固定 slug **覆盖** |
-| 持久知识(教训/可复用要点) | `knowledge/<项目\|域>/<主题>` | **append-only 新页**(绝不覆盖) |
-| 决策·近况 / 历史 | `decision/<主题>` / `decision/<主题>-<日期>` | 覆盖 / 新页 |
+| 状态记忆(进展/待办/当前决策) | `project/<id>/state` | 固定 slug **覆盖**,`tags: [project]` |
+| 项目决策(决定+理由) | `project/<id>/decisions/<主题>` | **append-only 新页**(绝不覆盖) |
+| 项目专属经验(踩坑/可复用要点) | `project/<id>/lessons/<主题>` | **append-only 新页**(绝不覆盖) |
+| 跨项目可复用认识 | `knowledge/<域>/<主题>` | **append-only 新页**(绝不覆盖),域=通用知识域(不含项目名) |
 | 周快照 | — | **转 memory-consolidate**,本 skill 不写 |
 
 | 判断 | 取值 | 动作 |
 |---|---|---|
 | 有无持久事实 | 无 / 有 | **静默结束** / 简述将写什么·写哪·为何,再写 |
-| 晋升信号(跨会话重复/决策已定/提炼成教训) | 命中 | 写新知识页,state 只留现状(不压 state) |
+| 晋升信号(跨会话重复/决策已定/提炼成教训) | 命中 | 写 `project/<id>/decisions/` 或 `project/<id>/lessons/` 新页,state 只留现状(不压 state) |
 | serve 持锁 / 写失败 | 是 / 否 | `jspace pending stage`(暂存不失败) / 直接写 |
 | embedding 不可达 | 是 / 否 | `embed_skip: true`(写仍成功)+固定提示 / 正常写 |
 
 ## 命令速查
 
 ```bash
-gbrain put project/<id>/state < <正文文件>      # 状态:固定 slug 覆盖
-gbrain put knowledge/<项目|域>/<主题> < <文件>   # 知识:新页 append-only
+gbrain put project/<id>/state < <正文文件>                # 状态:固定 slug 覆盖
+gbrain put project/<id>/decisions/<主题> < <文件>         # 项目决策:append-only
+gbrain put project/<id>/lessons/<主题> < <文件>           # 项目经验:append-only
+gbrain put knowledge/<域>/<主题> < <文件>                 # 跨项目知识:append-only
 gbrain get <slug>                                # 验证读回
 jspace pending stage <slug> --content <正文文件> --producer memory-writeback
 jspace pending apply                             # 锁空闲落 live(幂等)

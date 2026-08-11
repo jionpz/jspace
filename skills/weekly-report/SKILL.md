@@ -24,7 +24,7 @@ triggers:
    - `<YYYY-MM-DD>` = **本周起始日(周一)**,不是运行日。周日运行 → 用本周一的日期。
    - `<filehub>` = `.jspace/hub.json` 中 `type: filehub` 资源 `primary: true` path(经 `local.json` 绑定解析);解析不到 → 停止并报告,不猜路径。
 2. **gbrain 指针页** → `assets/周报/<YYYY-MM-DD>`(同一日期)
-   - frontmatter:`type: reference`、`project: jspace`、`tags: [weekly]`、`source: <harness>`
+   - frontmatter:`type: note`、`project: jspace`、`tags: [asset, weekly]`、`source: <harness>`
    - 正文以 **Pointer + 极薄 Summary** 为主;详细事实不在这里展开(在 md 本体与 consolidate 页里)。
 3. **同周重跑 = 周快照**:固定 slug 覆盖更新,**不重复建页、不建 `-v2`**。
 
@@ -39,7 +39,7 @@ triggers:
 
 ```bash
 gbrain list --type note -n 50                    # state 页 → 活跃项目
-gbrain get memory/consolidate/<最近一期>          # 事实来源(不重新归纳)
+gbrain get records/consolidate/<最近一期>          # 事实来源(不重新归纳)
 find <filehub>/projects -type f -mtime -7        # 本周资产变动
 gbrain put assets/周报/<YYYY-MM-DD> < <正文文件>   # 指针页(同周覆盖)
 gbrain get assets/周报/<YYYY-MM-DD>               # 验证读回
@@ -49,7 +49,7 @@ gbrain get assets/周报/<YYYY-MM-DD>               # 验证读回
 
 1. **定日期**:算本周一日期(周报文件名与 slug 都用它);解析 `<filehub>` 根。
 2. **发现项目**:按上节三个来源取并集。
-3. **取事实**:读最近一期 `memory/consolidate/<date>` 页 + 各 `project/<id>/state`;**不重新推断事实**。
+3. **取事实**:读最近一期 `records/consolidate/<date>` 页 + 各 `project/<id>/state`;**不重新推断事实**。
 4. **写本体**:`<filehub>/areas/周报/<日期>-周报.md`——每项目一节(本周进展 / 当前状态 / 下一步),末尾列关键文件指针。
 5. **写指针页**:`assets/周报/<日期>`,Pointer 指向第 4 步的 md 绝对路径,Summary 三五行。
 6. **验证**:`gbrain get` 读回;确认同周未产生第二个页/文件。

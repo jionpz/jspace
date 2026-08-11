@@ -1,13 +1,13 @@
 # asset-ingest — 入脑模板与纪律(gbrain-write)
 
-## reference 页模板
+## asset 指针页模板
 
 ```markdown
 ---
-type: reference
+type: note
 source: <harness>            # codex | claude | hermes | pi | manual(出处,不占用资产真实来源)
 project: <project|area id>
-tags: [t1, t2]
+tags: [asset]                # 检索路由:资产查找 list --tag asset
 rel_path: <相对 filehub 根的路径>   # M5 起:机器无关指针标识(见下)
 ---
 # <语义名>
@@ -29,7 +29,7 @@ rel_path: <相对 filehub 根的路径>   # M5 起:机器无关指针标识(见�
 
 ## 深度抽取(office)页内纪律
 
-excel / ppt 走深度抽取(`~/.agents/skills/asset-ingest/references/deep-extract.md`)时,reference 页在此模板上补两条:
+excel / ppt 走深度抽取(`~/.agents/skills/asset-ingest/references/deep-extract.md`)时,asset 指针页在此模板上补两条:
 
 - `Key Facts` 只收**策展后的关键数字/表头要点**(精炼 ≤ ~10 条),不 dump 全量;数字带出处语境:`- 单价 32000 元/台 [Source: <rel_path>, Sheet 报价单 B2, YYYY-MM-DD]`。
 - `Pointer` 后加一行抽取注记:`抽取: <伴生文件 rel_path>`(如 `projects/<项目>/2026-08-03-acme报价.extract.md`),全量数据可随时重开。
@@ -68,6 +68,6 @@ excel / ppt 走深度抽取(`~/.agents/skills/asset-ingest/references/deep-extra
 
 ## type 纪律(继承 gbrain.md 约定)
 
-- `reference`/`lesson` = 知识(append-only);`decision`/`note` = 记忆(固定 slug 覆盖写)。
-- 本 skill 写 `reference` 页(知识),**不覆盖已有知识页**。
+- `type` 统一 `note`;分类由 slug 承载(`assets/<归属>/` = 资产指针),检索用 `tags: [asset]` 路由。
+- 本 skill 写 asset 指针页,**不覆盖已有页**(新版本走 `-vN` 新页,旧页保留并注明 supersedes)。
 - 资产真实来源(客户/网盘/邮件)放正文 Source 或 tags,不占用 frontmatter `source`(其语义 = harness 出处)。

@@ -39,7 +39,7 @@ gbrain models doctor --json   # embedding_config / embedding_reachability
 
 smoke 后清理(不留探针页):
 ```bash
-printf '---\ntype: smoke\nembed_skip: true\n---\nprobe\n' | gbrain put smoke/first-use
+printf '---\ntype: note\ntags: [smoke]\nembed_skip: true\n---\nprobe\n' | gbrain put smoke/first-use
 gbrain get smoke/first-use && gbrain delete smoke/first-use
 ```
 断言:`gbrain doctor --json` resolver/pgvector 全 `ok`;smoke 页 put→get→delete 三步通过。细则 `~/.agents/skills/jspace-use/references/gbrain.md`。

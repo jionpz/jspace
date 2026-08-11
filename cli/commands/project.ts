@@ -3,16 +3,32 @@
 import type { CommandSpec } from "../../application/commands/command.ts";
 import { filehubInit } from "../../application/registry/filehub.ts";
 import { inboxStatus } from "../../application/registry/inbox.ts";
-import { projectAdd, projectList } from "../../application/registry/project.ts";
+import { projectAdd, projectList, projectListStatus } from "../../application/registry/project.ts";
 import { expandTilde, filehubReadme, devRoot } from "../embed.ts";
 import { resolvePath } from "../paths.ts";
 import { b, s } from "./helpers.ts";
+import { realGbrain } from "../../adapters/gbrain/gbrain.ts";
+import { PROJECT_COLLECT_TIMEOUT_MS } from "../../application/context/project-states.ts";
 
 const projectListSpec: CommandSpec = {
   name: "list",
-  summary: "list projects",
+  summary: "list projects (--status: overview from gbrain state cards + hub)",
   features: { json: true, dir: true },
-  handler: (ctx, args) => projectList(ctx.root, b(args.json)),
+  options: [
+    {
+      name: "--status",
+      takesValue: false,
+      help: "overview: gbrain project/*/state cards (三段摘要 + 相关项目) + hub-registered projects without a card",
+    },
+  ],
+  handler: async (ctx, args) => {
+    if (b(args.status)) {
+      // gbrain-backed overview with the short per-call timeout (same budget as
+      // the injection leg — a stalled gbrain degrades to the hub-only list).
+      return projectListStatus(ctx.root, b(args.json), realGbrain(undefined, PROJECT_COLLECT_TIMEOUT_MS));
+    }
+    return projectList(ctx.root, b(args.json));
+  },
 };
 
 const projectAddSpec: CommandSpec = {

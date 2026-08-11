@@ -11,6 +11,8 @@
 // protocol drives the process exit code).
 import type { CommandSpec, CmdContext } from "../../application/commands/command.ts";
 import { collectWorkbenchState } from "../../application/context/collect.ts";
+import { collectActiveProjects, PROJECT_COLLECT_TIMEOUT_MS } from "../../application/context/project-states.ts";
+import { realGbrain } from "../../adapters/gbrain/gbrain.ts";
 import { gate, gatePre, promptHasSkipKeyword } from "../../application/context/gate.ts";
 import {
   renderSessionStart,
@@ -49,11 +51,15 @@ const sessionStartSpec: CommandSpec = {
       help: "hook envelope shape (default claude; cursor = top-level additional_context)",
     },
   ],
-  handler: (ctx: CmdContext, args: Record<string, unknown>) => {
+  handler: async (ctx: CmdContext, args: Record<string, unknown>) => {
     try {
       const g = gate("session-start", undefined, ctx.root);
       if (!g.emit) return { lines: [] }; // not a workbench / hooks off: silent exit 0
       const state = collectWorkbenchState(g.root);
+      // R3: project state cards come from gbrain through the async port with a
+      // short per-call timeout. A stalled gbrain resolves empty (never blocks
+      // the hook) — the sync collectors above are unaffected.
+      state.projects = await collectActiveProjects(realGbrain(undefined, PROJECT_COLLECT_TIMEOUT_MS));
       const text = renderSessionStart(state, g.root);
       if (plain(args)) return { lines: [text] };
       return { lines: [args.envelope === "cursor" ? cursorSessionStartEnvelope(text) : sessionStartEnvelope(text)] };

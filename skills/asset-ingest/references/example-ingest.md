@@ -40,14 +40,14 @@ python3 .jspace/skills/asset-ingest/scripts/extract.py \
 ```
 预期:伴生 `.extract.md`(xlsx 走零依赖 office-extract 回退:各 sheet 单元格引用 + 值,全空高空行被幻影行过滤;有 markitdown 则走增强路径)。→ 策展关键数字入页(步骤 4),全量留伴生文件。细则 `~/.agents/skills/asset-ingest/references/deep-extract.md`。
 
-### 4. 入脑(写 reference 页 + advance --gbrain)
+### 4. 入脑(写 asset 指针页 + advance --gbrain)
 写页正文(模板见 `~/.agents/skills/asset-ingest/references/gbrain-write.md`):
 ```markdown
 ---
-type: reference
+type: note
 source: claude
 project: acme
-tags: [acme, 报价]
+tags: [asset, 报价]
 rel_path: projects/acme/2026-08-03-供应商报价明细-v1.xlsx
 ---
 # 供应商报价明细

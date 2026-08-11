@@ -1,6 +1,6 @@
 ---
 name: asset-ingest
-description: "把一份工作资料(书籍/pdf/ppt/excel/报告)变成可召回的知识资产:本体归位文件中心 + 要点写进 gbrain reference 页。Use when 资料入库/整理 inbox/归位资料。Do NOT use for 会话进度写回(→memory-writeback)或用户主动问句召回(→memory-recall)。"
+description: "把一份工作资料(书籍/pdf/ppt/excel/报告)变成可召回的知识资产:本体归位文件中心 + 要点写进 gbrain asset 指针页。Use when 资料入库/整理 inbox/归位资料。Do NOT use for 会话进度写回(→memory-writeback)或用户主动问句召回(→memory-recall)。"
 triggers:
   - "资料入库"
   - "整理 inbox"
@@ -60,7 +60,7 @@ gbrain query <关键词>
 
 1. **识别**:定类型/归属;查重(`gbrain get assets/<id>/<语义名>`)→ 冲突按决策表。
 2. **暂存**:`jspace ingest begin ...`(jspace 复制到目标、source 留 inbox、写 journal,返回 id)。
-3. **入脑**:写 gbrain reference 页(slug `assets/<projectId>/<语义名>`,模板见 `~/.agents/skills/asset-ingest/references/gbrain-write.md`)→ 成功 `advance --gbrain`;锁冲突 `jspace pending stage`。
+3. **入脑**:写 gbrain asset 指针页(slug `assets/<projectId>/<语义名>`,模板见 `~/.agents/skills/asset-ingest/references/gbrain-write.md`)→ 成功 `advance --gbrain`;锁冲突 `jspace pending stage`。
 4. **登记+提交**:`advance --index` → `advance --complete`(jspace 移除 source)。
 5. **召回自检**(必做):`gbrain query <关键词>` 命中;未命中 → 查 slug/tags/embedding。
 

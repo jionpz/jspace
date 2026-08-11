@@ -131,6 +131,12 @@ function stateLines(state: WorkbenchState): string[] {
   if (state.inboxCount > 0) {
     lines.push(`待办: filehub/_inbox 有 ${state.inboxCount} 份未归档资料`);
   }
+  if (state.projects.length > 0) {
+    const shown = state.projects
+      .map((p) => (p.summary ? `${p.id}（${p.summary}）` : p.id))
+      .join(" / ");
+    lines.push(`项目: ${state.projects.length} 个活跃 — ${shown}`);
+  }
   return lines;
 }
 

@@ -14,6 +14,7 @@ const empty: WorkbenchState = {
   cronIncidents: [],
   inboxCount: 0,
   hubBroken: false,
+  projects: [],
 };
 
 function doms(n: number, prefix = "d"): WorkbenchState {
@@ -105,6 +106,24 @@ test("many domains -> current-state caps at 5, available caps at 12 with tails",
   // available lists exactly 12 paths + the tail + the skills line
   const avail = r.slice(r.indexOf("<available>"), r.indexOf("</available>"));
   expect((avail.match(/- workspace\//g) ?? []).length).toBe(12);
+});
+
+test("projects populated -> project line in current-state; none -> no line", () => {
+  const withProjects: WorkbenchState = {
+    ...empty,
+    projects: [
+      { id: "jspace", summary: "记忆模型重构设计期", updatedAt: "2026-08-10" },
+      { id: "wms", summary: "", updatedAt: "2026-08-05" },
+    ],
+  };
+  const r = renderSessionStart(withProjects, "/wb");
+  expect(r).toContain("项目: 2 个活跃 — jspace（记忆模型重构设计期） / wms");
+  // empty projects -> project line omitted entirely (no noise)
+  expect(renderSessionStart(empty, "/wb")).not.toContain("项目:");
+  // pre-compact surfaces the project line too (state that could be lost)
+  expect(renderPreCompact(withProjects, "/wb")).toContain("项目: 2 个活跃");
+  // turn stays single-line and never emits a project line (not actionable)
+  expect(renderTurn(withProjects)).toBe("");
 });
 
 test("payload does not embed AGENTS.md content (dedup, AC-B8)", () => {

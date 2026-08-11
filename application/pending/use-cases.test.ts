@@ -48,7 +48,11 @@ test("stage writes an envelope; list reports it", () => {
 test("apply with a stub gbrain puts once and marks applied", async () => {
   pendingStage(wb, "assets/foo/doc", contentFile(), "asset-ingest");
   const envId = id();
-  const stub: GbrainDeps = { get: async () => ({ ok: false }), put: async () => ({ ok: true }) };
+  const stub: GbrainDeps = {
+    get: async () => ({ ok: false }),
+    put: async () => ({ ok: true }),
+    list: async () => ({ ok: true, rows: [] }),
+  };
   const res = await pendingApply(wb, undefined, stub);
   expect(res.lines[0]).toContain("applied 1");
   expect(readEnvelopes(fh).records[0].status).toBe("applied");

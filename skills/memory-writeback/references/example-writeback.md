@@ -46,39 +46,40 @@ gbrain put project/acme/state < state.md
 ```
 预期(示意):`put: project/acme/state  (overwritten, type=note)`
 
-### 4. 写回 — 知识(晋升:append-only 新页,不压 state)
-教训是可复用要点 → **晋升**为新知识页,而非塞进 state:
+### 4. 写回 — 项目经验(晋升:append-only 新页,不压 state)
+教训是可复用要点 → **晋升**为项目经验页,而非塞进 state:
 ```markdown
 ---
-type: lesson
+type: note
 source: claude
 project: acme
-tags: [migration, idempotency, lesson]
+tags: [knowledge, lesson]
 ---
 # 迁移脚本必须幂等
 重跑会重复插入 → 数据翻倍。写入前按幂等键 upsert/去重,重跑收敛同结果。
 ```
 ```bash
-gbrain put knowledge/acme/migration-idempotency < lesson.md
+gbrain put project/acme/lessons/migration-idempotency < lesson.md
 ```
-预期(示意):`put: knowledge/acme/migration-idempotency  (created, type=lesson)`
-- **绝不覆盖已有知识页**:新教训 = 新页;要更新「现状」只改 state 页。
+预期(示意):`put: project/acme/lessons/migration-idempotency  (created, type=note)`
+- **绝不覆盖已有经验页**:新教训 = 新页;要更新「现状」只改 state 页。
 
-### 5. 写回 — 决策(固定 slug 覆盖)
+### 5. 写回 — 项目决策(append-only 新页)
 ```markdown
 ---
-type: decision
+type: note
 source: claude
 project: acme
-tags: [storage, decision]
+tags: [knowledge, decision]
 ---
 # 存储层选型:PGLite
 存储层用 PGLite,不用 Postgres。理由:本地零依赖、随工作台物化,规模可控。
 ```
 ```bash
-gbrain put decision/acme-storage-choice < decision.md
+gbrain put project/acme/decisions/storage-choice < decision.md
 ```
-预期(示意):`put: decision/acme-storage-choice  (overwritten, type=decision)`
+预期(示意):`put: project/acme/decisions/storage-choice  (created, type=note)`
+- 跨项目可复用的认识升 `knowledge/<域>/<主题>`(如 `knowledge/architecture/<主题>`);项目决策/经验跟随项目,不升。
 
 ### 6.(分支)gbrain serve 持锁 → 暂存,不硬失败
 若 harness 的 `gbrain serve` 正持写锁,直接 `put` 冲突 → 改走暂存:
@@ -90,17 +91,17 @@ jspace pending apply     # 锁空闲后统一落 live(幂等)
 
 ### 7. 验证读回
 ```bash
-gbrain get project/acme/state                   # 覆盖:仍一页,现状最新
-gbrain get knowledge/acme/migration-idempotency # 新页:教训独立成页
-gbrain get decision/acme-storage-choice          # 决策:project/tags/source 齐
+gbrain get project/acme/state                     # 覆盖:仍一页,现状最新
+gbrain get project/acme/lessons/migration-idempotency # 新页:经验独立成页
+gbrain get project/acme/decisions/storage-choice   # 决策:project/tags/source 齐
 ```
-断言:state 未新增重复页;知识页独立、未覆盖旧知识;三页 frontmatter `project`+`tags`+`source` 齐。
+断言:state 未新增重复页;经验/决策页独立、未覆盖旧页;每页 frontmatter `project`+`tags`+`source` 齐。
 - embedding 不可达 → 上述 put 仍成功,页头加 `embed_skip: true` + 固定提示「写入成功,embedding 不可用,检索降级」(不静默、不失败)。
 
 ## 断言清单(照此判"做完没")
 - [ ] 无持久事实时:静默结束,未写任何页、未提示
 - [ ] 状态写 `project/<id>/state` 固定 slug 覆盖,未新增重复页
-- [ ] 知识/教训写 `knowledge/<项目|域>/<主题>` 新页,未覆盖旧知识页
-- [ ] 决策写 `decision/<主题>` 覆盖;每页 `project`+`tags`+`source` 齐
+- [ ] 项目经验/决策写 `project/<id>/lessons|decisions/<主题>` 新页,未覆盖旧页;跨项目认识写 `knowledge/<域>/<主题>`
+- [ ] 每页 `project`+`tags`+`source` 齐,`type: note`
 - [ ] 晋升到位:教训在知识页,state 只留现状(历史未压进 state)
 - [ ] serve 持锁时走 `jspace pending stage` → `apply`,未硬失败
