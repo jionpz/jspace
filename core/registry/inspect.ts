@@ -25,6 +25,10 @@ export interface InspectEnv {
   readJson: (p: string) => unknown;
 }
 
+/** Sentinel a `readJson` impl returns when the file cannot be parsed (never
+ *  throws — read-only diagnostics must not crash on a hand-edited file). */
+export const INVALID_JSON = Symbol("jspace.invalid-json");
+
 function isWithin(child: string, parent: string): boolean {
   const rel = relative(parent, child);
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
@@ -154,20 +158,18 @@ export function inspectWorkbench(env: InspectEnv): RegistryDiagnostic[] {
         message: `domain metadata missing: ${d.path}/domain.json`,
       });
     } else {
-      try {
-        const metadata = env.readJson(meta);
-        if (!isRecord(metadata)) {
-          out.push({ severity: "warning", code: "domain.context_drift", path: where, message: `${d.path}/domain.json must be an object` });
-        } else {
-          if (metadata.id !== d.id) {
-            out.push({ severity: "warning", code: "domain.context_drift", path: where, message: `${d.path}/domain.json id must match ${d.id}` });
-          }
-          if (typeof metadata.purpose !== "string" || metadata.purpose.length === 0) {
-            out.push({ severity: "warning", code: "domain.context_drift", path: where, message: `${d.path}/domain.json purpose must be non-empty` });
-          }
-        }
-      } catch {
+      const metadata = env.readJson(meta);
+      if (metadata === INVALID_JSON) {
         out.push({ severity: "warning", code: "domain.context_drift", path: where, message: `${d.path}/domain.json is not valid JSON` });
+      } else if (!isRecord(metadata)) {
+        out.push({ severity: "warning", code: "domain.context_drift", path: where, message: `${d.path}/domain.json must be an object` });
+      } else {
+        if (metadata.id !== d.id) {
+          out.push({ severity: "warning", code: "domain.context_drift", path: where, message: `${d.path}/domain.json id must match ${d.id}` });
+        }
+        if (typeof metadata.purpose !== "string" || metadata.purpose.length === 0) {
+          out.push({ severity: "warning", code: "domain.context_drift", path: where, message: `${d.path}/domain.json purpose must be non-empty` });
+        }
       }
     }
   }
