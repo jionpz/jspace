@@ -2,7 +2,7 @@
 // manifest + assets are injected so the layer stays free of the embedded-bundle
 // cli module. Filesystem writes go through injected writeFile for testability
 // (failure injection) and are preceded by backup + journal in .jspace/state/.
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fail } from "../../core/shared/errors.ts";
 import type { CmdResult } from "../commands/command.ts";
@@ -277,9 +277,9 @@ export function workspaceUpgrade(
   for (const e of plan) {
     const cur = deps.readFile(join(root, e.rel));
     if (cur !== null) {
-      const p = join(backupDir, "before", e.rel);
-      mkdirSync(dirname(p), { recursive: true });
-      writeFileSync(p, cur, "utf-8");
+      // atomic backup (issue #9 #9-08): the upgrade rollback copy must not be
+      // left half-written if the process dies mid-upgrade.
+      writeBytesAtomic(join(backupDir, "before", e.rel), cur);
     }
   }
 

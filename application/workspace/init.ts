@@ -2,13 +2,14 @@
 // Business logic moved out of cli/init.ts; environment-dependent bits
 // (binary root, asset materialization, path resolution) are injected so this
 // layer stays free of cli/env coupling.
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fail } from "../../core/shared/errors.ts";
 import { localDate } from "../time.ts";
 import type { CmdResult } from "../commands/command.ts";
 import { MARKER_FILE } from "../../core/contracts/files.ts";
 import {
+  writeBytesAtomic,
   writeLocalAtomic,
   writeMarkerAtomic,
 } from "../../adapters/fs/workbench-state.ts";
@@ -70,7 +71,7 @@ export function initWorkbench(
       for (const rel of materializedRels(f.path)) {
         const p = join(target, rel);
         if (existsSync(p) && statSync(p).isFile()) {
-          writeFileSync(`${p}.jspace-bak`, readFileSync(p));
+          writeBytesAtomic(`${p}.jspace-bak`, readFileSync(p, "utf-8"));
           backedUp.push(rel);
         }
       }
