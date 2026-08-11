@@ -5,7 +5,8 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { taskIdFor, workbenchTag } from "./types.ts";
+import { taskIdFor, workbenchTag, SCHEDULER_SPAWN_TIMEOUT_MS } from "./types.ts";
+import { makeSchedulerSpawn, type SchedulerSpawnImpl, type SchedulerSpawnImplOpts } from "./spawn.ts";
 import { buildPlist } from "./darwin.ts";
 import { parseSchedule } from "../../core/shared/schedule.ts";
 import { linuxAdapter, crontabBlock, crontabLine, replaceManagedBlock, parseManagedLine, extractTagBlock, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
@@ -13,6 +14,39 @@ import { darwinAdapter, plistPath, parsePlistName, plistBelongsToTag } from "./d
 import { schtasksArgs, isWindowsInstallable, parseOpContent, parseSchtasksXml, win32Adapter } from "./win32.ts";
 import { planReconciliation } from "../../application/automation/scheduler.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
+
+// ---- P1-3: external scheduler commands always carry a timeout (red line) ----
+// No bare spawnSync in the scheduler layer: every crontab/schtasks/plutil/
+// launchctl call routes through schedulerSpawn, which forces utf-8 + the shared
+// timeout. Inject a fake spawn to observe the options without a real command.
+
+test("schedulerSpawn forces utf-8 + the shared timeout on every call", () => {
+  const calls: { cmd: string; args: string[]; opts: SchedulerSpawnImplOpts }[] = [];
+  const fakeSpawn: SchedulerSpawnImpl = (cmd, args, opts) => {
+    calls.push({ cmd, args, opts });
+    return { status: 0, stdout: "", stderr: "", pid: 1, signal: null, output: [] } as never;
+  };
+  const run = makeSchedulerSpawn(fakeSpawn);
+
+  run("crontab", ["-l"]);
+  run("schtasks", ["/query", "/tn", "x"]);
+  run("plutil", ["-lint", "/x.plist"]);
+
+  expect(calls.length).toBe(3);
+  for (const c of calls) {
+    expect(c.opts.timeout).toBe(SCHEDULER_SPAWN_TIMEOUT_MS); // the red line
+    expect(c.opts.encoding).toBe("utf-8");
+  }
+  // stdin input is opt-in (only crontab `-` needs it); others get no `input`
+  const withInput: SchedulerSpawnImplOpts[] = [];
+  const runInput = makeSchedulerSpawn(((_cmd, _args, opts) => {
+    withInput.push(opts);
+    return { status: 0, stdout: "", stderr: "", pid: 1, signal: null, output: [] } as never;
+  }) as SchedulerSpawnImpl);
+  runInput("crontab", ["-"], { input: "block" });
+  expect(withInput[0].input).toBe("block");
+  expect(withInput[0].timeout).toBe(SCHEDULER_SPAWN_TIMEOUT_MS);
+});
 
 test("workbenchTag is stable + distinct across workbench ids", () => {
   const a = workbenchTag("wb-11111111-aaaa");

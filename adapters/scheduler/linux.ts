@@ -9,10 +9,10 @@
 // matching is needed (an old build claimed env.resolvePath did that; it never did).
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { spawnSync } from "node:child_process";
 import { fail } from "../../core/shared/errors.ts";
 import { parseSchedule } from "../../core/shared/schedule.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
+import { schedulerSpawn } from "./spawn.ts";
 import { taskIdFor, posixIdentity, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerIdentity, type SchedulerOp } from "./types.ts";
 
 /** Tag-scoped managed-block markers: two workbenches never share one block. */
@@ -149,14 +149,14 @@ export interface CrontabIO {
 
 const defaultIO: CrontabIO = {
   readCrontab(): string {
-    const res = spawnSync("crontab", ["-l"], { encoding: "utf-8" });
+    const res = schedulerSpawn("crontab", ["-l"]);
     if (res.status === 0) return (res.stdout ?? "").replace(/\s+$/, "") + "\n";
     if (res.status === 1) return ""; // no crontab
     fail(`crontab -l failed (status ${res.status}): ${(res.stderr ?? "").trim()}`);
     return "";
   },
   writeCrontab(content: string): void {
-    const r = spawnSync("crontab", ["-"], { input: content, encoding: "utf-8" });
+    const r = schedulerSpawn("crontab", ["-"], { input: content });
     if (r.status !== 0) fail(`crontab write failed: ${(r.stderr ?? "").trim()}`);
   },
 };
@@ -249,7 +249,7 @@ export const linuxAdapter: SchedulerAdapter & { io?: CrontabIO } = {
     mkdirSync(dirname(backup), { recursive: true });
     writeFileSync(backup, existing, "utf-8");
     if (merged.trim() === "") {
-      const r = spawnSync("crontab", ["-r"], { encoding: "utf-8" });
+      const r = schedulerSpawn("crontab", ["-r"]);
       if (r.status !== 0 && r.status !== 1) fail(`crontab -r failed: ${(r.stderr ?? "").trim()}`);
       return ["jspace: ok: removed jspace crons (empty crontab removed)"];
     }
@@ -258,8 +258,8 @@ export const linuxAdapter: SchedulerAdapter & { io?: CrontabIO } = {
   },
 
   health(_env: SchedulerEnv): { crontab: boolean; service: boolean } {
-    const c = spawnSync("sh", ["-c", "command -v crontab"], { encoding: "utf-8" });
-    const s = spawnSync("sh", ["-c", "pgrep -x crond >/dev/null 2>&1 || pgrep -x cron >/dev/null 2>&1"], { encoding: "utf-8" });
+    const c = schedulerSpawn("sh", ["-c", "command -v crontab"]);
+    const s = schedulerSpawn("sh", ["-c", "pgrep -x crond >/dev/null 2>&1 || pgrep -x cron >/dev/null 2>&1"]);
     return { crontab: (c.stdout ?? "").trim() !== "", service: s.status === 0 };
   },
 };

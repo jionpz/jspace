@@ -6,10 +6,10 @@
 // calls buildContent).
 import { existsSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
 import { fail } from "../../core/shared/errors.ts";
 import { parseSchedule, type ScheduleDict } from "../../core/shared/schedule.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
+import { schedulerSpawn } from "./spawn.ts";
 import { taskIdFor, posixIdentity, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerOp, type SchedulerIdentity } from "./types.ts";
 
 function xmlEscape(s: string): string {
@@ -85,7 +85,7 @@ export function plistBelongsToTag(name: string, tag: string): boolean {
 function plistSchedule(name: string, home: string): string {
   const p = join(home, "Library", "LaunchAgents", name);
   if (!existsSync(p)) return "";
-  const res = spawnSync("plutil", ["-extract", "StartCalendarInterval", "json", "-o", "-", p], { encoding: "utf-8" });
+  const res = schedulerSpawn("plutil", ["-extract", "StartCalendarInterval", "json", "-o", "-", p]);
   if (res.status !== 0) return "";
   try {
     const d = JSON.parse(res.stdout ?? "{}") as Record<string, number>;
@@ -106,7 +106,7 @@ function plistArgv(name: string, home: string): string {
   const p = join(home, "Library", "LaunchAgents", name);
   if (!existsSync(p)) return "";
   // plutil -extract WorkingDirectory json fails on bare strings; use -p and grep
-  const res = spawnSync("plutil", ["-p", p], { encoding: "utf-8" });
+  const res = schedulerSpawn("plutil", ["-p", p]);
   if (res.status !== 0) return "";
   const m = (res.stdout ?? "").match(/"WorkingDirectory" => "([^"]+)"/);
   const wd = m?.[1] ?? "";
@@ -125,15 +125,15 @@ function applyOne(op: SchedulerOp, tag: string, root: string, env: SchedulerEnv)
     mkdirSync(join(root, ".jspace", "logs", "cron"), { recursive: true });
     if (existsSync(p)) unlinkSync(p); // idempotent: replace
     writeFileSync(p, op.content, "utf-8"); // content = full plist body (caller-built)
-    const lint = spawnSync("plutil", ["-lint", p], { encoding: "utf-8" });
+    const lint = schedulerSpawn("plutil", ["-lint", p]);
     if (lint.status !== 0) fail(`plutil lint failed for ${p}: ${(lint.stderr ?? "").trim()}`);
-    spawnSync("launchctl", ["unload", p]); // unload may fail (not loaded) — tolerate
-    const load = spawnSync("launchctl", ["load", p], { encoding: "utf-8" });
+    schedulerSpawn("launchctl", ["unload", p]); // unload may fail (not loaded) — tolerate
+    const load = schedulerSpawn("launchctl", ["load", p]);
     if (load.status !== 0) fail(`launchctl load failed for ${p}: ${(load.stderr ?? "").trim()}`);
     return [`jspace: ok: installed cron ${cronId} -> ${p.split("/").pop()}`];
   }
   // delete
-  spawnSync("launchctl", ["unload", p]); // tolerate not-loaded
+  schedulerSpawn("launchctl", ["unload", p]); // tolerate not-loaded
   if (existsSync(p)) unlinkSync(p);
   return [`jspace: ok: removed ${op.taskId}.plist`];
 }
@@ -174,7 +174,7 @@ export const darwinAdapter: SchedulerAdapter = {
     for (const name of listPlists(env.home)) {
       if (!plistBelongsToTag(name, tag)) continue;
       const p = join(env.home, "Library", "LaunchAgents", name);
-      spawnSync("launchctl", ["unload", p]); // tolerate not-loaded
+      schedulerSpawn("launchctl", ["unload", p]); // tolerate not-loaded
       if (existsSync(p)) unlinkSync(p);
       lines.push(`jspace: ok: removed ${name}`);
     }

@@ -1,14 +1,14 @@
 // adapters/scheduler/win32.ts — schtasks adapter (tag-scoped).
 // Task name carries the workbench tag: JSpaceCron_<tag>_<id>. inspect()
 // filters by the tag so two workbenches never collide on scheduled tasks.
-import { spawnSync } from "node:child_process";
 import { fail } from "../../core/shared/errors.ts";
 import { parseSchedule } from "../../core/shared/schedule.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
+import { schedulerSpawn } from "./spawn.ts";
 import { taskIdFor, workbenchTag, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerIdentity, type SchedulerOp } from "./types.ts";
 
 function queryTasks(tag: string): string[] {
-  const res = spawnSync("schtasks", ["/query", "/fo", "csv", "/nh"], { encoding: "utf-8" });
+  const res = schedulerSpawn("schtasks", ["/query", "/fo", "csv", "/nh"]);
   const out = res.status === 0 ? (res.stdout ?? "") : "";
   const prefix = win32TaskName(tag, ""); // JSpaceCron_<tag>_ — inspect/uninstall prefix
   return out
@@ -106,13 +106,13 @@ export function parseOpContent(content: string): string[] {
  *  write port is applyBatch (win32 applies ops one at a time, no reshape). */
 function applyOne(op: SchedulerOp, _tag: string, _root: string, _env: SchedulerEnv): string[] {
   if (op.action === "delete") {
-    const res = spawnSync("schtasks", ["/delete", "/tn", op.taskId, "/f"], { encoding: "utf-8" });
+    const res = schedulerSpawn("schtasks", ["/delete", "/tn", op.taskId, "/f"]);
     if (res.status !== 0) fail(`schtasks delete failed for ${op.taskId}: ${(res.stderr ?? "").trim()}`);
     return [`jspace: ok: removed ${op.taskId}`];
   }
   // create/update: op.content is the JSON-encoded argv array built by the caller
   const args = parseOpContent(op.content);
-  const res = spawnSync("schtasks", args, { encoding: "utf-8" });
+  const res = schedulerSpawn("schtasks", args);
   if (res.status !== 0) fail(`schtasks create failed for ${op.taskId}: ${(res.stderr ?? "").trim()}`);
   return [`jspace: ok: installed cron ${op.taskId.split("_").pop()} -> ${op.taskId}`];
 }
@@ -135,7 +135,7 @@ export const win32Adapter: SchedulerAdapter = {
 
   inspect(tag: string): InstalledTask[] {
     return queryTasks(tag).map((n) => {
-      const res = spawnSync("schtasks", ["/query", "/tn", n, "/xml"], { encoding: "utf-8" });
+      const res = schedulerSpawn("schtasks", ["/query", "/tn", n, "/xml"]);
       const parsed = res.status === 0 ? parseSchtasksXml(res.stdout ?? "") : null;
       return {
         taskId: n,
@@ -155,7 +155,7 @@ export const win32Adapter: SchedulerAdapter = {
     const tasks = queryTasks(tag);
     const lines: string[] = [];
     for (const t of tasks) {
-      const res = spawnSync("schtasks", ["/delete", "/tn", t, "/f"], { encoding: "utf-8" });
+      const res = schedulerSpawn("schtasks", ["/delete", "/tn", t, "/f"]);
       if (res.status !== 0) fail(`schtasks delete failed for ${t}: ${(res.stderr ?? "").trim()}`);
       lines.push(`jspace: ok: removed ${t}`);
     }

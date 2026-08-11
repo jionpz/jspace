@@ -8,6 +8,12 @@ import type { CronDefinition } from "../../core/contracts/cron.ts";
 
 export type PlatformName = "darwin" | "linux" | "win32";
 
+/** External scheduler commands (crontab/schtasks/plutil/launchctl) must never
+ *  block the CLI without a cap — same red line as gbrain's process spawn
+ *  (GBRAIN_TIMEOUT_MS). A hung platform tool degrades to fail-loud (linux) or
+ *  empty-result (win32/darwin) instead of hanging the session. */
+export const SCHEDULER_SPAWN_TIMEOUT_MS = 10_000;
+
 export interface InstalledTask {
   /** platform identity, already workbench-tagged (com.jspace.cron.<tag>.<id>) */
   taskId: string;
