@@ -152,6 +152,20 @@ test("cronAdd validates + persists; duplicate/invalid rejected", () => {
   rmSync(wb, { recursive: true, force: true });
 });
 
+test("cronAdd on win32 rejects non-installable schedules (issue #9 #9-05)", () => {
+  const wb = makeWorkbench([]);
+  const deps = { isInstalled: () => false };
+  // monthly/dom-fixed schedules are not installable on win32 (MVP: DAILY/WEEKLY)
+  expect(() => cronAdd(wb, "monthly", "0 0 1 * *", "claude", "x", false, deps, "win32")).toThrow(/not supported on Windows/);
+  expect(() => cronAdd(wb, "dom", "0 0 1 6 *", "claude", "x", false, deps, "win32")).toThrow(/not supported on Windows/);
+  // DAILY/WEEKLY still accepted on win32 (same boundary as cron install)
+  expect(() => cronAdd(wb, "daily", "0 21 * * *", "claude", "x", false, deps, "win32")).not.toThrow();
+  expect(() => cronAdd(wb, "weekly", "0 21 * * 1", "claude", "x", false, deps, "win32")).not.toThrow();
+  // the same monthly schedule is fine on POSIX (crontab/launchd support dom)
+  expect(() => cronAdd(wb, "posix-monthly", "0 0 1 * *", "claude", "x", false, deps, "linux")).not.toThrow();
+  rmSync(wb, { recursive: true, force: true });
+});
+
 test("cronAdd isInstalled hint fires when the cron id is installed", () => {
   const wb = makeWorkbench([]);
   const r = cronAdd(wb, "inbox-tidy", "0 21 * * *", "claude", "tidy", false, { isInstalled: () => true });
