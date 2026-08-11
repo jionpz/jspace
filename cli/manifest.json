@@ -24,7 +24,7 @@
     },
     {
       "path": "templates/workbench/.jspace/cron.json",
-      "sha256": "637c7d073c7de7e91ef042a9c3be4056084c6e2b0a2796780e24dff3da276ae9",
+      "sha256": "253ea189def28ccc7259c7ed3a612c00bfb9d011ae64ceec24d195d294c3bea2",
       "ownership": "user"
     },
     {
@@ -59,7 +59,7 @@
     },
     {
       "path": "skills/jspace-use/SKILL.md",
-      "sha256": "b0b16dd7e71e3cc7701de64e518030202775b8d20b8b27926d0c5ba07bc44e73",
+      "sha256": "f48aa46c16ba7cae9adee08b37a240508999aa6efb02e2037dec971e63c9e26c",
       "ownership": "seed"
     },
     {

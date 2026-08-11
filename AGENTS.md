@@ -6,7 +6,7 @@
 
 本仓库只维护以下内容：
 
-- `cli/`：JSpace CLI（TypeScript/bun 源码，`bun run cli/main.ts` 运行；`bun run build` 产出 `bin/jspace` 编译二进制）。命令面：`init` / `doctor` / `domain` / `resource` / `project` / `registry` / `filehub` / `cron` / `ingest` / `pending` / `workspace diff|upgrade` / `context session-start|turn|pre-compact|session-end` / `harness wire` / `gbrain wire` / `skills install`。核心实现分层：`core/`（契约）→ `application/`（领域用例）→ `adapters/`（harness/scheduler/process/fs 适配）→ `scripts/`（生成与校验）。
+- `cli/`：JSpace CLI（TypeScript/bun 源码，`bun run cli/main.ts` 运行；`bun run build` 产出 `bin/jspace` 编译二进制）。命令面：`init` / `doctor` / `domain` / `resource` / `project` / `filehub` / `inbox` / `cron` / `ingest` / `pending` / `update` / `workspace diff|upgrade` / `context session-start|turn|pre-compact|session-end` / `gbrain wire` / `harness wire` / `skills install`。核心实现分层：`core/`（契约）→ `application/`（领域用例）→ `adapters/`（harness/scheduler/process/fs 适配）→ `scripts/`（生成与校验）。
 - `templates/workbench/`：工作台模板，包含 `.jspace/hub.json`、工作台 `AGENTS.md`、各 harness 接线 seed（`.claude/settings.json` / `.grok/hooks/jspace.json` / `.opencode/plugins/jspace.ts` / `.cursor/hooks.json`）。
 - `skills/`：官方技能源码，经 `scripts/gen-assets.ts` 嵌入二进制。当前 7 个——`jspace-use`（使用指南）、`asset-ingest`（资料转知识资产）、`memory-recall`（精准召回）、`memory-writeback`（收工写回）、`workbench-retro`（每周纪律自省）、`weekly-report`（周报）、`memory-consolidate`（周记忆巩固）。均物化进工作台 `.jspace/skills/<name>/`，并同字节投影到 `.claude/skills/` `.grok/skills/` `.opencode/skills/` `.agents/skills/`（多 harness 共享，见 `adapters/harness/capabilities.yaml`）。周期任务的输出契约归 skill 层（`cron.json` 用 `target: {kind: "skill"}`，不写内联长 prompt——cron.json 是 user 数据，升级不覆盖，内联契约会被冻结）。
 
@@ -49,7 +49,7 @@
    - `bunx tsc --noEmit`
    - `bun run cli/main.ts init /tmp/jspace-smoke`
    - `bun run cli/main.ts doctor --dir /tmp/jspace-smoke`
-   - 在 `/tmp/jspace-smoke` 内演练 registry 命令（`domain`/`resource` 的 list/add/remove）
+   - 在 `/tmp/jspace-smoke` 内演练 domain/resource 分组命令（`domain`/`resource` 的 list/add/remove）
 4. `hub.json` schema 见 `templates/workbench/.jspace/hub.json` 和 `skills/jspace-use/references/registry.md`：资源主路径经 `local.bindings` 绑定（hub.json 存 binding 引用，绝对路径是本机 `local.json` 真理，恰好一个 `primary: true`）。
 5. 命名统一：项目、CLI、技能、模板、文档、domain 统一使用 `jspace`。
 6. 已上线分发（v1.0.11，M5）：schema/CLI/模板演进走迁移与升级通道，不静默破坏；`jspace update` 一键安装/自更新。

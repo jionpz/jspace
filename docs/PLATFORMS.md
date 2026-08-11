@@ -78,7 +78,7 @@ bin/jspace filehub init ~/fh-test --register
 bin/jspace inbox status                # 期望:empty
 
 # 3. cron 全链
-bin/jspace cron list                   # 期望:3 默认任务,全部默认 disabled(模板默认;需 jspace cron enable <id> 后 cron install;启用后 doctor 才报未安装)
+bin/jspace cron list                   # 期望:4 默认任务,全部默认 disabled(模板默认;需 jspace cron enable <id> 后 cron install;启用后 doctor 才报未安装)
 bin/jspace cron run inbox-tidy --dry-run   # 期望:打印将执行的命令
 bin/jspace cron install                # 期望:调度器可见对应任务(见各平台)
 bin/jspace cron status inbox-tidy      # 期望:never run

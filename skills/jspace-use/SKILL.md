@@ -214,7 +214,7 @@ gbrain put project/<id>/state < <终态正文>
 
 - 治理细节(域/资源/skill 创建规则、cron 运维)→ 第 8 章
 - gbrain 安装/embedding 三方案/frontmatter schema/离线策略 → `~/.agents/skills/jspace-use/references/gbrain.md`
-- registry schema(hub v4 / local / marker)/drift 规则 → `~/.agents/skills/jspace-use/references/registry.md`
+- registry schema(schema_version=1 / local / marker)/drift 规则 → `~/.agents/skills/jspace-use/references/registry.md`
 - 逐 harness 接线(Claude Code / Grok Build / OpenCode / Pi / Cursor 各自 `harness-<name>.md` + capabilities 全景)→ `~/.agents/skills/jspace-use/references/harnesses.md`
 - 无头执行运维(账号/配额/失败可见性)→ `~/.agents/skills/jspace-use/references/headless-ops.md`
 - 首次启用 golden run → `~/.agents/skills/jspace-use/references/example-first-use.md`

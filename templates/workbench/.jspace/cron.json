@@ -45,7 +45,7 @@
         "kind": "skill",
         "skill": "workbench-retro",
         "entrypoint": "weekly",
-        "input": "先跑 jspace context session-start --plain 取工作台状态。然后:做本周自省(无头模式:只取证、只产报告,不提问、不修改任何文件)。在工作台根目录按 AGENTS.md 路由,执行 workbench-retro 的六条检查,产出分级建议清单并写 gbrain 页 memory/retro/<YYYY-MM-DD>(同周重跑覆盖同页)。排在 memory-consolidate 之后,可将本周巩固页作为输入之一。"
+        "input": "先跑 jspace context session-start --plain 取工作台状态。然后:做本周自省(无头模式:只取证、只产报告,不提问、不修改任何文件)。在工作台根目录按 AGENTS.md 路由,执行 workbench-retro 的六条检查,产出分级建议清单并写 gbrain 页 records/retro/<YYYY-MM-DD>(同周重跑覆盖同页)。排在 memory-consolidate 之后,可将本周巩固页作为输入之一。"
       },
       "enabled": false
     }
