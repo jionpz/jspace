@@ -12,7 +12,7 @@
 
 ## 验收用例(canonical 查询串逐字固定)
 
-语料:2 份示例资料,分别归入 `<领域A>`(含数值事实 X)与 `<领域B>`(含公式 Y)。参考目标页 slug 按 M2 纪律派生(`assets/<领域|项目>/<语义名>`)。
+语料:2 份示例资料,分别归入 `<领域A>`(含数值事实 X)与 `<领域B>`(含公式 Y)。参考目标页 slug 按记忆模型 v2 纪律派生(`assets/<项目id|领域>/<语义名>`,**项目用 ascii id**、领域用中文名——与 `project/<id>/state` 的 ascii 项目 id 一致)。
 
 | # | 查询(逐字) | 期望 top-1 | 负对照(不得排第一) |
 |---|---|---|---|
@@ -79,7 +79,7 @@
 |---|---|---|
 | 1 | 归位:真实 xlsx 经 asset-ingest 移到 `<filehub>/projects/<项目>/`,命名 `YYYY-MM-DD-语义名-vN.xlsx` | 文件存在;`projects/<项目>/index.md` 登记行 |
 | 2 | 深度抽取:`python3 office-extract.py <文件> --out <文件>.extract.md` | 伴生 `.extract.md` 存在;含 sheet 名 + 单元格引用 + 值;**幻影行(全空高空行)不输出**;超 `ROWS_LIMIT` 行有截断注记 |
-| 3 | 策展写页:gbrain reference 页 slug `assets/<项目>/<语义名>-vN` | 页含 Key Facts(关键数字带 `[Source: <rel_path>, Sheet <名> <列>, 日期]`) + `抽取:` 注记行 + `rel_path` |
+| 3 | 策展写页:gbrain asset 指针页 slug `assets/<项目id>/<语义名>-vN`(项目 id 用 ascii,与 state 卡一致) | 页含 Key Facts(关键数字带 `[Source: <rel_path>, Sheet <名> <列>, 日期]`) + `抽取:` 注记行 + `rel_path` |
 | 4 | 召回:① `gbrain query "<关键数字相关措辞>"` ② `gbrain search "<关键词>"` ③ 指针断言四连(`get` → Pointer → `test -f` → top-1 slug 一致) | query 与 search 均 top-1 目标页;指针四连成立 |
 
 **通过标准**:步骤 1–4 全过;关键数字的语义查询与关键词查询均 top-1;幻影行过滤与截断行为符合契约。
