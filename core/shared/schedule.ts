@@ -42,3 +42,12 @@ export function parseSchedule(schedule: string): ScheduleDict {
   }
   return { Minute: m, Hour: h, ...(d !== undefined && { Day: d }), ...(mo !== undefined && { Month: mo }), ...(w !== undefined && { Weekday: w }) };
 }
+
+/** Windows-only installable: DAILY (dom=* dow=*) or WEEKLY (dom=*, dow fixed);
+ *  month=* and dom=* required (schtasks MVP subset). Pure schedule predicate —
+ *  lives in the shared kernel because the win32 adapter AND the automation layer
+ *  (`cron add` Windows gate, issue #9 #9-05) both consume it. */
+export function isWindowsInstallable(schedule: string): boolean {
+  const d = parseSchedule(schedule);
+  return d.Month === undefined && d.Day === undefined;
+}

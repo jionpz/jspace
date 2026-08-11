@@ -2,7 +2,7 @@
 // Task name carries the workbench tag: JSpaceCron_<tag>_<id>. inspect()
 // filters by the tag so two workbenches never collide on scheduled tasks.
 import { fail } from "../../core/shared/errors.ts";
-import { parseSchedule } from "../../core/shared/schedule.ts";
+import { isWindowsInstallable, parseSchedule } from "../../core/shared/schedule.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 import { schedulerSpawn } from "./spawn.ts";
 import { taskIdFor, workbenchTag, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerIdentity, type SchedulerOp } from "./types.ts";
@@ -66,12 +66,6 @@ export function parseSchtasksXml(xml: string): { schedule: string; argv: string 
   if (!root || !id) return null;
   const schedule = dow === null ? `${minute} ${hour} * * *` : `${minute} ${hour} * * ${dow}`;
   return { schedule, argv: `cron run --id ${id[1]} --dir ${root[1]}` };
-}
-
-/** Windows-only installable: DAILY (dom=* dow=*) or WEEKLY (dom=*, dow fixed); month=* and dom=*. */
-export function isWindowsInstallable(schedule: string): boolean {
-  const d = parseSchedule(schedule);
-  return d.Month === undefined && d.Day === undefined;
 }
 
 /** Build schtasks args for a cron (DAILY/WEEKLY subset). Null when not expressible. */

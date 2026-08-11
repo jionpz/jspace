@@ -8,7 +8,7 @@ import { isId } from "../../core/contracts/ids.ts";
 import { findIndex } from "../registry/helpers.ts";
 import { ackIncidents } from "./incidents.ts";
 import { loadCrons, parseSchedule, saveCrons } from "./definitions.ts";
-import { isWindowsInstallable } from "../../adapters/scheduler/win32.ts";
+import { isWindowsInstallable } from "../../core/shared/schedule.ts";
 
 export interface CronInstalledCheck {
   isInstalled: (cronId: string) => boolean;
