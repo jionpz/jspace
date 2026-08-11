@@ -11,7 +11,7 @@ import { join } from "node:path";
 import type { CmdResult } from "../commands/command.ts";
 import type { RegistryDiagnostic } from "../../core/contracts/diagnostics.ts";
 import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
-import { inspectWorkbench, type InspectEnv } from "../../core/registry/inspect.ts";
+import { inspectWorkbench, INVALID_JSON, type InspectEnv } from "../../core/registry/inspect.ts";
 import { primaryPathForResourceType, resolveEffectiveRegistry } from "../../core/registry/effective.ts";
 import { readIncidents } from "../automation/incidents.ts";
 import { readJournals } from "../ingest/journal.ts";
@@ -560,12 +560,17 @@ function checkDomains(root: string, hub: HubV1 | null): RegistryDiagnostic[] {
 }
 
 /** Is a TOML config's `<server_key>` section already pointing GBRAIN_SKILLS_DIR
- *  at the workbench skills dir? (grok's config.toml, issue #8 #16.) */
+ *  at the workbench skills dir? (grok's config.toml, issue #8 #16.) Scoped to
+ *  the target section only — a sibling server section carrying the same env key
+ *  must not mask a missing wire (issue #9 #9-07). */
 function tomlSkillsDirWired(toml: string, serverKey: string, wbSkillsDir: string): boolean {
   const lines = toml.split("\n");
   const section = lines.findIndex((l) => l.trim() === `[${serverKey}]`);
   if (section === -1) return false;
-  const m = toml.match(/GBRAIN_SKILLS_DIR\s*=\s*["']([^"']*)["']/);
+  const rest = lines.slice(section + 1);
+  const nextHeader = rest.findIndex((l) => /^\s*\[/.test(l));
+  const body = (nextHeader === -1 ? rest : rest.slice(0, nextHeader)).join("\n");
+  const m = body.match(/GBRAIN_SKILLS_DIR\s*=\s*["']([^"']*)["']/);
   return m !== null && m[1] === wbSkillsDir;
 }
 
@@ -591,8 +596,21 @@ function checkGBrain(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
       cfg.format === "toml"
         ? tomlSkillsDirWired(raw, cfg.server_key, wbSkillsDir)
         : (() => {
-            const server = gbrainServer(JSON.parse(raw));
-            return server !== null && gbrainSkillsDirWired(server, wbSkillsDir);
+            try {
+              const server = gbrainServer(JSON.parse(raw));
+              return server !== null && gbrainSkillsDirWired(server, wbSkillsDir);
+            } catch {
+              // unreadable machine config is not a workbench health problem; the
+              // wire command repairs it. Report as info instead of crashing the
+              // read-only diagnostics (same invariant as cron.file_unreadable).
+              diags.push({
+                severity: "info",
+                code: "gbrain.config_invalid_json",
+                path: "gbrain",
+                message: `harness config for ${name} is not valid JSON; run ${name === "claude" ? "jspace gbrain wire" : `jspace harness wire --harness ${name}`} to re-wire GBRAIN_SKILLS_DIR`,
+              });
+              return true; // config unreadable — skip the unwired check below
+            }
           })();
     if (!wired) {
       const cmd = name === "claude" ? "jspace gbrain wire" : `jspace harness wire --harness ${name}`;
@@ -735,7 +753,13 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps, verbose = fa
     local: reads.local,
     pathExists: existsSync,
     isFile,
-    readJson: (p) => JSON.parse(readFileSync(p, "utf-8")),
+    readJson: (p) => {
+      try {
+        return JSON.parse(readFileSync(p, "utf-8"));
+      } catch {
+        return INVALID_JSON; // never throw — caller converts to a diagnostic
+      }
+    },
   };
   const diags: RegistryDiagnostic[] = [
     ...inspectWorkbench(env),

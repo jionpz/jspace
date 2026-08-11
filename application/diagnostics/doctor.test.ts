@@ -592,6 +592,38 @@ test("gbrain skillsdir unwired -> gbrain.skillsdir_unwired (info); wired -> none
   expect(codes(wired)).not.toContain("gbrain.skillsdir_unwired");
 });
 
+test("invalid JSON harness config -> gbrain.config_invalid_json (info), doctor does not crash", () => {
+  // a hand-edited .claude.json with bad JSON must not crash read-only diagnostics
+  const r = doctorWorkbench(
+    root,
+    stubDeps({ readHarnessConfig: (p) => (p.includes(".claude.json") ? "{ not json" : null) }),
+  );
+  const diags = (r.data as { diagnostics: { code: string; severity: string }[] }).diagnostics;
+  const d = diags.find((x) => x.code === "gbrain.config_invalid_json");
+  expect(d).toBeDefined();
+  expect(d!.severity).toBe("info");
+  expect(r.exitCode ?? 0).toBe(0);
+  // unreadable config is not double-reported as unwired (wire cmd owns repair)
+  expect(diags.some((x) => x.code === "gbrain.skillsdir_unwired")).toBe(false);
+});
+
+test("invalid JSON domain.json -> domain.context_drift warning, doctor does not throw", () => {
+  // a hand-edited domain.json with bad JSON must not crash read-only diagnostics
+  // (the injected readJson lambda returns a sentinel instead of throwing)
+  mkdirSync(join(root, "workspace", "files"), { recursive: true });
+  writeFileSync(join(root, "workspace", "files", "README.md"), "x");
+  writeFileSync(join(root, "workspace", "files", "domain.json"), "{ not json");
+  writeFileSync(
+    join(root, ".jspace", "hub.json"),
+    JSON.stringify({ schema_version: 1, domains: [{ id: "files", path: "workspace/files" }], resources: [], projects: [] }),
+  );
+  const r = doctorWorkbench(root, stubDeps());
+  const diags = (r.data as { diagnostics: { code: string; severity: string; message: string }[] }).diagnostics;
+  const d = diags.find((x) => x.code === "domain.context_drift" && x.message.includes("is not valid JSON"));
+  expect(d).toBeDefined();
+  expect(d!.severity).toBe("warning");
+});
+
 // ---- checkHarness (active harness support health) ----
 
 test("active headless harness with binary present -> no harness.* diagnostics", () => {
@@ -707,4 +739,19 @@ test("multi-harness gbrain wiring via capabilities.mcp_config (issue #8 #16)", (
     readHarnessConfig: (p) => (p.includes("config.toml") ? `[mcp_servers.gbrain]\ncommand = 'gbrain'\nenv = { GBRAIN_SKILLS_DIR = '${wbSkillsDir}' }\n` : null),
   });
   expect(codes(doctorWorkbench(root, grokWired))).not.toContain("gbrain.skillsdir_unwired");
+});
+
+test("tomlSkillsDirWired scoped to target section: sibling server with same key cannot mask unwired (issue #9 #9-07)", () => {
+  const wbSkillsDir = join(root, ".jspace", "skills");
+  // [mcp_servers.other] carries the wb skills dir while [mcp_servers.gbrain]
+  // points elsewhere — the whole-file regex would wrongly report "wired".
+  const interfering = `[mcp_servers.other]\ncommand = 'other'\nenv = { GBRAIN_SKILLS_DIR = '${wbSkillsDir}' }\n\n[mcp_servers.gbrain]\ncommand = 'gbrain'\nenv = { GBRAIN_SKILLS_DIR = '/wrong/skills' }\n`;
+  const r = doctorWorkbench(
+    root,
+    stubDeps({ readHarnessConfig: (p) => (p.includes("config.toml") ? interfering : null) }),
+  );
+  expect(codes(r)).toContain("gbrain.skillsdir_unwired"); // NOT masked by the sibling
+  // reverse: gbrain section itself wired -> no diagnostic even with a sibling unwired
+  const gbrainWired = `[mcp_servers.other]\ncommand = 'other'\nenv = { GBRAIN_SKILLS_DIR = '/wrong/skills' }\n\n[mcp_servers.gbrain]\ncommand = 'gbrain'\nenv = { GBRAIN_SKILLS_DIR = '${wbSkillsDir}' }\n`;
+  expect(codes(doctorWorkbench(root, stubDeps({ readHarnessConfig: (p) => (p.includes("config.toml") ? gbrainWired : null) })))).not.toContain("gbrain.skillsdir_unwired");
 });
