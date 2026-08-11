@@ -64,6 +64,7 @@ Every machine-truth state has a versioned decoder in `core/contracts/*` (strict 
 
 - Historical reads go through `readJsonRecords(dir, { ext, decode, sort })` → `{ records, issues }`; a corrupt file never blocks the rest. Consumers that feed health surfaces (`cronFailures` / `doctor`) must forward `issues` as warnings — damaged records count toward `needs_attention`, they are never silently dropped.
 - All state writes use `writeBytesAtomic` (temp sibling + rename) — no path may leave a partial JSON readable as complete state.
+- **Read-only diagnostics never throw on a hand-edited file**: `doctor`'s injected `readJson` lambda returns the `INVALID_JSON` sentinel instead of throwing, and a harness config whose `JSON.parse` fails degrades to an `info` diagnostic (`gbrain.config_invalid_json`) instead of crashing the whole run (issue #9 #9-02/#9-03).
 
 ```ts
 // recovery-critical: only "file truly missing" may be null
@@ -86,6 +87,7 @@ export function readRuns(root, cronId): { records: RunRecord[]; issues: Contract
 - **O_EXCL lock**: a post-create write failure (ENOSPC/EIO) is NOT contention — remove your own 0-byte poison lock and propagate, or every process skips for the whole staleMs and the real error is hidden behind a fake "already running" (issue #8 #7).
 - **Fail-closed verification**: when a guard cannot verify success (inbox batch log missing / no filehub), report the failure (`batch-stale` incident), never default to success — a guard that defaults to "changed=true" records fake ok runs (issue #8 #6).
 - **Timeout termination**: POSIX timeout must escalate SIGTERM → SIGKILL after a grace window — a harness that ignores SIGTERM otherwise hangs the CLI, the lock is never released, and ~1h later a second run double-executes. `timedOut` is the timer's own flag, not a wall-clock comparison (issue #8 #5).
+- **Scheduler external commands are never bare `spawnSync`**: every `crontab`/`schtasks`/`plutil`/`launchctl` call routes through `adapters/scheduler/spawn.ts` (utf-8 + `SCHEDULER_SPAWN_TIMEOUT_MS`) so a hung platform tool degrades to fail-loud / empty-result instead of hanging `cron install`/`cron check` — same red line as gbrain's process spawn (issue #9 #9-04).
 
 ## API / CLI Error Responses
 
