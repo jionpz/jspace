@@ -297,12 +297,12 @@ export const linuxAdapter: SchedulerAdapter & { io?: CrontabIO; spawn?: Schedule
     const service: LinuxCronHealth["service"] = s.status === 0 ? "ok" : isolated ? "unverifiable" : "stopped";
 
     // crontab: binary presence + `-l` exit-code grading. A missing crontab
-    // command is a confirmed fault (jspace cannot install) -> "missing". status 1
-    // is the legit "no crontab for this uid" state — a real finding on the
-    // host, but inside a UID-isolated sandbox it usually means the host spool
-    // is not visible, so there it degrades to "unverifiable".
+    // command is a confirmed fault (jspace cannot install) -> "missing-cmd".
+    // status 1 is the legit "no crontab for this uid" state — a real finding
+    // on the host, but inside a UID-isolated sandbox it usually means the host
+    // spool is not visible, so there it degrades to "unverifiable".
     const c = spawn("sh", ["-c", "command -v crontab"]);
-    let crontab: LinuxCronHealth["crontab"] = "missing"; // no crontab binary -> confirmed cannot install
+    let crontab: LinuxCronHealth["crontab"] = "missing-cmd"; // no crontab binary -> confirmed cannot install
     if ((c.stdout ?? "").trim() !== "") {
       const r = spawn("crontab", ["-l"]);
       crontab =

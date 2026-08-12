@@ -133,6 +133,17 @@ test("confirmed missing crontab + stopped daemon (verifiable host) -> both warni
   expect(codes(r)).not.toContain("cron.daemon_unverifiable");
 });
 
+test("missing-cmd (crontab binary absent) -> crontab_missing warning preserved + distinct message", () => {
+  setCrons([{ id: "inbox-tidy", schedule: "0 21 * * *", enabled: true }]);
+  const r = withLinuxPlatform(() =>
+    doctorWorkbench(root, stubDeps({ linuxCronHealth: () => ({ crontab: "missing-cmd", service: "ok" }) })),
+  );
+  expect(codes(r)).toContain("cron.crontab_missing"); // confirmed fault, not unverifiable
+  expect(codes(r)).toContain("cron.not_installed"); // no crontab -> enabled cron really is not installed
+  const diag = (r.data as { diagnostics: { code: string; message: string }[] }).diagnostics.find((d) => d.code === "cron.crontab_missing");
+  expect(diag?.message).toContain("crontab command not found"); // the missing-binary wording
+});
+
 test("installed task not in cron.json -> cron.stale_task", () => {
   setCrons([{ id: "a", schedule: "0 21 * * *", enabled: true }]);
   const r = doctorWorkbench(root, stubDeps({ installedCronIds: () => ["a", "old-cron"] }));

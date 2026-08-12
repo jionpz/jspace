@@ -643,21 +643,23 @@ function checkCrons(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
     diags.push({ severity: "warning", code: "cron.file_unreadable", path: "cron", message: `cron.json unreadable: ${e instanceof Error ? e.message : String(e)}` });
     crons = [];
   }
-  // crontab/daemon health. "missing"/"stopped" = confirmed absent on a
-  // verifiable host -> warning; "unverifiable" = detection may have failed due
-  // to sandbox / namespace isolation (the host scheduler state is hidden) ->
-  // info, never warning (issue #10).
+  // crontab/daemon health. "missing"/"missing-cmd"/"stopped" = confirmed
+  // faults on a verifiable host -> warning; "unverifiable" = detection may have
+  // failed due to sandbox / namespace isolation (the host scheduler state is
+  // hidden) -> info, never warning (issue #10).
   //
   // installed-state comparison: readable crontab ("ok") -> read installed ids;
-  // confirmed empty ("missing") -> treated as empty and still comparable (an
-  // enabled cron really is not installed); "unverifiable" -> not comparable
-  // (an empty read here proves nothing about the host).
+  // confirmed empty ("missing" / "missing-cmd") -> treated as empty and still
+  // comparable (an enabled cron really is not installed); "unverifiable" -> not
+  // comparable (an empty read here proves nothing about the host).
   let installedCheckable = true; // non-linux adapters read their own scheduler
   let installedIds = new Set<string>();
   if (process.platform === "linux") {
     const health = cron.linuxCronHealth();
-    if (health.crontab === "missing") {
+    if (health.crontab === "missing-cmd") {
       diags.push({ severity: "warning", code: "cron.crontab_missing", path: "cron", message: "crontab command not found on this system; jspace cron cannot install tasks" });
+    } else if (health.crontab === "missing") {
+      diags.push({ severity: "warning", code: "cron.crontab_missing", path: "cron", message: "no crontab installed for this user; jspace cron cannot install tasks (run crontab -e to create one)" });
     } else if (health.crontab === "unverifiable") {
       diags.push({ severity: "info", code: "cron.crontab_unverifiable", path: "cron", message: "cron install state cannot be verified here (sandbox/namespace isolation hides the host crontab); check crontab -l on the host" });
     }
@@ -668,7 +670,7 @@ function checkCrons(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
     }
     if (health.crontab === "ok") {
       installedIds = new Set(cron.installedCronIds(root));
-    } else if (health.crontab === "missing") {
+    } else if (health.crontab === "missing" || health.crontab === "missing-cmd") {
       installedIds = new Set(); // confirmed no crontab -> installs are empty (comparable)
     }
     installedCheckable = health.crontab !== "unverifiable";

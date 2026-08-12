@@ -7,7 +7,7 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 | 平台 | `jspace cron install` 后端 | 补跑语义 | 运行上下文 |
 |---|---|---|---|
 | macOS | launchd(一 cron 一 plist,`~/Library/LaunchAgents/com.jspace.cron.<tag>.<id>.plist`) | 睡眠错过 → **下次唤醒补跑一次**(多次合并一次);整夜关机不唤醒则跳过 | 仅用户已登录会话 |
-| Linux | crontab(注释块 `# jspace crons (managed) DO NOT EDIT`…`# end jspace`) | **无补跑**(错过即跳过) | 登录用户,环境最小(PATH/HOME 由 install 烘焙) |
+| Linux | crontab(注释块 `# jspace crons <tag> (managed) DO NOT EDIT`…`# end jspace <tag>`,tag 见 §Scheduler 任务隔离) | **无补跑**(错过即跳过) | 登录用户,环境最小(PATH/HOME 由 install 烘焙) |
 | Windows | Task Scheduler(`schtasks`,任务名 `JSpaceCron_<wb-id>_<id>`) | **无补跑** | **默认仅登录时运行**(登出不触发);`/it` 交互令牌 |
 
 > **调度语义差异诚实声明**:三个平台对「错过的时间点」行为不同——macOS 会唤醒补跑,Linux/Windows 直接跳过。这是各系统调度器的固有差异,cron 定义(`.jspace/cron.json`)是平台无关的,同一份定义在三平台行为可能不同。失败都会打开结构化 incident(`.jspace/state/incidents/`),`cron failures` 在下个会话可见;成功 retry 自动 resolve,`cron ack` 保留证据但停止告警。
@@ -89,8 +89,9 @@ bin/jspace cron uninstall              # 期望:任务移除
 1. **登录态实测**:`cron install` 后,`schtasks /query /tn JSpaceCron_<wb-id>_inbox-tidy` 应存在;等待/触发一次 `cron run`。
 2. **登出态**:登出后任务**不会触发**(Task Scheduler 默认仅登录运行)——这是文档明示的产品边界,不视为 bug。
 
-### Linux 额外用例(无 cron 服务,M5)
+### Linux 额外用例(无 cron 服务 / 沙盒隔离,M5 + issue #10)
 - 最小发行版/容器无 crontab 或未启动 crond:`jspace cron install` 应 **fail-fast 报错**;`doctor` 报「crontab 命令缺失 / cron 守护进程未运行」warning。
+- **沙盒 / PID+UID 隔离**(Codex sandbox、`bwrap --unshare-pid` 容器):宿主 cron daemon 与 crontab 对 doctor 不可见,`pgrep` 查不到进程、`crontab -l` 读不到宿主条目。doctor 经 `/proc/self/status` 的 `NSpid:` 字段(≥2 值 = 嵌套 namespace)识别,将状态降级为 **info**(`cron.daemon_unverifiable` / `cron.crontab_unverifiable`),不报 warning、不误导"未安装"——真机状态需在宿主上确认。
 
 ## doctor 断言表(CI 解锁后判通过标准,M6)
 
@@ -103,7 +104,10 @@ bin/jspace cron uninstall              # 期望:任务移除
 | 已 install | Windows | 无「enabled but not installed」;无 stale;`schtasks /query` 存在 |
 | cron 已删但调度器残留 | 全部 | warning `stale scheduled task <id>` |
 | 存在 open cron incident | 全部 | warning `cron.open_incidents`（`N open cron incident(s)`） |
-| Linux 无 crontab/无 crond | Linux | warning `crontab command not found` / `cron daemon not running; scheduled tasks won't fire until it starts` |
+| Linux 无 crontab 命令 | Linux | warning `crontab command not found on this system` |
+| Linux 有 crontab 命令但用户无 crontab(`crontab -l` status 1) | Linux | warning `no crontab installed for this user` |
+| Linux 无 crond(命令在、进程未跑) | Linux | warning `cron daemon not running; scheduled tasks won't fire until it starts` |
+| Linux 沙盒/namespace 隔离(宿主状态不可见) | Linux | info `cron.daemon_unverifiable` / `cron.crontab_unverifiable`(不报 warning) |
 | 非法 schedule | 全部 | warning `cron.file_unreadable`（schedule 已在 decode 层校验，手改 cron.json 使文件不可读） |
 
 ## CI 解锁后 cron 冒烟(占位)

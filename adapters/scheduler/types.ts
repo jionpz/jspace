@@ -63,9 +63,11 @@ export interface SchedulerIdentity {
 export type SchedulerHealth = "ok" | "stopped" | "missing" | "unverifiable";
 
 /** Linux cron health surface. service: ok / stopped (confirmed daemon state) /
- *  unverifiable. crontab: ok / missing (confirmed absent) / unverifiable. */
+ *  unverifiable. crontab distinguishes two confirmed negatives: `missing-cmd`
+ *  (the crontab binary is absent — jspace cannot install at all) and `missing`
+ *  (`crontab -l` status 1 — the binary exists but this user has no crontab). */
 export interface LinuxCronHealth {
-  crontab: Exclude<SchedulerHealth, "stopped">;
+  crontab: "ok" | "missing" | "missing-cmd" | "unverifiable";
   service: Exclude<SchedulerHealth, "missing">;
 }
 

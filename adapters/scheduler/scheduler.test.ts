@@ -527,7 +527,7 @@ test("health: crontab -l other status -> crontab unverifiable (not proof of abse
   expect(h.crontab).toBe("unverifiable");
 });
 
-test("health: no crontab binary -> crontab missing (confirmed cannot install)", () => {
+test("health: no crontab binary -> crontab missing-cmd (confirmed cannot install)", () => {
   const h = runHealth({ pgrep: 1, crontabBin: "", crontabL: 1 }, PROC_NOT_ISOLATED);
-  expect(h.crontab).toBe("missing"); // confirmed fault, not "unverifiable"
+  expect(h.crontab).toBe("missing-cmd"); // confirmed fault, distinct from "missing"
 });
