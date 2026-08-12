@@ -56,6 +56,19 @@ export interface SchedulerIdentity {
   taskId: string;
 }
 
+/** Scheduler health tri-state. `ok` = confirmed working, the negative states
+ *  mean confirmed broken, `unverifiable` = detection failed in a way that may
+ *  be environmental (PID namespace / UID isolation) rather than a real fault —
+ *  doctor maps unverifiable to info, not warning (issue #10). */
+export type SchedulerHealth = "ok" | "stopped" | "missing" | "unverifiable";
+
+/** Linux cron health surface. service: ok / stopped (confirmed daemon state) /
+ *  unverifiable. crontab: ok / missing (confirmed absent) / unverifiable. */
+export interface LinuxCronHealth {
+  crontab: Exclude<SchedulerHealth, "stopped">;
+  service: Exclude<SchedulerHealth, "missing">;
+}
+
 export interface SchedulerAdapter {
   readonly platform: PlatformName;
   /** canonical platform identity for a cron (single source — never assembled
@@ -76,8 +89,11 @@ export interface SchedulerAdapter {
   applyBatch(ops: SchedulerOp[], enabled: CronDefinition[], tag: string, root: string, env: SchedulerEnv): string[];
   /** remove every task for this tag (cron uninstall). */
   uninstallAll(tag: string, root: string, env: SchedulerEnv): string[];
-  /** platform health for doctor (linux: crontab present + daemon running). */
-  health?(env: SchedulerEnv): { crontab: boolean; service: boolean };
+  /** platform health for doctor (linux: crontab present + daemon running).
+   *  Returns tri-state so a sandbox / namespace-isolated environment that
+   *  cannot verify the host scheduler reports `unverifiable` instead of a
+   *  false "stopped/missing" (issue #10). */
+  health?(env: SchedulerEnv): LinuxCronHealth;
 }
 
 /** Stable short workbench tag derived from marker workbench_id. Single source:

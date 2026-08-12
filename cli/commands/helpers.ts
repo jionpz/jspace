@@ -72,7 +72,7 @@ export const cronDeps = {
   loadCrons,
   parseSchedule,
   installedCronIds: installedCronIdsForRoot,
-  linuxCronHealth: () => schedulerAdapter(process.platform)?.health?.(schedulerEnv()) ?? { crontab: false, service: false },
+  linuxCronHealth: () => schedulerAdapter(process.platform)?.health?.(schedulerEnv()) ?? { crontab: "missing", service: "stopped" },
   officialSkillNames: () => SKILLS_MANIFEST.workbench.map((s) => s.name),
   bundleStaleSkills,
   readUserClaudeJson,

@@ -43,7 +43,7 @@ const stubDeps = (over: Partial<CronHealthDeps> = {}): CronHealthDeps => ({
   loadCrons,
   parseSchedule,
   installedCronIds: () => [],
-  linuxCronHealth: () => ({ crontab: true, service: true }),
+  linuxCronHealth: () => ({ crontab: "ok", service: "ok" }),
   officialSkillNames: () => ["jspace-use", "asset-ingest", "memory-recall", "memory-writeback"],
   // deterministic: the test workbenches schedule claude, but the CI runner may
   // not have the claude binary — stub bin presence so harness checks are stable.
@@ -81,6 +81,56 @@ test("enabled cron not installed -> cron.not_installed", () => {
   setCrons([{ id: "inbox-tidy", schedule: "0 21 * * *", enabled: true }]);
   const r = doctorWorkbench(root, stubDeps()); // installedCronIds = []
   expect(codes(r)).toContain("cron.not_installed");
+});
+
+// ---- linux cron health tri-state (issue #10) --------------------------------
+// doctor only runs the linux crontab/daemon health branch when
+// process.platform === "linux"; force it so these cases run on any host.
+function withLinuxPlatform(fn: () => CmdResult): CmdResult {
+  const orig = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+  try {
+    return fn();
+  } finally {
+    if (orig) Object.defineProperty(process, "platform", orig);
+    else delete (process as { platform?: string }).platform;
+  }
+}
+
+test("unverifiable service (sandbox hides host daemon) -> info, no daemon_stopped", () => {
+  const r = withLinuxPlatform(() =>
+    doctorWorkbench(root, stubDeps({ linuxCronHealth: () => ({ crontab: "ok", service: "unverifiable" }) })),
+  );
+  expect(codes(r)).not.toContain("cron.daemon_stopped");
+  expect(codes(r)).toContain("cron.daemon_unverifiable");
+  const diags = (r.data as { diagnostics: { code: string; severity: string }[] }).diagnostics;
+  expect(diags.find((d) => d.code === "cron.daemon_unverifiable")?.severity).toBe("info");
+  expect(r.exitCode ?? 0).toBe(0); // info never fails doctor
+});
+
+test("unverifiable crontab (sandbox hides host spool) -> info, no not_installed despite enabled cron", () => {
+  setCrons([{ id: "inbox-tidy", schedule: "0 21 * * *", enabled: true }]);
+  const r = withLinuxPlatform(() =>
+    doctorWorkbench(root, stubDeps({ linuxCronHealth: () => ({ crontab: "unverifiable", service: "ok" }) })),
+  );
+  expect(codes(r)).not.toContain("cron.crontab_missing");
+  expect(codes(r)).not.toContain("cron.not_installed"); // cannot read installs -> cannot judge
+  expect(codes(r)).toContain("cron.crontab_unverifiable");
+  const diags = (r.data as { diagnostics: { code: string; severity: string }[] }).diagnostics;
+  expect(diags.find((d) => d.code === "cron.crontab_unverifiable")?.severity).toBe("info");
+  expect(r.exitCode ?? 0).toBe(0);
+});
+
+test("confirmed missing crontab + stopped daemon (verifiable host) -> both warnings preserved", () => {
+  setCrons([{ id: "inbox-tidy", schedule: "0 21 * * *", enabled: true }]);
+  const r = withLinuxPlatform(() =>
+    doctorWorkbench(root, stubDeps({ linuxCronHealth: () => ({ crontab: "missing", service: "stopped" }) })),
+  );
+  expect(codes(r)).toContain("cron.crontab_missing");
+  expect(codes(r)).toContain("cron.daemon_stopped");
+  expect(codes(r)).toContain("cron.not_installed"); // confirmed no crontab -> enabled cron really is not installed
+  expect(codes(r)).not.toContain("cron.crontab_unverifiable");
+  expect(codes(r)).not.toContain("cron.daemon_unverifiable");
 });
 
 test("installed task not in cron.json -> cron.stale_task", () => {

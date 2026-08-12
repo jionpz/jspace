@@ -6,11 +6,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { taskIdFor, workbenchTag, SCHEDULER_SPAWN_TIMEOUT_MS } from "./types.ts";
-import { makeSchedulerSpawn, type SchedulerSpawnImpl, type SchedulerSpawnImplOpts } from "./spawn.ts";
+import { makeSchedulerSpawn, type SchedulerSpawn, type SchedulerSpawnImpl, type SchedulerSpawnImplOpts } from "./spawn.ts";
 import { isWindowsInstallable } from "../../core/shared/schedule.ts";
 import { buildPlist } from "./darwin.ts";
 import { parseSchedule } from "../../core/shared/schedule.ts";
-import { linuxAdapter, crontabBlock, crontabLine, replaceManagedBlock, parseManagedLine, extractTagBlock, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
+import { linuxAdapter, crontabBlock, crontabLine, replaceManagedBlock, parseManagedLine, extractTagBlock, pidNamespaceIsolated, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
 import { darwinAdapter, plistPath, parsePlistName, plistBelongsToTag } from "./darwin.ts";
 import { schtasksArgs, parseOpContent, parseSchtasksXml, win32Adapter } from "./win32.ts";
 import { planReconciliation } from "../../application/automation/scheduler.ts";
@@ -453,4 +453,81 @@ test("linux applyBatch: non-empty enabled rebuilds the whole block from the enab
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+// ---- linux cron health tri-state (issue #10) --------------------------------
+// Inject the spawn + proc-status seams so every branch runs without a real
+// crontab/daemon or a real sandbox. Same saved/restored seam pattern as io.
+
+function fakeHealthSpawn(p: { pgrep: number; crontabBin: string; crontabL: number }) {
+  return ((cmd: string, args: string[]): ReturnType<SchedulerSpawn> => {
+    if (cmd === "sh" && args[1]?.includes("pgrep")) {
+      return { status: p.pgrep, stdout: "", stderr: "", pid: 1, signal: null, output: [] } as never;
+    }
+    if (cmd === "sh" && args[1]?.includes("command -v crontab")) {
+      return { status: p.crontabBin === "" ? 1 : 0, stdout: p.crontabBin, stderr: "", pid: 1, signal: null, output: [] } as never;
+    }
+    if (cmd === "crontab" && args[0] === "-l") {
+      return { status: p.crontabL, stdout: "", stderr: "no crontab for uid", pid: 1, signal: null, output: [] } as never;
+    }
+    throw new Error(`unexpected spawn: ${cmd} ${JSON.stringify(args)}`);
+  }) as SchedulerSpawn;
+}
+
+const PROC_NOT_ISOLATED = "Name:\tfoo\nNSpid:\t205\n";
+const PROC_ISOLATED = "Name:\tfoo\nNSpid:\t42 205\n"; // nested namespace: two values
+
+function runHealth(p: { pgrep: number; crontabBin: string; crontabL: number }, procStatus: string) {
+  const savedSpawn = linuxAdapter.spawn;
+  const savedRead = linuxAdapter.readProcStatus;
+  linuxAdapter.spawn = fakeHealthSpawn(p);
+  linuxAdapter.readProcStatus = () => procStatus;
+  try {
+    return linuxAdapter.health!({ jspaceBinary: "/bin/jspace", home: "/home/u", path: "/bin" });
+  } finally {
+    linuxAdapter.spawn = savedSpawn;
+    linuxAdapter.readProcStatus = savedRead;
+  }
+}
+
+test("pidNamespaceIsolated parses NSpid values", () => {
+  expect(pidNamespaceIsolated(PROC_NOT_ISOLATED)).toBe(false); // single value
+  expect(pidNamespaceIsolated(PROC_ISOLATED)).toBe(true); // nested namespace
+  expect(pidNamespaceIsolated("Name:\tfoo\n")).toBe(false); // no NSpid field
+  expect(pidNamespaceIsolated("")).toBe(false); // empty proc
+});
+
+test("health: pgrep hit -> service ok", () => {
+  const h = runHealth({ pgrep: 0, crontabBin: "/usr/bin/crontab", crontabL: 0 }, PROC_NOT_ISOLATED);
+  expect(h.service).toBe("ok");
+  expect(h.crontab).toBe("ok");
+});
+
+test("health: pgrep miss on a verifiable host -> service stopped", () => {
+  const h = runHealth({ pgrep: 1, crontabBin: "/usr/bin/crontab", crontabL: 1 }, PROC_NOT_ISOLATED);
+  expect(h.service).toBe("stopped"); // confirmed not running
+  expect(h.crontab).toBe("missing"); // confirmed no crontab for this uid
+});
+
+test("health: pgrep miss inside a nested PID namespace -> service unverifiable", () => {
+  // bwrap --unshare-pid hides the host daemon; "no process" is not proof of
+  // "stopped" (issue #10).
+  const h = runHealth({ pgrep: 1, crontabBin: "/usr/bin/crontab", crontabL: 1 }, PROC_ISOLATED);
+  expect(h.service).toBe("unverifiable");
+  expect(h.crontab).toBe("unverifiable"); // host spool invisible too
+});
+
+test("health: crontab -l status 1 on an isolated host -> crontab unverifiable", () => {
+  const h = runHealth({ pgrep: 1, crontabBin: "/usr/bin/crontab", crontabL: 1 }, PROC_ISOLATED);
+  expect(h.crontab).toBe("unverifiable");
+});
+
+test("health: crontab -l other status -> crontab unverifiable (not proof of absence)", () => {
+  const h = runHealth({ pgrep: 1, crontabBin: "/usr/bin/crontab", crontabL: 2 }, PROC_NOT_ISOLATED);
+  expect(h.crontab).toBe("unverifiable");
+});
+
+test("health: no crontab binary -> crontab missing (confirmed cannot install)", () => {
+  const h = runHealth({ pgrep: 1, crontabBin: "", crontabL: 1 }, PROC_NOT_ISOLATED);
+  expect(h.crontab).toBe("missing"); // confirmed fault, not "unverifiable"
 });

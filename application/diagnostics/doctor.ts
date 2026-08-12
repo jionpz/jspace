@@ -25,6 +25,7 @@ import { gbrainServer, gbrainSkillsDirWired } from "../gbrain/wiring.ts";
 import type { HubV1 } from "../../core/contracts/hub.ts";
 import { loadCapabilities } from "../../adapters/harness/registry.ts";
 import { binaryOnPath } from "../../adapters/harness/bin.ts";
+import type { LinuxCronHealth } from "../../adapters/scheduler/types.ts";
 
 /** Minimal cron view consumed by doctor; full cron surface lives in the scheduler. */
 export interface CronLike {
@@ -43,7 +44,10 @@ export interface CronHealthDeps {
   loadCrons: (root: string) => { crons: CronLike[] };
   parseSchedule: (schedule: string) => unknown;
   installedCronIds: (root: string) => string[];
-  linuxCronHealth: () => { crontab: boolean; service: boolean };
+  /** Linux cron health tri-state. `unverifiable` = detection failed in a way
+   *  that may be environmental (sandbox / namespace isolation) rather than a
+   *  real fault — doctor maps it to info, never warning (issue #10). */
+  linuxCronHealth: () => LinuxCronHealth;
   /** Official workbench skill names (SKILLS_MANIFEST.workbench). Injected from
    *  cli so doctor stays free of the embedded-bundle module. */
   officialSkillNames: () => string[];
@@ -639,12 +643,38 @@ function checkCrons(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
     diags.push({ severity: "warning", code: "cron.file_unreadable", path: "cron", message: `cron.json unreadable: ${e instanceof Error ? e.message : String(e)}` });
     crons = [];
   }
+  // crontab/daemon health. "missing"/"stopped" = confirmed absent on a
+  // verifiable host -> warning; "unverifiable" = detection may have failed due
+  // to sandbox / namespace isolation (the host scheduler state is hidden) ->
+  // info, never warning (issue #10).
+  //
+  // installed-state comparison: readable crontab ("ok") -> read installed ids;
+  // confirmed empty ("missing") -> treated as empty and still comparable (an
+  // enabled cron really is not installed); "unverifiable" -> not comparable
+  // (an empty read here proves nothing about the host).
+  let installedCheckable = true; // non-linux adapters read their own scheduler
+  let installedIds = new Set<string>();
   if (process.platform === "linux") {
     const health = cron.linuxCronHealth();
-    if (!health.crontab) diags.push({ severity: "warning", code: "cron.crontab_missing", path: "cron", message: "crontab command not found on this system; jspace cron cannot install tasks" });
-    if (!health.service) diags.push({ severity: "warning", code: "cron.daemon_stopped", path: "cron", message: "cron daemon not running; scheduled tasks won't fire until it starts" });
+    if (health.crontab === "missing") {
+      diags.push({ severity: "warning", code: "cron.crontab_missing", path: "cron", message: "crontab command not found on this system; jspace cron cannot install tasks" });
+    } else if (health.crontab === "unverifiable") {
+      diags.push({ severity: "info", code: "cron.crontab_unverifiable", path: "cron", message: "cron install state cannot be verified here (sandbox/namespace isolation hides the host crontab); check crontab -l on the host" });
+    }
+    if (health.service === "stopped") {
+      diags.push({ severity: "warning", code: "cron.daemon_stopped", path: "cron", message: "cron daemon not running; scheduled tasks won't fire until it starts" });
+    } else if (health.service === "unverifiable") {
+      diags.push({ severity: "info", code: "cron.daemon_unverifiable", path: "cron", message: "cron daemon status cannot be verified here (sandbox/namespace isolation hides the host process); check on the host" });
+    }
+    if (health.crontab === "ok") {
+      installedIds = new Set(cron.installedCronIds(root));
+    } else if (health.crontab === "missing") {
+      installedIds = new Set(); // confirmed no crontab -> installs are empty (comparable)
+    }
+    installedCheckable = health.crontab !== "unverifiable";
+  } else {
+    installedIds = new Set(cron.installedCronIds(root));
   }
-  const installedIds = new Set(cron.installedCronIds(root));
   if (crons.length > 0) {
     // Legacy inline-prompt contract: cron.json is user data (upgrade never
     // overwrites it), so a contract written into `prompt` is frozen at the
@@ -663,14 +693,19 @@ function checkCrons(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
         });
       }
     }
-    for (const c of crons) {
-      if (c.enabled && !installedIds.has(c.id)) {
-        diags.push({ severity: "warning", code: "cron.not_installed", path: `cron.${c.id}`, message: `cron ${c.id} enabled but not installed (run jspace cron install)` });
+    // enabled/installed + stale-task judgement requires a readable crontab;
+    // when it is missing/unverifiable these checks cannot judge installs and
+    // the health diagnostic above already reports the state (issue #10).
+    if (installedCheckable) {
+      for (const c of crons) {
+        if (c.enabled && !installedIds.has(c.id)) {
+          diags.push({ severity: "warning", code: "cron.not_installed", path: `cron.${c.id}`, message: `cron ${c.id} enabled but not installed (run jspace cron install)` });
+        }
       }
-    }
-    for (const id of installedIds) {
-      if (!crons.some((c) => c.id === id)) {
-        diags.push({ severity: "warning", code: "cron.stale_task", path: `cron.${id}`, message: `stale scheduled task ${id} (cron removed; run jspace cron uninstall)` });
+      for (const id of installedIds) {
+        if (!crons.some((c) => c.id === id)) {
+          diags.push({ severity: "warning", code: "cron.stale_task", path: `cron.${id}`, message: `stale scheduled task ${id} (cron removed; run jspace cron uninstall)` });
+        }
       }
     }
   }

@@ -7,13 +7,13 @@
 // workbench tag (parseManagedLine), so another workbench's crons are never
 // touched. Crontab is machine-global and tag-filtered per line — no root/path
 // matching is needed (an old build claimed env.resolvePath did that; it never did).
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fail } from "../../core/shared/errors.ts";
 import { parseSchedule } from "../../core/shared/schedule.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
-import { schedulerSpawn } from "./spawn.ts";
-import { taskIdFor, posixIdentity, type InstalledTask, type SchedulerAdapter, type SchedulerEnv, type SchedulerIdentity, type SchedulerOp } from "./types.ts";
+import { schedulerSpawn, type SchedulerSpawn } from "./spawn.ts";
+import { taskIdFor, posixIdentity, type InstalledTask, type LinuxCronHealth, type SchedulerAdapter, type SchedulerEnv, type SchedulerIdentity, type SchedulerOp } from "./types.ts";
 
 /** Tag-scoped managed-block markers: two workbenches never share one block. */
 export const CRON_BLOCK_START = (tag: string): string => `# jspace crons ${tag} (managed) DO NOT EDIT`;
@@ -161,6 +161,16 @@ const defaultIO: CrontabIO = {
   },
 };
 
+/** Read `/proc/self/status` for the NSpid isolation probe. A missing/unreadable
+ *  procfs (non-Linux test host) degrades to empty -> pidNamespaceIsolated=false. */
+function readProcStatusFile(): string {
+  try {
+    return readFileSync("/proc/self/status", "utf-8");
+  } catch {
+    return "";
+  }
+}
+
 /** Read the single-quoted value of `--<opt> '...'` in a crontab run segment,
  *  properly unquoting `'\''` and restoring `\%`. Null when absent/malformed. */
 function optionQuoted(s: string, opt: string): string | null {
@@ -170,6 +180,24 @@ function optionQuoted(s: string, opt: string): string | null {
   const len = quotedTokenLen(rest);
   if (len === -1) return null;
   return unshq(rest.slice(0, len));
+}
+
+/** Whether the current process runs in a nested PID namespace, parsed from
+ *  `/proc/self/status`. The `NSpid:` line lists the PID as seen by each
+ *  namespace from outermost to innermost; ≥2 values means the process is in a
+ *  nested namespace (e.g. `bwrap --unshare-pid`), so host processes are
+ *  invisible to `pgrep` and host crontab entries are invisible to `crontab -l`
+ *  (the spool lookup keys on the current UID). Missing/malformed field returns
+ *  false (conservative: do not assume isolation). Pure + injected-string so
+ *  tests cover the parse without a real sandbox (issue #10). */
+export function pidNamespaceIsolated(procStatus: string): boolean {
+  for (const line of procStatus.split("\n")) {
+    if (line.startsWith("NSpid:")) {
+      const values = line.slice("NSpid:".length).trim().split(/\s+/).filter((v) => v !== "");
+      return values.length >= 2;
+    }
+  }
+  return false;
 }
 
 /** Parse one managed-block crontab line into an InstalledTask, or null when it
@@ -198,7 +226,7 @@ export function parseManagedLine(line: string, tag: string): InstalledTask | nul
   return { taskId, cronId: id, schedule, argv: `cron run --id ${id} --dir ${dir}` };
 }
 
-export const linuxAdapter: SchedulerAdapter & { io?: CrontabIO } = {
+export const linuxAdapter: SchedulerAdapter & { io?: CrontabIO; spawn?: SchedulerSpawn; readProcStatus?: () => string } = {
   platform: "linux",
 
   identity(tag: string, cronId: string): SchedulerIdentity {
@@ -257,9 +285,31 @@ export const linuxAdapter: SchedulerAdapter & { io?: CrontabIO } = {
     return ["jspace: ok: removed jspace crons from crontab"];
   },
 
-  health(_env: SchedulerEnv): { crontab: boolean; service: boolean } {
-    const c = schedulerSpawn("sh", ["-c", "command -v crontab"]);
-    const s = schedulerSpawn("sh", ["-c", "pgrep -x crond >/dev/null 2>&1 || pgrep -x cron >/dev/null 2>&1"]);
-    return { crontab: (c.stdout ?? "").trim() !== "", service: s.status === 0 };
+  health(_env: SchedulerEnv): LinuxCronHealth {
+    const spawn = linuxAdapter.spawn ?? schedulerSpawn;
+    const procStatus = (linuxAdapter.readProcStatus ?? readProcStatusFile)();
+    const isolated = pidNamespaceIsolated(procStatus);
+
+    // service: pgrep is the only live check; when it finds nothing the result
+    // splits on environmental visibility — a nested PID namespace hides the host
+    // daemon, so "no process" is NOT proof of "stopped" (issue #10).
+    const s = spawn("sh", ["-c", "pgrep -x crond >/dev/null 2>&1 || pgrep -x cron >/dev/null 2>&1"]);
+    const service: LinuxCronHealth["service"] = s.status === 0 ? "ok" : isolated ? "unverifiable" : "stopped";
+
+    // crontab: binary presence + `-l` exit-code grading. A missing crontab
+    // command is a confirmed fault (jspace cannot install) -> "missing". status 1
+    // is the legit "no crontab for this uid" state — a real finding on the
+    // host, but inside a UID-isolated sandbox it usually means the host spool
+    // is not visible, so there it degrades to "unverifiable".
+    const c = spawn("sh", ["-c", "command -v crontab"]);
+    let crontab: LinuxCronHealth["crontab"] = "missing"; // no crontab binary -> confirmed cannot install
+    if ((c.stdout ?? "").trim() !== "") {
+      const r = spawn("crontab", ["-l"]);
+      crontab =
+        r.status === 0 ? "ok"
+        : r.status === 1 ? (isolated ? "unverifiable" : "missing")
+        : "unverifiable"; // other failure (e.g. sandboxed crontab) -> not proof of absence
+    }
+    return { crontab, service };
   },
 };
