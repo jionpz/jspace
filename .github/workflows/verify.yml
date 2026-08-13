@@ -105,10 +105,13 @@ jobs:
           rm -rf /tmp/jspace-verify /tmp/jspace-fh
           bun run cli/main.ts init /tmp/jspace-verify
           bun run cli/main.ts doctor --dir /tmp/jspace-verify
-          # issue #10 R4 regression: this runner has no crond, so doctor must
-          # still warn on the confirmed stopped daemon (the sandbox downgrade
-          # must never leak into real hosts)
-          bun run cli/main.ts doctor --dir /tmp/jspace-verify --json | grep -q "cron.daemon_stopped"
+          # issue #10 R4 regression: on a real (non-isolated) host the
+          # sandbox-only downgrade must never fire — the daemon/crontab verdict
+          # stays a real one, whatever it is (crontab_missing / daemon_stopped
+          # / or ok). Only a true nested PID namespace yields unverifiable.
+          OUT=$(bun run cli/main.ts doctor --dir /tmp/jspace-verify --json)
+          if echo "$OUT" | grep -q "cron.daemon_unverifiable"; then echo "unexpected sandbox downgrade on real host"; exit 1; fi
+          if echo "$OUT" | grep -q "cron.crontab_unverifiable"; then echo "unexpected sandbox downgrade on real host"; exit 1; fi
           bun run cli/main.ts domain add files --dir /tmp/jspace-verify
           # filehub init --register creates the domain + registers type=filehub + binds;
           # do NOT also resource-add "filehub" (filehub-path binding would collide).
