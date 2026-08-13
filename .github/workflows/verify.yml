@@ -134,22 +134,12 @@ jobs:
           bun run cli/main.ts workspace diff --dir /tmp/jspace-verify
           bun run cli/main.ts workspace upgrade --dir /tmp/jspace-verify --dry-run
 
-      # issue #10: sandbox / nested-PID-namespace doctor regression. Recreates
-      # the isolation Codex sandbox produces (NSpid >= 2 values in
-      # /proc/self/status) with unshare; doctor must downgrade host-state checks
-      # to info, never warning. If the runner kernel does not allow this unshare,
-      # the step reds — the validation is deliberately not silently skipped.
-      - name: Sandbox doctor regression (nested PID namespace, issue #10)
-        run: |
-          command -v unshare >/dev/null || { echo "unshare not available"; exit 1; }
-          unshare --user --map-root-user --pid --fork --mount-proc bash -c '
-            set -euo pipefail
-            OUT=$(bun run cli/main.ts doctor --dir /tmp/jspace-verify --json)
-            echo "$OUT" | grep -q "cron.daemon_unverifiable" || { echo "MISSING cron.daemon_unverifiable"; exit 1; }
-            echo "$OUT" | grep -q "cron.crontab_unverifiable" || { echo "MISSING cron.crontab_unverifiable"; exit 1; }
-            if echo "$OUT" | grep -q "cron.daemon_stopped"; then echo "UNEXPECTED cron.daemon_stopped inside sandbox"; exit 1; fi
-            if echo "$OUT" | grep -q "cron.crontab_missing"; then echo "UNEXPECTED cron.crontab_missing inside sandbox"; exit 1; fi
-            if echo "$OUT" | grep -q "cron.not_installed"; then echo "UNEXPECTED cron.not_installed inside sandbox"; exit 1; fi
-            echo "sandbox doctor OK: downgraded to info"
-          '
+      # NOTE (issue #10): an end-to-end sandbox doctor regression (nested PID
+      # namespace -> unverifiable downgrade) was attempted via `unshare --user
+      # --map-root-user --pid`, but GitHub Actions runners forbid unprivileged
+      # user namespaces (`write failed /proc/self/uid_map: Operation not
+      # permitted`) — the step cannot run in CI. The downgrade logic is covered
+      # by unit tests (pidNamespaceIsolated + health() tri-state branches); the
+      # real-host non-downgrade is asserted above; final sandbox verification
+      # must happen on a real host (e.g. WSL2 + Codex sandbox).
 
