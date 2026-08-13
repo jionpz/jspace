@@ -66,6 +66,11 @@ export interface CronHealthDeps {
   /** Active-harness binary presence (injectable so tests stay deterministic on
    *  machines without the harness CLI installed). Defaults to a real PATH check. */
   harnessBinOnPath?: (name: string) => boolean;
+  /** Platform the linux cron-health branch keys on. Defaults to
+   *  `process.platform`; injected so tests exercise the linux branch without
+   *  mutating the global process.platform (which a future runtime could make
+   *  non-configurable — issue #11 P3-4). */
+  platform?: string;
 }
 
 type WorkbenchReads = ReturnType<typeof readWorkbenchState>;
@@ -654,7 +659,7 @@ function checkCrons(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
   // comparable (an empty read here proves nothing about the host).
   let installedCheckable = true; // non-linux adapters read their own scheduler
   let installedIds = new Set<string>();
-  if (process.platform === "linux") {
+  if ((cron.platform ?? process.platform) === "linux") {
     const health = cron.linuxCronHealth();
     if (health.crontab === "missing-cmd") {
       diags.push({ severity: "warning", code: "cron.crontab_missing", path: "cron", message: "crontab command not found on this system; jspace cron cannot install tasks" });
@@ -750,7 +755,7 @@ function checkHarness(root: string, cron: CronHealthDeps): RegistryDiagnostic[] 
     return diags; // cron.json unreadable -> checkCrons reports it (read-only, never throw)
   }
   const caps = loadCapabilities();
-  const binOnPath = cron.harnessBinOnPath ?? ((name: string) => binaryOnPath(name, process.platform));
+  const binOnPath = cron.harnessBinOnPath ?? ((name: string) => binaryOnPath(name, cron.platform ?? process.platform));
   const active = new Set<string>();
   // only ENABLED crons decide harness-bin health — a disabled cron whose harness
   // is missing must not alarm (issue #8 #22).

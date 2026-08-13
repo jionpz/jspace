@@ -141,6 +141,7 @@ curl -fsSL <raw>/install/install.sh -o /tmp/jspace-install.sh && bash /tmp/jspac
 - **架构探测**:macOS Rosetta(`sysctl -n sysctl.proc_translated`=1)强制 arm64;Windows ARM64 主机上 x64 模拟安装时提示。
 - **符号链接 rc**(dotfiles 用户):脚本解析真实路径再写;解析失败则跳过自动注入并打印手动指令。
 - **版本钉定**:`JSPACE_VERSION=<tag>` 安装指定版本(默认 `latest`);`JSPACE_BASE_URL` 可覆盖下载源(本地 e2e 逃生门)。
+- **`JSPACE_BASE_URL` 信任语义**:设置该变量即**完全信任该源**——二进制与 `checksums.txt` 的 SHA-256 校验对都来自同一个 base(install 脚本与 `jspace update` 一致),校验只防传输/宿主篡改,不防源本身。默认 GitHub Releases 安全;本地模拟/私有镜像源时需自行确保源可信。install 脚本强制 https 并用 `JSPACE_ALLOW_INSECURE=1` 显式放行 http。
 - **卸载语义**:只剥离 rc 标记块、绝不整文件回滚;「安装后改 rc 再卸载」保留用户编辑;Windows PATH 按条目精确删除。
 
 ## 跨平台脚本陷阱速查(2026-08-03 实测沉淀)

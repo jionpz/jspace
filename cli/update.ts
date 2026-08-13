@@ -155,6 +155,9 @@ export async function cmdUpdate(check: boolean, targetVersion?: string): Promise
     return;
   }
   const asset = assetFor(process.platform, process.arch);
+  // Setting JSPACE_BASE_URL makes that source the single trust root — both the
+  // binary and checksums.txt are fetched from it (SHA-256 only defends against
+  // transport/tampering, not the source itself). Documented in PLATFORMS.md.
   const base = process.env.JSPACE_BASE_URL || DEFAULT_BASE;
   const target = await resolveTargetVersion(targetVersion || process.env.JSPACE_VERSION, latestTag);
   const upToDate = compareVersions(current, target) >= 0;

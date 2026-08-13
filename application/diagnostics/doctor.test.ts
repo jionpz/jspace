@@ -84,23 +84,15 @@ test("enabled cron not installed -> cron.not_installed", () => {
 });
 
 // ---- linux cron health tri-state (issue #10) --------------------------------
-// doctor only runs the linux crontab/daemon health branch when
-// process.platform === "linux"; force it so these cases run on any host.
-function withLinuxPlatform(fn: () => CmdResult): CmdResult {
-  const orig = Object.getOwnPropertyDescriptor(process, "platform");
-  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
-  try {
-    return fn();
-  } finally {
-    if (orig) Object.defineProperty(process, "platform", orig);
-    else delete (process as { platform?: string }).platform;
-  }
+// doctor only runs the linux crontab/daemon health branch when platform is
+// linux; inject `platform` through the deps (issue #11 P3-4) instead of mutating
+// the global process.platform (a future runtime could make it non-configurable).
+function linuxDeps(over: Partial<CronHealthDeps> = {}): CronHealthDeps {
+  return stubDeps({ platform: "linux", ...over });
 }
 
 test("unverifiable service (sandbox hides host daemon) -> info, no daemon_stopped", () => {
-  const r = withLinuxPlatform(() =>
-    doctorWorkbench(root, stubDeps({ linuxCronHealth: () => ({ crontab: "ok", service: "unverifiable" }) })),
-  );
+  const r = doctorWorkbench(root, linuxDeps({ linuxCronHealth: () => ({ crontab: "ok", service: "unverifiable" }) }));
   expect(codes(r)).not.toContain("cron.daemon_stopped");
   expect(codes(r)).toContain("cron.daemon_unverifiable");
   const diags = (r.data as { diagnostics: { code: string; severity: string }[] }).diagnostics;
@@ -110,9 +102,7 @@ test("unverifiable service (sandbox hides host daemon) -> info, no daemon_stoppe
 
 test("unverifiable crontab (sandbox hides host spool) -> info, no not_installed despite enabled cron", () => {
   setCrons([{ id: "inbox-tidy", schedule: "0 21 * * *", enabled: true }]);
-  const r = withLinuxPlatform(() =>
-    doctorWorkbench(root, stubDeps({ linuxCronHealth: () => ({ crontab: "unverifiable", service: "ok" }) })),
-  );
+  const r = doctorWorkbench(root, linuxDeps({ linuxCronHealth: () => ({ crontab: "unverifiable", service: "ok" }) }));
   expect(codes(r)).not.toContain("cron.crontab_missing");
   expect(codes(r)).not.toContain("cron.not_installed"); // cannot read installs -> cannot judge
   expect(codes(r)).toContain("cron.crontab_unverifiable");
@@ -123,9 +113,7 @@ test("unverifiable crontab (sandbox hides host spool) -> info, no not_installed 
 
 test("confirmed missing crontab + stopped daemon (verifiable host) -> both warnings preserved", () => {
   setCrons([{ id: "inbox-tidy", schedule: "0 21 * * *", enabled: true }]);
-  const r = withLinuxPlatform(() =>
-    doctorWorkbench(root, stubDeps({ linuxCronHealth: () => ({ crontab: "missing", service: "stopped" }) })),
-  );
+  const r = doctorWorkbench(root, linuxDeps({ linuxCronHealth: () => ({ crontab: "missing", service: "stopped" }) }));
   expect(codes(r)).toContain("cron.crontab_missing");
   expect(codes(r)).toContain("cron.daemon_stopped");
   expect(codes(r)).toContain("cron.not_installed"); // confirmed no crontab -> enabled cron really is not installed
@@ -135,9 +123,7 @@ test("confirmed missing crontab + stopped daemon (verifiable host) -> both warni
 
 test("missing-cmd (crontab binary absent) -> crontab_missing warning preserved + distinct message", () => {
   setCrons([{ id: "inbox-tidy", schedule: "0 21 * * *", enabled: true }]);
-  const r = withLinuxPlatform(() =>
-    doctorWorkbench(root, stubDeps({ linuxCronHealth: () => ({ crontab: "missing-cmd", service: "ok" }) })),
-  );
+  const r = doctorWorkbench(root, linuxDeps({ linuxCronHealth: () => ({ crontab: "missing-cmd", service: "ok" }) }));
   expect(codes(r)).toContain("cron.crontab_missing"); // confirmed fault, not unverifiable
   expect(codes(r)).toContain("cron.not_installed"); // no crontab -> enabled cron really is not installed
   const diag = (r.data as { diagnostics: { code: string; message: string }[] }).diagnostics.find((d) => d.code === "cron.crontab_missing");
