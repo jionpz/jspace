@@ -27,7 +27,7 @@
 
 ## gbrain skill 路由
 
-`jspace gbrain wire` 把 `GBRAIN_SKILLS_DIR=<wb>/.jspace/skills` 注入 `~/.claude.json` 的 gbrain MCP server env（合并、备份、绝不重写；需已存在 gbrain MCP server）。
+`jspace harness wire --harness claude`(等价旧入口 `jspace gbrain wire`,issue #12)把 `GBRAIN_SKILLS_DIR=<wb>/.jspace/skills` 注入 `~/.claude.json` 的 gbrain MCP server env(合并、备份、绝不重写;需已存在 gbrain MCP server)。
 
 ## 验证
 

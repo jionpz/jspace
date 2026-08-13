@@ -135,12 +135,12 @@ test("harness wire grok: missing config status -> errors (not stdout lines) + ex
 test("harness wire: unsupported --harness value is an argument error (ArgError exit 2)", () => {
   let caught: ArgError | undefined;
   try {
-    parse(["harness", "wire", "--harness", "claude"], ROOT);
+    parse(["harness", "wire", "--harness", "codex"], ROOT);
   } catch (e) {
     caught = e instanceof ArgError ? e : undefined;
   }
   expect(caught).toBeDefined();
-  expect(caught!.message).toContain("unsupported harness for harness wire: claude");
+  expect(caught!.message).toContain("codex is a cron-compat entry, not a session harness");
   // main.ts maps ArgError to process.exitCode = 2 (see cli/main.ts catch)
 });
 

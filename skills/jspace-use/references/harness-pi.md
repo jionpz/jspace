@@ -27,21 +27,21 @@
 pi install npm:pi-mcp-adapter
 ```
 
-然后配置 `mcpServers`（stdio `command` + `args`，`<gbrain>` 按上文解析），配置优先级（高→低）：
-
-```
-~/.config/mcp/mcp.json  >  ~/.agents/mcp.json  >  ~/.agents/mcp/mcp.json
->  ~/.pi/agent/mcp.json  >  .mcp.json  >  .pi/mcp.json
-```
-
-示例（`~/.pi/agent/mcp.json` 或更高优先级位置）：
+然后配置 `mcpServers`（stdio `command` + `args`，`<gbrain>` 按上文解析）。**机器级接线用统一 wire（issue #12）**：`jspace harness wire --harness pi --dir <workbench>` 幂等写 `~/.pi/agent/mcp.json` 的 `mcpServers.gbrain`（`command` = gbrain 路径，`args: ["serve"]`，`env.GBRAIN_SKILLS_DIR`），merge 保留其余字段，写前 backup。等价产物：
 
 ```json
 {
   "mcpServers": {
-    "gbrain": { "command": "<gbrain>", "args": ["serve"] }
+    "gbrain": { "command": "<gbrain>", "args": ["serve"], "env": { "GBRAIN_SKILLS_DIR": "<wb>/.jspace/skills" } }
   }
 }
+```
+
+pi-mcp-adapter 的配置搜索优先级（高→低，wire 固定落 `~/.pi/agent/mcp.json`，已在该列表中）：
+
+```
+~/.config/mcp/mcp.json  >  ~/.agents/mcp.json  >  ~/.agents/mcp/mcp.json
+>  ~/.pi/agent/mcp.json  >  .mcp.json  >  .pi/mcp.json
 ```
 
 > ⚠️ **供应链核对（红线级）**：`npm:pi-mcp-adapter` **安装即执行包代码**。安装前务必核对包来源与 README，确认信任后再 `pi install`。JSpace 只提示安装，**永不自动执行**。

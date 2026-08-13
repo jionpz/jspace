@@ -21,7 +21,6 @@ import { isFile } from "../fs.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { readMaterializedJournal } from "../workspace/journal.ts";
 import { skillProjections } from "../workspace/manifest.ts";
-import { gbrainServer, gbrainSkillsDirWired } from "../gbrain/wiring.ts";
 import type { HubV1 } from "../../core/contracts/hub.ts";
 import { loadCapabilities } from "../../adapters/harness/registry.ts";
 import { binaryOnPath } from "../../adapters/harness/bin.ts";
@@ -63,6 +62,10 @@ export interface CronHealthDeps {
    *  or null when missing. Used by the multi-harness gbrain wiring check
    *  (issue #8 #16). */
   readHarnessConfig?: (path: string) => string | null;
+  /** True when an official skill is thin-linked into Cursor's user-level skills
+   *  dir (~/.cursor/skills/<name> → ~/.agents/skills/<name>). Injected from cli
+   *  (uses homedir + readlink); doctor reports gaps as info (issue #12). */
+  cursorSkillsLinked?: (name: string) => boolean;
   /** Active-harness binary presence (injectable so tests stay deterministic on
    *  machines without the harness CLI installed). Defaults to a real PATH check. */
   harnessBinOnPath?: (name: string) => boolean;
@@ -583,6 +586,27 @@ function tomlSkillsDirWired(toml: string, serverKey: string, wbSkillsDir: string
   return m !== null && m[1] === wbSkillsDir;
 }
 
+/** Resolve a dot-path `server_key` (`mcpServers.gbrain`, `mcp.gbrain`) through a
+ *  JSON doc — the json branch of checkGBrain mirrors the wire backend instead of
+ *  hard-coding the top-level `mcpServers.gbrain` shape (opencode's local servers
+ *  live under `mcp.<name>`, issue #12). */
+function serverAtKeyPath(doc: unknown, key: string): Record<string, unknown> | null {
+  let cur = doc;
+  for (const seg of key.split(".")) {
+    if (!cur || typeof cur !== "object") return null;
+    cur = (cur as Record<string, unknown>)[seg];
+  }
+  return cur && typeof cur === "object" ? (cur as Record<string, unknown>) : null;
+}
+
+/** True when the server's env (field name per `env_key`, default "env";
+ *  opencode uses "environment") already points GBRAIN_SKILLS_DIR at the dir. */
+function serverEnvWired(server: Record<string, unknown>, envKey: string, dir: string): boolean {
+  const env = server[envKey];
+  if (!env || typeof env !== "object") return false;
+  return (env as Record<string, unknown>).GBRAIN_SKILLS_DIR === dir;
+}
+
 /** gbrain skill-routing wiring (info), for EVERY native-MCP harness that has a
  *  declared config path (capabilities.mcp_config — single source, issue #8 #16).
  *  gbrain's resolver only auto-detects a root `skills/` dir; the wire commands
@@ -606,8 +630,12 @@ function checkGBrain(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
         ? tomlSkillsDirWired(raw, cfg.server_key, wbSkillsDir)
         : (() => {
             try {
-              const server = gbrainServer(JSON.parse(raw));
-              return server !== null && gbrainSkillsDirWired(server, wbSkillsDir);
+              // Resolve the server via the declared server_key (dot-path) and read
+              // the env under the declared env_key — mirrors the wire backend so an
+              // already-wired harness is never misreported (issue #12: opencode's
+              // local servers live under mcp.<name> with an `environment` field).
+              const server = serverAtKeyPath(JSON.parse(raw), cfg.server_key);
+              return server !== null && serverEnvWired(server, cfg.env_key ?? "env", wbSkillsDir);
             } catch {
               // unreadable machine config is not a workbench health problem; the
               // wire command repairs it. Report as info instead of crashing the
@@ -631,6 +659,26 @@ function checkGBrain(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
       });
     }
   }
+  return diags;
+}
+
+/** Cursor user-level skills thin-links (issue #12): official skills should be
+ *  linked into ~/.cursor/skills/ so the IDE sees them. Missing links are info
+ *  (the wire command creates them; doctor only surfaces the gap). */
+function checkCursorSkills(cron: CronHealthDeps): RegistryDiagnostic[] {
+  const diags: RegistryDiagnostic[] = [];
+  const linked = cron.cursorSkillsLinked;
+  if (!linked) return diags; // not injected — check skipped silently
+  const names = cron.officialSkillNames();
+  if (names.length === 0) return diags;
+  const missing = names.filter((n) => !linked(n));
+  if (missing.length === 0) return diags;
+  diags.push({
+    severity: "info",
+    code: "cursor.skills_unlinked",
+    path: "cursor",
+    message: `Cursor user-level skills missing jspace thin-links: ${missing.join(", ")} (run 'jspace harness wire --harness cursor' after 'jspace skills install')`,
+  });
   return diags;
 }
 
@@ -811,6 +859,7 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps, verbose = fa
     ...checkSkills(root, cron),
     ...checkDomains(root, reads.hub.status === "ok" ? reads.hub.value : null),
     ...checkGBrain(root, cron),
+    ...checkCursorSkills(cron),
     ...checkCrons(root, cron),
     ...checkHarness(root, cron),
   ];

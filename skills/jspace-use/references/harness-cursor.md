@@ -14,21 +14,22 @@
 | skills 投影 | `.agents/skills/`（共享） | 工作台级 |
 | 生命周期分级 | session-start best_effort / session-end manual / fallback manual / crash manual | 见 capabilities.lifecycle |
 
-## 接线（现状，D6 保留不扩）
+## 接线（D6 保留不扩；机器级用一条命令）
 
-- **MCP**：
+- **MCP（统一 wire，issue #12）**：`jspace harness wire --harness cursor --dir <workbench>` 幂等写 `~/.cursor/mcp.json` 的 `mcpServers.gbrain`（`command` = 解析出的 gbrain 路径，`args: ["serve"]`，`env.GBRAIN_SKILLS_DIR` 指向工作台 `.jspace/skills`）；已正确则 `already-wired` 不写；写前 backup。等价手动产物：
 
 ```json
 {
   "mcpServers": {
-    "gbrain": { "command": "<gbrain>", "args": ["serve"] }
+    "gbrain": { "command": "<gbrain>", "args": ["serve"], "env": { "GBRAIN_SKILLS_DIR": "<wb>/.jspace/skills" } }
   }
 }
 ```
 
-  用户级 `~/.cursor/mcp.json` 或项目级 `.cursor/mcp.json`（project overrides user）。若 `~/.cursor` 不存在，创建 `~/.cursor/mcp.json`；Cursor 重启后可能在 MCP 设置里要求审批 server。
+  用户级 `~/.cursor/mcp.json` 或项目级 `.cursor/mcp.json`（project overrides user）。`--dry-run` 预览；Cursor 重启后可能在 MCP 设置里要求审批 server。
+- **skills 薄链**：同一条 wire 把官方 skills 链到 `~/.cursor/skills/<name>` → `~/.agents/skills/<name>`（先 `jspace skills install` 物化用户级）；缺链 `jspace doctor` 报 `cursor.skills_unlinked` info。
 - **session-start 注入**：至少保证 MCP wiring；如需会话级 context 注入，用 `.cursor/rules/*.mdc`（项目级）或 Rules 文件。项目级 `.cursor/hooks.json`（seed，check into VCS）的 `sessionStart` 事件输出顶层 `{"additional_context":"<text>"}` 注入会话初始上下文——命令为 `jspace context session-start --envelope cursor`（纯命令，无 shell 语法；CLI 内部吞错 exit 0。Cursor 从项目级 + 用户级 `~/.cursor/hooks.json` 多层级加载；用户级可覆盖/追加，但工作台 seed 落项目级）。
-- **无 headless**：cron 不能用 cursor 跑（`cron run --harness cursor` → `fail`）。
+- **无 headless**：cron 不能用 cursor 跑（`cron run --harness cursor` → `fail`；`harness wire` 不接受 cursor 之外的 `--harness cursor` 也不会把它当 cron）。
 
 ## 能力边界（诚实声明）
 
@@ -39,6 +40,7 @@
 ## 验证
 
 ```bash
-jspace doctor --dir .          # checkHarness: cursor 无 headless 不触发 bin 检查（非 cron harness）
+jspace harness wire --harness cursor --dir . --dry-run   # 预览 ~/.cursor/mcp.json + skills 薄链计划
+jspace doctor --dir .          # checkHarness: cursor 无 headless 不触发 bin 检查（非 cron harness）；缺薄链报 cursor.skills_unlinked info
 jspace cron run <cron> --harness cursor --dry-run --dir .   # fail("cursor has no headless CLI")
 ```

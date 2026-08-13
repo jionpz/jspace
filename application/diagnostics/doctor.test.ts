@@ -788,6 +788,33 @@ test("multi-harness gbrain wiring via capabilities.mcp_config (issue #8 #16)", (
   expect(codes(doctorWorkbench(root, grokWired))).not.toContain("gbrain.skillsdir_unwired");
 });
 
+test("opencode gbrain wiring via mcp.<name> + environment env_key (issue #12)", () => {
+  const wbSkillsDir = join(root, ".jspace", "skills");
+  const opencodeCfg = (env: string): string =>
+    JSON.stringify({
+      $schema: "https://opencode.ai/config.json",
+      provider: { opencodego: { apiKey: "sk-x" } },
+      mcp: { gbrain: { type: "local", command: ["/x/gbrain", "serve"], enabled: true, environment: { GBRAIN_SKILLS_DIR: env } } },
+    });
+  // unwired: environment points elsewhere -> gbrain.skillsdir_unwired
+  const unwired = doctorWorkbench(root, stubDeps({ readHarnessConfig: (p) => (p.includes("opencode.json") ? opencodeCfg("/other/skills") : null) }));
+  expect(codes(unwired)).toContain("gbrain.skillsdir_unwired");
+  // wired: environment.GBRAIN_SKILLS_DIR == wb skills -> no diagnostic (the old
+  // top-level mcpServers.gbrain lookup would falsely report this as unwired)
+  const wired = doctorWorkbench(root, stubDeps({ readHarnessConfig: (p) => (p.includes("opencode.json") ? opencodeCfg(wbSkillsDir) : null) }));
+  expect(codes(wired)).not.toContain("gbrain.skillsdir_unwired");
+});
+
+test("cursor skills thin-links: all linked -> none; missing -> cursor.skills_unlinked (info)", () => {
+  const allLinked = stubDeps({ cursorSkillsLinked: () => true });
+  expect(codes(doctorWorkbench(root, allLinked))).not.toContain("cursor.skills_unlinked");
+  const someMissing = stubDeps({ cursorSkillsLinked: (n) => n !== "memory-writeback" });
+  const r = doctorWorkbench(root, someMissing);
+  expect(codes(r)).toContain("cursor.skills_unlinked");
+  const d = (r.data as { diagnostics: { code: string; severity: string }[] }).diagnostics.find((x) => x.code === "cursor.skills_unlinked");
+  expect(d?.severity).toBe("info");
+});
+
 test("tomlSkillsDirWired scoped to target section: sibling server with same key cannot mask unwired (issue #9 #9-07)", () => {
   const wbSkillsDir = join(root, ".jspace", "skills");
   // [mcp_servers.other] carries the wb skills dir while [mcp_servers.gbrain]

@@ -2,8 +2,9 @@
 // coercion + cron deps for doctor/workspace-upgrade). Neutral module: family
 // command files import from here instead of redefining or crossing into each
 // other (keeps the family split free of circular imports).
-import { readFileSync } from "node:fs";
+import { readFileSync, readlinkSync } from "node:fs";
 import { homedir } from "node:os";
+import { join } from "node:path";
 import { loadCrons, parseSchedule } from "../../application/automation/definitions.ts";
 import { schedulerAdapter } from "../../adapters/scheduler/index.ts";
 import { installedCronIdsForRoot, schedulerEnv } from "../scheduler.ts";
@@ -80,3 +81,16 @@ export const cronDeps = {
   harnessBinOnPath: (name: string) => binaryOnPath(name, process.platform),
   platform: process.platform,
 };
+
+/** True when an official skill has a thin-link `~/.cursor/skills/<name>` →
+ *  `~/.agents/skills/<name>` (Cursor's user-level skills dir; wired by
+ *  `harness wire --harness cursor`, doctor reports gaps as info). */
+export function cursorSkillsLinked(name: string): boolean {
+  const userPath = join(homedir(), ".agents", "skills", name);
+  const cursorPath = join(homedir(), ".cursor", "skills", name);
+  try {
+    return readlinkSync(cursorPath) === userPath;
+  } catch {
+    return false;
+  }
+}

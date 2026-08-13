@@ -126,7 +126,12 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "mcp": {
         "native": true
       },
-      "mcp_config": null,
+      "mcp_config": {
+        "path": "~/.config/opencode/opencode.json",
+        "format": "json",
+        "server_key": "mcp.gbrain",
+        "env_key": "environment"
+      },
       "workbench_projection": [
         ".opencode/skills"
       ],
@@ -161,7 +166,11 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "mcp": {
         "via": "pi_mcp_adapter"
       },
-      "mcp_config": null,
+      "mcp_config": {
+        "path": "~/.pi/agent/mcp.json",
+        "format": "json",
+        "server_key": "mcpServers.gbrain"
+      },
       "workbench_projection": [],
       "user_install": [
         "~/.agents/skills"
@@ -189,7 +198,11 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "mcp": {
         "native": true
       },
-      "mcp_config": null,
+      "mcp_config": {
+        "path": "~/.cursor/mcp.json",
+        "format": "json",
+        "server_key": "mcpServers.gbrain"
+      },
       "workbench_projection": [],
       "user_install": [],
       "hook_format": "cursor_hooks_json",

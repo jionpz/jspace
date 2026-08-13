@@ -50,7 +50,7 @@ JSpace 工作台 = 本地工作控制平面:根 `AGENTS.md` 是入口面,其余�
 1. **gbrain**(first core):解析二进制 → `bun install -g gbrain` → `gbrain init` → `gbrain doctor --json` 修所报 → embedding(默认本地 Ollama bge-m3;不可达 `embed_skip: true` 保底,不失败)。细则 `~/.agents/skills/jspace-use/references/gbrain.md`。
 2. **Registry health**:`jspace doctor --dir .`;`hub.json` 合法 JSON;域文件夹/id 一致;每资源恰一 primary。细则 `~/.agents/skills/jspace-use/references/registry.md`。
 3. **File center**:问用户选 filehub 根 → `jspace filehub init <根> --register`;暂不配则告知降级暂存区。**首启验收**:放一份示例文件进 `_inbox/` 跑一次「整理一下 inbox」,确认入库→gbrain 页→中文召回闭环。
-4. **Harness wiring**:问用户用哪个 harness,wire 那一个(MCP/CLI + 会话注入/写回)。细则 `~/.agents/skills/jspace-use/references/harnesses.md`。
+4. **Harness wiring**:问用户用哪个 harness,选一个跑同一条命令 `jspace harness wire --harness <claude|grok|opencode|cursor|pi> --dir .`(幂等写该端 gbrain MCP + 打印能力边界;Cursor 还链官方 skills 到 `~/.cursor/skills/`;claude 的旧入口 `jspace gbrain wire` 仍是等价别名)。细则 `~/.agents/skills/jspace-use/references/harnesses.md`。
 5. **Final smoke + sign-off**:`jspace doctor` + `jq hub.json` + `gbrain doctor --fast`;报 configured/already-OK/missing-deferred。
 
 ## 3. 日常会话路由

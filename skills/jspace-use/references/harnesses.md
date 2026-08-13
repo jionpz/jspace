@@ -29,12 +29,17 @@
 
 ## 逐 harness 接线
 
-- [`harness-claude.md`](harness-claude.md) — 参考实现：hooks + `.claude/skills/` + MCP + `jspace gbrain wire`
+> **机器级接线命令统一**(issue #12):选一个会话 harness,跑同一条命令——
+> `jspace harness wire --harness <claude|grok|opencode|cursor|pi> --dir .`(幂等写该端 gbrain MCP 配置并打印能力边界)。
+> `--dry-run` 预览将写的路径/内容;`jspace harness init --harness <端>` 按端核对工作台 skill 投影(init/upgrade 已全量物化,通常 no-op)。
+> claude 的旧入口 `jspace gbrain wire` 保留为等价别名。配置目标单一来源 = `adapters/harness/capabilities.yaml` 的 `mcp_config`。
+
+- [`harness-claude.md`](harness-claude.md) — 参考实现：hooks + `.claude/skills/` + MCP + `jspace harness wire --harness claude`（旧入口 `gbrain wire` 等价）
 - [`harness-grok.md`](harness-grok.md) — T1 桥接：`.grok/hooks/` 四事件 + `.grok/skills/` + `jspace harness wire --harness grok`
-- [`harness-opencode.md`](harness-opencode.md) — T2.5 plugin：`.opencode/plugins/jspace.ts` + 细粒度事件 + compacting context 注入
-- [`harness-pi.md`](harness-pi.md) — T3 honest boundary：cron `pi -p` + pi-mcp-adapter 插件通道
-- [`harness-cursor.md`](harness-cursor.md) — 会话 harness（D6 保留）：无 headless，MCP + sessionStart hook + Rules
-- codex：cron 兼容条目（`documented: false`，无独立 doc——现有 cron 契约继续可用）
+- [`harness-opencode.md`](harness-opencode.md) — T2.5 plugin：`.opencode/plugins/jspace.ts` + 细粒度事件 + compacting context 注入；MCP 用 `jspace harness wire --harness opencode`（写 `~/.config/opencode/opencode.json` 的 `mcp.gbrain`）
+- [`harness-pi.md`](harness-pi.md) — T3 honest boundary：cron `pi -p` + `jspace harness wire --harness pi`（写 `~/.pi/agent/mcp.json`）
+- [`harness-cursor.md`](harness-cursor.md) — 会话 harness（D6 保留）：无 headless，`jspace harness wire --harness cursor`（写 `~/.cursor/mcp.json` + 官方 skills 薄链到 `~/.cursor/skills/`）
+- codex：cron 兼容条目（`documented: false`，无独立 doc——现有 cron 契约继续可用；`harness wire` 不接受 codex）
 
 ## 跨平台路径速查(Windows / macOS / Linux)
 

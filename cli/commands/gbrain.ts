@@ -96,13 +96,14 @@ export const gbrainSpec: CommandSpec = {
   name: "gbrain",
   summary: "wire gbrain skill routing (GBRAIN_SKILLS_DIR → workbench .jspace/skills)",
   description:
-    "gbrain's skill resolver only auto-detects a root `skills/` dir; wire it to the workbench's official " +
-    "skills by injecting GBRAIN_SKILLS_DIR=<wb>/.jspace/skills into the gbrain MCP server env in ~/.claude.json.",
+    "Alias for `jspace harness wire --harness claude`: gbrain's skill resolver only auto-detects a root " +
+    "`skills/` dir; wire it to the workbench's official skills by injecting GBRAIN_SKILLS_DIR=<wb>/.jspace/skills " +
+    "into the gbrain MCP server env in ~/.claude.json.",
   features: { dir: true },
   children: [
     {
       name: "wire",
-      summary: "inject GBRAIN_SKILLS_DIR=<wb>/.jspace/skills into the gbrain MCP server env",
+      summary: "inject GBRAIN_SKILLS_DIR=<wb>/.jspace/skills into the gbrain MCP server env (alias: harness wire --harness claude)",
       features: { dir: true, dryRun: true },
       handler: (ctx) => wireHandler(ctx),
     },

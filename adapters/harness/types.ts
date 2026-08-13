@@ -19,9 +19,11 @@ export interface HarnessSession {
 export type McpBinding = { native: true } | { via: string };
 
 /** Where a harness keeps its gbrain MCP server config (issue #8 #16 — single
- *  source for `harness wire`/`gbrain wire` and doctor's wiring check; claude and
- *  grok have real wirings today, the rest are `null` until a wire exists). */
-export type McpConfig = { path: string; format: "json" | "toml"; server_key: string } | null;
+ *  source for `harness wire`/`gbrain wire` and doctor's wiring check; all five
+ *  session harnesses have a real wire today). `env_key` overrides the env field
+ *  name inside the server object (default "env"; opencode's local-server shape
+ *  uses "environment"). `path` may start with `~` (expanded per home dir). */
+export type McpConfig = { path: string; format: "json" | "toml"; server_key: string; env_key?: string } | null;
 
 export type NativeMemory = "none" | "full";
 

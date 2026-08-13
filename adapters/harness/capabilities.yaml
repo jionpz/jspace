@@ -21,6 +21,11 @@
 #                           distinguishes hook / plugin / extension channels.
 #   mcp                   — `native: true` (harness-native MCP) or `via: <adapter>`
 #                           (third-party extension channel, e.g. pi-mcp-adapter).
+#   mcp_config            — where a harness keeps its gbrain MCP server config
+#                           (path/format/server_key); consumed by `harness wire` +
+#                           doctor's wiring check. `env_key` overrides the env
+#                           field name (default "env"; opencode uses "environment").
+#                           `path` may start with `~` (expanded per home dir).
 #   workbench_projection  — workbench-relative skill projection dirs materialized by
 #                           init/upgrade (byte-identical copies of .jspace/skills/).
 #   user_install          — user-level paths (doctor reports existence only; wired by
@@ -108,7 +113,11 @@ harnesses:
       - { name: session.idle, source: plugin }
       - { name: experimental.session.compacting, source: plugin }
     mcp: { native: true }
-    mcp_config: null
+    # opencode MCP servers live under `mcp.<name>` with a local-server shape:
+    # { type: "local", command: [bin, ...], enabled, environment } — `command` is an
+    # array and env is named `environment` (vs claude/cursor/pi `command`+`args`/`env`),
+    # so env_key must be "environment" for doctor's wiring check to find GBRAIN_SKILLS_DIR.
+    mcp_config: { path: "~/.config/opencode/opencode.json", format: json, server_key: "mcp.gbrain", env_key: "environment" }
     workbench_projection: [".opencode/skills"]
     user_install: []
     hook_format: opencode_plugin_ts
@@ -128,7 +137,7 @@ harnesses:
       - { name: session_start, source: extension }
       - { name: before_agent_start, source: extension }
     mcp: { via: pi_mcp_adapter }
-    mcp_config: null
+    mcp_config: { path: "~/.pi/agent/mcp.json", format: json, server_key: "mcpServers.gbrain" }
     workbench_projection: []
     user_install: ["~/.agents/skills"]
     hook_format: none
@@ -147,7 +156,7 @@ harnesses:
     sessions:
       - { name: sessionStart, source: hook }
     mcp: { native: true }
-    mcp_config: null
+    mcp_config: { path: "~/.cursor/mcp.json", format: json, server_key: "mcpServers.gbrain" }
     workbench_projection: []
     user_install: []
     hook_format: cursor_hooks_json
