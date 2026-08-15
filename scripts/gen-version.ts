@@ -5,6 +5,12 @@
 // `1.0.9-2-g7cef2bc` when HEAD leads the tag), so `--version` distinguishes a
 // tag-point build from a leading-commits dev build. Release builds (tag) are
 // still overwritten to the clean tag by JSPACE_BUILD_VERSION.
+//
+// RELEASE NOTE: bumping the version requires BOTH this script AND gen-assets.ts
+// — gen-assets reads VERSION and embeds it as manifest `bundle_version`
+// (cli/manifest.generated.ts / manifest.json). Missing the second step passes
+// local tests but fails CI's asset-freshness (verify + build test), which skips
+// the release job (v1.0.14 lesson: run `build:all`, never gen-version alone).
 import { execSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
