@@ -35,6 +35,8 @@ const caps = Bun.YAML.parse(readFileSync(join(ROOT, "adapters/harness/capabiliti
       cron_harness_enum_value?: string | null;
       headless?: string[] | null;
       mcp?: { via?: string };
+      sessions?: { name?: string; source?: string }[];
+      session_start?: { path?: string; format?: string; key?: string };
       lifecycle?: { session_start?: string; session_end?: string; fallback?: string; crash_recovery?: string };
     }
   >;
@@ -117,6 +119,24 @@ for (const ev of ["SessionStart", "UserPromptSubmit", "PreCompact", "SessionEnd"
 const opencodePlugin = readFileSync(join(ROOT, "templates/workbench/.opencode/plugins/jspace.ts"), "utf-8");
 for (const ev of ["session.created", "session.idle", "experimental.session.compacting"]) {
   check(`4.opencode-${ev}`, opencodePlugin.includes(ev), `opencode plugin dispatches ${ev}`);
+}
+
+// ---- 4b. session-start materialization (issue #13) -------------------------
+// Every harness with a session-start event must declare where the briefing hook
+// lives. Workbench-relative paths must point at a real template file; Pi's
+// machine-level extension path is documented in harness-pi.md.
+for (const [h, cap] of Object.entries(caps.harnesses)) {
+  const hasStart = (cap.sessions ?? []).some((s) => /session.?start/i.test(s.name ?? ""));
+  if (!hasStart) continue;
+  const ss = cap.session_start;
+  check(`4b.${h}-session-start-declared`, ss?.path !== undefined, `${h} declares session_start in capabilities.yaml`);
+  if (!ss?.path) continue;
+  const isWorkbenchPath = !ss.path.startsWith("~") && !ss.path.startsWith("/");
+  if (isWorkbenchPath) {
+    check(`4b.${h}-session-start-template`, existsSync(join(ROOT, "templates/workbench", ss.path)), `session_start template exists (${ss.path})`);
+  } else if (h === "pi") {
+    check(`4b.pi-session-start-doc`, piDoc.includes("extensions/jspace"), `harness-pi.md documents ~/.pi/agent/extensions/jspace/`);
+  }
 }
 
 // ---- 5. SKILL.md reference area covers every harness-*.md ------------------

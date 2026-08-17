@@ -14,6 +14,16 @@ export interface HarnessSession {
   source: SessionSource;
 }
 
+/** Where the session-start briefing hook is materialized. `path` may be a
+ *  workbench-relative path (checked under the workbench root) or a `~`-expanded
+ *  machine-level path (e.g. Pi extension). `format: file` means file presence is
+ *  the wiring signal; `json`/`toml` use `key` as the dot-path/TOML section. */
+export interface HarnessSessionStart {
+  path: string;
+  format: "json" | "toml" | "file";
+  key?: string;
+}
+
 /** `{ native: true }` (harness-native MCP) or `{ via: "<adapter>" }` (third-party
  *  extension channel, e.g. pi_mcp_adapter). */
 export type McpBinding = { native: true } | { via: string };
@@ -43,6 +53,9 @@ export interface HarnessCapabilityData {
   argv_flags: { permission?: string; tools_value?: string; output?: string; output_value?: string };
   /** Session events jspace wires (or plans to wire); source = channel kind. */
   sessions: HarnessSession[];
+  /** Where the session-start briefing hook is materialized (optional for
+   *  compatibility-only entries such as codex). */
+  session_start?: HarnessSessionStart;
   mcp: McpBinding;
   mcp_config: McpConfig;
   /** Workbench-relative skill projection dirs materialized by init/upgrade. */

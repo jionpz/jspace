@@ -23,6 +23,7 @@ import { readMaterializedJournal } from "../workspace/journal.ts";
 import { skillProjections } from "../workspace/manifest.ts";
 import type { HubV1 } from "../../core/contracts/hub.ts";
 import { loadCapabilities } from "../../adapters/harness/registry.ts";
+import { isBriefingStale, readBriefing } from "../context/briefing.ts";
 import { binaryOnPath } from "../../adapters/harness/bin.ts";
 import type { LinuxCronHealth } from "../../adapters/scheduler/types.ts";
 
@@ -832,6 +833,107 @@ function checkHarness(root: string, cron: CronHealthDeps): RegistryDiagnostic[] 
   return diags;
 }
 
+/** Session-start briefing behavior checks (issue #13): the file-level doctor
+ *  checks were not enough — a workbench can be perfectly materialized while the
+ *  hook that should run `jspace context session-start` is missing/stale. This
+ *  check surfaces that gap plus the machine-side briefing timestamp. */
+function checkSessionStartHooks(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
+  const diags: RegistryDiagnostic[] = [];
+  const caps = loadCapabilities();
+  const home = homedir();
+
+  // Active/selected harness signals. To avoid cross-harness noise, machine-level
+  // Pi is only checked when this workbench actually uses Pi (enabled cron or a
+  // project .pi directory); workbench-level seeds are checked only when the seed
+  // file exists.
+  const activeCron = new Set<string>();
+  try {
+    for (const c of cron.loadCrons(root).crons) {
+      if (c.harness && c.enabled) activeCron.add(c.harness);
+    }
+  } catch {
+    // cron.json unreadable -> checkCrons reports it; no active signal here.
+  }
+  const piActive = activeCron.has("pi") || existsSync(join(root, ".pi"));
+  let anySessionStartSignal = false;
+
+  for (const [name, cap] of Object.entries(caps.harnesses)) {
+    const ss = cap.session_start;
+    if (!ss) continue;
+    const hasStart = cap.sessions.some((s) => /session.?start/i.test(s.name));
+    if (!hasStart) continue;
+    const isMachine = ss.path.startsWith("~/") || ss.path.startsWith("~\\") || ss.path.startsWith("/");
+    const abs = isMachine
+      ? ss.path.startsWith("~/") || ss.path.startsWith("~\\")
+        ? join(home, ss.path.slice(2))
+        : ss.path
+      : join(root, ss.path);
+
+    let raw: string | null;
+    if (isMachine) {
+      raw = cron.readHarnessConfig?.(abs) ?? null;
+    } else {
+      try {
+        raw = isFile(abs) ? readFileSync(abs, "utf-8") : null;
+      } catch {
+        raw = null; // unreadable seed: not a session-start wiring signal
+      }
+    }
+    if (raw !== null) anySessionStartSignal = true;
+    if (raw !== null && raw.includes("jspace context session-start")) continue;
+
+    if (isMachine) {
+      // Pi: only warn when this workbench uses Pi and Pi itself is installed
+      // (settings.json exists) but the jspace extension is missing/unwired.
+      if (name === "pi") {
+        const piSettings = join(home, ".pi", "agent", "settings.json");
+        const piInstalled = cron.readHarnessConfig?.(piSettings) !== null;
+        if (piInstalled && piActive) {
+          diags.push({
+            severity: "warning",
+            code: "harness.session_start_not_wired",
+            path: `harness.${name}`,
+            message: `Pi is installed and active for this workbench, but the jspace session-start extension is missing or stale at ${abs}; run 'jspace harness wire --harness pi' to enable automatic briefing`,
+          });
+        }
+      } else if (raw !== null) {
+        diags.push({
+          severity: "warning",
+          code: "harness.session_start_not_wired",
+          path: `harness.${name}`,
+          message: `${name} session-start hook exists but is missing 'jspace context session-start' at ${abs}; run the harness's wire/upgrade command to repair it`,
+        });
+      }
+    } else if (raw !== null) {
+      // Workbench seed exists for this harness but no longer contains the hook.
+      diags.push({
+        severity: "warning",
+        code: "harness.session_start_not_wired",
+        path: `harness.${name}`,
+        message: `${name} session-start seed exists but is missing 'jspace context session-start' at ${abs}; run 'jspace workspace upgrade' to restore the seed`,
+      });
+    }
+  }
+
+  // Briefing staleness: only meaningful once at least one session-start
+  // mechanism is present/selected. On a brand-new workbench with no harness
+  // wired yet, "no briefing" is expected, not a health problem.
+  if (anySessionStartSignal) {
+    const briefing = readBriefing(root);
+    if (isBriefingStale(briefing.state)) {
+      diags.push({
+        severity: "warning",
+        code: "briefing.stale",
+        path: "briefing",
+        message: briefing.state === null
+          ? "no session-start briefing recorded yet; automatic briefing may not be running (run 'jspace harness wire --harness <your-harness>')"
+          : `last session-start briefing is stale (${briefing.state.last_session_start_at}); session-start hooks may not be running (run 'jspace harness wire --harness <your-harness>')`,
+      });
+    }
+  }
+  return diags;
+}
+
 /** `jspace doctor` — orchestrate the read-only checks and aggregate by severity.
  *  `verbose` prints info-level diagnostics in human mode (default: only counted). */
 export function doctorWorkbench(root: string, cron: CronHealthDeps, verbose = false): CmdResult {
@@ -862,6 +964,7 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps, verbose = fa
     ...checkCursorSkills(cron),
     ...checkCrons(root, cron),
     ...checkHarness(root, cron),
+    ...checkSessionStartHooks(root, cron),
   ];
 
   const errors = diags.filter((d) => d.severity === "error").map((d) => d.message);

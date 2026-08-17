@@ -28,6 +28,7 @@ import {
   cursorSessionStartEnvelope,
 } from "../../application/context/envelope.ts";
 import { readHookPrompt } from "../../application/context/hook-input.ts";
+import { touchBriefing } from "../../application/context/briefing.ts";
 
 /** Never propagate: any internal failure degrades to a warning + exit 0. */
 function failLines(e: unknown): { lines: string[]; warnings: string[] } {
@@ -61,6 +62,12 @@ const sessionStartSpec: CommandSpec = {
       // the hook) — the sync collectors above are unaffected.
       state.projects = await collectActiveProjects(realGbrain(undefined, PROJECT_COLLECT_TIMEOUT_MS));
       const text = renderSessionStart(state, g.root);
+      // Best-effort briefing timestamp: never blocks the hook if the write fails.
+      try {
+        touchBriefing(g.root);
+      } catch {
+        // silent — the hook must never fail because a machine-state write failed
+      }
       if (plain(args)) return { lines: [text] };
       return { lines: [args.envelope === "cursor" ? cursorSessionStartEnvelope(text) : sessionStartEnvelope(text)] };
     } catch (e) {

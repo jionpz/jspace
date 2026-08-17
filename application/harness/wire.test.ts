@@ -130,6 +130,26 @@ describe("harness wire — cursor (MCP-list create/merge)", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.status).toBe("invalid-config");
   });
+
+  test("workbench session-start seed missing → sessionStart missing + upgrade hint", () => {
+    const { deps } = makeCtx({ dryRun: true });
+    const r = wireHarness("cursor", deps, ROOT);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.sessionStart?.status).toBe("missing");
+    expect(r.sessionStart?.notes.join("\n")).toContain("workspace upgrade");
+  });
+
+  test("workbench session-start seed already wired → sessionStart already-wired", () => {
+    const { deps } = makeCtx({
+      files: { [join(ROOT, ".cursor", "hooks.json")]: JSON.stringify({ hooks: { sessionStart: [{ command: "jspace context session-start --envelope cursor" }] } }) },
+      dryRun: true,
+    });
+    const r = wireHarness("cursor", deps, ROOT);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.sessionStart?.status).toBe("already-wired");
+  });
 });
 
 describe("harness wire — opencode (mcp.<name> local-server shape)", () => {
@@ -194,6 +214,7 @@ describe("harness wire — opencode (mcp.<name> local-server shape)", () => {
 
 describe("harness wire — pi (MCP-list, ~/.pi/agent/mcp.json)", () => {
   const PI_MCP = join(HOME, ".pi", "agent", "mcp.json");
+  const PI_EXT = join(HOME, ".pi", "agent", "extensions", "jspace", "index.ts");
 
   test("dry-run writes claude-shaped gbrain server", () => {
     const { deps, writes } = makeCtx({ dryRun: true });
@@ -206,6 +227,42 @@ describe("harness wire — pi (MCP-list, ~/.pi/agent/mcp.json)", () => {
     expect(doc.mcpServers.gbrain.command).toBe("/usr/local/bin/gbrain");
     expect(doc.mcpServers.gbrain.args).toEqual(["serve"]);
     expect(doc.mcpServers.gbrain.env.GBRAIN_SKILLS_DIR).toBe(WB_SKILLS);
+  });
+
+  test("dry-run also plans the Pi session-start extension", () => {
+    const { deps, writes } = makeCtx({ dryRun: true });
+    const r = wireHarness("pi", deps, ROOT);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.sessionStart?.status).toBe("wired");
+    expect(r.sessionStart?.plans).toHaveLength(1);
+    expect(r.sessionStart?.plans[0].path).toBe(PI_EXT);
+    expect(r.sessionStart?.plans[0].content).toContain("jspace context session-start");
+    expect(writes.length).toBe(0);
+  });
+
+  test("real wire writes MCP + Pi session-start extension", () => {
+    const { deps, writes, backups } = makeCtx();
+    const r = wireHarness("pi", deps, ROOT);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(writes.map((w) => w.path).sort()).toEqual([PI_EXT, PI_MCP].sort());
+    expect(r.sessionStart?.status).toBe("wired");
+    expect(backups).toEqual([PI_MCP]); // missing extension has no backup
+  });
+
+  test("pi session-start extension already wired → already-wired, no extra write", () => {
+    const existing = "// jspace context session-start\nconst x = 1;\n";
+    const { deps, writes } = makeCtx({
+      files: { [PI_EXT]: existing, [PI_MCP]: "{}" },
+      dryRun: true,
+    });
+    const r = wireHarness("pi", deps, ROOT);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.sessionStart?.status).toBe("already-wired");
+    expect(r.sessionStart?.plans).toEqual([]);
+    expect(writes.length).toBe(0);
   });
 
   test("idempotent pi re-run → already-wired", () => {

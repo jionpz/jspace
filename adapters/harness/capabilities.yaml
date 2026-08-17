@@ -19,6 +19,11 @@
 #                           adapter code, not this file).
 #   sessions              — session events jspace wires (or plans to wire); `source`
 #                           distinguishes hook / plugin / extension channels.
+#   session_start         — where the session-start briefing hook is materialized:
+#                           `path` is workbench-relative or `~`-expanded machine path,
+#                           `format` is json/toml/file, `key` is the json/toml write
+#                           point when applicable. file format means "file presence is
+#                           the wiring signal" (e.g. Pi extension).
 #   mcp                   — `native: true` (harness-native MCP) or `via: <adapter>`
 #                           (third-party extension channel, e.g. pi-mcp-adapter).
 #   mcp_config            — where a harness keeps its gbrain MCP server config
@@ -62,6 +67,7 @@ harnesses:
     sessions:
       - { name: SessionStart, source: hook }
       - { name: UserPromptSubmit, source: hook }
+    session_start: { path: ".claude/settings.json", format: json, key: "hooks.SessionStart" }
     mcp: { native: true }
     mcp_config: { path: "~/.claude.json", format: json, server_key: "mcpServers.gbrain" }
     workbench_projection: [".claude/skills"]
@@ -88,6 +94,7 @@ harnesses:
       - { name: UserPromptSubmit, source: hook }
       - { name: PreCompact, source: hook }
       - { name: SessionEnd, source: hook }
+    session_start: { path: ".grok/hooks/jspace.json", format: json, key: "hooks.SessionStart" }
     mcp: { native: true }
     mcp_config: { path: "~/.grok/config.toml", format: toml, server_key: "mcp_servers.gbrain" }
     workbench_projection: [".grok/skills"]
@@ -112,6 +119,7 @@ harnesses:
       - { name: session.created, source: plugin }
       - { name: session.idle, source: plugin }
       - { name: experimental.session.compacting, source: plugin }
+    session_start: { path: ".opencode/plugins/jspace.ts", format: file }
     mcp: { native: true }
     # opencode MCP servers live under `mcp.<name>` with a local-server shape:
     # { type: "local", command: [bin, ...], enabled, environment } — `command` is an
@@ -136,6 +144,7 @@ harnesses:
     sessions:
       - { name: session_start, source: extension }
       - { name: before_agent_start, source: extension }
+    session_start: { path: "~/.pi/agent/extensions/jspace/index.ts", format: file }
     mcp: { via: pi_mcp_adapter }
     mcp_config: { path: "~/.pi/agent/mcp.json", format: json, server_key: "mcpServers.gbrain" }
     workbench_projection: []
@@ -155,6 +164,7 @@ harnesses:
     argv_flags: {}
     sessions:
       - { name: sessionStart, source: hook }
+    session_start: { path: ".cursor/hooks.json", format: json, key: "hooks.sessionStart" }
     mcp: { native: true }
     mcp_config: { path: "~/.cursor/mcp.json", format: json, server_key: "mcpServers.gbrain" }
     workbench_projection: []

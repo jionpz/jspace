@@ -28,6 +28,11 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
           "source": "hook"
         }
       ],
+      "session_start": {
+        "path": ".claude/settings.json",
+        "format": "json",
+        "key": "hooks.SessionStart"
+      },
       "mcp": {
         "native": true
       },
@@ -80,6 +85,11 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
           "source": "hook"
         }
       ],
+      "session_start": {
+        "path": ".grok/hooks/jspace.json",
+        "format": "json",
+        "key": "hooks.SessionStart"
+      },
       "mcp": {
         "native": true
       },
@@ -123,6 +133,10 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
           "source": "plugin"
         }
       ],
+      "session_start": {
+        "path": ".opencode/plugins/jspace.ts",
+        "format": "file"
+      },
       "mcp": {
         "native": true
       },
@@ -163,6 +177,10 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
           "source": "extension"
         }
       ],
+      "session_start": {
+        "path": "~/.pi/agent/extensions/jspace/index.ts",
+        "format": "file"
+      },
       "mcp": {
         "via": "pi_mcp_adapter"
       },
@@ -195,6 +213,11 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
           "source": "hook"
         }
       ],
+      "session_start": {
+        "path": ".cursor/hooks.json",
+        "format": "json",
+        "key": "hooks.sessionStart"
+      },
       "mcp": {
         "native": true
       },

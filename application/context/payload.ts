@@ -13,6 +13,13 @@ const MAX_SESSION_START_BYTES = 4 * 1024;
 
 const SKILL_LIST = "jspace-use / asset-ingest / memory-recall / memory-writeback";
 
+/** Open-incident banner (issue #13): put failures at the very top of context
+ *  output so a session that does not run `jspace cron check` still sees them. */
+function incidentBanner(state: WorkbenchState): string {
+  if (state.cronIncidents.length === 0) return "";
+  return `⚠️ open incidents: ${state.cronIncidents.length}（jspace cron check）`;
+}
+
 /** Session-start blocks (design §3.1): static pointer, evaluated state,
  *  path list for on-demand reads, and a computed next action. Empty state
  *  emits only the pointer + next-action (design §7: no noise on a clean
@@ -21,7 +28,9 @@ export function renderSessionStart(state: WorkbenchState, root: string): string 
   const workbenchBlock = `<jspace-workbench>\nJSpace 工作台 ${root}。路由规则与治理在工作台根 AGENTS.md（未随本块复制；从根目录启动时经 CLAUDE.md 加载，按需读取）。\n</jspace-workbench>`;
 
   const stateLinesText = stateLines(state);
+  const banner = incidentBanner(state);
   const parts = [workbenchBlock];
+  if (banner) parts.unshift(banner);
   if (stateLinesText.length > 0) {
     parts.push(`<current-state>\n${stateLinesText.join("\n")}\n</current-state>`);
   }
@@ -78,7 +87,9 @@ export function renderTurn(state: WorkbenchState): string {
 export function renderPreCompact(state: WorkbenchState, root: string): string {
   const workbenchBlock = `<jspace-workbench>JSpace 工作台 ${root}。会话即将 compaction：以下状态若需持久化，请显式触发收工（memory-writeback），本提醒不自动写 gbrain。\n</jspace-workbench>`;
   const stateLinesText = stateLines(state);
+  const banner = incidentBanner(state);
   const parts = [workbenchBlock];
+  if (banner) parts.unshift(banner);
   if (stateLinesText.length > 0) {
     parts.push(`<current-state>\n${stateLinesText.join("\n")}\n</current-state>`);
   }
@@ -91,7 +102,9 @@ export function renderPreCompact(state: WorkbenchState, root: string): string {
 export function renderSessionEnd(state: WorkbenchState, root: string): string {
   const workbenchBlock = `<jspace-workbench>JSpace 工作台 ${root}。会话结束：如需记忆本次事实，请显式触发收工（memory-writeback），本提醒不自动写 gbrain。\n</jspace-workbench>`;
   const stateLinesText = stateLines(state);
+  const banner = incidentBanner(state);
   const parts = [workbenchBlock];
+  if (banner) parts.unshift(banner);
   if (stateLinesText.length > 0) {
     parts.push(`<current-state>\n${stateLinesText.join("\n")}\n</current-state>`);
   }

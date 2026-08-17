@@ -104,6 +104,15 @@ function wireHandler(ctx: CmdContext, args: Record<string, unknown>): CmdResult 
     for (const plan of r.plans) lines.push(`  wrote ${plan.path}`);
     lines.push(`restart the ${harness} session (MCP reconnect) so gbrain serve starts with the new env`);
   }
+  if (r.sessionStart) {
+    for (const note of r.sessionStart.notes) lines.push(`  session-start: ${note}`);
+    for (const plan of r.sessionStart.plans) {
+      lines.push(ctx.dryRun ? `  session-start: (dry-run) write ${plan.path}:` : `  session-start: wrote ${plan.path}`);
+      if (ctx.dryRun) {
+        for (const l of plan.content.trimEnd().split("\n")) lines.push(`    ${l}`);
+      }
+    }
+  }
   if (harness === "cursor") lines.push(...cursorSkillsWire(ctx.dryRun));
   lines.push(...describeCapability(harness));
   return { lines };

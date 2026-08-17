@@ -829,3 +829,65 @@ test("tomlSkillsDirWired scoped to target section: sibling server with same key 
   const gbrainWired = `[mcp_servers.other]\ncommand = 'other'\nenv = { GBRAIN_SKILLS_DIR = '/wrong/skills' }\n\n[mcp_servers.gbrain]\ncommand = 'gbrain'\nenv = { GBRAIN_SKILLS_DIR = '${wbSkillsDir}' }\n`;
   expect(codes(doctorWorkbench(root, stubDeps({ readHarnessConfig: (p) => (p.includes("config.toml") ? gbrainWired : null) })))).not.toContain("gbrain.skillsdir_unwired");
 });
+
+test("Pi installed + active without jspace session-start extension -> harness.session_start_not_wired (issue #13)", () => {
+  mkdirSync(join(root, ".pi"), { recursive: true });
+  const piSettings = JSON.stringify({ packages: ["npm:pi-hooks"] });
+  const r = doctorWorkbench(
+    root,
+    stubDeps({
+      readHarnessConfig: (p) => {
+        if (p.endsWith("settings.json") && p.includes(".pi")) return piSettings;
+        return null;
+      },
+    }),
+  );
+  const c = codes(r);
+  expect(c).toContain("harness.session_start_not_wired");
+  const d = (r.data as { diagnostics: { code: string; path: string }[] }).diagnostics.find((x) => x.code === "harness.session_start_not_wired");
+  expect(d?.path).toBe("harness.pi");
+});
+
+test("Pi installed but not active -> no harness.session_start_not_wired (no cross-harness noise)", () => {
+  const piSettings = JSON.stringify({ packages: ["npm:pi-hooks"] });
+  const r = doctorWorkbench(
+    root,
+    stubDeps({
+      readHarnessConfig: (p) => (p.endsWith("settings.json") && p.includes(".pi") ? piSettings : null),
+    }),
+  );
+  expect(codes(r)).not.toContain("harness.session_start_not_wired");
+});
+
+test("Pi session-start extension wired + active -> no harness.session_start_not_wired (issue #13)", () => {
+  mkdirSync(join(root, ".pi"), { recursive: true });
+  const piSettings = JSON.stringify({ packages: ["npm:pi-hooks"] });
+  const piExt = "// jspace context session-start\n";
+  const r = doctorWorkbench(
+    root,
+    stubDeps({
+      readHarnessConfig: (p) => {
+        if (p.endsWith("settings.json") && p.includes(".pi")) return piSettings;
+        if (p.endsWith("index.ts") && p.includes(".pi")) return piExt;
+        return null;
+      },
+    }),
+  );
+  expect(codes(r)).not.toContain("harness.session_start_not_wired");
+});
+
+test("briefing missing/old -> briefing.stale; recent -> none (issue #13)", () => {
+  // a wired workbench seed is the signal that session-start should be running
+  mkdirSync(join(root, ".claude"), { recursive: true });
+  writeFileSync(
+    join(root, ".claude", "settings.json"),
+    JSON.stringify({ hooks: { SessionStart: [{ matcher: "startup", hooks: [{ type: "command", command: "jspace context session-start", timeout: 10 }] }] } }),
+  );
+  expect(codes(doctorWorkbench(root, stubDeps()))).toContain("briefing.stale");
+  mkdirSync(join(root, ".jspace", "state"), { recursive: true });
+  writeFileSync(
+    join(root, ".jspace", "state", "briefing.json"),
+    JSON.stringify({ schema_version: 1, last_session_start_at: new Date().toISOString(), session_count: 1 }),
+  );
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("briefing.stale");
+});

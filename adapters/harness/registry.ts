@@ -24,6 +24,13 @@ function resolveCaps(raw: HarnessCapabilitiesFile): Record<string, HarnessCapabi
     if (data.lifecycle === undefined) {
       fail(`capabilities: ${name} is missing lifecycle grades`);
     }
+    // Every session harness that declares a session-start event must say where
+    // the briefing hook is materialized (issue #13). codex is the compatibility
+    // exception — it has no session-start event.
+    const hasSessionStart = data.sessions.some((s) => /session.?start/i.test(s.name));
+    if (hasSessionStart && data.session_start === undefined) {
+      fail(`capabilities: ${name} declares a session-start event but no session_start materialization path`);
+    }
     harnesses[name] = { ...data, name };
   }
   return harnesses;

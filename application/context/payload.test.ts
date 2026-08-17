@@ -173,6 +173,18 @@ test("many cron incidents -> current-state caps at MAX_CRON_LINES with tail", ()
   expect(stateBlock).toContain("另有 35 个 cron 失败");
 });
 
+test("open incidents -> banner at the very top of session-start/precompact/session-end (issue #13)", () => {
+  const state = { ...empty, cronIncidents: [{ cronId: "inbox-tidy", failureClass: "failed" }] };
+  const ss = renderSessionStart(state, "/wb");
+  expect(ss.startsWith("⚠️ open incidents: 1（jspace cron check）")).toBe(true);
+  const pc = renderPreCompact(state, "/wb");
+  expect(pc.startsWith("⚠️ open incidents: 1（jspace cron check）")).toBe(true);
+  const se = renderSessionEnd(state, "/wb");
+  expect(se.startsWith("⚠️ open incidents: 1（jspace cron check）")).toBe(true);
+  // no incidents -> no banner
+  expect(renderSessionStart(empty, "/wb")).not.toContain("⚠️ open incidents");
+});
+
 test("long cronId -> truncated in both session-start and turn (stays under budget)", () => {
   const longId = "x".repeat(500);
   const state = { ...empty, cronIncidents: [{ cronId: longId, failureClass: "failed" }] };
