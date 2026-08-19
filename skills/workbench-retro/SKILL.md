@@ -49,9 +49,11 @@ triggers:
 
 ```bash
 # 取证(只读;逐条判读见 references/checks.md)
-gbrain list --type note -n 50                     # state 页与更新时间(检查 1)
+gbrain list --type note --tag project -n 50        # state 页与更新时间(检查 1)
+gbrain list --type note --tag knowledge -n 20      # 本周新知识(检查 1/6)
 ls <filehub>/projects/ && jspace project list      # 挂接一致性(检查 2)
-gbrain list --type reference -n 20                 # 指针抽样源(检查 3)
+gbrain list --type note --tag asset -n 20          # 指针抽样源(检查 3)
+gbrain list --type reference -n 20                 # 迁移缺口抽样(检查 3, info)
 jspace cron check && jspace ingest list && jspace pending list   # 流程卡点(检查 4)
 find <filehub>/_inbox -type f -mtime +7            # inbox 停滞(检查 5)
 ls .jspace/logs/cron/*/ | tail -20                 # 本周 cron 运行痕迹(检查 4/6)
