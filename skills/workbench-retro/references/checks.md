@@ -13,14 +13,15 @@
 
 **证据**
 ```bash
-gbrain list --type note -n 50            # 看 project/<id>/state 页与 updated_at
-gbrain list --type lesson -n 20          # 本周有无新知识页
+gbrain list --type note --tag project -n 50   # 看 project/<id>/state 页与 updated_at
+gbrain list --type note --tag knowledge -n 20 # 本周有无新知识页(再按 updated_at 滤窗口)
 ls -la <filehub>/projects/*/ | head -40  # 资产层本周有无文件变动
 ls .jspace/logs/cron/*/                  # cron 活动痕迹(佐证「这周确实在用」)
 ```
 
 **判读**
 - 活动信号 = 本周内 filehub 有文件新增/修改,或 cron 成功运行,或域/hub 有变更。
+- 本周新知识 = `gbrain list --type note --tag knowledge -n 20` 结果中 `updated_at` 落在本周窗口内的页;没有 → 记「本周无新知识」。
 - 某项目有活动信号,但其 `project/<id>/state` 页 `updated_at` ≥7 天未动 → **写回缺口**。
 - 全工作台本周 0 个 state 页更新且有活动信号 → **写回腿停摆**(整体性问题,优先级最高)。
 - 本周有 ≥1 条 state 更新 → 记录实际条数,不评价好坏(基线数据,供跨周对比)。
@@ -51,14 +52,15 @@ jspace project list                                       # registry 注册情�
 
 ## 检查 3 · 指针有效性
 
-gbrain reference 页的 `Pointer` 指向资产本体;文件被移动/改名/未同步 → 指针断,召回时才发现就晚了。
+gbrain asset 指针页的 `Pointer` 指向资产本体;文件被移动/改名/未同步 → 指针断,召回时才发现就晚了。
 
 **证据**
 ```bash
-gbrain list --type reference -n 20                 # 取样本(≤5 个,优先本周新增)
+gbrain list --type note --tag asset -n 20          # 指针抽样源(v2: asset 指针页)
+gbrain list --type reference -n 20                 # 迁移缺口抽样(仅 info,非唯一抽样源)
 gbrain get <slug>                                   # 读 Pointer / rel_path 字段
 test -f "<Pointer>" && echo OK || echo BROKEN
-gbrain stats                                        # pages_by_type:看有无白名单外的 type
+gbrain stats                                        # pages_by_type:看 type 契约
 ```
 
 **判读**
@@ -66,9 +68,9 @@ gbrain stats                                        # pages_by_type:看有无白
 - `test -f` 失败但 `rel_path` 能经「本机 filehub 根 + rel_path」解析到实际文件 → **指针待重解析**(换机场景,非损坏)。
 - 两者都失败 → **断指针**。
 - 页缺 `rel_path` 字段 → **纪律缺口**(写侧没按 M5 纪律写)。
-- **type 契约外值**:`gbrain stats` 的 `pages_by_type` 出现 `lesson|note|decision|reference|smoke` 之外的值(如 `concept`/`project`)→ **写侧未按 gbrain.md 的 type 语义写**。这条由 retro 承担而不是 `jspace doctor`:doctor 是离线结构化诊断、不碰 gbrain 运行时;retro 本就在读 gbrain,顺手即可判。
+- **type 契约**:`gbrain stats` 的 `pages_by_type` 只应出现 `note`(first-use 探针可保留 `smoke`);出现 `lesson|decision|reference` → **迁移未完成**(info / 需决策),不是合法 type;出现 `concept|project|knowledge|asset-pointer` → **写侧未按 gbrain.md 的 type 语义写**(需决策)。这条由 retro 承担而不是 `jspace doctor`:doctor 是离线结构化诊断、不碰 gbrain 运行时;retro 本就在读 gbrain,顺手即可判。
 
-**分级**:待重解析 / 断指针 → 立即可做;纪律缺口 / type 契约外值 → 需你决策(是否回写侧修 asset-ingest 或 memory-* 的写页模板)。
+**分级**:待重解析 / 断指针 → 立即可做;纪律缺口 / 迁移未完成 / type 契约 → 需你决策(是否回写侧修 asset-ingest 或 memory-* 的写页模板)。
 
 ---
 
@@ -118,7 +120,7 @@ tail -40 <filehub>/.jspace-logs/inbox-batch.md      # 看是否反复被列为�
 
 **证据**
 ```bash
-gbrain list --type lesson -n 20                     # 本周新增知识页主题
+gbrain list --type note --tag knowledge -n 20       # 本周新增知识页主题(再按 updated_at 滤窗口)
 gbrain query "本周重复出现的问题"                     # 语义面佐证
 ls .jspace/logs/cron/*/ && tail -30 .jspace/logs/cron/<id>/<最近>.md   # 无头运行里反复出现的同类处置
 rg -n '无法判定|跳过|模糊' <filehub>/.jspace-logs/inbox-batch.md | tail -10
