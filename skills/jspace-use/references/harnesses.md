@@ -6,7 +6,7 @@
 
 支持集 = **五个会话 harness（Claude Code / Grok Build / OpenCode / Pi / Cursor）+ codex cron 兼容**。用户选其一会话 harness 使用,wire 那一个;hermes 可选(提及即可,不主动推广)。所有 harness 经 MCP/CLI 读写同一 gbrain 库。
 
-## Harness 支持全景（auto-generated from capabilities.yaml）
+## Harness 支持全景（rendered from capabilities.yaml，由 check-harness-consistency #10 校验）
 
 > 逐 harness 真实能力与接线:见各 `harness-<name>.md`(下节链接)。下表是 capabilities.yaml 的渲染,勿手工编辑。
 
@@ -14,10 +14,10 @@
 |---|---|---|---|---|---|---|
 | claude | `claude -p …` | SessionStart / UserPromptSubmit | native | claude_settings_json | none | best_effort / manual / manual / best_effort |
 | grok | `grok -p …` | SessionStart / UserPromptSubmit / PreCompact / SessionEnd | native | grok_hooks_json | full | best_effort / best_effort / manual / best_effort |
-| opencode | `opencode run …` | session.created / session.idle / experimental.session.compacting | native | opencode_plugin_ts | none | best_effort / best_effort / manual / best_effort |
-| pi | `pi -p …` | session_start / before_agent_start（扩展事件） | via: pi_mcp_adapter | none | none | best_effort / best_effort / manual / best_effort |
+| opencode | `opencode run …` | session.created / session.idle / experimental.session.compacting | native | opencode_plugin_ts | none | best_effort / manual / manual / best_effort |
+| pi | `pi -p …` | session_start / before_agent_start（扩展事件） | via: pi_mcp_adapter | none | none | best_effort / manual / manual / best_effort |
 | cursor | 无（IDE-only） | sessionStart | native | cursor_hooks_json | none | best_effort / manual / manual / manual |
-| codex | `codex exec …` | — | native | none | none | best_effort / manual / manual / best_effort |
+| codex | `codex exec …` | — | native | none | none | manual / manual / manual / best_effort |
 
 - **automated 的边界**：上表全部为 best_effort/manual（lifecycle 真实触发是 harness 运行时行为，未在 CI 全链验证）；CLI 侧的 automated 见 `docs/PLATFORMS.md`（外部稳定依赖，JSpace 开发仓库文档）「Harness 能力矩阵」（claude cron argv 有单测证据）。
 - **分级语义（父任务 invariant #7：不虚报自动化可靠性）**：

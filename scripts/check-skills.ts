@@ -136,7 +136,9 @@ function pass(label: string): void {
   const generated = [
     "cli/assets.generated.ts",
     "cli/manifest.generated.ts",
+    "cli/manifest.json",
     "cli/skills.generated.ts",
+    "adapters/harness/capabilities.generated.ts",
     "templates/workbench/AGENTS.md",
   ];
   const snapshot = new Map(generated.map((f) => [f, readFileSync(join(repoRoot, f), "utf-8")]));

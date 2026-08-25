@@ -22,8 +22,10 @@ test("lifecycle matrix is the authoritative single source", () => {
   for (const grade of ["automated", "best_effort", "manual", "unsupported"]) {
     expect(matrix, `matrix must define grade: ${grade}`).toContain(grade);
   }
-  // the capabilities table is the render source (not a hand-maintained duplicate)
-  expect(matrix).toContain("auto-generated from capabilities.yaml");
+  // the capabilities table is rendered from capabilities.yaml and drift-checked
+  // (check-harness-consistency #10), not a hand-maintained duplicate
+  expect(matrix).toContain("rendered from capabilities.yaml");
+  expect(matrix).toContain("check-harness-consistency #10");
   expect(matrix).toContain("harness-<name>.md");
 });
 

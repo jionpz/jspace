@@ -83,7 +83,7 @@ if (!enumMatch) {
     `cron.ts HARNESSES ${sortedEnum.join(",")} vs capabilities enum ${capEnum.join(",")}`,
   );
   const cronJson = JSON.parse(readFileSync(join(ROOT, "templates/workbench/.jspace/cron.json"), "utf-8")) as {
-    crons: { harness?: string }[];
+    crons: { id?: string; harness?: string; target?: { kind?: string; skill?: string; entrypoint?: string } }[];
   };
   const cronValues = cronJson.crons.map((c) => c.harness).filter(Boolean);
   check(
@@ -91,6 +91,29 @@ if (!enumMatch) {
     cronValues.every((v) => v !== undefined && caps.harnesses[v] !== undefined),
     `cron.json harness values ${cronValues.join(",")} all ⊆ capabilities keys`,
   );
+  // 2c: skill-target crons must reference a real workbench skill + entrypoint.
+  // compileSkillTarget only validates ENABLED crons at runtime; a typo in a
+  // disabled cron would otherwise ship to release undetected.
+  const skillsManifest = JSON.parse(readFileSync(join(ROOT, "skills-manifest.json"), "utf-8")) as {
+    workbench: { name: string; entrypoints?: string[] }[];
+  };
+  const entryBySkill: Record<string, string[]> = {};
+  for (const s of skillsManifest.workbench) entryBySkill[s.name] = s.entrypoints ?? [];
+  for (const c of cronJson.crons) {
+    const t = c.target;
+    if (!t || t.kind !== "skill") continue;
+    const label = c.id ?? c.harness ?? "?";
+    const skill = t.skill ?? "";
+    const ep = t.entrypoint ?? "";
+    const eps = entryBySkill[skill];
+    if (eps === undefined) {
+      check(`2c.cron-target.${label}`, false, `target.skill "${skill}" not in skills-manifest workbench`);
+    } else if (!eps.includes(ep)) {
+      check(`2c.cron-target.${label}`, false, `target.entrypoint "${ep}" not in ${skill} entrypoints [${eps.join(",")}]`);
+    } else {
+      check(`2c.cron-target.${label}`, true, `${skill}.${ep} valid`);
+    }
+  }
 }
 
 // ---- 3. adapter filenames ⊆ capabilities keys -------------------------------
@@ -214,6 +237,28 @@ for (const dim of ["session_start", "session_end", "fallback", "crash_recovery"]
     const got = cap.lifecycle?.[dim as keyof typeof cap.lifecycle] ?? "manual";
     check(`9.${dim}.${h}`, got === want, `${h} ${dim}=${got} (expect ${want})`);
   }
+}
+
+// ---- 10. harnesses.md lifecycle table == capabilities.yaml (no silent drift) -
+// The table header claims "rendered from capabilities.yaml"; assert that claim by
+// parsing the rendered lifecycle column and comparing it cell-by-cell against the
+// source. A hand-edit that drifts a grade turns red instead of silently lying.
+const harnessesMd = readFileSync(join(REF_DIR, "harnesses.md"), "utf-8");
+const LIFECYCLE_DIMS = ["session_start", "session_end", "fallback", "crash_recovery"] as const;
+for (const [h, cap] of Object.entries(caps.harnesses)) {
+  const row = harnessesMd.split("\n").find((line) => line.startsWith(`| ${h} |`));
+  if (!row) {
+    check(`10.lifecycle.${h}`, false, `no lifecycle table row for ${h} in harnesses.md`);
+    continue;
+  }
+  const cells = row.split("|").map((c) => c.trim());
+  const grades = cells[cells.length - 2].split("/").map((g) => g.trim());
+  const want = LIFECYCLE_DIMS.map((d) => cap.lifecycle?.[d] ?? "manual");
+  check(
+    `10.lifecycle.${h}`,
+    JSON.stringify(grades) === JSON.stringify(want),
+    `${h} table=[${grades.join("/")}] caps=[${want.join("/")}]`,
+  );
 }
 
 if (failures.length > 0) {

@@ -123,6 +123,10 @@ jobs:
         run: bun test
       - name: Skills / generated-asset freshness
         run: bun run scripts/check-skills.ts
+      - name: Manifest source integrity (committed)
+        run: bun run scripts/check-manifest-integrity.ts
+      - name: Harness consistency (capabilities.yaml ↔ code/docs/templates)
+        run: bun run scripts/check-harness-consistency.ts
 
   release:
     # R6 (issue #7 P0): tag publishes must pass the full test gate (tsc + bun
