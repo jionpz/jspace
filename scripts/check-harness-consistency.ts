@@ -183,6 +183,7 @@ check("5.skill-refs", uncoveredByGroup === false, uncoveredByGroup ? `SKILL.md å
 // jspace-domain surfaces only (NOT skills/harness-config â€” machine-level wiring
 // keeps its own set incl. hermes). A list missing a support harness = drift.
 const surfaces: { label: string; path: string; mustInclude: string[] }[] = [
+  { label: "README", path: "README.md", mustInclude: [...SUPPORT_DISPLAY_NAMES] },
   { label: "template-AGENTS", path: "templates/workbench/AGENTS.md", mustInclude: [...SUPPORT_DISPLAY_NAMES] },
   { label: "PLATFORMS", path: "docs/PLATFORMS.md", mustInclude: [...SUPPORT_DISPLAY_NAMES] },
   { label: "harnesses.md", path: "skills/jspace-use/references/harnesses.md", mustInclude: [...SUPPORT_DISPLAY_NAMES] },

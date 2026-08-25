@@ -2,7 +2,7 @@
 
 > 本文件是整个项目的**最高对齐物**：所有 PRD、任务拆分、范围取舍、暂缓决策都向它对齐。
 > 根 `AGENTS.md` 的 Product Vision 是它的操作摘要；两者冲突时以本文件为准，并同步修订。
-> 最后更新：2026-08-03。决策留痕见当期任务 PRD 的 Key Decisions。
+> 最后更新：2026-08-25。决策留痕见当期任务 PRD 的 Key Decisions。
 
 ## 一句话终局
 
@@ -91,6 +91,8 @@
 - **M5 ✅** 分发（R7）：模板去个人化、打包安装已提前落地（v1.0.1/一键安装/update/CI 6 平台全绿）。本机模拟双机演练通过（2026-08-03）：A `gbrain export` → B 独立 brain `import`+embedding 重建 → B 侧四条中文查询 top-1 与 A 一致 → **指针换机解析成立**（`rel_path` 相对 filehub 根，换机按「目标机根 + rel_path」重解析）→「问一句」闭环引用机器 B 路径。记忆层可移植假设验证成立；**开放问题 #1 关闭**（结论基于本机模拟，真实第二机待实际使用）。指针纪律落 `rel_path`（asset-ingest 写页 + memory-recall 换机解析 + MEMORY-ACCEPTANCE 扩展节）。
 - **M6 ✅** 飞轮补全与漂移硬化（2026-08-10）：审查发现「建造质量远超使用里程」——记忆与资产有机制但转速近零，**工作流自省完全缺失**，且已建好的厚度没到使用现场（分发链过时、受管块外躺着 205 行旧模板全文）。交付：① `workbench-retro` skill（六条取证式检查 + 分级建议 + 只提议不改红线）+ 周日 cron，补上第三个飞轮；② weekly-report / memory-consolidate 契约从 `cron.json` 内联 prompt **升格为 upgrade 受管 skill**（user 数据冻结死角消除），新 init 的四个 cron 全为 `kind: skill`；③ jspace-use §8.7 项目生命周期 checklist（含「project id 用 ascii、资产目录保留中文、经 `--asset-rel-path` 绑定」的命名约定）；④ doctor 三个静默漂移检查（`agentsmd.stale_outside_block` / `skills.bundle_stale` / `registry.project_unlinked`）。官方 workbench skill 4 → 7（另有 global 段的 `harness-config` 机器级治理 skill，manifest 合计 8 个）。**开放问题 #3 全部闭合**（真实定时触发观察确认）。
   - 待真实使用验证：首次无头 `workbench-retro` cron（2026-08-16 周日 23:00）；写回腿的习惯养成（当前 gbrain 写入仍全部来自 cron，0 条来自日常会话）。
+- **H1 ✅ 安全与韧性硬化轮（2026-08-25）**：M6 之后 main 再收七笔（v1.0.14 之上）——① 无头 cron 降权：env 白名单 + per-cron headless tools 覆盖（write-only crons 去 Bash）+ inbox 不可信数据提示；② low-security 硬化：https-only 下载、expandTilde 规范化、plist Label 校验、cmdEscapeArg % 转义；③ symlink 逃逸收容（realpath 前缀门禁 confinedWithin）；④ 测试可靠性：darwin 调和假绿修复、import-boundary 强化、漂移门禁硬化（lifecycle 表校验 + cron target 静态校验 + CI 补齐）。命名沿用提交自标「H1 完成」（f23e7b2）。
+  - 待真实使用验证：Linux/Windows 真机调度复核（同 M3 开放项）。
 - 顺序理由：cron 的第一批任务操作资产层，故 M2 在 M3 前；里程碑随真实使用可重排，重排时更新本文件。
 
 ## 开放问题
