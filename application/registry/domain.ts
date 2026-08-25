@@ -1,5 +1,5 @@
 // application/registry/domain.ts — domain use cases (moved from cli/cmds.ts).
-import { existsSync, mkdirSync, rmSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync, rmSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fail, rejectErrors } from "../../core/shared/errors.ts";
 import type { CmdResult } from "../commands/command.ts";
@@ -8,7 +8,7 @@ import { normalizePortablePath } from "../../core/contracts/paths.ts";
 import { decodeHub } from "../../core/contracts/hub.ts";
 import { writeHubAtomic } from "../../adapters/fs/workbench-state.ts";
 import { loadHub, assertHubValid } from "../workspace/state.ts";
-import { cleanTags, findIndex, isWithin } from "./helpers.ts";
+import { cleanTags, confinedWithin, findIndex, isWithin } from "./helpers.ts";
 
 export const DEFAULT_DOMAIN_PURPOSE =
   "本域由 jspace domain add 创建，尚未填充用途；请按需补充管理方式/工作流。";
@@ -173,10 +173,12 @@ export function domainRemove(root: string, id: string, purge: boolean, dryRun: b
   if (purge) {
     if (!domainPath) fail(`domain ${id} has no usable path to purge`);
     const domainDir = resolve(resolve(root, domainPath));
-    if (!isWithin(domainDir, root) || domainDir === root) {
+    const realRoot = realpathSync(root);
+    const realDir = confinedWithin(domainDir, root);
+    if (!realDir || realDir === realRoot) {
       fail(`refusing to purge directory outside workbench root: ${domainPath}`);
     }
-    if (existsSync(domainDir)) rmSync(domainDir, { recursive: true, force: true });
+    if (existsSync(domainDir)) rmSync(realDir, { recursive: true, force: true });
   }
 
   let message = `removed domain: ${id}`;

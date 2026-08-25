@@ -9,7 +9,7 @@ import type { CmdResult } from "../commands/command.ts";
 import { fail } from "../../core/shared/errors.ts";
 import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
 import { resolveFilehubRoot } from "../registry/filehub-lookup.ts";
-import { isWithin } from "../registry/helpers.ts";
+import { confinedWithin } from "../registry/helpers.ts";
 import type { IngestStep } from "../../core/contracts/ingest.ts";
 import {
   advanceIngest,
@@ -39,8 +39,9 @@ function filehubOps(root: string): IngestFileOps {
     copyFile: copyFileSync,
     unlink: (p) => {
       const abs = isAbsolute(p) ? p : resolve(p);
-      if (!isWithin(abs, fh)) fail(`refusing to remove a file outside the filehub: ${p}`);
-      unlinkSync(p);
+      const real = confinedWithin(abs, fh);
+      if (!real) fail(`refusing to remove a file outside the filehub: ${p}`);
+      unlinkSync(real);
     },
   };
 }
@@ -64,7 +65,7 @@ export function ingestBegin(root: string, args: IngestBeginArgs): CmdResult {
   // key) into a possibly-synced filehub. Resolve to an absolute path for the journal.
   const inboxDir = join(fh, "_inbox");
   const sourceAbs = resolve(args.file);
-  if (!isWithin(sourceAbs, inboxDir)) {
+  if (!confinedWithin(sourceAbs, inboxDir)) {
     fail(`source must be inside the filehub inbox (${inboxDir}): ${args.file}`);
   }
   const target = isAbsolute(args.target) ? args.target : join(fh, args.target);
