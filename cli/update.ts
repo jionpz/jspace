@@ -159,6 +159,16 @@ export async function cmdUpdate(check: boolean, targetVersion?: string): Promise
   // binary and checksums.txt are fetched from it (SHA-256 only defends against
   // transport/tampering, not the source itself). Documented in PLATFORMS.md.
   const base = process.env.JSPACE_BASE_URL || DEFAULT_BASE;
+  // Mirror install.sh: the binary and checksums.txt share one trust root, so
+  // it must be https — http lets a same-origin attacker swap both together.
+  // Local e2e over http opts in explicitly with JSPACE_ALLOW_INSECURE=1.
+  if (/^https:\/\//i.test(base)) {
+    /* ok */
+  } else if (/^http:\/\//i.test(base) && process.env.JSPACE_ALLOW_INSECURE === "1") {
+    /* explicit local-e2e opt-in */
+  } else {
+    fail(`JSPACE_BASE_URL 必须为 https（当前 ${base}）；本地 e2e 需 JSPACE_ALLOW_INSECURE=1 放行`);
+  }
   const target = await resolveTargetVersion(targetVersion || process.env.JSPACE_VERSION, latestTag);
   const upToDate = compareVersions(current, target) >= 0;
   const show = (v: string): string => v.replace(/^v/, "");

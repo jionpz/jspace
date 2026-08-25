@@ -55,7 +55,10 @@ export interface Win32Spawn {
  *  executed by cmd, never reaching the model (issue #8 #3). */
 function cmdEscapeArg(a: string): string {
   if (!/[\s&|<>^%!"]/.test(a)) return a;
-  return `"${a.replace(/"/g, `""`)}"`;
+  // `%VAR%` still expands inside double quotes on a cmd /c command line (unlike
+  // the other metacharacters), so `%` needs an explicit `^` escape to stay
+  // literal — a cron prompt containing `%PATH%` must reach the model verbatim.
+  return `"${a.replace(/"/g, `""`).replace(/%/g, "^%")}"`;
 }
 
 /** Build the spawn target for one win32 argv. Non-scripts pass through; .cmd/.bat

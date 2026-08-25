@@ -44,6 +44,9 @@ export function expandTilde(p: string): string {
   if (p.startsWith("~")) {
     // ~user → that user's home (best-effort; Python uses the OS user database)
     const name = p.slice(1).split(/[\\/]/)[0];
+    // A `~name` whose name is `.`/`..`/empty is a traversal (e.g. `~../etc`),
+    // not a username — leave it literal so it can't normalize outside $HOME.
+    if (!name || name === "." || name === "..") return p;
     const rest = p.slice(1 + name.length);
     const base =
       process.platform === "win32"

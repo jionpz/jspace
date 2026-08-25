@@ -44,6 +44,14 @@ test(".cmd arg with embedded quote is doubled inside the quoted arg (issue #8 #3
   expect(t.args[3]).not.toContain('-p " & whoami"'); // raw (injectable) form must not appear
 });
 
+test(".cmd arg with % is caret-escaped so %VAR% stays literal", () => {
+  // `%PATH%` expands even inside double quotes on a cmd /c command line; the
+  // ^ escape keeps the prompt verbatim instead of substituting an env value.
+  const t = win32SpawnTarget(["claude.cmd", "-p", "echo %PATH%"]);
+  expect(t.args[3]).toContain('"echo ^%PATH^%"');
+  expect(t.args[3]).not.toContain('"echo %PATH%"');
+});
+
 test(".exe/.com and plain binaries pass through verbatim=false (Node quotes args)", () => {
   const exe = win32SpawnTarget(["C:\\bin\\claude.exe", "-p", "hi there"]);
   expect(exe.command).toBe("C:\\bin\\claude.exe");
