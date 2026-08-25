@@ -35,6 +35,9 @@ export interface SpawnOpts {
   killGraceMs?: number;
   /** Optional stdin content, written to the child then closed (gbrain put). */
   input?: string;
+  /** Child env; defaults to the full process.env. Cron harness spawns pass the
+   *  cronSpawnEnv whitelist so a prompt-injected shell can't read every secret. */
+  env?: Record<string, string>;
 }
 
 /** Windows spawn target for one argv. A .cmd/.bat script cannot be executed
@@ -75,12 +78,34 @@ export function win32SpawnTarget(argv: string[]): Win32Spawn {
   return { command: "cmd.exe", args: ["/d", "/s", "/c", `"${cmdline}"`], verbatim: true };
 }
 
+/** Env whitelist for a headless cron child (H1). A scheduled, unattended LLM
+ *  has a shell: passing it `{...process.env}` exposes every machine secret to a
+ *  prompt-injected cron. Whitelist only what the harness needs to authenticate
+ *  and what gbrain needs — the harness's own key must stay (it authenticates
+ *  the run), but the other N secrets (tokens, credentials) are withheld. */
+export function cronSpawnEnv(platform: string): Record<string, string> {
+  const allow = [
+    "PATH", "HOME", "TERM", "LANG", "LC_ALL", "USER", "LOGNAME", "SHELL", "TMPDIR", "NO_COLOR", "CLICOLOR",
+    "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL",
+    "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENROUTER_API_KEY", "GROK_API_KEY", "XAI_API_KEY",
+    "GEMINI_API_KEY", "GOOGLE_API_KEY", "PI_API_KEY", "CODEX_API_KEY", "BUN_INSTALL", "NODE_OPTIONS",
+  ];
+  const out: Record<string, string> = {};
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith("GBRAIN_") || allow.includes(key)) out[key] = process.env[key] as string;
+  }
+  if (out.PATH === undefined) {
+    out.PATH = platform === "win32" ? "C:\\Windows\\system32;C:\\Windows" : "/usr/local/bin:/usr/bin:/bin";
+  }
+  return out;
+}
+
 /** Spawn `argv` and wait for exit, streaming stdout+stderr (capped at
  *  MAX_OUTPUT_BYTES). Arms a hard kill after `timeoutMs`. Never throws on a
  *  child error — a spawn failure resolves as exit 1 (the caller reports it). */
 export async function spawnProcess(argv: string[], opts: SpawnOpts): Promise<SpawnResult> {
   const defaultPath = opts.platform === "win32" ? "C:\\Windows\\system32;C:\\Windows" : "/usr/local/bin:/usr/bin:/bin";
-  const env = { ...process.env, PATH: process.env.PATH ?? defaultPath };
+  const env = opts.env ?? { ...process.env, PATH: process.env.PATH ?? defaultPath };
   const outChunks: Buffer[] = [];
   const errChunks: Buffer[] = [];
   let outBytes = 0;

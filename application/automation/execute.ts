@@ -17,7 +17,7 @@ import type { CmdResult } from "../commands/command.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
-import { spawnProcess } from "../../adapters/process/spawn.ts";
+import { spawnProcess, cronSpawnEnv } from "../../adapters/process/spawn.ts";
 import { loadCrons, resolveCronPrompt, type SkillTargetContext } from "./definitions.ts";
 import { skillRel, skillRoot } from "../fs.ts";
 import { lastRun, writeRun } from "./runs.ts";
@@ -220,7 +220,7 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
     const fhRoot = deps.filehubRoot(root);
     const { isInboxTask, batchLog, batchBefore } = validateInboxGuard(cron, root, fhRoot);
 
-    const spawned = await spawnProcess(argv, { cwd: root, platform: deps.platform, timeoutMs: opts.timeoutSec * 1000 });
+    const spawned = await spawnProcess(argv, { cwd: root, platform: deps.platform, timeoutMs: opts.timeoutSec * 1000, env: cronSpawnEnv(deps.platform) });
     const exited = spawned.exit;
     const output = spawned.output;
     const timedOut = spawned.timedOut;

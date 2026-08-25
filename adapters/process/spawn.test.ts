@@ -6,7 +6,7 @@ import { expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawnProcess, win32SpawnTarget } from "./spawn.ts";
+import { spawnProcess, win32SpawnTarget, cronSpawnEnv } from "./spawn.ts";
 
 test(".cmd script -> cmd.exe /d /s /c, doubled-quoted tail, verbatim", () => {
   const t = win32SpawnTarget(["C:\\bin\\claude.cmd", "-p", "prompt", "--allowedTools", "Bash,Read"]);
@@ -50,6 +50,23 @@ test(".cmd arg with % is caret-escaped so %VAR% stays literal", () => {
   const t = win32SpawnTarget(["claude.cmd", "-p", "echo %PATH%"]);
   expect(t.args[3]).toContain('"echo ^%PATH^%"');
   expect(t.args[3]).not.toContain('"echo %PATH%"');
+});
+
+test("cronSpawnEnv whitelists harness/gbrain vars and withholds other secrets", () => {
+  const saved = { ...process.env };
+  try {
+    process.env.AWS_SECRET_ACCESS_KEY = "topsecret";
+    process.env.ANTHROPIC_API_KEY = "sk-harness";
+    process.env.GBRAIN_TEST_HOME = "/t/gbrain";
+    const env = cronSpawnEnv("linux");
+    expect(env.ANTHROPIC_API_KEY).toBe("sk-harness");
+    expect(env.GBRAIN_TEST_HOME).toBe("/t/gbrain");
+    expect(env.AWS_SECRET_ACCESS_KEY).toBeUndefined();
+    expect(env.PATH).toBeDefined();
+  } finally {
+    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
+    Object.assign(process.env, saved);
+  }
 });
 
 test(".exe/.com and plain binaries pass through verbatim=false (Node quotes args)", () => {
