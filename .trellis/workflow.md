@@ -14,6 +14,8 @@
 
 ## Trellis System
 
+> `.trellis/tasks/` 与 `.trellis/workspace/` 是**本地-only**（仓库 .gitignore 排除，内容含真实个人路径/会话记录）：新克隆不含这两目录，由下文命令按需创建（`init_developer.py` / `task.py create`）；版本化部分为 `.trellis/spec/`、本文件与 `.trellis/scripts/`。
+
 ### Developer Identity
 
 On first use, initialize your identity:

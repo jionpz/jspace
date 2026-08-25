@@ -110,6 +110,21 @@ bin/jspace cron uninstall              # 期望:任务移除
 | Linux 沙盒/namespace 隔离(宿主状态不可见) | Linux | info `cron.daemon_unverifiable` / `cron.crontab_unverifiable`(不报 warning) |
 | 非法 schedule | 全部 | warning `cron.file_unreadable`（schedule 已在 decode 层校验，手改 cron.json 使文件不可读） |
 
+## 真机验证台账（执行后回写，2026-08-26 建）
+
+> 本台账跟踪「手动验证矩阵」在**真机**上的执行状态。每项执行后回写：日期 + 证据（输出 / 日志路径 / 截图）。全部通过后解锁下方 CI cron 冒烟占位。
+
+| 平台 | 用例（见验证矩阵） | 状态 | 证据 |
+|---|---|---|---|
+| Linux | crontab `install → status → uninstall` 全链（无补跑语义：错过即跳过） | 未验证 | — |
+| Linux | 无 crontab 命令 / 无 crond → `cron install` fail-fast + doctor warning | 未验证 | — |
+| Linux | 沙盒 / PID+UID namespace 隔离 → doctor info 降级（`cron.daemon_unverifiable` 等，不报 warning） | 未验证 | — |
+| Windows | schtasks `install` → `/query` 存在 → 触发一次 `cron run` | 未验证 | — |
+| Windows | 登出不触发（产品边界，文档明示非 bug） | 未验证 | — |
+| Windows | 非法 schedule（MONTHLY / dom / month 定值）→ 显式报错 | 未验证 | — |
+| Windows | AVX-less（baseline）本地构建 `bun run build:all` 产物冒烟（CI 无 baseline 运行时） | 未验证 | — |
+| 全部 | CI cron 冒烟解锁：`install → status → uninstall` 全链 exit 0 + doctor 断言 | 未验证（占位 `if: false`） | — |
+
 ## CI 解锁后 cron 冒烟(占位)
 
 `.github/workflows/build.yml` 已预留 cron 冒烟(注释 `if: false`):解锁后启用 `cron add → install → status → uninstall`,三平台 runner 全链 exit 0 + 按上表断言 doctor。
