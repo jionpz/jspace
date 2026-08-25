@@ -12,11 +12,21 @@
 ## 第 2 步 · 取证(留实际输出)
 
 ```bash
-$ gbrain list --type note -n 50
+$ gbrain list --type note --tag project -n 50
 project/jspace/state          updated 2026-08-09
-project/机器学习/state         updated 2026-08-09
-project/报表模块/state         updated 2026-08-09
-records/consolidate/2026-08-09 updated 2026-08-09
+project/tiyanying-52/state    updated 2026-08-09
+project/baobiao-module/state  updated 2026-08-09
+
+$ gbrain list --type note --tag knowledge -n 20
+(空)
+
+$ gbrain list --type note --tag asset -n 20
+assets/tiyanying-52/回访登记   updated 2026-08-08
+assets/baobiao-module/验收记录  updated 2026-08-09
+assets/jspace/roadmap          updated 2026-08-09
+
+$ gbrain list --type reference -n 20
+No pages found.
 
 $ ls <filehub>/projects/
 52期体验营/  报表模块/
@@ -42,7 +52,7 @@ $ ls .jspace/logs/cron/inbox-tidy/
 **检查 2(挂接一致性)**:`projects/` 有 2 个项目,`jspace project list` 返回 no projects。
 → 结论:registry 未注册(域 README 已挂接,故非完全漂移)。归 `立即可做`,附:`jspace project add <ascii-id> --asset-rel-path projects/<中文名>`。
 
-**检查 3(指针有效性)**:抽样 3 条 reference 页,`test -f` 全部 OK,均含 `rel_path`。
+**检查 3(指针有效性)**:抽样 3 条 asset 指针页(`type: note` + `tags: [asset]`),`test -f` 全部 OK,均含 `rel_path`;另抽 `--type reference` 无残留(迁移已干净)。
 → 结论:无断指针。基线记 0。
 
 **检查 4(流程卡点)**:`needs_attention: 0`;cron 日志显示 08-07 失败(API 520)已于 08-08 ack 并成功。
@@ -51,7 +61,7 @@ $ ls .jspace/logs/cron/inbox-tidy/
 **检查 5(inbox 停滞)**:`_inbox/` 为空,三次 inbox-tidy 均「无事可做」。
 → 结论:无停滞;但**连续 3 次空跑**——不是流程问题,是没往里放东西。归 `观察中`(下周若仍空,说明资产腿缺输入)。
 
-**检查 6(规则进化候选)**:本周新增 lesson 页 0 条;cron 日志里出现过 `skill asset-ingest is out of date` 的过时告警。
+**检查 6(规则进化候选)**:本周新增 knowledge 页 0 条(`gbrain list --type note --tag knowledge`);cron 日志里出现过 `skill asset-ingest is out of date` 的过时告警。
 → 结论:skill 过时在 cron 路径能被发现、在 `jspace doctor` 路径发现不了——**规则/工具缺口**,提议给 doctor 补同类检查。归 `需你决策`。
 
 ## 第 4 步 · 复现升级
