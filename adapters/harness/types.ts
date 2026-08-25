@@ -86,8 +86,10 @@ export interface HarnessAdapter {
   name: string;
   capability: HarnessCapability;
   /** Assemble the headless argv. `bin` is the resolved binary (override or PATH
-   *  resolution); fails for harnesses without a headless CLI. */
-  headlessArgv: (prompt: string, platform: string, bin: string) => string[];
+   *  resolution); fails for harnesses without a headless CLI. `tools` is an
+   *  optional per-cron override of the capability-declared tools (absent → the
+   *  harness default). */
+  headlessArgv: (prompt: string, platform: string, bin: string, tools?: string) => string[];
   /** Workbench-relative hook/plugin file, or null when hook_format is none. */
   hookFilePath?: (workbench: string) => string | null;
 }

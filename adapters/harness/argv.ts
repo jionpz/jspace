@@ -7,7 +7,7 @@ import { getAdapter } from "./index.ts";
 
 export { resolveHarnessBin } from "./bin.ts";
 
-export function harnessArgv(harness: string, prompt: string, platform: string, bin?: string): string[] {
+export function harnessArgv(harness: string, prompt: string, platform: string, bin?: string, tools?: string): string[] {
   const resolved = bin ?? resolveHarnessBin(harness, platform);
-  return getAdapter(harness).headlessArgv(prompt, platform, resolved);
+  return getAdapter(harness).headlessArgv(prompt, platform, resolved, tools);
 }

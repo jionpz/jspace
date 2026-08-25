@@ -19,6 +19,23 @@ test("claude headless argv has the permission whitelist and never bypasses", () 
   expect(argv.some((a) => /bypass/i.test(a))).toBe(false); // unattended: no bypassPermissions
 });
 
+test("per-cron tools override replaces the capability default", () => {
+  const argv = harnessArgv("claude", "整理 inbox", "darwin", "/usr/bin/claude", "Read,Write,Edit,mcp__gbrain__*");
+  expect(argv).toEqual([
+    "/usr/bin/claude",
+    "-p",
+    "整理 inbox",
+    "--output-format",
+    "text",
+    "--allowedTools",
+    "Read,Write,Edit,mcp__gbrain__*",
+  ]);
+  expect(argv.some((a) => /Bash/i.test(a))).toBe(false); // write-only cron: no shell
+  const grok = harnessArgv("grok", "do it", "darwin", "/bin/grok", "Read,Write,Edit");
+  expect(grok).toContain("--allow");
+  expect(grok[grok.length - 1]).toBe("Read,Write,Edit");
+});
+
 test("codex and pi headless argv shapes are stable", () => {
   expect(harnessArgv("codex", "do it", "darwin", "/bin/codex")).toEqual(["/bin/codex", "exec", "do it"]);
   expect(harnessArgv("pi", "do it", "darwin", "/bin/pi")).toEqual(["/bin/pi", "-p", "do it"]);

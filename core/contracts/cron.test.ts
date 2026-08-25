@@ -57,6 +57,25 @@ test("skill target crons decode with target and no prompt", () => {
   }
 });
 
+test("optional per-cron tools override decodes (write-only crons drop Bash)", () => {
+  const input = {
+    schema_version: 1,
+    crons: [
+      { id: "weekly-report", schedule: "0 21 * * 0", harness: "claude", tools: "Read,Write,Edit,mcp__gbrain__*", target: { kind: "skill", skill: "weekly-report", entrypoint: "weekly", input: "周报" }, enabled: true },
+    ],
+  };
+  const result = decodeCrons(input);
+  expect(result.ok).toBe(true);
+  if (result.ok) {
+    const c = result.value.crons[0];
+    expect(c.tools).toBe("Read,Write,Edit,mcp__gbrain__*");
+  }
+});
+
+test("non-string tools is rejected", () => {
+  expectIssue({ schema_version: 1, crons: [{ id: "x", schedule: "* * * * *", harness: "claude", tools: 42, prompt: "p", enabled: true }] }, "cron.tools.invalid");
+});
+
 test("exactly one of prompt | target is required", () => {
   const neither = { schema_version: 1, crons: [{ id: "x", schedule: "* * * * *", harness: "claude", enabled: true }] };
   expectIssue(neither, "cron.entry.prompt_or_target");

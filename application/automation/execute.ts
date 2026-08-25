@@ -195,7 +195,7 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   // Skill-target crons validate + compile HERE, before the dry-run return: a
   // missing/stale skill fails with a fix action and never reaches execution.
   const harness = opts.harnessOverride ?? cron.harness;
-  const argv = harnessArgv(harness, resolveCronPrompt(cron, root, skillCtx), deps.platform, deps.harnessBin);
+  const argv = harnessArgv(harness, resolveCronPrompt(cron, root, skillCtx), deps.platform, deps.harnessBin, cron.tools);
   if (opts.dryRun) {
     return { lines: [`jspace: dry-run: would run in ${root}:`, `  $ ${argv.join(" ")}`] };
   }

@@ -43,6 +43,10 @@ export interface CronDefinition {
   harness: Harness;
   prompt?: string; // custom escape hatch (exactly one of prompt | target)
   target?: CronSkillTarget; // versioned skill target (exactly one of prompt | target)
+  /** Optional override of the harness's default headless tools for THIS cron —
+   *  e.g. drop Bash for write-only skills so a prompt-injected run cannot shell.
+   *  Absent = the harness capability default (argv_flags.tools_value). */
+  tools?: string;
   enabled: boolean;
 }
 
@@ -78,7 +82,7 @@ export function decodeCrons(input: unknown): DecodeResult<CronsFile> {
         return;
       }
       const before = issues.issues.length;
-      checkNoUnknownFields(item, ["id", "schedule", "harness", "prompt", "target", "enabled"], prefix, "cron.entry.unknown-field", issues);
+      checkNoUnknownFields(item, ["id", "schedule", "harness", "prompt", "target", "tools", "enabled"], prefix, "cron.entry.unknown-field", issues);
       const id = readRequiredString(item, "id", prefix, "cron.id.invalid", issues);
       const schedule = readRequiredString(item, "schedule", prefix, "cron.schedule.invalid", issues);
       readEnum(issues, "cron.harness.invalid", `${prefix}.harness`, item.harness, HARNESSES);
@@ -107,6 +111,11 @@ export function decodeCrons(input: unknown): DecodeResult<CronsFile> {
         issues.add("cron.id.invalid", `${prefix}.id`, `id must match ${ID_PATTERN}`);
       }
       readBool(issues, "cron.enabled.invalid", `${prefix}.enabled`, item.enabled);
+      let tools: string | undefined;
+      if (item.tools !== undefined) {
+        if (typeof item.tools === "string" && item.tools.trim().length > 0) tools = item.tools;
+        else issues.add("cron.tools.invalid", `${prefix}.tools`, "tools must be a non-empty string (harness tool-list syntax)");
+      }
       if (issues.issues.length === before) {
         crons.push({
           id: id as string,
@@ -114,6 +123,7 @@ export function decodeCrons(input: unknown): DecodeResult<CronsFile> {
           harness: item.harness as Harness,
           ...(prompt !== undefined ? { prompt } : {}),
           ...(target !== undefined ? { target } : {}),
+          ...(tools !== undefined ? { tools } : {}),
           enabled: item.enabled as boolean,
         });
       }
