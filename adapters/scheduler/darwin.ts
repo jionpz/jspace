@@ -16,6 +16,16 @@ function xmlEscape(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/** Parity with linux.ts: refuse control chars that would corrupt the plist (a
+ *  newline in root/home/path would silently break the XML). */
+function rejectControlChars(...vals: string[]): void {
+  for (const v of vals) {
+    if (/[\n\r\u0000]/.test(v)) {
+      fail(`plist values must not contain newline/CR/NUL: ${JSON.stringify(v)}`);
+    }
+  }
+}
+
 /** launchd plist body; Label carries the workbench tag (cross-workbench safety). */
 export function buildPlist(id: string, tag: string, schedule: ScheduleDict, root: string, jspaceBin: string, home: string, path: string): string {
   const launchdDir = join(root, ".jspace", "logs", "cron");
@@ -24,11 +34,12 @@ export function buildPlist(id: string, tag: string, schedule: ScheduleDict, root
     .map((k) => `    <key>${k}</key>\n    <integer>${schedule[k]}</integer>`)
     .join("\n");
   const taskId = taskIdFor(tag, id);
+  rejectControlChars(id, tag, root, jspaceBin, home, path);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>${taskId}</string>
+  <key>Label</key><string>${xmlEscape(taskId)}</string>
   <key>ProgramArguments</key>
   <array>
     <string>${xmlEscape(jspaceBin)}</string>
@@ -79,41 +90,49 @@ export function plistBelongsToTag(name: string, tag: string): boolean {
   return parsed !== null && parsed.tag === tag;
 }
 
-/** Extract the StartCalendarInterval dict keys as a canonical schedule string
- *  (matches the cron.json `0 3 * * *` shape when mapped back). We only need
- *  enough to detect drift vs cron.json, not a full round-trip. */
+/** Map a parsed StartCalendarInterval dict (plutil -extract json) back to a
+ *  canonical cron schedule string. Missing fields mean `*`. Pure (exported) for
+ *  the reconciliation round-trip test. */
+export function scheduleFromIntervalDict(d: Record<string, number>): string {
+  const min = d.Minute ?? "*";
+  const hour = d.Hour ?? "*";
+  const dom = d.Day ?? "*";
+  const mon = d.Month ?? "*";
+  const dow = d.Weekday ?? "*";
+  return `${min} ${hour} ${dom} ${mon} ${dow}`;
+}
+
 function plistSchedule(name: string, home: string): string {
   const p = join(home, "Library", "LaunchAgents", name);
   if (!existsSync(p)) return "";
   const res = schedulerSpawn("plutil", ["-extract", "StartCalendarInterval", "json", "-o", "-", p]);
   if (res.status !== 0) return "";
   try {
-    const d = JSON.parse(res.stdout ?? "{}") as Record<string, number>;
-    const min = d.Minute ?? "*";
-    const hour = d.Hour ?? "*";
-    const dom = d.Day ?? "*";
-    const mon = d.Month ?? "*";
-    const dow = d.Weekday ?? "*";
-    return `${min} ${hour} ${dom} ${mon} ${dow}`;
+    return scheduleFromIntervalDict(JSON.parse(res.stdout ?? "{}"));
   } catch {
     return "";
   }
 }
 
-/** Extract the WorkingDirectory from an installed plist (the workbench root the
- *  cron runs against; matches buildDesired's argv intent). */
+/** Reconstruct the cron argv from a `plutil -p` dump + the plist file name.
+ *  The id comes from the file name; the workbench root from WorkingDirectory.
+ *  Same shape as buildDesired.argv so planReconciliation no-ops on identical
+ *  state. Pure (exported) for the reconciliation round-trip test. */
+export function argvFromPlistStdout(stdout: string, name: string): string {
+  const m = stdout.match(/"WorkingDirectory" => "([^"]+)"/);
+  const wd = m?.[1] ?? "";
+  const parts = name.replace(/\.plist$/, "").split(".");
+  const id = parts[parts.length - 1] ?? "";
+  return `cron run --id ${id} --dir ${wd}`;
+}
+
 function plistArgv(name: string, home: string): string {
   const p = join(home, "Library", "LaunchAgents", name);
   if (!existsSync(p)) return "";
   // plutil -extract WorkingDirectory json fails on bare strings; use -p and grep
   const res = schedulerSpawn("plutil", ["-p", p]);
   if (res.status !== 0) return "";
-  const m = (res.stdout ?? "").match(/"WorkingDirectory" => "([^"]+)"/);
-  const wd = m?.[1] ?? "";
-  const parts = name.replace(/\.plist$/, "").split(".");
-  const id = parts[parts.length - 1] ?? "";
-  // same shape as buildDesired.argv so planReconciliation no-ops on identical state
-  return `cron run --id ${id} --dir ${wd}`;
+  return argvFromPlistStdout(res.stdout ?? "", name);
 }
 
 /** Install one op (per-cron plist semantics). Private helper — the public write

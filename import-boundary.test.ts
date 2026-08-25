@@ -26,13 +26,17 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-/** Static import specifiers: `from "..."` (covers re-exports too). */
+/** Static import specifiers: `from "..."` (covers re-exports), bare side-effect
+ *  `import "..."` / `export "..."`, and dynamic `import("...")`. */
 function importSpecifiers(file: string): string[] {
   const src = readFileSync(file, "utf-8");
   const out: string[] = [];
-  const re = /\bfrom\s+["']([^"']+)["']/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(src)) !== null) out.push(m[1]);
+  const collect = (re: RegExp): void => {
+    for (let m = re.exec(src); m !== null; m = re.exec(src)) out.push(m[1]);
+  };
+  collect(/\bfrom\s+["']([^"']+)["']/g);
+  collect(/\b(?:import|export)\s+["']([^"']+)["']/g);
+  collect(/\bimport\s*\(\s*["']([^"']+)["']/g);
   return out;
 }
 
@@ -47,6 +51,7 @@ function layerOf(p: string): Layer | null {
 /** Forbidden edges: importer layer must not import the target layer. */
 const FORBIDDEN: Array<[Layer, Layer]> = [
   ["adapters", "application"],
+  ["adapters", "cli"],
   ["application", "cli"],
   ["core", "application"],
   ["core", "adapters"],

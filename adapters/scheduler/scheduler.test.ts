@@ -11,7 +11,7 @@ import { isWindowsInstallable } from "../../core/shared/schedule.ts";
 import { buildPlist } from "./darwin.ts";
 import { parseSchedule } from "../../core/shared/schedule.ts";
 import { linuxAdapter, crontabBlock, crontabLine, replaceManagedBlock, parseManagedLine, extractTagBlock, pidNamespaceIsolated, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
-import { darwinAdapter, plistPath, parsePlistName, plistBelongsToTag } from "./darwin.ts";
+import { darwinAdapter, plistPath, parsePlistName, plistBelongsToTag, scheduleFromIntervalDict, argvFromPlistStdout } from "./darwin.ts";
 import { schtasksArgs, parseOpContent, parseSchtasksXml, win32Adapter } from "./win32.ts";
 import { planReconciliation } from "../../application/automation/scheduler.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
@@ -336,10 +336,19 @@ test("P0: darwin reconciliation converges — plist identity == inspect parse", 
   const tag = "tagA";
   const cron = mkCron("inbox", "0 21 * * *");
   const id = darwinAdapter.identity(tag, cron.id); // posix dotted
-  const content = buildPlist(cron.id, tag, parseSchedule(cron.schedule), "/wb", "/bin/jspace", "/Users/u", "/bin");
+  const root = "/wb";
+  const content = buildPlist(cron.id, tag, parseSchedule(cron.schedule), root, "/bin/jspace", "/Users/u", "/bin");
   const desired = [{ taskId: id.taskId, cronId: cron.id, schedule: cron.schedule, argv: "cron run --id inbox --dir /wb", content }];
-  // what inspect() would parse back from the installed plist file name
-  const installed = [{ taskId: parsePlistName(`${id.taskId}.plist`)!.taskId, cronId: "inbox", schedule: "0 21 * * *", argv: "cron run --id inbox --dir /wb" }];
+  // Round-trip through the REAL inspect parse functions with canned `plutil`
+  // output (macOS `plutil -p` / `-extract json` format), so a build/parse drift
+  // reds instead of the reconciliation no-opping on hand-crafted literals.
+  const name = `${id.taskId}.plist`;
+  const installed = [{
+    taskId: parsePlistName(name)!.taskId,
+    cronId: "inbox",
+    schedule: scheduleFromIntervalDict(JSON.parse('{"Minute":0,"Hour":21}')),
+    argv: argvFromPlistStdout(`"WorkingDirectory" => "${root}"\n`, name),
+  }];
   expect(planReconciliation(desired, installed)).toEqual([]); // identical -> no-op
   const changed = [{ ...desired[0], schedule: "0 9 * * *" }];
   expect(planReconciliation(changed, installed)).toEqual([{ action: "update", taskId: id.taskId, content }]); // changed -> update
