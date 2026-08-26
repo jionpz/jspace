@@ -67,6 +67,7 @@ JSpace 工作台 = 本地工作控制平面:根 `AGENTS.md` 是入口面,其余�
    jspace cron status --dir .                # 确认已安装
    ```
    - **只想开一部分**:`jspace cron enable <id> --dir .` 逐条开(推荐至少开 `inbox-tidy` + `workbench-retro`——一条转资产、一条转纪律)。
+   - **第 4 步选的不是 Claude Code?先改 harness 字段**:出厂 `.jspace/cron.json` 四个任务都是 `"harness": "claude"`;选了其他 harness 就把各任务的 `harness` 改成对应值(`grok`/`opencode`/`pi`/`codex`;Cursor 无 headless CLI 不进 cron enum,cron 改用其中一个无头 harness),否则 rehearsal 会因本机没有 claude 可执行文件而失败。cron.json 是 user 数据,改后升级不覆盖。
    - **harness 未接线/配额未配就先别装调度**:先做第 4 步,再 rehearsal。`cron run` 失败是安全失败(记 incident + `jspace cron check` 可见,不改任何数据);`cron install` 只登记调度、不代跑。
    - **用户确认要跳过**:标 `deferred` 并告知 `jspace doctor --verbose`(或 `--json`)会持续报 `cron.all_disabled`(info,不是错误——info 默认只计数不打印),想开时回到本步。
 5. **Final smoke + sign-off**:`jspace doctor` + `jq hub.json` + `gbrain doctor --fast`;报 configured/already-OK/missing-deferred。若有启用的 cron,再确认 `jspace cron status --dir .` 显示已安装/可运行;选择跳过 cron 的标 `deferred`(`jspace doctor --verbose` 只报 `cron.all_disabled` info,不失败)。
