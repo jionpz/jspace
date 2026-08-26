@@ -147,9 +147,9 @@ bin/jspace cron uninstall              # 期望:任务移除
 
 **刻意不断言的**:任务被**真的触发**。runner 上 crond/launchd 的触发时机不是可信信号,且无头 run 还需真实 harness CLI;真实触发留在上方台账的人工行。
 
-> 触发时机注意:`build.yml` 只在 `push tags v*` 与 `workflow_dispatch` 上运行(PR 走 `verify.yml`)。因此这套冒烟的首个 run 证据来自下一次 tag 构建或手动 dispatch —— **发版前建议先手动 dispatch 一次**,别把调度冒烟的问题留到打 tag 当下。
+> 触发时机注意：`build.yml` 只在 `push tags v*` 与 `workflow_dispatch` 上运行（PR 走 `verify.yml`）。**首跑已执行（2026-08-26）：第一轮 dispatch（32969257020）即抓出 win32 cron 读回 bug**——`schtasks /query` 输出任务路径形式（前导 `\`），裸名前缀过滤全丢 → install 成功后 doctor 仍报 `cron.not_installed`；修复 #23（含二次 install 非 no-op 的连带），复跑（32971530049）6 平台全绿。发版打 tag 前仍建议手动 dispatch 一次确认最新 main。
 >
-> Cloud Agent / 默认 `GITHUB_TOKEN` **无** `actions: write`，无法代你 `gh workflow run build.yml`（会 403）。请仓库维护者在 GitHub → Actions → **build** → **Run workflow**（ref=`main`）手动触发，或用带 `workflow` scope 的 PAT。
+> Cloud Agent / 默认 `GITHUB_TOKEN` **无** `actions: write`，无法代你 `gh workflow run build.yml`（会 403）。本机 `gh`（凭据带 `workflow` scope）已实测可直接 dispatch（2026-08-26）；否则请仓库维护者在 GitHub → Actions → **build** → **Run workflow**（ref=`main`）手动触发。
 
 ## 纯函数单测(本机可跑,无需真机)
 
