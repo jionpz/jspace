@@ -85,7 +85,7 @@ jobs:
       - name: Cross-skill reference reachability
         run: bun test cli/assets-reachability.test.ts
 
-      - name: Skill self-checks (C1–C4)
+      - name: Skill self-checks (C1–C5)
         run: bun run scripts/check-skills.ts
 
       - name: Office extraction tests

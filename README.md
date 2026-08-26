@@ -97,6 +97,8 @@ bun run cli/main.ts doctor --dir ~/jworkspace
 
 本仓库默认就是开发模式。非平凡改动先走 Trellis；改完 CLI 后用临时目录做一次 `init` + `doctor` 验证。改模板/skills/capabilities 后必须重跑 `bun run scripts/gen-assets.ts`（嵌入二进制资产并提交 generated 文件）。PR/push 质量门禁见 `.github/workflows/verify.yml`：tsc、bun test、资产完整性（`check-manifest-integrity`）、skill 自检、harness 一致性、全链集成。
 
-## License
+## Contributing / Security / License
 
-MIT License，见根目录 [LICENSE](./LICENSE)。Copyright (c) 2026 jionpz。
+- [Contributing](./CONTRIBUTING.md) — 开发环境、验证命令与 generated 提交纪律
+- [Security](./SECURITY.md) — 漏洞报告渠道与支持版本
+- [License](./LICENSE) — MIT License，Copyright (c) 2026 jionpz
