@@ -39,7 +39,7 @@
     },
     {
       "path": "templates/workbench/AGENTS.md",
-      "sha256": "ead1b05c3851b3c07927b4a43be60de7048da17554b8403e19f8ec12c46de4d0",
+      "sha256": "7f40703e2c0e5e88d3ed6f17529a2711e89ae35146fcd384e515e1b740451b22",
       "ownership": "seed"
     },
     {
@@ -59,7 +59,7 @@
     },
     {
       "path": "skills/jspace-use/SKILL.md",
-      "sha256": "ac80a520fc77f61fb4203d8fa20f0eac3b098250b4b972fdb745a2a90af10307",
+      "sha256": "190c063c8f41e632b6ff71401ffd890d7a710eff0921b871c3cee3073e052402",
       "ownership": "seed"
     },
     {
@@ -69,7 +69,7 @@
     },
     {
       "path": "skills/jspace-use/references/example-first-use.md",
-      "sha256": "4c8bebe777747b2e39df0398adeb2b0b9ea55277126f9d8c31f4db06e89c274c",
+      "sha256": "5ee94728902e1d7ad3ee4bce8b8bc53f9627863f798e22af5004cb0b028a8006",
       "ownership": "seed"
     },
     {
@@ -199,12 +199,12 @@
     },
     {
       "path": "skills/workbench-retro/SKILL.md",
-      "sha256": "aa40f38e44ba30ca31df7d66cbb34a88fc637da90ef523daec8ad0d8d6e3776e",
+      "sha256": "acb2f88f1402651eccf6dd3d06cf9352644f6c34057e64b34b1ecd9a63d9faac",
       "ownership": "seed"
     },
     {
       "path": "skills/workbench-retro/references/checks.md",
-      "sha256": "4d92b85492b7f9b12ca88b2774c15c329f15a68480ba2e533aec8d68d12c3903",
+      "sha256": "113ebfee16204e37e66b8f2c7e5289e3ece148c4710335df69defbdb94e0bbdd",
       "ownership": "seed"
     },
     {

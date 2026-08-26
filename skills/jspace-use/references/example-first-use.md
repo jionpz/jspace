@@ -85,6 +85,26 @@ jspace gbrain wire --dir .   # GBRAIN_SKILLS_DIR=<工作台>/.jspace/skills 注�
 ```
 重启 Claude Code 让 `gbrain serve` 以新 env 启动(否则 resolver 只认根 `skills/` 或回退内置 skill)。细则 `~/.agents/skills/jspace-use/references/gbrain.md`「Skill routing wiring」。
 
+## Phase 4.5 — Scheduled tasks(必须问一次,默认推荐开)
+
+出厂 `.jspace/cron.json` 四个任务全 `enabled: false`。**先念代价再问**:不开 = inbox 只在想起来时才整理、没有周报/周记忆巩固页、纪律腐化没人取证(三个飞轮各停一条腿)。用户答"开":
+
+```bash
+for id in inbox-tidy weekly-report memory-consolidate workbench-retro; do jspace cron enable "$id" --dir .; done
+jspace cron run inbox-tidy --dir .    # rehearsal:先手跑验证契约(逐个跑一遍最稳)
+jspace cron install --dir .           # 装进系统调度(此处 macOS launchd)
+jspace cron status --dir .
+```
+预期(示意):
+```
+jspace: ok: enabled cron inbox-tidy
+jspace: ok: installed 4 task(s) into launchd (tag JSpaceCron_<tag>)
+inbox-tidy        last: ok 2026-08-26 21:00   next: 2026-08-27 21:00
+```
+断言:`jspace cron status` 四条都显示已安装;`jspace doctor --dir . --verbose` 不再报 `cron.all_disabled`,且无 `cron.not_installed`。
+
+用户答"先不开":标 `deferred`,告知 `jspace doctor --verbose` 会持续报 `cron.all_disabled`(info,不失败;info 默认只计数不打印),想开时回到本 Phase——**不许默默跳过不问**。
+
 ## Phase 5 — Final smoke + sign-off
 
 ```bash
@@ -105,3 +125,4 @@ gbrain doctor --fast      # brain 健康
 - [ ] Phase 0 缺失工具走「下载临时文件 → 核验 → 用户确认」,未默认远程管道执行
 - [ ] embedding 不可达时写页 `embed_skip: true` 保底,首次启用未因此失败
 - [ ] Claude Code `mcpServers.gbrain` 已写入 `~/.claude.json`
+- [ ] Phase 4.5 cron 问过用户:开了则 `jspace cron status` 显示已安装且 `doctor --verbose` 无 `cron.all_disabled`;跳过则明确标 `deferred`(未默默略过)

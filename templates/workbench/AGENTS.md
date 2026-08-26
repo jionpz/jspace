@@ -8,7 +8,7 @@
 
 # JSpace 工作台 - 本地工作控制平面
 
-本目录由 JSpace CLI (`jspace init`) 生成，是用户本地工作控制平面。大多数非项目特定的计算机工作从这里开始：domain 路由、资源查找和上下文进入。**First core - gbrain unified memory base.** 第一核心是共享记忆层（`gbrain`）：JSpace 工作台 + gbrain 支持 Pi、Claude Code、Codex、Cursor、Grok Build、OpenCode 六个 harness（会话 harness 五选一，codex 兼容 cron），用户选择其一；各 harness 通过 MCP/CLI 读写同一本地记忆库（PGLite + 知识图谱 + 本地 embedding），会话开始检索式注入，结束写回持久事实。hermes（自主/cron/多端）可选：提及即可，不主动推广。本工作台不包装 gbrain 命令，gbrain CLI/MCP 就是接口。
+本目录由 JSpace CLI (`jspace init`) 生成，是用户本地工作控制平面。大多数非项目特定的计算机工作从这里开始：domain 路由、资源查找和上下文进入。**First core - gbrain unified memory base.** 第一核心是共享记忆层（`gbrain`）：JSpace 工作台 + gbrain 支持 Pi、Claude Code、Codex、Cursor、Grok Build、OpenCode 六个 harness（会话 harness 五选一，codex 兼容 cron），用户选择其一；各 harness 通过 MCP/CLI 读写同一本地记忆库（PGLite + 知识图谱 + 本地 embedding），会话开始检索式注入，结束时提醒你显式写回持久事实（提醒不代写，见 End-of-Work Capture）。hermes（自主/cron/多端）可选：提及即可，不主动推广。本工作台不包装 gbrain 命令，gbrain CLI/MCP 就是接口。
 
 > 治理与流程细节（域/资源/skill 创建规则、cron 运维）→ `.jspace/skills/jspace-use/SKILL.md` 第 8 章「治理细节」，按需读，不在此复制。
 
@@ -72,11 +72,13 @@ Ask before: creating a project-local skill; creating a domain when confidence is
 
 ## End-of-Work Capture
 
-Before finishing a work session, quietly check whether anything should be preserved (durable domain/resource fact, rule for future agents, repeated workflow, candidate skill). **When something durable was learned, run `memory-writeback` skill to persist it to gbrain** (session-fact write-back: state 覆盖 / knowledge append-only / promotion). If nothing durable was learned, do not mention the check.
+Before finishing a work session, quietly check whether anything should be preserved (durable domain/resource fact, rule for future agents, repeated workflow, candidate skill). **When something durable was learned, run `memory-writeback` skill to persist it to gbrain** (session-fact write-back: state 覆盖 / knowledge append-only / promotion; 每页 `tags` 带 **`source:session`** —— 写回率取证的唯一依据). If nothing durable was learned, do not mention the check.
+
+**提醒 ≠ 写入**：session-end hook 与每会话一次的收工轻提示（`jspace context turn`）都只提醒、从不写 gbrain；不跑 `memory-writeback` 就等于本次没沉淀。写回率自查 → `gbrain list --type note --tag source:session -n 20`。
 
 ## Scheduled Tasks (cron)
 
-**Session start 跑 `jspace cron check`**，上报失败与 pending 暂存写（`<filehub>/.jspace-logs/*.APPLY.json`）；定义在 `.jspace/cron.json`。运维细节 → jspace-use 第 8 章。
+**Session start 跑 `jspace cron check`**，上报失败与 pending 暂存写（`<filehub>/.jspace-logs/*.APPLY.json`）；定义在 `.jspace/cron.json`。**出厂四个任务全 `enabled: false`**——没开启就没有 inbox 整理 / 周报 / 记忆巩固 / 周自省（`jspace doctor --verbose` 以 `cron.all_disabled` info 提示）；开启序列 `jspace cron enable <id>` → `jspace cron run <id>` → `jspace cron install`，细节与代价说明 → jspace-use 第 2 章 4.5 与第 8 章。
 
 ## Brain operations
 
