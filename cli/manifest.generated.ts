@@ -12,7 +12,7 @@ export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   { path: "templates/workbench/.jspace/cron.json", sha256: "7447becb74459e1affd11260eee9ba0b466da147a8e498ac0af8e17099bec9a7", ownership: "user" },
   { path: "templates/workbench/.jspace/hub.json", sha256: "56125ed5177d55eae719e876a90cf0299c386c7f571c945c1e6291e808106001", ownership: "user" },
   { path: "templates/workbench/.opencode/plugins/jspace.ts", sha256: "23d79a228580c3be51a287e485de5248fa3afe938c94da921a23f0e85a7bcbef", ownership: "seed" },
-  { path: "templates/workbench/AGENTS.md", sha256: "f5e7f1d4d05a156435b7430be773f2a2e2993158f12334796888732304cb9437", ownership: "seed" },
+  { path: "templates/workbench/AGENTS.md", sha256: "9632d03c6cfdd4cd415284e0cb5268a02f59a104e10fb451ee99dad41152ef92", ownership: "seed" },
   { path: "templates/workbench/CLAUDE.md", sha256: "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49", ownership: "seed" },
   { path: "templates/workbench/README.md", sha256: "9ca38511b99de950c15db4ba2be29893dd4b9f7373b51e7434f63176dc33f505", ownership: "seed" },
   { path: "templates/filehub/README.md", sha256: "18ae3bff4f969ad7d84389fbba871879b5a29270ab127f41d9bfdb3817614924", ownership: "managed" },

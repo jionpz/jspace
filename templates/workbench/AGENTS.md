@@ -84,7 +84,7 @@ Before finishing a work session, quietly check whether anything should be preser
 
 gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbrain` for skill routing; keep the format intact.
 
-<!-- TRELLIS-BRAIN-OPS:BEGIN -->
+<!-- JSPACE-BRAIN-OPS:BEGIN -->
 - **jspace-use**: initialize jspace | setup jspace | configure jspace | first-use jspace | how to use jspace | 工作台怎么用 | maintain jspace | 维护工作台 | workspace upgrade | jspace doctor | cron check | 故障排查 | workbench broken | registry broken | gbrain missing | wire gbrain | fresh environment
 - **asset-ingest**: 资料入库 | 整理 inbox | 归位资料 | 把这份资料入库
 - **memory-recall**: 问一句 | 找那个文件 | 那个数 | 精准召回 | recall | find the file
@@ -92,7 +92,7 @@ gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbr
 - **workbench-retro**: 周自省 | 复盘 | 本周回顾 | 工作流体检 | retro | workbench retro | 纪律检查
 - **weekly-report**: 生成周报 | 本周周报 | 本周汇总 | weekly report
 - **memory-consolidate**: 记忆巩固 | 巩固记忆 | 周快照 | consolidate
-<!-- TRELLIS-BRAIN-OPS:END -->
+<!-- JSPACE-BRAIN-OPS:END -->
 > 区间内由 `scripts/gen-assets.ts` 从 SKILL.md frontmatter `triggers` 渲染生成,勿手工编辑;改 triggers 后重跑 gen-assets。
 
 ## Quality Checks

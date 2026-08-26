@@ -164,11 +164,12 @@ export function checkSkills(root: string, deps: SkillsDeps): RegistryDiagnostic[
     if (body !== null && endIdx !== -1) {
       const outside = body.slice(endIdx + BLOCK_END.length);
       const hits: string[] = [];
-      // "TRELLIS-" markers are the frozen historical wire format present in
-      // deployed workbenches (see scripts/skill-frontmatter.ts); this residue
-      // check must keep matching the OLD spelling even if a future rename adds
-      // a new marker, so legacy copies are still detected.
-      for (const marker of ["TRELLIS-BRAIN-OPS:BEGIN", "TRELLIS-SKILL-GOV:BEGIN"]) {
+      // Detects generated-block markers in the user-owned region (a pre-block-era
+      // template dump). Current marker is JSPACE-BRAIN-OPS; the TRELLIS-* spellings
+      // are the retired historical names (renamed with the jspace naming cleanup,
+      // see scripts/skill-frontmatter.ts) and MUST stay listed — legacy residue in
+      // old workbenches carries them.
+      for (const marker of ["JSPACE-BRAIN-OPS:BEGIN", "TRELLIS-BRAIN-OPS:BEGIN", "TRELLIS-SKILL-GOV:BEGIN"]) {
         if (outside.includes(marker)) hits.push(`generated block ${marker}`);
       }
       for (const retired of RETIRED_SKILL_NAMES) {
