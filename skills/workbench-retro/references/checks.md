@@ -10,23 +10,62 @@
 ## 检查 1 · 写回执行率(最重要)
 
 「本周明明有活动,却没有一条持久事实进 gbrain」——这是飞轮停摆最典型的形态,且完全无声。
+更隐蔽的一种:**记忆在长,但长的全是 cron 归纳的,没有一条来自日常会话**。所以本检查要分**来源**数,不只数总量。
 
 **证据**
 ```bash
+# 1a 来源量化(B4:写侧按运行模式打来源 tag)
+gbrain list --type note --tag source:session -n 50   # 会话写入(memory-writeback 等,含 updated_at)
+gbrain list --type note --tag source:cron -n 50      # 定时写入(cron 无头跑的 consolidate/report/retro/ingest)
+
+# 1b 写回面(与来源正交:数哪些页动了)
 gbrain list --type note --tag project -n 50   # 看 project/<id>/state 页与 updated_at
 gbrain list --type note --tag knowledge -n 20 # 本周有无新知识页(再按 updated_at 滤窗口)
+
+# 1c 活动信号(佐证「这周确实在用」)
 ls -la <filehub>/projects/*/ | head -40  # 资产层本周有无文件变动
-ls .jspace/logs/cron/*/                  # cron 活动痕迹(佐证「这周确实在用」)
+ls .jspace/logs/cron/*/                  # cron 活动痕迹
 ```
 
-**判读**
+**判读 · 来源比(先做这一段,它决定报告的第一句话)**
+
+三个计数都只数 `updated_at` **落在本周窗口内**的页:
+
+| 计数 | 取法 |
+|---|---|
+| `session_writes` | `--tag source:session` 结果中落窗口的页数 |
+| `cron_writes` | `--tag source:cron` 结果中落窗口的页数 |
+| `untagged_writes` | 落窗口、但两条来源 tag 都没有的页(用 1b 的结果减去上面两组) |
+
+- **写回率 = `session_writes / (session_writes + cron_writes)`**,分母为 0 时记「本周无写入」,不写 0%(0/0 不是 0)。
+- `session_writes == 0` 且 `cron_writes > 0` → **会话写回腿停摆**:飞轮只有定时那条腿在转。整体性问题,报告开头单独点出。
+- `session_writes == 0` 且 `cron_writes == 0` 且有活动信号 → **写回腿整体停摆**(比上一条更严重)。
+- `session_writes > 0` → 记实际条数与比例,**不评价好坏**(基线数据,供跨周对比;单周数字没意义,走向才有)。
+- `untagged_writes > 0` → **不要**把它算进任何一条腿。分两种情况写:
+  - 页的 `updated_at` 早于本约定上线 → 记「历史页,无来源 tag」,只在基线里标注数量,不进判读;
+  - 页是本周新写的却没 tag → **写侧纪律缺口**(某个 skill 没按 `~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」打标),归 `需你决策`,指明是哪个 slug/哪个 skill。
+- `gbrain list --tag source:session` 在本机 gbrain 版本上取不到结果(tag 解析差异等)→ 本段记「**无法判定** + 缺来源 tag 查询能力」,改用下面的降级 proxy,并把「来源 tag 不可查」本身作为一条 `需你决策` 报出来——**不要**默默用 proxy 冒充精确计数。
+
+**降级 proxy(仅当来源 tag 不可用时)**:cron 写入 ≈ `records/consolidate/*` `records/retro/*` `assets/周报/*` 这些 slug 命名空间里落窗口的页,再叠加 `.jspace/logs/cron/*/` 里成功运行的时间戳;会话写入 ≈ 落窗口的其余页。**这是估算,报告里必须标明「proxy 估算,非精确计数」**。
+
+**判读 · 写回面(来源比之外的缺口定位)**
 - 活动信号 = 本周内 filehub 有文件新增/修改,或 cron 成功运行,或域/hub 有变更。
 - 本周新知识 = `gbrain list --type note --tag knowledge -n 20` 结果中 `updated_at` 落在本周窗口内的页;没有 → 记「本周无新知识」。
 - 某项目有活动信号,但其 `project/<id>/state` 页 `updated_at` ≥7 天未动 → **写回缺口**。
-- 全工作台本周 0 个 state 页更新且有活动信号 → **写回腿停摆**(整体性问题,优先级最高)。
-- 本周有 ≥1 条 state 更新 → 记录实际条数,不评价好坏(基线数据,供跨周对比)。
+- 全工作台本周 0 个 state 页更新且有活动信号 → **写回腿停摆**(与来源比的结论互为佐证;两者不一致时**两个数都报**,不挑一个顺眼的)。
 
-**分级**:单项目缺口 → 需你决策(问「X 项目这周的进展要不要补记」);整体停摆 → 需你决策 + 在报告开头单独点出。
+**判读 · 提醒面是否接上(找根因,不只报现象)**
+
+`session_writes == 0` 时顺手判一句「是没被提醒,还是提醒了没做」:
+
+```bash
+jq '.session_count, .writeback_nudge_for_session' .jspace/state/briefing.json   # 会话计数 / 轻提示已用到第几个会话
+```
+- 文件不存在或 `session_count` 本周没涨 → **session-start hook 没在跑**(提醒面根本没接上):归 `立即可做`,附 `jspace doctor --dir .` 看 `briefing.stale` 与 `harness.session_start_not_wired`。
+- `session_count` 在涨、`writeback_nudge_for_session` 也在跟 → 提醒发出去了但没人写回,是**习惯问题不是接线问题**:归 `需你决策`,别去改接线。
+- 各 harness 的 session-end 能力边界(哪些是 best_effort、哪些只有 turn 轻提示)→ `~/.agents/skills/jspace-use/references/harnesses.md`。
+
+**分级**:单项目缺口 → 需你决策(问「X 项目这周的进展要不要补记」);会话腿/整体停摆 → 需你决策 + 在报告开头单独点出;hook 没接上 → 立即可做。
 
 ---
 
@@ -144,6 +183,12 @@ rg -n '无法判定|跳过|模糊' <filehub>/.jspace-logs/inbox-batch.md | tail 
 ## 一句话
 <本周纪律整体状态;有整体性问题在此点出>
 
+## 写回率(检查 1)
+- 会话写入 <N> 条 / 定时写入 <M> 条 → 写回率 <N/(N+M)>(分母为 0 记「本周无写入」)
+- 无来源 tag 的页:<K> 条(<历史页 / 本周写侧漏打标,后者要点名 slug>)
+- 取证方式:<gbrain --tag 精确计数 / proxy 估算(说明原因)>
+- 提醒面:session_count <涨没涨> / 轻提示 <发没发>
+
 ## 立即可做(N)
 - [问题] 证据:`<命令输出片段>` → 结论:<...>
   修复:`<具体命令或编辑动作>`
@@ -159,6 +204,7 @@ rg -n '无法判定|跳过|模糊' <filehub>/.jspace-logs/inbox-batch.md | tail 
 - [检查 X] 缺:<什么证据> → 补法:<怎么拿到>
 
 ## 基线数据(供跨周对比)
+- 会话写入数 / 定时写入数 / 写回率 / 无来源 tag 页数
 - state 页本周更新数 / 未挂接项目数 / 断指针数 / inbox 停滞数 / cron 失败数 / 契约外 type 页数
 ```
 

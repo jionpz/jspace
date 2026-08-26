@@ -114,6 +114,21 @@ Update = `gbrain put project/<id>/state` overwrites the same slug, never a new p
 - Snapshot pages keep the existing `tags: [weekly]` mitigation (dated pages must not mix into recent injection); consolidate additionally keeps `consolidate`.
 - Recent injection: `gbrain list --type note --tag project -n 50` (state cards), excluding `weekly`. Q&A: `--tag knowledge` / `--tag asset`.
 
+### Provenance tag (which flywheel leg wrote it) — B4
+
+Every write ALSO carries exactly one **provenance tag**, orthogonal to the routing tag above:
+
+| tag | Written by | Meaning |
+|---|---|---|
+| `source:session` | any skill running **in a session** (memory-writeback, and asset-ingest / weekly-report / memory-consolidate / workbench-retro when a person triggered them) | 日常会话沉淀的写入 |
+| `source:cron` | the same skills running **headless under cron** | 定时归纳产生的写入 |
+
+- The tag is chosen by **run mode, not by skill**: the same skill writes `source:session` in a session and `source:cron` under cron. Each skill's decision table already carries a 会话 / 无头(cron) row — reuse it.
+- Why a tag and not a frontmatter field: `gbrain list` filters by `--type` / `--tag` only, so a tag is the *only* thing `workbench-retro` can count. Frontmatter `source:` keeps its existing meaning (**harness** provenance: `claude` / `codex` / …) and answers a different question — do not overload it.
+- Both live on the same page: `tags: [project, source:session]`, `source: claude`.
+- Counting (retro 检查 1): `gbrain list --type note --tag source:session -n 50` vs `--tag source:cron -n 50`.
+- **Pages written before this convention carry neither tag.** They are not "cron writes" — they are unknown-provenance, and retro must report them as a separate bucket instead of folding them into either leg.
+
 ## Write-back discipline
 
 Two write patterns; never mix them:

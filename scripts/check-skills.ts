@@ -8,10 +8,13 @@
 //   C3 routing:    "Brain operations" / "Skill Governance" skill sets == skills-manifest
 //                  workbench list (excludes harness-config, a machine-global skill).
 //   C4 freshness:  re-running gen-assets leaves git diff clean (generated assets synced).
+//   C5 doc drift:  root README.md + AGENTS.md skill listings == skills-manifest
+//                  workbench + global names; "manifest 合计 N" matches manifest.
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { decodeSkillsManifest } from "../core/contracts/skills.ts";
+import { checkDocSkillListing, loadManifestSkillSets } from "./skill-doc-drift.ts";
 import { readWorkbenchSkills } from "./skill-frontmatter.ts";
 
 const repoRoot = resolve(import.meta.dir, "..");
@@ -155,6 +158,25 @@ function pass(label: string): void {
     }
   } catch (e) {
     fail(`C4 gen-assets failed: ${(e as Error).message}`);
+  }
+}
+
+// ---- C5: root README/AGENTS skill listings vs skills-manifest ---------------
+{
+  const sets = loadManifestSkillSets(repoRoot);
+  if ("error" in sets) {
+    fail(`C5 skills-manifest.json invalid: ${sets.error}`);
+  } else {
+    const readme = readFileSync(join(repoRoot, "README.md"), "utf-8");
+    const agents = readFileSync(join(repoRoot, "AGENTS.md"), "utf-8");
+    const c5Failures = [
+      ...checkDocSkillListing(readme, "README.md", sets),
+      ...checkDocSkillListing(agents, "AGENTS.md", sets),
+    ];
+    for (const msg of c5Failures) fail(msg);
+    if (c5Failures.length === 0) {
+      pass(`C5 README/AGENTS skill listings match manifest (${sets.total} skills)`);
+    }
   }
 }
 

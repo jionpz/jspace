@@ -38,6 +38,9 @@ const caps = Bun.YAML.parse(readFileSync(join(ROOT, "adapters/harness/capabiliti
       sessions?: { name?: string; source?: string }[];
       session_start?: { path?: string; format?: string; key?: string };
       lifecycle?: { session_start?: string; session_end?: string; fallback?: string; crash_recovery?: string };
+      supports_tool_restriction?: boolean;
+      argv_flags?: { permission?: string };
+      cron_env?: { allow_prefixes?: string[]; allow_keys?: string[] };
     }
   >;
 };
@@ -134,14 +137,26 @@ const piCapMcp = caps.harnesses.pi?.mcp?.via;
 const piDoc = readFileSync(join(REF_DIR, "harness-pi.md"), "utf-8");
 check("4.pi-mcp-literal", piCapMcp === "pi_mcp_adapter" && piDoc.includes("pi-mcp-adapter"), "capabilities.pi via:pi_mcp_adapter + harness-pi.md mentions pi-mcp-adapter");
 
-// each grok/opencode session event has a template hook/plugin branch
-const grokHook = readFileSync(join(ROOT, "templates/workbench/.grok/hooks/jspace.json"), "utf-8");
-for (const ev of ["SessionStart", "UserPromptSubmit", "PreCompact", "SessionEnd"]) {
-  check(`4.grok-hook-${ev}`, grokHook.includes(`"${ev}"`), `grok hook JSON declares ${ev}`);
-}
-const opencodePlugin = readFileSync(join(ROOT, "templates/workbench/.opencode/plugins/jspace.ts"), "utf-8");
-for (const ev of ["session.created", "session.idle", "experimental.session.compacting"]) {
-  check(`4.opencode-${ev}`, opencodePlugin.includes(ev), `opencode plugin dispatches ${ev}`);
+// Session-event double ledger: the hand-written expectation below must match
+// BOTH capabilities.yaml `sessions` AND the seed template that materializes the
+// hook/plugin. Dropping an event from one side (or from both at once) turns red,
+// so a lifecycle grade can never outlive its wiring (B4: claude/cursor
+// session-end; evidence in docs/session-end-hooks.md).
+const SEED_SESSION_EVENTS: Record<string, { seed: string; events: string[] }> = {
+  claude: { seed: "templates/workbench/.claude/settings.json", events: ["SessionStart", "UserPromptSubmit", "SessionEnd"] },
+  grok: { seed: "templates/workbench/.grok/hooks/jspace.json", events: ["SessionStart", "UserPromptSubmit", "PreCompact", "SessionEnd"] },
+  cursor: { seed: "templates/workbench/.cursor/hooks.json", events: ["sessionStart", "sessionEnd"] },
+  opencode: { seed: "templates/workbench/.opencode/plugins/jspace.ts", events: ["session.created", "session.idle", "experimental.session.compacting"] },
+};
+for (const [h, { seed, events }] of Object.entries(SEED_SESSION_EVENTS)) {
+  const body = readFileSync(join(ROOT, seed), "utf-8");
+  const declared = (caps.harnesses[h]?.sessions ?? []).map((s) => s.name);
+  for (const ev of events) {
+    check(`4.${h}-seed-${ev}`, body.includes(ev), `${seed} declares ${ev}`);
+    check(`4.${h}-caps-${ev}`, declared.includes(ev), `capabilities.${h}.sessions declares ${ev}`);
+  }
+  const extra = declared.filter((n) => n !== undefined && !events.includes(n));
+  check(`4.${h}-caps-extra`, extra.length === 0, extra.length ? `capabilities.${h}.sessions has ${extra.join(",")} with no seed expectation` : `no undeclared session events`);
 }
 
 // ---- 4b. session-start materialization (issue #13) -------------------------
@@ -221,13 +236,16 @@ for (const [h, cap] of Object.entries(caps.harnesses)) {
 
 // ---- 9. lifecycle grades match the real wiring matrix ------------------------
 // Expectation table: a grade must reflect actual wiring. best_effort only where
-// a real mechanism exists (grok SessionEnd hook; session_start mechanisms on the
-// five session harnesses; crash_recovery on the CLI/headless-capable ones).
-// Anything not listed defaults to manual — an unlisted "upgrade to best_effort
-// without wiring" turns red here.
+// a real mechanism exists (claude/grok/cursor session-end hooks; session_start
+// mechanisms on the five session harnesses; crash_recovery on the
+// CLI/headless-capable ones). Anything not listed defaults to manual — an
+// unlisted "upgrade to best_effort without wiring" turns red here.
 const LIFECYCLE_EXPECTED: Record<string, Record<string, string>> = {
   session_start: { claude: "best_effort", grok: "best_effort", opencode: "best_effort", pi: "best_effort", cursor: "best_effort" },
-  session_end: { grok: "best_effort" }, // grok template declares SessionEnd; all others manual
+  // claude/grok/cursor seeds declare a session-end hook (evidence per harness in
+  // docs/session-end-hooks.md); opencode/pi/codex have no matching event and
+  // stay manual + the once-per-session `jspace context turn` nudge.
+  session_end: { claude: "best_effort", grok: "best_effort", cursor: "best_effort" },
   fallback: {},
   crash_recovery: { claude: "best_effort", grok: "best_effort", opencode: "best_effort", pi: "best_effort", codex: "best_effort" },
 };
@@ -260,6 +278,18 @@ for (const [h, cap] of Object.entries(caps.harnesses)) {
     JSON.stringify(grades) === JSON.stringify(want),
     `${h} table=[${grades.join("/")}] caps=[${want.join("/")}]`,
   );
+}
+
+// ---- 11. supports_tool_restriction matches argv_flags.permission --------------
+for (const [h, cap] of Object.entries(caps.harnesses)) {
+  const hasPermission = cap.argv_flags?.permission !== undefined;
+  const supports = cap.supports_tool_restriction === true;
+  check(
+    `11.${h}-tool-restriction`,
+    supports === hasPermission,
+    `${h} supports_tool_restriction=${supports} vs permission flag ${hasPermission}`,
+  );
+  check(`11.${h}-cron-env`, cap.cron_env?.allow_prefixes !== undefined, `${h} declares cron_env.allow_prefixes`);
 }
 
 if (failures.length > 0) {

@@ -83,6 +83,18 @@ test("enabled cron not installed -> cron.not_installed", () => {
   expect(codes(r)).toContain("cron.not_installed");
 });
 
+test("cron with tools on unsupported harness -> cron.tools_unsupported_harness warning", () => {
+  writeFileSync(
+    join(root, ".jspace", "cron.json"),
+    JSON.stringify({
+      schema_version: 1,
+      crons: [{ id: "probe", schedule: "0 21 * * *", harness: "opencode", prompt: "p", tools: "Read", enabled: true }],
+    }),
+  );
+  const r = doctorWorkbench(root, stubDeps());
+  expect(codes(r)).toContain("cron.tools_unsupported_harness");
+});
+
 // ---- linux cron health tri-state (issue #10) --------------------------------
 // doctor only runs the linux crontab/daemon health branch when platform is
 // linux; inject `platform` through the deps (issue #11 P3-4) instead of mutating

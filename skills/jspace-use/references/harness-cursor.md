@@ -9,10 +9,11 @@
 |---|---|---|
 | cron 无头 | ❌ **无 headless CLI**（IDE） | `cursorAdapter.headlessArgv` → `fail("cursor has no headless CLI")`；`cron.harness` 不接受 cursor |
 | 会话 hook | ✅ `sessionStart`（项目级 `.cursor/hooks.json` seed，`additional_context` 注入会话初始上下文） | best_effort |
+| 会话结束 hook | ✅ `sessionEnd`（同一 seed，`jspace context session-end --plain`） | best_effort；**fire-and-forget**（见下方能力边界） |
 | MCP | ✅ 原生（`~/.cursor/mcp.json` 用户级 / `.cursor/mcp.json` 项目级，project overrides user） | |
 | 会话注入 | Rules `.mdc`（项目级）+ Cursor 原生读 AGENTS.md/CLAUDE.md | 用户级无规则文件（Cursor UI 存 User Rules） |
 | skills 投影 | `.agents/skills/`（共享） | 工作台级 |
-| 生命周期分级 | session-start best_effort / session-end manual / fallback manual / crash manual | 见 capabilities.lifecycle |
+| 生命周期分级 | session-start best_effort / session-end best_effort / fallback manual / crash manual | 见 capabilities.lifecycle |
 
 ## 接线（D6 保留不扩；机器级用一条命令）
 
@@ -35,7 +36,8 @@
 
 - 无 headless CLI → 不参与 cron 无头执行。
 - 用户级规则无文件入口（Cursor UI 存 User Rules），全局治理文档接进 Cursor 靠项目级 `.mdc` 指针 + Cursor 原生读 AGENTS.md/CLAUDE.md。
-- 会话结束无自动 memory-writeback（manual）；收工走显式纪律。
+- **`sessionEnd` 已接线但注不回会话**：Cursor 官方声明该 hook 是 fire-and-forget（「响应被记录但不使用」），输入含 `reason`（`completed`/`aborted`/`error`/`window_close`/`user_close`）；seed 用 `--plain` 输出纯文本便于排查。另外 **cloud agent 不加载 `sessionStart`/`sessionEnd`**（云端没有 editor 生命周期的会话边界），只在 IDE 会话里触发——这也是它停在 best_effort 而非 automated 的原因。
+- **会话结束不自动写 gbrain**（永远显式）：真实提醒面是 `jspace context turn` 的每会话一次收工轻提示；写回由你说「收工」触发 `memory-writeback`。证据见 JSpace 开发仓库（工作台外部，不随 init 物化）`docs/session-end-hooks.md`。
 
 ## 验证
 

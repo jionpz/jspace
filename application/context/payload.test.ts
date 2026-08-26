@@ -162,6 +162,30 @@ test("turn: clean workbench -> empty (no noise); each state -> single-line top p
   }
 });
 
+test("turn write-back nudge: lowest priority, single line, only when opted in (B4)", () => {
+  // opt-out (default): clean workbench stays silent
+  expect(renderTurn(empty)).toBe("");
+
+  const nudged = renderTurn(empty, { writebackNudge: true });
+  expect(nudged).toContain("收工");
+  expect(nudged).toContain("memory-writeback");
+  expect(nudged).toContain("不自动写 gbrain"); // nudge only, never an auto write
+  expect(nudged.split("\n").length).toBe(1);
+  expect(Buffer.byteLength(nudged, "utf-8")).toBeLessThan(512);
+
+  // every actionable state outranks the nudge — it never replaces a real todo
+  const pending = { ...empty, pendingCount: 1, pendingProducers: ["asset-ingest"] };
+  const inc = { ...empty, cronIncidents: [{ cronId: "x", failureClass: "failed" }] };
+  const inbox = { ...empty, inboxCount: 3 };
+  const broken = { ...empty, hubBroken: true };
+  for (const s of [pending, inc, inbox, broken]) {
+    expect(renderTurn(s, { writebackNudge: true })).toBe(renderTurn(s));
+    expect(renderTurn(s, { writebackNudge: true })).not.toContain("memory-writeback");
+  }
+  // domains alone are not actionable, so the nudge does surface there
+  expect(renderTurn(doms(2), { writebackNudge: true })).toContain("memory-writeback");
+});
+
 test("many cron incidents -> current-state caps at MAX_CRON_LINES with tail", () => {
   const state = {
     ...empty,

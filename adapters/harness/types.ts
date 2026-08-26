@@ -46,6 +46,13 @@ export interface HarnessLifecycle {
 
 /** Raw capability data as it appears in capabilities.yaml / the generated module
  *  (`name` is the harness key, derived at registry load — not duplicated here). */
+export interface HarnessCronEnv {
+  /** Env key prefixes allowed for this harness's headless cron child. */
+  allow_prefixes: string[];
+  /** Extra exact env keys (e.g. NODE_OPTIONS when explicitly needed). */
+  allow_keys?: string[];
+}
+
 export interface HarnessCapabilityData {
   /** Headless invocation prefix; `null` for IDE-only harnesses (no CLI). */
   headless: string[] | null;
@@ -70,6 +77,10 @@ export interface HarnessCapabilityData {
   cron_harness_enum_value: string | null;
   /** false for compatibility-only entries (codex) with no harness-<name>.md doc. */
   documented: boolean;
+  /** true when cron.json `tools` / `--tools` may restrict headless tool access. */
+  supports_tool_restriction: boolean;
+  /** Per-harness env whitelist for headless cron spawns (cronSpawnEnv SSOT). */
+  cron_env: HarnessCronEnv;
 }
 
 /** A capability with `name` resolved from the harness key (registry output). */

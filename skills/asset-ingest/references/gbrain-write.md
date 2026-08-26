@@ -7,7 +7,8 @@
 type: note
 source: <harness>            # codex | claude | hermes | pi | manual(出处,不占用资产真实来源)
 project: <project|area id>
-tags: [asset]                # 检索路由:资产查找 list --tag asset
+tags: [asset, source:session]  # 路由 tag(list --tag asset)+ 来源 tag:会话内 source:session / 无头 cron source:cron
+                               # 来源 tag 按运行模式选,纪律源见 jspace-use/references/gbrain.md「Provenance tag」
 rel_path: <相对 filehub 根的路径>   # M5 起:机器无关指针标识(见下)
 ---
 # <语义名>

@@ -12,11 +12,11 @@
 
 | harness | headless(cron) | sessions | mcp | hook_format | native_memory | lifecycle: start/end/fallback/crash |
 |---|---|---|---|---|---|---|
-| claude | `claude -p …` | SessionStart / UserPromptSubmit | native | claude_settings_json | none | best_effort / manual / manual / best_effort |
+| claude | `claude -p …` | SessionStart / UserPromptSubmit / SessionEnd | native | claude_settings_json | none | best_effort / best_effort / manual / best_effort |
 | grok | `grok -p …` | SessionStart / UserPromptSubmit / PreCompact / SessionEnd | native | grok_hooks_json | full | best_effort / best_effort / manual / best_effort |
 | opencode | `opencode run …` | session.created / session.idle / experimental.session.compacting | native | opencode_plugin_ts | none | best_effort / manual / manual / best_effort |
 | pi | `pi -p …` | session_start / before_agent_start（扩展事件） | via: pi_mcp_adapter | none | none | best_effort / manual / manual / best_effort |
-| cursor | 无（IDE-only） | sessionStart | native | cursor_hooks_json | none | best_effort / manual / manual / manual |
+| cursor | 无（IDE-only） | sessionStart / sessionEnd | native | cursor_hooks_json | none | best_effort / best_effort / manual / manual |
 | codex | `codex exec …` | — | native | none | none | manual / manual / manual / best_effort |
 
 - **automated 的边界**：上表全部为 best_effort/manual（lifecycle 真实触发是 harness 运行时行为，未在 CI 全链验证）；CLI 侧的 automated 见 `docs/PLATFORMS.md`（外部稳定依赖，JSpace 开发仓库文档）「Harness 能力矩阵」（claude cron argv 有单测证据）。
@@ -26,6 +26,8 @@
   - **manual**：无自动机制，须用户/agent 显式执行。
   - **unsupported**：机制不存在。
 - **措辞约定**：产品文档（模板 AGENTS / references / PLATFORMS）**只在 automated 处**使用「自动/保证」类措辞；best_effort/manual 路径说「按需」「显式」「可」等。
+- **session-end 这一列怎么读**：claude / grok / cursor 的 seed 声明了会话结束 hook（`jspace context session-end`），所以是 best_effort；但 **claude 与 cursor 的 session-end 输出是 fire-and-forget**（harness 丢弃/只记录不使用），提醒文本不会回注会话——它们的 best_effort 只表示「结束时机上有个会跑的钩子」。opencode / pi / codex **没有语义匹配的结束事件**，保持 manual。三类的共同提醒面是 `jspace context turn` 的**每会话一次**收工写回轻提示（无更高优先级状态时才出，且从不自动写 gbrain）。逐 harness 事件名、matcher、限制与复核方法见 JSpace 开发仓库（工作台外部，不随 init 物化）`docs/session-end-hooks.md`。
+- **写回始终显式**：任何 session-end / turn 提示都只提醒，**不自动写 gbrain**；写回由用户触发 `memory-writeback`。
 
 ## 逐 harness 接线
 

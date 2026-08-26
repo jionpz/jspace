@@ -34,6 +34,7 @@ triggers:
 | 判断 | 取值 | 动作 |
 |---|---|---|
 | 有无持久事实 | 无 / 有 | **静默结束** / 简述将写什么·写哪·为何,再写 |
+| 来源 tag | 恒定 | 每页 `tags` 追加 **`source:session`**(写回率取证;frontmatter `source:` 仍是 harness 出处,不挪用) |
 | 晋升信号(跨会话重复/决策已定/提炼成教训) | 命中 | 写 `project/<id>/decisions/` 或 `project/<id>/lessons/` 新页,state 只留现状(不压 state) |
 | serve 持锁 / 写失败 | 是 / 否 | `jspace pending stage`(暂存不失败) / 直接写 |
 | embedding 不可达 | 是 / 否 | `embed_skip: true`(写仍成功)+固定提示 / 正常写 |
@@ -55,8 +56,8 @@ jspace pending apply                             # 锁空闲落 live(幂等)
 1. **扫描**:本会话有无持久事实(进展/决策/教训/资产指针/规则/工作流)。**无 → 静默结束**。
 2. **分类**:按决策表(状态/知识/决策/周快照)。
 3. **归属**:定 domain/project id(活跃项目发现:`hub.json`+域 README+既有 state 页);slug 从项目+主题派生,**不发明**。
-4. **写回**:按分类写语义;晋升 → 新知识页;每页带 `project`+`tags`+`source`;锁冲突 `jspace pending stage`。
-5. **验证**:`gbrain get <slug>` 读回;state 覆盖不新增、知识不重复。
+4. **写回**:按分类写语义;晋升 → 新知识页;每页带 `project`+`tags`(路由 tag + **`source:session`**)+`source`;锁冲突 `jspace pending stage`。
+5. **验证**:`gbrain get <slug>` 读回;state 覆盖不新增、知识不重复;`gbrain list --type note --tag source:session -n 5` 应能列到刚写的页。
 6. **文件归位**(有产出文件)→ 转 `asset-ingest` 步骤 2-4,本 skill 不重复。
 
 ## 按需深入(条件读指针)
@@ -73,8 +74,11 @@ jspace pending apply                             # 锁空闲落 live(幂等)
 
 ```bash
 gbrain get <slug>          # project/tags/source 齐;state 覆盖未新增、知识未重复
+gbrain list --type note --tag source:session -n 5   # 来源 tag 生效(写回率取证的基础)
 ```
 (无持久事实时本 skill 应静默结束,不写页、不提示)
+
+> **提醒 ≠ 写入**:`jspace context session-end` 与 `jspace context turn` 的每会话一次轻提示都只提醒、从不写 gbrain,也不打 `source:session`。所以「本周 `source:session` 计数」量的是**真的写回了几次**,不是被提醒了几次。各 harness 的 session-end 能力边界见 `~/.agents/skills/jspace-use/references/harnesses.md`。
 
 ## 参考
 - `~/.agents/skills/memory-writeback/references/writeback.md` — 分类表/slug/晋升信号/降级

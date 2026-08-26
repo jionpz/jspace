@@ -24,7 +24,8 @@ triggers:
    - `<YYYY-MM-DD>` = **本周起始日(周一)**,不是运行日。周日运行 → 用本周一的日期。
    - `<filehub>` = `.jspace/hub.json` 中 `type: filehub` 资源 `primary: true` path(经 `local.json` 绑定解析);解析不到 → 停止并报告,不猜路径。
 2. **gbrain 指针页** → `assets/周报/<YYYY-MM-DD>`(同一日期)
-   - frontmatter:`type: note`、`project: jspace`、`tags: [asset, weekly]`、`source: <harness>`
+   - frontmatter:`type: note`、`project: jspace`、`tags: [asset, weekly, <来源 tag>]`、`source: <harness>`
+   - **来源 tag 按运行模式选**:无头(cron)运行 → `source:cron`;会话内触发 → `source:session`(纪律源:`~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」)。
    - 正文以 **Pointer + 极薄 Summary** 为主;详细事实不在这里展开(在 md 本体与 consolidate 页里)。
 3. **同周重跑 = 周快照**:固定 slug 覆盖更新,**不重复建页、不建 `-v2`**。
 

@@ -18,6 +18,13 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "output": "--output-format",
         "output_value": "text"
       },
+      "supports_tool_restriction": true,
+      "cron_env": {
+        "allow_prefixes": [
+          "ANTHROPIC_"
+        ],
+        "allow_keys": []
+      },
       "sessions": [
         {
           "name": "SessionStart",
@@ -25,6 +32,10 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         },
         {
           "name": "UserPromptSubmit",
+          "source": "hook"
+        },
+        {
+          "name": "SessionEnd",
           "source": "hook"
         }
       ],
@@ -49,7 +60,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "native_memory": "none",
       "lifecycle": {
         "session_start": "best_effort",
-        "session_end": "manual",
+        "session_end": "best_effort",
         "fallback": "manual",
         "crash_recovery": "best_effort"
       },
@@ -66,6 +77,14 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "tools_value": "Bash(*)",
         "output": "--output-format",
         "output_value": "json"
+      },
+      "supports_tool_restriction": true,
+      "cron_env": {
+        "allow_prefixes": [
+          "GROK_",
+          "XAI_"
+        ],
+        "allow_keys": []
       },
       "sessions": [
         {
@@ -119,6 +138,13 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "run"
       ],
       "argv_flags": {},
+      "supports_tool_restriction": false,
+      "cron_env": {
+        "allow_prefixes": [
+          "OPENCODE_"
+        ],
+        "allow_keys": []
+      },
       "sessions": [
         {
           "name": "session.created",
@@ -167,6 +193,13 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "-p"
       ],
       "argv_flags": {},
+      "supports_tool_restriction": false,
+      "cron_env": {
+        "allow_prefixes": [
+          "PI_"
+        ],
+        "allow_keys": []
+      },
       "sessions": [
         {
           "name": "session_start",
@@ -207,9 +240,18 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
     "cursor": {
       "headless": null,
       "argv_flags": {},
+      "supports_tool_restriction": false,
+      "cron_env": {
+        "allow_prefixes": [],
+        "allow_keys": []
+      },
       "sessions": [
         {
           "name": "sessionStart",
+          "source": "hook"
+        },
+        {
+          "name": "sessionEnd",
           "source": "hook"
         }
       ],
@@ -232,7 +274,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "native_memory": "none",
       "lifecycle": {
         "session_start": "best_effort",
-        "session_end": "manual",
+        "session_end": "best_effort",
         "fallback": "manual",
         "crash_recovery": "manual"
       },
@@ -245,6 +287,14 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "exec"
       ],
       "argv_flags": {},
+      "supports_tool_restriction": false,
+      "cron_env": {
+        "allow_prefixes": [
+          "OPENAI_",
+          "CODEX_"
+        ],
+        "allow_keys": []
+      },
       "sessions": [],
       "mcp": {
         "native": true

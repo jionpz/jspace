@@ -28,9 +28,10 @@ const cronAddSpec: CommandSpec = {
     { name: "--schedule", takesValue: true, required: true, help: 'restricted 5-field cron expression (e.g. "0 21 * * *"; single values or *; no lists/ranges/steps)' },
     { name: "--harness", takesValue: true, required: true, help: `harness to run: ${HARNESSES.join(" | ")}` },
     { name: "--prompt", takesValue: true, required: true, help: "instruction for the headless harness" },
+    { name: "--tools", takesValue: true, help: "override harness default tools (claude/grok only)" },
     { name: "--disabled", takesValue: false, help: "add the cron disabled" },
   ],
-  handler: (ctx, args) => cronAdd(ctx.root, s(args.id), s(args.schedule), s(args.harness), s(args.prompt), b(args.disabled), { isInstalled: (id) => cronIsInstalledForRoot(ctx.root, id) }),
+  handler: (ctx, args) => cronAdd(ctx.root, s(args.id), s(args.schedule), s(args.harness), s(args.prompt), b(args.disabled), { isInstalled: (id) => cronIsInstalledForRoot(ctx.root, id) }, process.platform, optS(args.tools) || undefined),
 };
 
 const cronListSpec: CommandSpec = {

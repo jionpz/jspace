@@ -173,6 +173,18 @@ test("cronAdd isInstalled hint fires when the cron id is installed", () => {
   rmSync(wb, { recursive: true, force: true });
 });
 
+test("cronAdd rejects --tools on harness without tool restriction", () => {
+  const wb = makeWorkbench([]);
+  const deps = { isInstalled: () => false };
+  expect(() => cronAdd(wb, "probe", "0 21 * * *", "opencode", "x", false, deps, "linux", "Read")).toThrow(/does not support --tools/);
+  expect(() => cronAdd(wb, "probe", "0 21 * * *", "pi", "x", false, deps, "linux", "Read")).toThrow(/does not support --tools/);
+  expect(() => cronAdd(wb, "probe", "0 21 * * *", "codex", "x", false, deps, "linux", "Read")).toThrow(/does not support --tools/);
+  cronAdd(wb, "ok", "0 21 * * *", "claude", "x", false, deps, "linux", "Read,Write");
+  const data = JSON.parse(readFileSync(join(wb, ".jspace", "cron.json"), "utf-8"));
+  expect(data.crons[0].tools).toBe("Read,Write");
+  rmSync(wb, { recursive: true, force: true });
+});
+
 test("cronRemove deletes + hints; unknown id throws", () => {
   const wb = makeWorkbench([{ id: "a", enabled: true }]);
   const r = cronRemove(wb, "a", { isInstalled: () => true });
