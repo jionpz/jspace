@@ -124,9 +124,12 @@ jobs:
           bun run cli/main.ts cron run inbox-tidy --dir /tmp/jspace-verify --dry-run | grep "dry-run: would run"
           # P2 AC7: new-harness argv assembles without a real grok binary (argv-only seam)
           bun run cli/main.ts cron run inbox-tidy --dir /tmp/jspace-verify --harness grok --dry-run | grep -- "--allow"
+          # B1: tools on unsupported harness must fail loud (template crons ship tools)
+          if bun run cli/main.ts cron run inbox-tidy --dir /tmp/jspace-verify --harness opencode --dry-run 2>&1 | grep -q "does not support --tools"; then :; else echo "expected tools unsupported fail for opencode override"; exit 1; fi
           # P0 (issue #7): opencode argv includes the `run` subcommand (capability
-          # headless prefix) — assert the assembled argv, no real binary needed
-          bun run cli/main.ts cron run inbox-tidy --dir /tmp/jspace-verify --harness opencode --dry-run | grep -- "opencode run"
+          # headless prefix) — assert on a tools-free cron so B1 guard does not fire
+          bun run cli/main.ts cron add opencode-argv-probe --schedule "0 0 * * *" --harness opencode --prompt "probe" --dir /tmp/jspace-verify
+          bun run cli/main.ts cron run opencode-argv-probe --dir /tmp/jspace-verify --dry-run | grep -- "opencode run"
           # reconciliation plan preview (no real scheduler apply)
           bun run cli/main.ts cron install --dir /tmp/jspace-verify --dry-run | grep "would apply"
           bun run cli/main.ts cron check --dir /tmp/jspace-verify
