@@ -10,7 +10,7 @@ import { makeSchedulerSpawn, type SchedulerSpawn, type SchedulerSpawnImpl, type 
 import { isWindowsInstallable } from "../../core/shared/schedule.ts";
 import { buildPlist } from "./darwin.ts";
 import { parseSchedule } from "../../core/shared/schedule.ts";
-import { linuxAdapter, crontabBlock, crontabLine, replaceManagedBlock, parseManagedLine, extractTagBlock, pidNamespaceIsolated, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
+import { linuxAdapter, crontabBlock, crontabLine, crontabUnavailable, replaceManagedBlock, parseManagedLine, extractTagBlock, pidNamespaceIsolated, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
 import { darwinAdapter, plistPath, parsePlistName, plistBelongsToTag, scheduleFromIntervalDict, argvFromPlistStdout } from "./darwin.ts";
 import { schtasksArgs, parseOpContent, parseSchtasksXml, win32Adapter } from "./win32.ts";
 import { planReconciliation } from "../../application/automation/scheduler.ts";
@@ -498,6 +498,27 @@ function runHealth(p: { pgrep: number; crontabBin: string; crontabL: number }, p
     linuxAdapter.readProcStatus = savedRead;
   }
 }
+
+// A machine without the cron package used to fail `cron install` with
+// "crontab -l failed (status undefined)" — fail-fast, but naming neither the
+// fault nor the fix. The spawn-never-ran case is now its own message.
+test("crontabUnavailable separates 'command never ran' from a crontab error", () => {
+  const enoent = crontabUnavailable({ status: null, error: new Error("spawn crontab ENOENT") });
+  expect(enoent).toContain("crontab command not available");
+  expect(enoent).toContain("apt-get install cron");
+
+  const noStatus = crontabUnavailable({ status: null, stderr: "" });
+  expect(noStatus).toContain("could not be executed");
+  expect(noStatus).toContain("apt-get install cron");
+
+  expect(crontabUnavailable({ status: null, signal: "SIGTERM" })).toContain("SIGTERM");
+
+  // crontab ran and answered: not this fault (0 = readable, 1 = no crontab,
+  // other = a real crontab error the existing message already reports)
+  expect(crontabUnavailable({ status: 0 })).toBeNull();
+  expect(crontabUnavailable({ status: 1 })).toBeNull();
+  expect(crontabUnavailable({ status: 2, stderr: "boom" })).toBeNull();
+});
 
 test("pidNamespaceIsolated parses NSpid values", () => {
   expect(pidNamespaceIsolated(PROC_NOT_ISOLATED)).toBe(false); // single value
