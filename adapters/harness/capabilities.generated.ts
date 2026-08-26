@@ -21,7 +21,8 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "supports_tool_restriction": true,
       "cron_env": {
         "allow_prefixes": [
-          "ANTHROPIC_"
+          "ANTHROPIC_",
+          "CLAUDE_"
         ],
         "allow_keys": []
       },

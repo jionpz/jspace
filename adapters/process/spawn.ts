@@ -82,6 +82,10 @@ export function win32SpawnTarget(argv: string[]): Win32Spawn {
 /** Base env keys every headless cron child needs regardless of harness. */
 const CRON_ENV_BASE_KEYS = [
   "PATH", "HOME", "TERM", "LANG", "LC_ALL", "USER", "LOGNAME", "SHELL", "TMPDIR", "NO_COLOR", "CLICOLOR", "BUN_INSTALL",
+  // Corporate / local proxies — not secrets; required when ANTHROPIC_BASE_URL
+  // (or other harness endpoints) sit behind HTTP(S)_PROXY.
+  "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+  "http_proxy", "https_proxy", "all_proxy", "no_proxy",
 ] as const;
 
 const CRON_ENV_WIN32_KEYS = [
@@ -102,8 +106,15 @@ export function cronSpawnEnv(platform: string, harness: string): Record<string, 
   ]);
   const allowPrefixes = [...cap.cron_env.allow_prefixes];
   const out: Record<string, string> = {};
+  // Bun hides HTTP(S)_PROXY etc. from Object.keys(process.env) while still
+  // allowing direct reads — so allowKeys must be copied by explicit lookup,
+  // not only by enumerating process.env.
+  for (const key of allowKeys) {
+    const v = process.env[key];
+    if (v !== undefined) out[key] = v;
+  }
   for (const key of Object.keys(process.env)) {
-    if (key.startsWith("GBRAIN_") || allowKeys.has(key) || allowPrefixes.some((p) => key.startsWith(p))) {
+    if (key.startsWith("GBRAIN_") || allowPrefixes.some((p) => key.startsWith(p))) {
       out[key] = process.env[key] as string;
     }
   }

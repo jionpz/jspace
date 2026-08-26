@@ -125,7 +125,7 @@ bin/jspace cron uninstall              # 期望:任务移除
 
 | 平台 | 用例（见验证矩阵） | 状态 | 证据 |
 |---|---|---|---|
-| Linux | crontab `install → status → uninstall` 全链（无补跑语义：错过即跳过） | **CRUD 已验证**（2026-08-26）；补跑语义仍未验证 | 本机（Ubuntu 24.04 容器 + cron 3.0pl1，`/proc/self/status` 的 `NSpid:` 单值即非嵌套 namespace）按 `build.yml`「Cron CRUD smoke (Linux crontab)」脚本**原样**执行通过（编译产物 `bun-linux-x64-baseline`，commit 702a61b）：install 后 `crontab -l` 含受管块与 smoke-test 行 → `cron status` 为 `never run` → doctor 不再报 `cron.not_installed` → 二次 install 为 no-op → `cron remove` 后 doctor 报 `cron.stale_task` → uninstall 后受管块消失。同一脚本已进 CI（linux 两格矩阵）。「错过即跳过」需真实错过一个时间点，**仍未验证** |
+| Linux | crontab `install → status → uninstall` 全链（无补跑语义：错过即跳过） | **CRUD 已验证**（2026-08-26）；补跑语义仍未验证 | ① 合入前本机（Ubuntu 24.04 + cron，`NSpid:` 单值）按 `build.yml` 脚本原样通过（`bun-linux-x64-baseline`）。② **main @ `13bf260`（#21 合入后）再次原样通过**（`bin/jspace-smoke`）：doctor 报 `cron.not_installed` → install → `crontab -l` 含受管块与 smoke-test → status `never run` → 二次 install no-op → remove 后 `cron.stale_task` → uninstall 后受管块消失。同一脚本已进 CI（linux 两格）。「错过即跳过」仍未验证 |
 | Linux | 无 crontab 命令 / 无 crond → `cron install` fail-fast + doctor warning | **已验证**（2026-08-26） | 本机临时移除 `/usr/bin/crontab`：`doctor` 报 warning `crontab command not found on this system` 且 **exit 0**（健康检查不抛）；`cron install` **exit 1**，文案 `crontab command not available (…ENOENT); install the cron package first (…)`（本次复核发现原文案是无信息量的 `crontab -l failed (status undefined)`，已硬化为 `adapters/scheduler/linux.ts` 的 `crontabUnavailable`）。无 crond：cron 已安装但守护进程未启动 → doctor 报 warning `cron daemon not running…` |
 | Linux | 沙盒 / PID+UID namespace 隔离 → doctor info 降级（`cron.daemon_unverifiable` 等，不报 warning） | 未验证 | 构造不出：本仓库开发环境 `NSpid:` 单值（非嵌套），GitHub runner 禁止非特权 user namespace（`verify.yml` 尾注实测）。仅单测覆盖（`pidNamespaceIsolated` + `health()` 三态分支）。**非降级侧**（真机绝不得报 `*_unverifiable`）已在 `verify.yml` 与本次 CI cron 冒烟中断言。真机复核建议 WSL2 + Codex sandbox |
 | Windows | schtasks `install` → `/query` 存在 → 触发一次 `cron run` | **注册/读回已进 CI 断言**；真实触发仍未验证 | `build.yml`「Cron CRUD smoke (Windows schtasks)」：install → `schtasks /query /fo csv /nh` 出现 `JSpaceCron_*` → `cron status` 为 `never run` → `cron remove` 后 doctor 报 `cron.stale_task` → uninstall 后任务消失。真实触发（等到 21:00 或 `schtasks /run`）需真机 |
@@ -148,6 +148,8 @@ bin/jspace cron uninstall              # 期望:任务移除
 **刻意不断言的**:任务被**真的触发**。runner 上 crond/launchd 的触发时机不是可信信号,且无头 run 还需真实 harness CLI;真实触发留在上方台账的人工行。
 
 > 触发时机注意:`build.yml` 只在 `push tags v*` 与 `workflow_dispatch` 上运行(PR 走 `verify.yml`)。因此这套冒烟的首个 run 证据来自下一次 tag 构建或手动 dispatch —— **发版前建议先手动 dispatch 一次**,别把调度冒烟的问题留到打 tag 当下。
+>
+> Cloud Agent / 默认 `GITHUB_TOKEN` **无** `actions: write`，无法代你 `gh workflow run build.yml`（会 403）。请仓库维护者在 GitHub → Actions → **build** → **Run workflow**（ref=`main`）手动触发，或用带 `workflow` scope 的 PAT。
 
 ## 纯函数单测(本机可跑,无需真机)
 
