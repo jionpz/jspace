@@ -56,7 +56,7 @@ pi-mcp-adapter 的配置搜索优先级（高→低，wire 固定落 `~/.pi/agen
 ## 能力边界（诚实声明）
 
 - **session-start 自动注入**：通过 `~/.pi/agent/extensions/jspace/index.ts` 实现 best_effort 自动 briefing；Pi 无 Claude 风格 hooks.json，但扩展事件通道可用。
-- **收工显式**：会话结束无自动 memory-writeback 触发；按 AGENTS.md End-of-Work Capture 纪律，显式触发 memory-writeback skill。
+- **收工显式（session_end 保持 manual）**：Pi 的扩展事件只有会话开始面（`session_start` / `before_agent_start`），**没有会话结束事件**，所以 `lifecycle.session_end` 停在 `manual`，不虚报。补偿面是 `jspace context turn` 的每会话一次收工写回轻提示（不自动写 gbrain）；写回按 AGENTS.md End-of-Work Capture 纪律显式触发 `memory-writeback`。取证见 JSpace 开发仓库（工作台外部，不随 init 物化）`docs/session-end-hooks.md`。
 - **资产入库粒度**：cron 无头 `harness: pi` + `jspace pending` 桥接仍可用，但粒度是「一晚上一次」而非「一会话一次」。
 - **如需 session-level 自动接线**，请选 Claude Code / Grok Build / OpenCode 之一（见 `harness-claude.md` / `harness-grok.md` / `harness-opencode.md`）。
 

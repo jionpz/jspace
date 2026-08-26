@@ -42,6 +42,17 @@
           }
         ]
       }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jspace context session-end",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }

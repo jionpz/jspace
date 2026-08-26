@@ -4,12 +4,12 @@
   "files": [
     {
       "path": "templates/workbench/.claude/settings.json",
-      "sha256": "4e50230a79475feaf16089518129a9e276647cc2197f6e6ad23f5ad7f5a25a99",
+      "sha256": "e58f63934ddef681f113eb50e6457447e4f1d000f1f78dbfd1fa571ac86f59fd",
       "ownership": "seed"
     },
     {
       "path": "templates/workbench/.cursor/hooks.json",
-      "sha256": "d3314899e4a15cfc891967b63852df1e999ce5998d9a8bd3a3cae41d5a651487",
+      "sha256": "a8dbae5353c3380c0c640ae4881f6175a5578fc863516eb671ef4e13f9f2cf70",
       "ownership": "seed"
     },
     {
@@ -49,7 +49,7 @@
     },
     {
       "path": "templates/workbench/README.md",
-      "sha256": "f041cf97680ffc7b6e49154386a0dc6a2b904cbab0fdab1dfa0d8d96075f38b0",
+      "sha256": "9ca38511b99de950c15db4ba2be29893dd4b9f7373b51e7434f63176dc33f505",
       "ownership": "seed"
     },
     {
@@ -79,12 +79,12 @@
     },
     {
       "path": "skills/jspace-use/references/harness-claude.md",
-      "sha256": "d544599980d19f084bdd4bcbf9848f27f3138eedb9e6d79c905a357221be3d93",
+      "sha256": "c38aa4164abcc876144c5188937ae481ee0523c0957125acdbd39a14dfac0e73",
       "ownership": "seed"
     },
     {
       "path": "skills/jspace-use/references/harness-cursor.md",
-      "sha256": "13ff4dfbd49eb48b228f0e1c76fe483de5bb53855bdcfdf34c270bd15d0ba744",
+      "sha256": "24f8b53cd1956bde0921b5a86969b0319519a549d412b16b9913ac36ba5bd961",
       "ownership": "seed"
     },
     {
@@ -94,17 +94,17 @@
     },
     {
       "path": "skills/jspace-use/references/harness-opencode.md",
-      "sha256": "b3a86093c40073eb400c1f6c069dd942657c52336660587764f47a0cb7b0331e",
+      "sha256": "c2d5123cece26f633a02a047a71215f2abb67e0f0bd954a5ab1eb6b95e74fec5",
       "ownership": "seed"
     },
     {
       "path": "skills/jspace-use/references/harness-pi.md",
-      "sha256": "3d36a76590342b908c1bdefb80837f26623a607bc44ffb09e5a9c86b0320bef9",
+      "sha256": "5954a45e0bac4ce4aaa5c90219a7435a30c8dcfb87256eeb82a7cc1894c5100f",
       "ownership": "seed"
     },
     {
       "path": "skills/jspace-use/references/harnesses.md",
-      "sha256": "a8cea7f43b280eb912ce269459e5f2bfe151bd594c6c34bcaf2da8d892d4ed82",
+      "sha256": "0b90b8eb6d359cecd50e59672f777598d41274d8e2e97af8fad442151377d240",
       "ownership": "seed"
     },
     {
