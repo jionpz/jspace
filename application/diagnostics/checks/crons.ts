@@ -41,6 +41,18 @@ export function checkCrons(root: string, cron: CronsDeps): RegistryDiagnostic[] 
     installedIds = new Set(cron.installedCronIds(root));
   }
   if (crons.length > 0) {
+    // Template crons ship disabled (nothing fires on a machine with no wired
+    // harness), so "never enabled" is the silent default — and it stops two of
+    // the three flywheels (asset tidy + weekly retro/consolidation) without any
+    // error. info, not warning: an all-manual workbench is a legitimate choice.
+    if (!crons.some((c) => c.enabled)) {
+      diags.push({
+        severity: "info",
+        code: "cron.all_disabled",
+        path: "cron",
+        message: `all ${crons.length} cron definition(s) disabled, so no scheduled task runs (inbox tidy / weekly report / memory consolidation / retro); enable with jspace cron enable <id>, rehearse with jspace cron run <id>, then jspace cron install`,
+      });
+    }
     const officialSkills = new Set(cron.officialSkillNames());
     for (const c of crons) {
       if (!c.target && officialSkills.has(c.id)) {

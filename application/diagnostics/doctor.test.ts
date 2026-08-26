@@ -83,6 +83,31 @@ test("enabled cron not installed -> cron.not_installed", () => {
   expect(codes(r)).toContain("cron.not_installed");
 });
 
+test("every cron disabled -> cron.all_disabled info (flywheel never starts), never a failure", () => {
+  setCrons([
+    { id: "inbox-tidy", schedule: "0 21 * * *", enabled: false },
+    { id: "workbench-retro", schedule: "0 23 * * 0", enabled: false },
+  ]);
+  const r = doctorWorkbench(root, stubDeps());
+  expect(codes(r)).toContain("cron.all_disabled");
+  const diags = (r.data as { diagnostics: { code: string; severity: string; message: string }[] }).diagnostics;
+  const d = diags.find((x) => x.code === "cron.all_disabled");
+  expect(d?.severity).toBe("info"); // an all-manual workbench is a legitimate choice
+  expect(d?.message).toContain("jspace cron enable"); // the enable path is right there
+  expect(r.exitCode ?? 0).toBe(0);
+  expect((r.warnings ?? []).join("\n")).not.toContain("cron definition(s) disabled");
+});
+
+test("at least one cron enabled -> no cron.all_disabled; empty cron.json stays silent", () => {
+  setCrons([
+    { id: "inbox-tidy", schedule: "0 21 * * *", enabled: true },
+    { id: "workbench-retro", schedule: "0 23 * * 0", enabled: false },
+  ]);
+  expect(codes(doctorWorkbench(root, stubDeps({ installedCronIds: () => ["inbox-tidy"] })))).not.toContain("cron.all_disabled");
+  setCrons([]);
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("cron.all_disabled");
+});
+
 test("cron with tools on unsupported harness -> cron.tools_unsupported_harness warning", () => {
   writeFileSync(
     join(root, ".jspace", "cron.json"),
