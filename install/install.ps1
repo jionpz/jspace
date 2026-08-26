@@ -126,6 +126,22 @@ try {
     $actual = (Get-FileHash -LiteralPath (Join-Path $tmp 'jspace.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($actual -ne $expected) { Fail ("SHA-256 校验不匹配。期望 {0}，实际 {1}" -f $expected, $actual) }
 
+    # 替换前自检：先在临时目录把产物跑一次 --version,跑不起来就绝不覆盖现有安装。
+    # Windows x64 发布产物是非 baseline 构建(需 AVX2),AVX-less CPU 上直接崩溃——
+    # 校验和只证明字节是我们发布的,不证明它能在本机跑起来(同 `jspace update`)。
+    $probeOut  = ''
+    $probeExit = 1
+    try {
+        $probeOut  = (& (Join-Path $tmp 'jspace.exe') --version) -join ' '
+        $probeExit = $LASTEXITCODE
+    } catch {
+        $probeOut  = $_.Exception.Message
+        $probeExit = -1
+    }
+    if ($probeExit -ne 0 -or -not ($probeOut -match 'jspace ')) {
+        Fail ('下载的产物自检失败(exit {0}: {1})。未安装/未替换现有 jspace。Windows x64 发布产物为非 baseline 构建(需要 AVX2 指令集),不支持 AVX2 的 CPU 会直接崩溃:请换用支持 AVX2 的机器,或在本地用 "bun run build:all" 产出 baseline 二进制后手动放到 {2}(见 docs/PLATFORMS.md)' -f $probeExit, $probeOut, $BIN)
+    }
+
     # 安装
     New-Item -ItemType Directory -Path $INSTALL_DIR -Force | Out-Null
     if (Test-Path -LiteralPath $BIN) {
@@ -142,7 +158,9 @@ try {
 
     # 绝对路径自检（PATH 只对后续进程生效）
     $verOut = & $BIN --version
-    if ($LASTEXITCODE -ne 0) { Fail '安装后自检失败' }
+    if ($LASTEXITCODE -ne 0) {
+        Fail ('安装后自检失败(exit {0}):{1} 无法运行。产物在临时目录已自检通过,说明问题出在落盘位置(杀软拦截/文件被占用/磁盘异常);若是首次在老 CPU 上安装,请核对 AVX2 要求(Windows x64 发布产物为非 baseline 构建,见 docs/PLATFORMS.md)' -f $LASTEXITCODE, $BIN)
+    }
     Write-Log ("已安装 {0}" -f $verOut)
 
     if (-not $NoPath) { Add-JspacePath }
