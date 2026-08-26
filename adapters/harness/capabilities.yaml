@@ -73,7 +73,9 @@ harnesses:
       output_value: "text"
     supports_tool_restriction: true
     cron_env:
-      allow_prefixes: ["ANTHROPIC_"]
+      # CLAUDE_* covers subscription/OAuth tokens (e.g. CLAUDE_CODE_OAUTH_TOKEN);
+      # ANTHROPIC_* covers API key + ANTHROPIC_BASE_URL proxy setups.
+      allow_prefixes: ["ANTHROPIC_", "CLAUDE_"]
       allow_keys: []
     sessions:
       - { name: SessionStart, source: hook }

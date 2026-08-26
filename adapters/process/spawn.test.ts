@@ -58,12 +58,16 @@ test("cronSpawnEnv whitelists harness/gbrain vars and withholds other secrets", 
     process.env.AWS_SECRET_ACCESS_KEY = "topsecret";
     process.env.ANTHROPIC_API_KEY = "sk-harness";
     process.env.ANTHROPIC_BASE_URL = "https://proxy.example";
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = "oauth-token";
+    process.env.HTTPS_PROXY = "http://proxy:8080";
     process.env.OPENAI_API_KEY = "sk-other";
     process.env.NODE_OPTIONS = "--inspect";
     process.env.GBRAIN_TEST_HOME = "/t/gbrain";
     const env = cronSpawnEnv("linux", "claude");
     expect(env.ANTHROPIC_API_KEY).toBe("sk-harness");
     expect(env.ANTHROPIC_BASE_URL).toBe("https://proxy.example");
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe("oauth-token");
+    expect(env.HTTPS_PROXY).toBe("http://proxy:8080");
     expect(env.GBRAIN_TEST_HOME).toBe("/t/gbrain");
     expect(env.AWS_SECRET_ACCESS_KEY).toBeUndefined();
     expect(env.OPENAI_API_KEY).toBeUndefined();
