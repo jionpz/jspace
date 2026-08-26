@@ -57,12 +57,34 @@ test("cronSpawnEnv whitelists harness/gbrain vars and withholds other secrets", 
   try {
     process.env.AWS_SECRET_ACCESS_KEY = "topsecret";
     process.env.ANTHROPIC_API_KEY = "sk-harness";
+    process.env.ANTHROPIC_BASE_URL = "https://proxy.example";
+    process.env.OPENAI_API_KEY = "sk-other";
+    process.env.NODE_OPTIONS = "--inspect";
     process.env.GBRAIN_TEST_HOME = "/t/gbrain";
-    const env = cronSpawnEnv("linux");
+    const env = cronSpawnEnv("linux", "claude");
     expect(env.ANTHROPIC_API_KEY).toBe("sk-harness");
+    expect(env.ANTHROPIC_BASE_URL).toBe("https://proxy.example");
     expect(env.GBRAIN_TEST_HOME).toBe("/t/gbrain");
     expect(env.AWS_SECRET_ACCESS_KEY).toBeUndefined();
+    expect(env.OPENAI_API_KEY).toBeUndefined();
+    expect(env.NODE_OPTIONS).toBeUndefined();
     expect(env.PATH).toBeDefined();
+  } finally {
+    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
+    Object.assign(process.env, saved);
+  }
+});
+
+test("cronSpawnEnv for grok allows GROK_/XAI_ only, not ANTHROPIC_", () => {
+  const saved = { ...process.env };
+  try {
+    process.env.ANTHROPIC_API_KEY = "sk-claude";
+    process.env.GROK_API_KEY = "sk-grok";
+    process.env.XAI_API_KEY = "sk-xai";
+    const env = cronSpawnEnv("linux", "grok");
+    expect(env.GROK_API_KEY).toBe("sk-grok");
+    expect(env.XAI_API_KEY).toBe("sk-xai");
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
   } finally {
     for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
     Object.assign(process.env, saved);

@@ -2,7 +2,7 @@
 // (.jspace/state/incidents/). A failed/suspect run opens or updates an incident
 // keyed by cron + failure class; a successful retry resolves it; `cron ack`
 // records acknowledgment (evidence retained) so it stops alerting.
-import { mkdirSync } from "node:fs";
+import { mkdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
@@ -12,6 +12,11 @@ import { readJsonRecords } from "../fs.ts";
 import type { ContractIssue } from "../../core/contracts/diagnostics.ts";
 
 const INCIDENTS_DIR = join(CONFIG_DIR, "state", "incidents");
+
+/** Resolved incidents older than this are pruned (days). */
+export const RESOLVED_INCIDENT_RETENTION_DAYS = 30;
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export type { FailureClass, IncidentStatus } from "../../core/contracts/incident.ts";
 export type Incident = IncidentV1;
@@ -37,6 +42,26 @@ export function readIncidents(root: string): IncidentCollection {
 function writeIncident(root: string, inc: Incident): void {
   mkdirSync(dir(root), { recursive: true });
   writeBytesAtomic(join(dir(root), `${inc.id}.json`), JSON.stringify({ ...inc, schema_version: 1 }, null, 2) + "\n");
+}
+
+function parseLocalStamp(stamp: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2})(\d{2})(\d{2})$/.exec(stamp);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6]));
+}
+
+function pruneResolvedIncidents(root: string, nowMs: number = Date.now()): void {
+  const cutoff = nowMs - RESOLVED_INCIDENT_RETENTION_DAYS * MS_PER_DAY;
+  const incDir = dir(root);
+  for (const inc of readIncidents(root).records) {
+    if (inc.status !== "resolved" || inc.resolvedAt === undefined) continue;
+    const resolved = parseLocalStamp(inc.resolvedAt);
+    if (resolved !== null && resolved.getTime() < cutoff) {
+      try {
+        unlinkSync(join(incDir, `${inc.id}.json`));
+      } catch { /* ignore missing file */ }
+    }
+  }
 }
 
 /** Open a new incident for cron+failureClass, or re-open/update an existing
@@ -74,6 +99,7 @@ export function resolveIncidents(root: string, cronId: string): void {
       writeIncident(root, { ...inc, status: "resolved", resolvedAt: localStamp() });
     }
   }
+  pruneResolvedIncidents(root);
 }
 
 /** Acknowledge open incidents (all, or just one cron). Returns how many were acked. */

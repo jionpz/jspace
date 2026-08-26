@@ -22,7 +22,7 @@ import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { readMaterializedJournal } from "../workspace/journal.ts";
 import { skillProjections } from "../workspace/manifest.ts";
 import type { HubV1 } from "../../core/contracts/hub.ts";
-import { loadCapabilities } from "../../adapters/harness/registry.ts";
+import { getCapability, loadCapabilities } from "../../adapters/harness/registry.ts";
 import { isBriefingStale, readBriefing } from "../context/briefing.ts";
 import { binaryOnPath } from "../../adapters/harness/bin.ts";
 import type { LinuxCronHealth } from "../../adapters/scheduler/types.ts";
@@ -38,6 +38,8 @@ export interface CronLike {
    *  in cron.json (user data, never overwritten by upgrade) is frozen forever,
    *  while a skill target keeps it in the upgrade-managed skill layer. */
   target?: { skill: string };
+  /** Per-cron headless tools override; read by checkCrons for harness support. */
+  tools?: string;
 }
 
 export interface CronHealthDeps {
@@ -747,6 +749,20 @@ function checkCrons(root: string, cron: CronHealthDeps): RegistryDiagnostic[] {
           path: `cron.${c.id}`,
           message: `cron ${c.id} carries an inline prompt while bundled skill ${c.id} owns the same contract; switch to target: {kind: "skill", skill: "${c.id}", entrypoint: "weekly"} so the contract follows jspace workspace upgrade`,
         });
+      }
+      if (c.tools && c.harness) {
+        try {
+          if (!getCapability(c.harness).supports_tool_restriction) {
+            diags.push({
+              severity: "warning",
+              code: "cron.tools_unsupported_harness",
+              path: `cron.${c.id}`,
+              message: `cron ${c.id} sets tools but harness ${c.harness} does not support tool restriction; cron run will fail until tools is removed or harness is changed`,
+            });
+          }
+        } catch {
+          // unknown harness is reported by checkHarness
+        }
       }
     }
     // enabled/installed + stale-task judgement requires a readable crontab;

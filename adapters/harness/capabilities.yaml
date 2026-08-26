@@ -46,6 +46,13 @@
 #                           manual = explicit user action; unsupported = no mechanism.
 #   cron_harness_enum_value — value valid in cron.json `harness` (absent/null for
 #                           IDE-only harnesses that cannot run headless).
+#   supports_tool_restriction — true when argv_flags.permission is set and cron
+#                           `--tools` / cron.json `tools` may restrict headless
+#                           tool access; false = cron add/run must fail loud.
+#   cron_env              — per-harness child env whitelist for headless cron
+#                           spawns (SSOT for cronSpawnEnv); GBRAIN_* + base keys
+#                           are always included; NODE_OPTIONS only when listed
+#                           in allow_keys.
 #   documented            — false for compatibility-only entries (codex) that have no
 #                           harness-<name>.md doc (P5 assertion exemption).
 
@@ -64,6 +71,10 @@ harnesses:
       tools_value: "Bash,Read,Write,Edit,mcp__gbrain__*"
       output: "--output-format"
       output_value: "text"
+    supports_tool_restriction: true
+    cron_env:
+      allow_prefixes: ["ANTHROPIC_"]
+      allow_keys: []
     sessions:
       - { name: SessionStart, source: hook }
       - { name: UserPromptSubmit, source: hook }
@@ -89,6 +100,10 @@ harnesses:
       tools_value: "Bash(*)"
       output: "--output-format"
       output_value: "json"
+    supports_tool_restriction: true
+    cron_env:
+      allow_prefixes: ["GROK_", "XAI_"]
+      allow_keys: []
     sessions:
       - { name: SessionStart, source: hook }
       - { name: UserPromptSubmit, source: hook }
@@ -112,6 +127,10 @@ harnesses:
   opencode:
     headless: ["opencode", "run"]
     argv_flags: {}
+    supports_tool_restriction: false
+    cron_env:
+      allow_prefixes: ["OPENCODE_"]
+      allow_keys: []
     sessions:
       # session.created injects the workbench context as a no-reply user message
       # (client.session.prompt with noReply: true) — real injection, not a
@@ -141,6 +160,10 @@ harnesses:
   pi:
     headless: ["pi", "-p"]
     argv_flags: {}
+    supports_tool_restriction: false
+    cron_env:
+      allow_prefixes: ["PI_"]
+      allow_keys: []
     sessions:
       - { name: session_start, source: extension }
       - { name: before_agent_start, source: extension }
@@ -162,6 +185,10 @@ harnesses:
   cursor:
     headless: null
     argv_flags: {}
+    supports_tool_restriction: false
+    cron_env:
+      allow_prefixes: []
+      allow_keys: []
     sessions:
       - { name: sessionStart, source: hook }
     session_start: { path: ".cursor/hooks.json", format: json, key: "hooks.sessionStart" }
@@ -182,6 +209,10 @@ harnesses:
   codex:
     headless: ["codex", "exec"]
     argv_flags: {}
+    supports_tool_restriction: false
+    cron_env:
+      allow_prefixes: ["OPENAI_", "CODEX_"]
+      allow_keys: []
     sessions: []
     mcp: { native: true }
     mcp_config: null

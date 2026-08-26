@@ -4,6 +4,7 @@
 // so the application layer never touches child_process directly. This is the
 // single place platform process-I/O lives (was application/automation/win32-spawn.ts).
 import { spawn, spawnSync } from "node:child_process";
+import { getCapability } from "../harness/registry.ts";
 
 /** Max harness output bytes kept in memory (1 MiB); beyond that output is
  *  dropped at the tail so a runaway cron can't OOM the CLI. */
@@ -78,21 +79,33 @@ export function win32SpawnTarget(argv: string[]): Win32Spawn {
   return { command: "cmd.exe", args: ["/d", "/s", "/c", `"${cmdline}"`], verbatim: true };
 }
 
-/** Env whitelist for a headless cron child (H1). A scheduled, unattended LLM
+/** Base env keys every headless cron child needs regardless of harness. */
+const CRON_ENV_BASE_KEYS = [
+  "PATH", "HOME", "TERM", "LANG", "LC_ALL", "USER", "LOGNAME", "SHELL", "TMPDIR", "NO_COLOR", "CLICOLOR", "BUN_INSTALL",
+] as const;
+
+const CRON_ENV_WIN32_KEYS = [
+  "USERPROFILE", "APPDATA", "LOCALAPPDATA", "SYSTEMROOT", "COMSPEC", "TEMP", "TMP",
+] as const;
+
+/** Env whitelist for a headless cron child (H1/B6). A scheduled, unattended LLM
  *  has a shell: passing it `{...process.env}` exposes every machine secret to a
  *  prompt-injected cron. Whitelist only what the harness needs to authenticate
- *  and what gbrain needs — the harness's own key must stay (it authenticates
- *  the run), but the other N secrets (tokens, credentials) are withheld. */
-export function cronSpawnEnv(platform: string): Record<string, string> {
-  const allow = [
-    "PATH", "HOME", "TERM", "LANG", "LC_ALL", "USER", "LOGNAME", "SHELL", "TMPDIR", "NO_COLOR", "CLICOLOR",
-    "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL",
-    "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENROUTER_API_KEY", "GROK_API_KEY", "XAI_API_KEY",
-    "GEMINI_API_KEY", "GOOGLE_API_KEY", "PI_API_KEY", "CODEX_API_KEY", "BUN_INSTALL", "NODE_OPTIONS",
-  ];
+ *  and what gbrain needs — cross-vendor API keys and NODE_OPTIONS are withheld
+ *  unless the harness capability explicitly allows them. */
+export function cronSpawnEnv(platform: string, harness: string): Record<string, string> {
+  const cap = getCapability(harness);
+  const allowKeys = new Set<string>([
+    ...CRON_ENV_BASE_KEYS,
+    ...(platform === "win32" ? CRON_ENV_WIN32_KEYS : []),
+    ...(cap.cron_env.allow_keys ?? []),
+  ]);
+  const allowPrefixes = [...cap.cron_env.allow_prefixes];
   const out: Record<string, string> = {};
   for (const key of Object.keys(process.env)) {
-    if (key.startsWith("GBRAIN_") || allow.includes(key)) out[key] = process.env[key] as string;
+    if (key.startsWith("GBRAIN_") || allowKeys.has(key) || allowPrefixes.some((p) => key.startsWith(p))) {
+      out[key] = process.env[key] as string;
+    }
   }
   if (out.PATH === undefined) {
     out.PATH = platform === "win32" ? "C:\\Windows\\system32;C:\\Windows" : "/usr/local/bin:/usr/bin:/bin";

@@ -32,6 +32,10 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 
 > cron 是无头 unattended 执行：`--allowedTools` 白名单、绝不 bypassPermissions。cursor 无 headless CLI（IDE-only 会话 harness），永不进 cron。
 >
+> **工具降权（`--tools` / cron.json `tools`）**：仅 claude/grok 支持（`supports_tool_restriction`）；opencode/pi/codex 设 `tools` 时 `cron add`/`cron run` 非 0 退出；doctor 对存量配置报 `cron.tools_unsupported_harness` warning（不自动改 cron.json）。
+>
+> **无头子进程 env（B6）**：`cronSpawnEnv(platform, harness)` 按 capabilities 声明的 per-harness 白名单放行（如 claude 仅 `ANTHROPIC_*` + `GBRAIN_*` + 基础 env）；默认**不含**跨厂商 API key 与 `NODE_OPTIONS`。claude 代理需保留 `ANTHROPIC_BASE_URL` 等——已在 `ANTHROPIC_*` 前缀内。
+>
 > **支持集** = 五个会话 harness（Claude Code / Grok Build / OpenCode / Pi / Cursor）+ Codex（cron 兼容）。
 
 ## Harness lifecycle 能力矩阵（M4，会话生命周期）
@@ -122,6 +126,7 @@ bin/jspace cron uninstall              # 期望:任务移除
 | Windows | schtasks `install` → `/query` 存在 → 触发一次 `cron run` | 未验证 | — |
 | Windows | 登出不触发（产品边界，文档明示非 bug） | 未验证 | — |
 | Windows | 非法 schedule（MONTHLY / dom / month 定值）→ 显式报错 | 未验证 | — |
+| Windows | schtasks `/tr` 超长（>260 字符）→ build 阶段 fail loud | 未验证 | — |
 | Windows | AVX-less（baseline）本地构建 `bun run build:all` 产物冒烟（CI 无 baseline 运行时） | 未验证 | — |
 | 全部 | CI cron 冒烟解锁：`install → status → uninstall` 全链 exit 0 + doctor 断言 | 未验证（占位 `if: false`） | — |
 
