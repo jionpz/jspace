@@ -9,9 +9,9 @@
 // claude/grok reuse the existing application/gbrain/{wiring,grok-wiring}.ts;
 // cursor/opencode/pi merge/`create` their MCP-list config (their target files
 // ARE MCP lists). All writes are merge + backup, never whole-file rewrites.
-import { readFileSync, writeFileSync, copyFileSync, mkdirSync, existsSync, symlinkSync, readlinkSync, cpSync } from "node:fs";
+import { readFileSync, writeFileSync, copyFileSync, mkdirSync, existsSync, symlinkSync, readlinkSync, cpSync, readdirSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type { CommandSpec, OptionSpec, CmdContext, CmdResult } from "../../application/commands/command.ts";
 import { wireGrokSkillsDir, grokConfigPath, type GrokWireDeps, type GrokWireResult } from "../../application/gbrain/grok-wiring.ts";
 import { wireHarness, describeCapability, defaultGbrainBin, type HarnessWireDeps } from "../../application/harness/wire.ts";
@@ -33,10 +33,29 @@ function readFileOrNull(p: string): string | null {
   }
 }
 
-function backupConfig(p: string): string | null {
+const CONFIG_BACKUP_KEEP = 3;
+
+function pruneConfigBackups(configPath: string): void {
+  const dir = dirname(configPath);
+  const prefix = `${basename(configPath)}.jspace-bak-`;
+  try {
+    const backups = readdirSync(dir)
+      .filter((n) => n.startsWith(prefix))
+      .sort();
+    while (backups.length > CONFIG_BACKUP_KEEP) {
+      unlinkSync(join(dir, backups.shift()!));
+    }
+  } catch {
+    // best-effort prune — the fresh backup still landed
+  }
+}
+
+/** Timestamped backup beside a machine config before merge/write. Exported for tests. */
+export function backupConfig(p: string): string | null {
   const backup = `${p}.jspace-bak-${Date.now()}`;
   try {
     copyFileSync(p, backup);
+    pruneConfigBackups(p);
     return backup;
   } catch {
     return null;

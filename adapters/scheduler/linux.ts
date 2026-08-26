@@ -226,90 +226,81 @@ export function parseManagedLine(line: string, tag: string): InstalledTask | nul
   return { taskId, cronId: id, schedule, argv: `cron run --id ${id} --dir ${dir}` };
 }
 
-export const linuxAdapter: SchedulerAdapter & { io?: CrontabIO; spawn?: SchedulerSpawn; readProcStatus?: () => string } = {
-  platform: "linux",
+export function makeLinuxAdapter(deps: {
+  io?: CrontabIO;
+  spawn?: SchedulerSpawn;
+  readProcStatus?: () => string;
+} = {}): SchedulerAdapter {
+  const io = deps.io ?? defaultIO;
+  const spawnFn = deps.spawn ?? schedulerSpawn;
+  const readProc = deps.readProcStatus ?? readProcStatusFile;
 
-  identity(tag: string, cronId: string): SchedulerIdentity {
-    return posixIdentity(tag, cronId);
-  },
+  return {
+    platform: "linux",
 
-  buildContent(cron: CronDefinition, tag: string, root: string, env: SchedulerEnv): string {
-    // real per-cron install content (a managed crontab line). applyBatch
-    // re-assembles the whole block from the enabled set at write time, so this
-    // also gives dry-run/planning a truthful per-cron view.
-    return crontabLine(cron, tag, root, env.jspaceBinary, env.path, env.home);
-  },
+    identity(tag: string, cronId: string): SchedulerIdentity {
+      return posixIdentity(tag, cronId);
+    },
 
-  inspect(tag: string): InstalledTask[] {
-    const io = linuxAdapter.io ?? defaultIO;
-    const out: InstalledTask[] = [];
-    const existing = io.readCrontab();
-    for (const line of existing.split("\n")) {
-      const parsed = parseManagedLine(line, tag);
-      if (parsed) out.push(parsed);
-    }
-    return out;
-  },
+    buildContent(cron: CronDefinition, tag: string, root: string, env: SchedulerEnv): string {
+      return crontabLine(cron, tag, root, env.jspaceBinary, env.path, env.home);
+    },
 
-  applyBatch(_ops: SchedulerOp[], enabled: CronDefinition[], tag: string, root: string, env: SchedulerEnv): string[] {
-    // Whole-block semantic lives here: crontab is whole-file, so the FULL
-    // enabled set (not the op list) decides the block. An empty enabled set ->
-    // empty block -> the managed block is removed (all-disabled uninstalls);
-    // delete/disable of one cron simply drops it from the rebuilt block.
-    const io = linuxAdapter.io ?? defaultIO;
-    const existing = io.readCrontab();
-    // empty enabled set -> empty block -> replaceManagedBlock removes the whole
-    // managed block (markers too); a non-empty set rebuilds it from scratch.
-    const block = enabled.length === 0 ? "" : crontabBlock(enabled, tag, root, env.jspaceBinary, env.path, env.home);
-    const backup = join(root, ".jspace", "logs", "cron", "crontab.backup");
-    mkdirSync(dirname(backup), { recursive: true });
-    writeFileSync(backup, existing, "utf-8");
-    const merged = replaceManagedBlock(existing, block, tag);
-    io.writeCrontab(merged);
-    return [`jspace: ok: installed cron block (${enabled.length} cron(s))`];
-  },
+    inspect(tag: string): InstalledTask[] {
+      const out: InstalledTask[] = [];
+      const existing = io.readCrontab();
+      for (const line of existing.split("\n")) {
+        const parsed = parseManagedLine(line, tag);
+        if (parsed) out.push(parsed);
+      }
+      return out;
+    },
 
-  uninstallAll(tag: string, root: string, _env: SchedulerEnv): string[] {
-    const io = linuxAdapter.io ?? defaultIO;
-    const existing = io.readCrontab();
-    const merged = replaceManagedBlock(existing, "", tag);
-    const backup = join(root, ".jspace", "logs", "cron", "crontab.backup");
-    mkdirSync(dirname(backup), { recursive: true });
-    writeFileSync(backup, existing, "utf-8");
-    if (merged.trim() === "") {
-      const r = schedulerSpawn("crontab", ["-r"]);
-      if (r.status !== 0 && r.status !== 1) fail(`crontab -r failed: ${(r.stderr ?? "").trim()}`);
-      return ["jspace: ok: removed jspace crons (empty crontab removed)"];
-    }
-    io.writeCrontab(merged);
-    return ["jspace: ok: removed jspace crons from crontab"];
-  },
+    applyBatch(_ops: SchedulerOp[], enabled: CronDefinition[], tag: string, root: string, env: SchedulerEnv): string[] {
+      const existing = io.readCrontab();
+      const block = enabled.length === 0 ? "" : crontabBlock(enabled, tag, root, env.jspaceBinary, env.path, env.home);
+      const backup = join(root, ".jspace", "logs", "cron", "crontab.backup");
+      mkdirSync(dirname(backup), { recursive: true });
+      writeFileSync(backup, existing, "utf-8");
+      const merged = replaceManagedBlock(existing, block, tag);
+      io.writeCrontab(merged);
+      return [`jspace: ok: installed cron block (${enabled.length} cron(s))`];
+    },
 
-  health(_env: SchedulerEnv): LinuxCronHealth {
-    const spawn = linuxAdapter.spawn ?? schedulerSpawn;
-    const procStatus = (linuxAdapter.readProcStatus ?? readProcStatusFile)();
-    const isolated = pidNamespaceIsolated(procStatus);
+    uninstallAll(tag: string, root: string, _env: SchedulerEnv): string[] {
+      const existing = io.readCrontab();
+      const merged = replaceManagedBlock(existing, "", tag);
+      const backup = join(root, ".jspace", "logs", "cron", "crontab.backup");
+      mkdirSync(dirname(backup), { recursive: true });
+      writeFileSync(backup, existing, "utf-8");
+      if (merged.trim() === "") {
+        const r = spawnFn("crontab", ["-r"]);
+        if (r.status !== 0 && r.status !== 1) fail(`crontab -r failed: ${(r.stderr ?? "").trim()}`);
+        return ["jspace: ok: removed jspace crons (empty crontab removed)"];
+      }
+      io.writeCrontab(merged);
+      return ["jspace: ok: removed jspace crons from crontab"];
+    },
 
-    // service: pgrep is the only live check; when it finds nothing the result
-    // splits on environmental visibility — a nested PID namespace hides the host
-    // daemon, so "no process" is NOT proof of "stopped" (issue #10).
-    const s = spawn("sh", ["-c", "pgrep -x crond >/dev/null 2>&1 || pgrep -x cron >/dev/null 2>&1"]);
-    const service: LinuxCronHealth["service"] = s.status === 0 ? "ok" : isolated ? "unverifiable" : "stopped";
+    health(_env: SchedulerEnv): LinuxCronHealth {
+      const procStatus = readProc();
+      const isolated = pidNamespaceIsolated(procStatus);
 
-    // crontab: binary presence + `-l` exit-code grading. A missing crontab
-    // command is a confirmed fault (jspace cannot install) -> "missing-cmd".
-    // status 1 is the legit "no crontab for this uid" state — a real finding
-    // on the host, but inside a UID-isolated sandbox it usually means the host
-    // spool is not visible, so there it degrades to "unverifiable".
-    const c = spawn("sh", ["-c", "command -v crontab"]);
-    let crontab: LinuxCronHealth["crontab"] = "missing-cmd"; // no crontab binary -> confirmed cannot install
-    if ((c.stdout ?? "").trim() !== "") {
-      const r = spawn("crontab", ["-l"]);
-      crontab =
-        r.status === 0 ? "ok"
-        : r.status === 1 ? (isolated ? "unverifiable" : "missing")
-        : "unverifiable"; // other failure (e.g. sandboxed crontab) -> not proof of absence
-    }
-    return { crontab, service };
-  },
-};
+      const s = spawnFn("sh", ["-c", "pgrep -x crond >/dev/null 2>&1 || pgrep -x cron >/dev/null 2>&1"]);
+      const service: LinuxCronHealth["service"] = s.status === 0 ? "ok" : isolated ? "unverifiable" : "stopped";
+
+      const c = spawnFn("sh", ["-c", "command -v crontab"]);
+      let crontab: LinuxCronHealth["crontab"] = "missing-cmd";
+      if ((c.stdout ?? "").trim() !== "") {
+        const r = spawnFn("crontab", ["-l"]);
+        crontab =
+          r.status === 0 ? "ok"
+          : r.status === 1 ? (isolated ? "unverifiable" : "missing")
+          : "unverifiable";
+      }
+      return { crontab, service };
+    },
+  };
+}
+
+export const linuxAdapter = makeLinuxAdapter();

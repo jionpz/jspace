@@ -59,7 +59,12 @@ function walk(dir: string, base: string, out: Map<string, string>): void {
       if (/\.test\.(ts|py)$/.test(name)) continue;
       const rel = relative(base, p).split(sep).join("/");
       const baseRel = relative(repoRoot, base).split(sep).join("/");
-      out.set(`${baseRel}/${rel}`, readFileSync(p, "utf-8"));
+      const raw = readFileSync(p);
+      const asUtf8 = Buffer.from(raw.toString("utf8"), "utf8");
+      if (!raw.equals(asUtf8)) {
+        throw new Error(`gen-assets: binary assets not supported (not valid UTF-8 round-trip): ${baseRel}/${rel}`);
+      }
+      out.set(`${baseRel}/${rel}`, raw.toString("utf8"));
     }
   }
 }
