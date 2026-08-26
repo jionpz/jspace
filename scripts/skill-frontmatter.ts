@@ -11,6 +11,14 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+// The "TRELLIS-" prefix is historical (pre-jspace naming), kept ON PURPOSE:
+// the marker is a frozen wire-format identifier baked into every deployed
+// workbench's user-owned AGENTS.md, and the delimited section feeds the
+// external gbrain skill resolver (OpenClaw AGENTS.md layout — see the prose
+// above the block in templates/workbench/AGENTS.md). Renaming would need
+// dual-marker compat across gen-assets / doctor / upgrade for zero functional
+// gain. Do not rename without a migration plan for existing workbenches.
+
 export interface SkillFrontmatter {
   name: string;
   description: string;
