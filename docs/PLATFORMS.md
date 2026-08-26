@@ -56,13 +56,14 @@ MVP 只支持能映射到 Task Scheduler 的 **DAILY / WEEKLY**:
 
 ## 手动验证矩阵(每平台)
 
-> 构建/发布与一键安装已在 CI 自动验证(`.github/workflows/build.yml`:三平台矩阵构建 + `verify-install` 作业)。本矩阵用于本地开发期人工冒烟与 CI 断言口径;真机调度行为(macOS launchd / Linux crontab / Windows schtasks)仍按本矩阵人工复核。
+> 构建/发布与一键安装已在 CI 自动验证(`.github/workflows/build.yml`:三平台矩阵构建 + `verify-install` 作业)。**Linux crontab 与 Windows schtasks 的调度 CRUD(写入/读回/卸载)自 2026-08-26 起也由 CI 真实执行**(见下方「CI cron 冒烟」)。本矩阵仍是本地开发期人工冒烟与 CI 断言口径;**真实触发**(等到时间点被拉起)与 macOS launchd 的真机安装仍按本矩阵人工复核。
 
 ### 构建 target 兼容性(发布二进制与本地构建一致)
 
 - x64 目标使用 `-baseline`(不要求 AVX 的兼容构建):`bun-linux-x64-baseline`、`bun-darwin-x64-baseline`。
 - **Windows x64 例外**:GitHub Windows runner 上 baseline bun runtime 下载被持续阻断,因此发布/CI 的 Windows x64 二进制用**非 baseline** `bun-windows-x64`(需 AVX2)。`scripts/build-all.ts`、`package.json build:win` 与 CI 矩阵保持一致(单一权威,AC9),本地 `bun run build:all` 产出的 `bin/jspace-windows-x64.exe` 与 Release 资产同 target。
 - arm64 目标(`bun-*-arm64`)无需 baseline 区分。
+- **AVX-less 机器的护栏**:因为 Windows x64 发布产物需要 AVX2,`jspace update` 与 `install.ps1` 都在替换前跑一次 `--version` 自检,跑不起来就丢弃下载、保留现有二进制(见下方「一键安装验证矩阵」的边界与约定)。这是「未获 AVX-less 硬件」那条台账行的替代关闭条件。
 
 
 ```bash
@@ -93,16 +94,18 @@ bin/jspace cron uninstall              # 期望:任务移除
 - 最小发行版/容器无 crontab 或未启动 crond:`jspace cron install` 应 **fail-fast 报错**;`doctor` 报「crontab 命令缺失 / cron 守护进程未运行」warning。
 - **沙盒 / PID+UID 隔离**(Codex sandbox、`bwrap --unshare-pid` 容器):宿主 cron daemon 与 crontab 对 doctor 不可见,`pgrep` 查不到进程、`crontab -l` 读不到宿主条目。doctor 经 `/proc/self/status` 的 `NSpid:` 字段(≥2 值 = 嵌套 namespace)识别,将状态降级为 **info**(`cron.daemon_unverifiable` / `cron.crontab_unverifiable`),不报 warning、不误导"未安装"——真机状态需在宿主上确认。
 
-## doctor 断言表(CI 解锁后判通过标准,M6)
+## doctor 断言表(判通过标准,M6)
+
+> 标 **[CI]** 的行自 2026-08-26 起由 CI cron 冒烟在 Linux/Windows runner 上真实断言(见下方「CI cron 冒烟」):install 前必有 `cron.not_installed`、install 后必无、孤儿任务必有 `cron.stale_task`、真机上绝不出现 `*_unverifiable`。其余行仍是人工复核口径。
 
 | 场景 | 平台 | `doctor` 期望输出 |
 |---|---|---|
 | 无 cron 定义 | 全部 | 无 cron 相关 warning |
-| cron enabled 但未 install | 全部 | warning `cron <id> enabled but not installed` |
+| cron enabled 但未 install **[CI]** | 全部 | warning `cron <id> enabled but not installed` |
 | 已 install | macOS | 无「enabled but not installed」warning;无 stale 告警 |
-| 已 install | Linux | 无「enabled but not installed」;无 stale;crontab/cron 服务存在 → 无服务 warning |
-| 已 install | Windows | 无「enabled but not installed」;无 stale;`schtasks /query` 存在 |
-| cron 已删但调度器残留 | 全部 | warning `stale scheduled task <id>` |
+| 已 install **[CI]** | Linux | 无「enabled but not installed」;无 stale;crontab/cron 服务存在 → 无服务 warning |
+| 已 install **[CI]** | Windows | 无「enabled but not installed」;无 stale;`schtasks /query` 存在 |
+| cron 已删但调度器残留 **[CI]** | 全部 | warning `stale scheduled task <id>` |
 | 存在 open cron incident | 全部 | warning `cron.open_incidents`（`N open cron incident(s)`） |
 | Linux 无 crontab 命令 | Linux | warning `crontab command not found on this system` |
 | Linux 有 crontab 命令但用户无 crontab(`crontab -l` status 1) | Linux | warning `no crontab installed for this user` |
@@ -112,22 +115,34 @@ bin/jspace cron uninstall              # 期望:任务移除
 
 ## 真机验证台账（执行后回写，2026-08-26 建）
 
-> 本台账跟踪「手动验证矩阵」在**真机**上的执行状态。每项执行后回写：日期 + 证据（输出 / 日志路径 / 截图）。全部通过后解锁下方 CI cron 冒烟占位。
+> 本台账跟踪「手动验证矩阵」在**真机**上的执行状态。每项执行后回写：日期 + 证据（输出 / 日志路径 / 截图）。
+>
+> **两类关闭条件**：① 调度 **CRUD**（写入 / 读回 / 卸载）可由 CI 在 hosted runner 上真实执行 —— 已解锁，见下节；② **真实触发**（等到时间点被 crond / launchd / Task Scheduler 拉起）、**沙盒 namespace 降级**、**AVX-less 硬件**这三类在 CI 与本仓库开发环境都构造不出，只能人工真机复核，或按此处显式记录的**替代关闭条件**关闭。
 
 | 平台 | 用例（见验证矩阵） | 状态 | 证据 |
 |---|---|---|---|
-| Linux | crontab `install → status → uninstall` 全链（无补跑语义：错过即跳过） | 未验证 | — |
-| Linux | 无 crontab 命令 / 无 crond → `cron install` fail-fast + doctor warning | 未验证 | — |
-| Linux | 沙盒 / PID+UID namespace 隔离 → doctor info 降级（`cron.daemon_unverifiable` 等，不报 warning） | 未验证 | — |
-| Windows | schtasks `install` → `/query` 存在 → 触发一次 `cron run` | 未验证 | — |
-| Windows | 登出不触发（产品边界，文档明示非 bug） | 未验证 | — |
-| Windows | 非法 schedule（MONTHLY / dom / month 定值）→ 显式报错 | 未验证 | — |
-| Windows | AVX-less（baseline）本地构建 `bun run build:all` 产物冒烟（CI 无 baseline 运行时） | 未验证 | — |
-| 全部 | CI cron 冒烟解锁：`install → status → uninstall` 全链 exit 0 + doctor 断言 | 未验证（占位 `if: false`） | — |
+| Linux | crontab `install → status → uninstall` 全链（无补跑语义：错过即跳过） | **CRUD 已验证**（2026-08-26）；补跑语义仍未验证 | 本机（Ubuntu 24.04 容器 + cron 3.0pl1，`/proc/self/status` 的 `NSpid:` 单值即非嵌套 namespace）按 `build.yml`「Cron CRUD smoke (Linux crontab)」脚本**原样**执行通过（编译产物 `bun-linux-x64-baseline`，commit 702a61b）：install 后 `crontab -l` 含受管块与 smoke-test 行 → `cron status` 为 `never run` → doctor 不再报 `cron.not_installed` → 二次 install 为 no-op → `cron remove` 后 doctor 报 `cron.stale_task` → uninstall 后受管块消失。同一脚本已进 CI（linux 两格矩阵）。「错过即跳过」需真实错过一个时间点，**仍未验证** |
+| Linux | 无 crontab 命令 / 无 crond → `cron install` fail-fast + doctor warning | **已验证**（2026-08-26） | 本机临时移除 `/usr/bin/crontab`：`doctor` 报 warning `crontab command not found on this system` 且 **exit 0**（健康检查不抛）；`cron install` **exit 1**，文案 `crontab command not available (…ENOENT); install the cron package first (…)`（本次复核发现原文案是无信息量的 `crontab -l failed (status undefined)`，已硬化为 `adapters/scheduler/linux.ts` 的 `crontabUnavailable`）。无 crond：cron 已安装但守护进程未启动 → doctor 报 warning `cron daemon not running…` |
+| Linux | 沙盒 / PID+UID namespace 隔离 → doctor info 降级（`cron.daemon_unverifiable` 等，不报 warning） | 未验证 | 构造不出：本仓库开发环境 `NSpid:` 单值（非嵌套），GitHub runner 禁止非特权 user namespace（`verify.yml` 尾注实测）。仅单测覆盖（`pidNamespaceIsolated` + `health()` 三态分支）。**非降级侧**（真机绝不得报 `*_unverifiable`）已在 `verify.yml` 与本次 CI cron 冒烟中断言。真机复核建议 WSL2 + Codex sandbox |
+| Windows | schtasks `install` → `/query` 存在 → 触发一次 `cron run` | **注册/读回已进 CI 断言**；真实触发仍未验证 | `build.yml`「Cron CRUD smoke (Windows schtasks)」：install → `schtasks /query /fo csv /nh` 出现 `JSpaceCron_*` → `cron status` 为 `never run` → `cron remove` 后 doctor 报 `cron.stale_task` → uninstall 后任务消失。真实触发（等到 21:00 或 `schtasks /run`）需真机 |
+| Windows | 登出不触发（产品边界，文档明示非 bug） | 未验证 | 需真机登出会话观察；hosted runner 没有登出语义 |
+| Windows | 非法 schedule（MONTHLY / dom / month 定值）→ 显式报错 | **已进 CI 断言**（2026-08-26） | 同上 Windows 步骤末尾的负向断言：`cron add --schedule "0 21 1 * *"` 必须非零退出且文案含 `not supported on Windows`（`cronAdd` 在 win32 上 add 期即拒绝）。纯函数侧另有 `isWindowsInstallable` 单测 |
+| Windows | AVX-less（baseline）本地构建 `bun run build:all` 产物冒烟（CI 无 baseline 运行时） | **替代关闭**（2026-08-26） | 未获 AVX-less 硬件，改按替代关闭条件关闭：① `jspace update` **替换前自检**——下载 + SHA-256 通过后先落暂存文件跑 `--version`，exit≠0 或版本号不符即丢弃、**绝不触碰**现有二进制，文案点名 Windows x64 非 baseline / AVX2 边界（`cli/update.ts`，有单测）；② `install/install.ps1` 落盘前同构自检，失败不安装/不替换；③ 本文档「构建 target 兼容性」明示该边界。真机复核待有 AVX-less 机器 |
+| 全部 | CI cron 冒烟解锁：`install → status → uninstall` 全链 exit 0 + doctor 断言 | **已解锁**（2026-08-26） | `.github/workflows/build.yml` 的 `if: false` 占位已替换为按 `runner.os` 分派的真实断言，见下节 |
 
-## CI 解锁后 cron 冒烟(占位)
+## CI cron 冒烟（已解锁,2026-08-26）
 
-`.github/workflows/build.yml` 已预留 cron 冒烟(注释 `if: false`):解锁后启用 `cron add → install → status → uninstall`,三平台 runner 全链 exit 0 + 按上表断言 doctor。
+`.github/workflows/build.yml` 的 build 矩阵按 runner OS 跑调度 CRUD 闭环,用编译好的发布产物(不是源码 CLI):
+
+| runner | 步骤 | 断言 |
+|---|---|---|
+| Linux(2 格) | Cron CRUD smoke (Linux crontab) | `cron add`(enabled)→ doctor 报 `cron.not_installed` → `install --dry-run` 规划 `[create]` → `install` → `crontab -l` 含受管块 + smoke-test 行 → `cron status` 为 `never run` → doctor 不再报 `cron.not_installed` 且**不得**出现 `*_unverifiable` → 二次 `install` 为 no-op → `cron remove` 后报 `cron.stale_task` → `uninstall` 后受管块消失。runner 缺 `crontab` 时先装 cron,绝不静默跳过 |
+| Windows(2 格) | Cron CRUD smoke (Windows schtasks) | 同构闭环,读回走 `schtasks /query`;末尾追加 dom 定值调度必须在 `cron add` 阶段被拒绝的负向断言 |
+| macOS(2 格) | Cron plan smoke (macOS, no launchd mutation) | 仅 `cron install --dry-run` + `doctor`:launchd agent 绑定真实用户 GUI 会话,hosted runner 上 bootstrap 只会 flaky。仍覆盖 schedule 解析 + plist 内容编译 + 收敛规划 |
+
+**刻意不断言的**:任务被**真的触发**。runner 上 crond/launchd 的触发时机不是可信信号,且无头 run 还需真实 harness CLI;真实触发留在上方台账的人工行。
+
+> 触发时机注意:`build.yml` 只在 `push tags v*` 与 `workflow_dispatch` 上运行(PR 走 `verify.yml`)。因此这套冒烟的首个 run 证据来自下一次 tag 构建或手动 dispatch —— **发版前建议先手动 dispatch 一次**,别把调度冒烟的问题留到打 tag 当下。
 
 ## 纯函数单测(本机可跑,无需真机)
 
@@ -156,6 +171,9 @@ curl -fsSL <raw>/install/install.sh -o /tmp/jspace-install.sh && bash /tmp/jspac
 - **架构探测**:macOS Rosetta(`sysctl -n sysctl.proc_translated`=1)强制 arm64;Windows ARM64 主机上 x64 模拟安装时提示。
 - **符号链接 rc**(dotfiles 用户):脚本解析真实路径再写;解析失败则跳过自动注入并打印手动指令。
 - **版本钉定**:`JSPACE_VERSION=<tag>` 安装指定版本(默认 `latest`);`JSPACE_BASE_URL` 可覆盖下载源(本地 e2e 逃生门)。
+- **`jspace update` 版本形态**:只接受**正式发布 tag** `vX.Y.Z`(裸 `1.2.3` 归一到 `v1.2.3`)。预发布/别名/畸形 tag 在下载前 fail loud —— 本项目不发预发布通道,放行只会让 update 去下一组根本不存在的产物。
+- **`jspace update` 的 API 逃生门**:解析 `latest` 走 GitHub API,遇 403/429(未认证速率限制或代理拦截)会明确提示改用 `jspace update --version vX.Y.Z` —— 指定版本直连 releases 下载,完全绕过 API。
+- **替换前自检(防变砖)**:SHA-256 只证明字节是我们发布的,不证明它能在本机跑起来。`jspace update` 与 `install.ps1` 都先把产物落到暂存文件跑一次 `--version`(须 exit 0 且输出含目标版本号),通过后才替换;失败即丢弃暂存文件、**绝不触碰**现有二进制,文案点名 Windows x64 非 baseline(需 AVX2)这条最可能的成因。暂存文件放**目标目录同级**而不是 `$TMPDIR`:`/tmp` 常挂 `noexec`,同盘 rename 也才是原子的。
 - **`JSPACE_BASE_URL` 信任语义**:设置该变量即**完全信任该源**——二进制与 `checksums.txt` 的 SHA-256 校验对都来自同一个 base(install 脚本与 `jspace update` 一致),校验只防传输/宿主篡改,不防源本身。默认 GitHub Releases 安全;本地模拟/私有镜像源时需自行确保源可信。install 脚本强制 https 并用 `JSPACE_ALLOW_INSECURE=1` 显式放行 http。
 - **卸载语义**:只剥离 rc 标记块、绝不整文件回滚;「安装后改 rc 再卸载」保留用户编辑;Windows PATH 按条目精确删除。
 
