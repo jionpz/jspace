@@ -12,6 +12,19 @@
 ## 第 2 步 · 取证(留实际输出)
 
 ```bash
+$ gbrain list --type note --tag source:session -n 50
+No pages found.
+
+$ gbrain list --type note --tag source:cron -n 50
+records/consolidate/2026-08-09    updated 2026-08-09
+project/jspace/state              updated 2026-08-09
+project/tiyanying-52/state        updated 2026-08-09
+project/baobiao-module/state      updated 2026-08-09
+
+$ jq '.session_count, .writeback_nudge_for_session' .jspace/state/briefing.json
+9
+9
+
 $ gbrain list --type note --tag project -n 50
 project/jspace/state          updated 2026-08-09
 project/tiyanying-52/state    updated 2026-08-09
@@ -46,8 +59,9 @@ $ ls .jspace/logs/cron/inbox-tidy/
 
 ## 第 3 步 · 判读分级
 
-**检查 1(写回执行率)**:state 页最近更新全部是 `2026-08-09`,而那天正是 memory-consolidate cron 的运行日;窗口内没有任何一条更新来自日常会话。
-→ 结论:**写回腿停摆**——记忆在长,但长的是 cron 归纳的,不是会话沉淀的。归 `需你决策`。
+**检查 1(写回执行率)**:来源计数 —— `--tag source:session` 落窗口 **0 条**,`--tag source:cron` 落窗口 **4 条**;两组都没覆盖到的无 tag 页 0 条。写回率 = 0/(0+4) = **0%**。state 页最近更新全部是 `2026-08-09`(memory-consolidate cron 的运行日),与来源计数互相印证。
+提醒面:`session_count = 9` 且 `writeback_nudge_for_session = 9` —— session-start hook 在跑、轻提示也发到了最近这个会话,所以**不是接线断了,是习惯没养成**。
+→ 结论:**会话写回腿停摆**——记忆在长,但长的是 cron 归纳的,不是会话沉淀的;根因在习惯不在接线。归 `需你决策`。
 
 **检查 2(挂接一致性)**:`projects/` 有 2 个项目,`jspace project list` 返回 no projects。
 → 结论:registry 未注册(域 README 已挂接,故非完全漂移)。归 `立即可做`,附:`jspace project add <ascii-id> --asset-rel-path projects/<中文名>`。
@@ -91,14 +105,20 @@ $ gbrain get records/retro/2026-08-10        # 验证读回
 ## 一句话
 cron 腿稳定在转、资产腿无输入、**会话写回腿停摆**——本周 gbrain 的增长全部来自定时归纳,没有一条来自日常会话沉淀。
 
+## 写回率(检查 1)
+- 会话写入 0 条 / 定时写入 4 条 → 写回率 **0%**
+- 无来源 tag 的页:0 条
+- 取证方式:`gbrain list --tag source:session|source:cron` 精确计数(非 proxy)
+- 提醒面:session_count 本周 6→9(在涨)/ 轻提示已发到第 9 个会话 → 接线正常,缺的是习惯
+
 ## 立即可做(1)
 - [挂接] 证据:`ls projects/` = 2 个;`jspace project list` = no projects → registry 未注册
   修复:`jspace project add <ascii-id> --asset-rel-path projects/<中文名>`(需先定中文名↔ascii id 映射)
 
 ## 需你决策(2)
-- [写回停摆] 证据:state 页最近更新均为 08-09(consolidate cron 当日),窗口内 0 条来自会话
-  选项:A 养成收工说「收工」的习惯(触发 memory-writeback)/ B 给常用 harness 补 session_end 接线 / C 接受现状,靠 cron 归纳
-  推荐 A —— 成本最低且不依赖 harness 能力(多数 harness 的 session_end 是 manual 级)
+- [写回停摆] 证据:`--tag source:session` 落窗口 0 条 vs `--tag source:cron` 4 条;state 页最近更新均为 08-09(consolidate cron 当日)
+  选项:A 养成收工说「收工」的习惯(触发 memory-writeback)/ B 换一个 session_end 是 best_effort 的 harness / C 接受现状,靠 cron 归纳
+  推荐 A —— B 没有想象中管用:claude/cursor 的 session-end hook 输出是 fire-and-forget(注不回会话),opencode/pi 压根没有结束事件;而轻提示已经发到位了(session_count 9 / nudge 9),缺的是「被提醒之后真的写」这一步
 - [工具缺口] 证据:cron 日志有 `skill asset-ingest is out of date` 告警,而 `jspace doctor` 无此检查
   选项:A 给 doctor 补 skill 过时检查(复用 cron 路径已有机制)/ B 维持现状
   推荐 A
@@ -111,6 +131,7 @@ cron 腿稳定在转、资产腿无输入、**会话写回腿停摆**——本�
   补法:语料增长到 ~50 页后此条才有判别力;本周仅用日志面证据
 
 ## 基线数据
+- 会话写入:0 | 定时写入:4 | 写回率:0% | 无来源 tag 页:0
 - state 页本周更新数:4(全部来自 cron)| 未挂接项目:0(域表)/ 2(registry)
 - 断指针:0 | inbox 停滞:0 | cron 失败:1(已闭环)
 ```
@@ -120,6 +141,7 @@ cron 腿稳定在转、资产腿无输入、**会话写回腿停摆**——本�
 ## 这份 run 为什么合格
 
 - 每条结论前面都有一行**实际命令输出**,不是「据观察」。
+- 写回率是**数出来的**(两条 `--tag` 计数),不是「感觉这周写得少」;而且顺手判了提醒面(`briefing.json`),把「没被提醒」和「提醒了没做」分开——推荐项才立得住。
 - 「连续 3 次空跑」没有被写成「资产流水线运行良好」——**空跑不等于健康**,它被诚实地记为观察项。
 - 小语料导致检查 6 的语义面失效,被明确记为「无法判定 + 补法」,而不是硬编一个结论。
 - 全程**没有修改任何文件**:两条「需你决策」给的是选项与推荐,落地要等用户点头。

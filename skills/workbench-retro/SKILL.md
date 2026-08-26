@@ -34,6 +34,20 @@ triggers:
 
 自省最容易退化成「AI 编一段听起来对的反思」。**每条结论必须绑定一条取证命令的实际输出**;拿不到证据就写「无法判定 + 缺什么证据」,**不许猜、不许润色成结论**。六条检查的完整取证细则 → `~/.agents/skills/workbench-retro/references/checks.md`。
 
+## 输出格式(固定;完整骨架见 checks.md「报告结构」)
+
+报告依次是:一句话 → **写回率** → 立即可做 → 需你决策 → 观察中 → 无法判定 → 基线数据。**「写回率」是必出的一节**,即使数字不好看也照写:
+
+```markdown
+## 写回率(检查 1)
+- 会话写入 <N> 条 / 定时写入 <M> 条 → 写回率 <N/(N+M)>(分母为 0 记「本周无写入」,不写 0%)
+- 无来源 tag 的页:<K> 条(历史页 / 本周写侧漏打标——后者要点名 slug)
+- 取证方式:<`gbrain --tag` 精确计数 / proxy 估算(说明为什么降级)>
+- 提醒面:session_count <涨没涨> / 轻提示 <发没发>
+```
+
+它回答的是飞轮最要命的那个问题:**记忆在长,长的是 cron 归纳的还是会话沉淀的**。来源 tag 的写侧纪律见 `~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」;取不到精确计数就照实写「无法判定 + 降级 proxy」,**不许**拿 proxy 冒充精确数。
+
 ## 决策表
 
 | 判断 | 取值 | 动作 |
@@ -49,8 +63,11 @@ triggers:
 
 ```bash
 # 取证(只读;逐条判读见 references/checks.md)
+gbrain list --type note --tag source:session -n 50 # 会话写入(写回率分子,检查 1)
+gbrain list --type note --tag source:cron -n 50    # 定时写入(写回率分母另一半,检查 1)
 gbrain list --type note --tag project -n 50        # state 页与更新时间(检查 1)
 gbrain list --type note --tag knowledge -n 20      # 本周新知识(检查 1/6)
+jq '.session_count, .writeback_nudge_for_session' .jspace/state/briefing.json  # 提醒面接没接上(检查 1)
 ls <filehub>/projects/ && jspace project list      # 挂接一致性(检查 2)
 gbrain list --type note --tag asset -n 20          # 指针抽样源(检查 3)
 gbrain list --type reference -n 20                 # 迁移缺口抽样(检查 3, info)
@@ -70,7 +87,7 @@ gbrain put records/retro/<YYYY-MM-DD> < <报告文件>   # dated memory record,�
 2. **取证**:跑六条检查的命令(`~/.agents/skills/workbench-retro/references/checks.md`),**留下实际输出**。任一条拿不到证据 → 记「无法判定」,继续下一条,不中断。
 3. **判读分级**:按决策表把发现归入 立即可做 / 需你决策 / 观察中;每条写明「证据 → 结论」两段,不许只有结论。
 4. **复现升级**:读上周 `records/retro/<上周日期>` 页,把连续出现的「观察中」提级并标注已复现周数。
-5. **产出**:写 gbrain note 页 `records/retro/<YYYY-MM-DD>`(`tags: [retro, weekly]`、`project: jspace`;同周重跑覆盖同页,不新建);会话模式同时把清单呈给用户。
+5. **产出**:写 gbrain note 页 `records/retro/<YYYY-MM-DD>`(`tags: [retro, weekly, <来源 tag>]`——无头 cron 跑 → `source:cron`,会话内跑 → `source:session`;`project: jspace`;同周重跑覆盖同页,不新建);会话模式同时把清单呈给用户。
 6. **执行(仅会话模式、仅经确认)**:用户逐项确认后才执行「立即可做」项;**未确认的一律不动**。无头模式跳过本步。
 
 ## 边界(红线)
@@ -82,7 +99,9 @@ gbrain put records/retro/<YYYY-MM-DD> < <报告文件>   # dated memory record,�
 ## 按需深入(条件读指针)
 
 - 六条检查的取证命令 / 判读阈值 / 分级归属 / 证据缺失处置 → `~/.agents/skills/workbench-retro/references/checks.md`
-- 写回纪律(判定「该写没写」的标准)→ `~/.agents/skills/memory-writeback/references/writeback.md`
+- 写回纪律(判定「该写没写」的标准)+ 来源 tag 写侧约定 → `~/.agents/skills/memory-writeback/references/writeback.md`
+- 来源 tag 纪律源(`source:session` / `source:cron` 的语义与计数口径)→ `~/.agents/skills/jspace-use/references/gbrain.md`
+- session-end / turn 提醒的能力边界(哪些 harness 有 hook、哪些只有轻提示)→ `~/.agents/skills/jspace-use/references/harnesses.md`
 - 挂接三步与退役阈值 → `~/.agents/skills/jspace-use/SKILL.md` §8
 - dated memory record 纪律(为何用日期 slug 而非固定 slug)→ `~/.agents/skills/jspace-use/references/gbrain.md`
 
@@ -93,9 +112,10 @@ gbrain put records/retro/<YYYY-MM-DD> < <报告文件>   # dated memory record,�
 ## 自检(做完跑这条)
 
 ```bash
-gbrain get records/retro/<YYYY-MM-DD>   # 页存在;tags 含 retro;每条结论都带证据行
+gbrain get records/retro/<YYYY-MM-DD>   # 页存在;tags 含 retro + 来源 tag;每条结论都带证据行
 jspace doctor --dir .                   # 自省过程未把工作台改坏(应与跑之前一致)
 ```
+(报告缺「写回率」一节 = 不合格,补跑检查 1)
 (报告里出现任何一条没有证据支撑的结论 = 本次自省不合格,重跑第 2 步)
 
 ## 参考

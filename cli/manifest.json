@@ -74,7 +74,7 @@
     },
     {
       "path": "skills/jspace-use/references/gbrain.md",
-      "sha256": "2208b58e37fd32e5d9591452dc92e44804f13427a3920bed72c283bbeac920be",
+      "sha256": "669d40ca6a9ef04fbaa72bdf871903b07ef7765db25d33fb76b6df80dea166a0",
       "ownership": "seed"
     },
     {
@@ -144,7 +144,7 @@
     },
     {
       "path": "skills/asset-ingest/references/gbrain-write.md",
-      "sha256": "fa22bcec210b077b9b10bb2f790c3dc178dd4658399573046b81b2f6e9a6e2fd",
+      "sha256": "575414d43f541cad8b95d6c57659452e1f1975777a075b767446e137637000ef",
       "ownership": "seed"
     },
     {
@@ -184,42 +184,42 @@
     },
     {
       "path": "skills/memory-writeback/SKILL.md",
-      "sha256": "c04660c99287fe84f1fa6515c3bddd4f6fdf321d39c8476f500f44c2f9e7ff2f",
+      "sha256": "6b7ee961cb8d370402d24233069b505c3c035c02f2efc17ff50b4873dad4de68",
       "ownership": "seed"
     },
     {
       "path": "skills/memory-writeback/references/example-writeback.md",
-      "sha256": "a22348f9ed6268c201d77b32901fc4bba8abeca73fa24ecfbc387a5b1fa0531a",
+      "sha256": "4e12184de693864a9dd4ee45638c07575e4b83ea23d7936a0513d235b8a1ea38",
       "ownership": "seed"
     },
     {
       "path": "skills/memory-writeback/references/writeback.md",
-      "sha256": "d1a3e5bd0757fce9e7ffa51a61885ae0e669c66b35856a8814e47b6a0183d286",
+      "sha256": "a3ea56b10101ec41c0daca862d99de012e2752f0234a0830de6db81741a9f7cc",
       "ownership": "seed"
     },
     {
       "path": "skills/workbench-retro/SKILL.md",
-      "sha256": "25914f32edd10b6d16aa570cc4688c6bde07e19cd9bcba84c4c86b9ffe11cbb2",
+      "sha256": "aa40f38e44ba30ca31df7d66cbb34a88fc637da90ef523daec8ad0d8d6e3776e",
       "ownership": "seed"
     },
     {
       "path": "skills/workbench-retro/references/checks.md",
-      "sha256": "b90a5a02bef4b3e583e9d1536f51c52672d7e59e9d419c285100c8a403179da7",
+      "sha256": "4d92b85492b7f9b12ca88b2774c15c329f15a68480ba2e533aec8d68d12c3903",
       "ownership": "seed"
     },
     {
       "path": "skills/workbench-retro/references/example-retro.md",
-      "sha256": "89e23b1a2c3d96f097321ba23c5b1a2eb0e4034cc27f296da94045b268bacedd",
+      "sha256": "bc9e938d55e1867653a743b4eccb6bc7e98bd231fef3a99eb0c9a88a64a74c0f",
       "ownership": "seed"
     },
     {
       "path": "skills/weekly-report/SKILL.md",
-      "sha256": "d548e58faf450cf6df92591f2a04d103338f1a5dd3875e7d9eb7fc044ed23f1e",
+      "sha256": "d55e367a3e8cfb705a13c73d05b485c3f7bd04928151dde7dd4b1466f8503db9",
       "ownership": "seed"
     },
     {
       "path": "skills/memory-consolidate/SKILL.md",
-      "sha256": "0d8518411421307ce09be5d23794295499b87e24ae89582523584e7ec7a4d989",
+      "sha256": "defab071d25e46c120aa078a9aa87b279597ccb89a1fc180879e8a2f477dd17e",
       "ownership": "seed"
     }
   ]
