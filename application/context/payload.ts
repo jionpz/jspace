@@ -61,10 +61,17 @@ export function renderSessionStart(state: WorkbenchState, root: string): string 
   return fixed; // extreme: even the empty <available> overflows — keep state, drop list
 }
 
+export interface TurnOptions {
+  /** Caller has claimed this session's single write-back nudge (B4). Only
+   *  honored when nothing more urgent is pending — the nudge is the lowest
+   *  priority line, never a competitor to hub/pending/cron/inbox. */
+  writebackNudge?: boolean;
+}
+
 /** Per-turn single-line state (design §3.2). Empty string = nothing actionable,
  *  and the caller emits nothing (zero output, exit 0). Always well under the
  *  512B turn budget by construction (single line, ids truncated). */
-export function renderTurn(state: WorkbenchState): string {
+export function renderTurn(state: WorkbenchState, opts: TurnOptions = {}): string {
   if (state.hubBroken) return `<jspace-state>hub.json 缺失或损坏（jspace doctor --dir .）</jspace-state>`;
   if (state.pendingCount > 0) {
     return `<jspace-state>pending: ${state.pendingCount} 笔暂存写待落盘（jspace pending apply）</jspace-state>`;
@@ -77,8 +84,17 @@ export function renderTurn(state: WorkbenchState): string {
   if (state.inboxCount > 0) {
     return `<jspace-state>inbox: ${state.inboxCount} 份待整理（「整理一下 inbox」）</jspace-state>`;
   }
+  // Lowest priority, at most once per session (B4 flywheel): most harnesses have
+  // no usable session-end hook, and the two that do discard the hook's output —
+  // so this line is the only in-session write-back reminder. It nudges an
+  // EXPLICIT action; nothing here ever writes gbrain.
+  if (opts.writebackNudge) {
+    return `<jspace-state>${WRITEBACK_NUDGE}</jspace-state>`;
+  }
   return "";
 }
+
+const WRITEBACK_NUDGE = "收工前若本次有值得留存的事实，说「收工」触发 memory-writeback（每会话提醒一次；不自动写 gbrain）";
 
 /** Pre-compact passive reminder (only nudge, never auto-write): the session is about to compact;
  *  surface the state that could be lost + remind that write-back stays explicit

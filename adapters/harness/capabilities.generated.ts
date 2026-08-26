@@ -33,6 +33,10 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         {
           "name": "UserPromptSubmit",
           "source": "hook"
+        },
+        {
+          "name": "SessionEnd",
+          "source": "hook"
         }
       ],
       "session_start": {
@@ -56,7 +60,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "native_memory": "none",
       "lifecycle": {
         "session_start": "best_effort",
-        "session_end": "manual",
+        "session_end": "best_effort",
         "fallback": "manual",
         "crash_recovery": "best_effort"
       },
@@ -245,6 +249,10 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         {
           "name": "sessionStart",
           "source": "hook"
+        },
+        {
+          "name": "sessionEnd",
+          "source": "hook"
         }
       ],
       "session_start": {
@@ -266,7 +274,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "native_memory": "none",
       "lifecycle": {
         "session_start": "best_effort",
-        "session_end": "manual",
+        "session_end": "best_effort",
         "fallback": "manual",
         "crash_recovery": "manual"
       },

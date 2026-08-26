@@ -29,6 +29,15 @@
 
 `jspace cron check` 的退出码语义：exit != 0 表示有需要 attention 的项（失败 + pending staged writes）；`--quiet` 变体抑制 stdout 但保留 exit code（JSpace CLI 提供）。
 
+## 为什么 session-end 保持 manual
+
+OpenCode 事件总线里没有语义匹配的「会话收工」事件，所以 `lifecycle.session_end` 停在 `manual`（不虚报）：
+
+- `session.idle`（已 deprecated，官方建议改用 `session.status`）**每个 agent turn 结束都触发**——当 session-end 用会变成逐 turn 噪声；现有 seed 把它用在 `jspace cron check`（失败面可见），不做写回提示。
+- `session.deleted` 是会话被**删除**，`server.instance.disposed` / `global.disposed` 是实例/进程关停，都不是某个会话的收工点。
+
+补偿面：`jspace context turn` 在无更高优先级状态时**每会话最多注入一次**收工写回轻提示（不自动写 gbrain）。取证见 JSpace 开发仓库（工作台外部，不随 init 物化）`docs/session-end-hooks.md`。
+
 ## 待真实 OpenCode 会话验证（best_effort 边界）
 
 1. `.opencode/plugins/jspace.ts` 是否被 OpenCode 自动发现/需配置引用——未实测。

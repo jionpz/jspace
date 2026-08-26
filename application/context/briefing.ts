@@ -14,6 +14,11 @@ export interface BriefingStateV1 {
   schema_version: 1;
   last_session_start_at: string;
   session_count: number;
+  /** `session_count` value the per-turn write-back nudge was last emitted for
+   *  (B4). Absent = never nudged. Stays inside schema_version 1: it is an
+   *  additive optional field, so an older CLI reading a newer file just ignores
+   *  it (worst case one extra nudge), and no migration is needed. */
+  writeback_nudge_for_session?: number;
 }
 
 export interface BriefingRead {
@@ -40,14 +45,15 @@ export function readBriefing(root: string): BriefingRead {
     if (obj.schema_version !== 1 || typeof obj.last_session_start_at !== "string" || typeof obj.session_count !== "number") {
       return { state: null, issues: [`${p} has an unsupported shape; expected schema_version=1, last_session_start_at, session_count`] };
     }
-    return {
-      state: {
-        schema_version: 1,
-        last_session_start_at: obj.last_session_start_at,
-        session_count: obj.session_count,
-      },
-      issues: [],
+    const state: BriefingStateV1 = {
+      schema_version: 1,
+      last_session_start_at: obj.last_session_start_at,
+      session_count: obj.session_count,
     };
+    if (typeof obj.writeback_nudge_for_session === "number") {
+      state.writeback_nudge_for_session = obj.writeback_nudge_for_session;
+    }
+    return { state, issues: [] };
   } catch (e) {
     return { state: null, issues: [`${p} is not valid JSON: ${e instanceof Error ? e.message : String(e)}`] };
   }
@@ -62,7 +68,28 @@ export function touchBriefing(root: string, now: Date = new Date()): void {
     last_session_start_at: now.toISOString(),
     session_count: (prev.state?.session_count ?? 0) + 1,
   };
+  // Carried over, not reset: the marker names the session it was spent on, and
+  // the incremented session_count already re-arms the nudge for the new session.
+  if (prev.state?.writeback_nudge_for_session !== undefined) {
+    next.writeback_nudge_for_session = prev.state.writeback_nudge_for_session;
+  }
   writeBytesAtomic(briefingPath(root), JSON.stringify(next, null, 2) + "\n");
+}
+
+/** Claim the once-per-session write-back nudge (B4). Returns true exactly once
+ *  per session-start, then records the claim so later turns stay silent.
+ *
+ *  No briefing state = no session-start hook has ever run here, so there is no
+ *  session counter to dedupe against: returns false rather than nudging on
+ *  every single turn. Best-effort like touchBriefing — callers catch and treat
+ *  a failure as "no nudge" (a hook must never fail over machine state). */
+export function claimWritebackNudge(root: string): boolean {
+  const prev = readBriefing(root);
+  if (!prev.state) return false;
+  if (prev.state.writeback_nudge_for_session === prev.state.session_count) return false;
+  const next: BriefingStateV1 = { ...prev.state, writeback_nudge_for_session: prev.state.session_count };
+  writeBytesAtomic(briefingPath(root), JSON.stringify(next, null, 2) + "\n");
+  return true;
 }
 
 /** True when the briefing is missing, unreadable, or older than the stale

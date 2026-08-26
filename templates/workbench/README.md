@@ -8,7 +8,7 @@
 
 - 根目录(入口面 + 用户区):
   - `AGENTS.md` - 你的文件:`<!-- JSPACE:START -->…<!-- JSPACE:END -->` 块内是 JSpace 规则(init 嵌入、upgrade 只更新块内),块外内容归你,永不覆盖
-  - `CLAUDE.md` / `README.md` / `.gitignore` / `.claude/settings.json` - 入口文件(未修改随升级刷新,本地修改保留)。`CLAUDE.md` 内容为 `@AGENTS.md` 导入,让 Claude Code 通过官方 memory 通道加载工作台路由
+  - `CLAUDE.md` / `README.md` / `.gitignore` / `.claude/settings.json` - 入口文件(未修改随升级刷新,本地修改保留)。`CLAUDE.md` 内容为 `@AGENTS.md` 导入,让 Claude Code 通过官方 memory 通道加载工作台路由;`.claude/settings.json` 是 Claude Code 会话 hook(SessionStart/UserPromptSubmit/SessionEnd)
   - `workspace/` - 域目录（初始不预建；按 AGENTS.md 的 Domain Governance 从真实使用涌现，首个域创建时生成）
   - `skills/` - 用户自建技能保留地（需用户确认；官方技能不在根目录）
   - `.claude/skills/` - 官方 skill 的 Claude Code 同字节投影（机器托管；勿手工编辑，改动会产生 `skills.projection_drift` 告警）
@@ -16,7 +16,7 @@
   - `.opencode/skills/` - 官方 skill 的 OpenCode 同字节投影（机器托管；同 `.claude/skills/` 纪律）
   - `.agents/skills/` - 官方 skill 的项目级多 harness 同字节投影（机器托管；同 `.claude/skills/` 纪律，用户级 `~/.agents/skills/` 由 `jspace skills install` 物化）
   - `.grok/hooks/jspace.json` - Grok Build 会话 hook（SessionStart/UserPromptSubmit/PreCompact/SessionEnd；seed，未修改随升级刷新，本地修改保留）
-  - `.cursor/hooks.json` - Cursor 会话 hook（sessionStart；seed，未修改随升级刷新，本地修改保留）
+  - `.cursor/hooks.json` - Cursor 会话 hook（sessionStart/sessionEnd；seed，未修改随升级刷新，本地修改保留）
   - `.opencode/plugins/jspace.ts` - OpenCode 会话 plugin（session.created→session-start / session.idle→pending+cron / compacting→context 注入；seed，未修改随升级刷新，本地修改保留）
 - `.jspace/`(JSpace 管理区):
   - `hub.json` - domain/resource/project 注册表(**用户数据**;升级永不覆盖;缺失时重建空注册表)

@@ -6,6 +6,12 @@
         "command": "jspace context session-start --envelope cursor",
         "timeout": 10
       }
+    ],
+    "sessionEnd": [
+      {
+        "command": "jspace context session-end --plain",
+        "timeout": 10
+      }
     ]
   }
 }

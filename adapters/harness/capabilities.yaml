@@ -78,6 +78,7 @@ harnesses:
     sessions:
       - { name: SessionStart, source: hook }
       - { name: UserPromptSubmit, source: hook }
+      - { name: SessionEnd, source: hook }
     session_start: { path: ".claude/settings.json", format: json, key: "hooks.SessionStart" }
     mcp: { native: true }
     mcp_config: { path: "~/.claude.json", format: json, server_key: "mcpServers.gbrain" }
@@ -87,7 +88,11 @@ harnesses:
     native_memory: none
     lifecycle:
       session_start: best_effort
-      session_end: manual
+      # B4: SessionEnd hook wired in the seed (docs/session-end-hooks.md). Stays
+      # best_effort, never automated — Claude discards SessionEnd output, so the
+      # reminder never reaches the session; the in-session surface is the
+      # once-per-session `jspace context turn` write-back nudge.
+      session_end: best_effort
       fallback: manual
       crash_recovery: best_effort
     cron_harness_enum_value: claude
@@ -191,6 +196,7 @@ harnesses:
       allow_keys: []
     sessions:
       - { name: sessionStart, source: hook }
+      - { name: sessionEnd, source: hook }
     session_start: { path: ".cursor/hooks.json", format: json, key: "hooks.sessionStart" }
     mcp: { native: true }
     mcp_config: { path: "~/.cursor/mcp.json", format: json, server_key: "mcpServers.gbrain" }
@@ -200,7 +206,10 @@ harnesses:
     native_memory: none
     lifecycle:
       session_start: best_effort
-      session_end: manual
+      # B4: sessionEnd hook wired in the seed (docs/session-end-hooks.md). Same
+      # boundary as claude — Cursor logs but does not use the response, so the
+      # nudge lands on the turn hook, not here.
+      session_end: best_effort
       fallback: manual
       crash_recovery: manual
     cron_harness_enum_value: null

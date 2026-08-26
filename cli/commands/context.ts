@@ -28,7 +28,7 @@ import {
   cursorSessionStartEnvelope,
 } from "../../application/context/envelope.ts";
 import { readHookPrompt } from "../../application/context/hook-input.ts";
-import { touchBriefing } from "../../application/context/briefing.ts";
+import { claimWritebackNudge, touchBriefing } from "../../application/context/briefing.ts";
 
 /** Never propagate: any internal failure degrades to a warning + exit 0. */
 function failLines(e: unknown): { lines: string[]; warnings: string[] } {
@@ -92,7 +92,20 @@ const turnSpec: CommandSpec = {
       if (timedOut) return { exitCode: 0, lines: [] };
       if (promptHasSkipKeyword(prompt)) return { lines: [] }; // no-jspace: this turn only
       const state = collectWorkbenchState(pre.root);
-      const text = renderTurn(state);
+      let text = renderTurn(state);
+      // Nothing more urgent to say: spend this session's single write-back nudge
+      // (B4). The claim is only attempted when the turn would otherwise be
+      // silent, so a busy workbench never burns the nudge on a turn that does
+      // not show it. A failed claim degrades to the silent turn.
+      if (text === "") {
+        let nudge = false;
+        try {
+          nudge = claimWritebackNudge(pre.root);
+        } catch {
+          // silent — the hook must never fail because a machine-state write failed
+        }
+        if (nudge) text = renderTurn(state, { writebackNudge: true });
+      }
       if (text === "") return { lines: [] }; // nothing actionable: zero output
       return { lines: [plain(args) ? text : turnEnvelope(text)] };
     } catch (e) {

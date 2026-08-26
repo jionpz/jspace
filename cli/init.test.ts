@@ -97,6 +97,24 @@ test("init materializes the Grok hook file and the .grok/.opencode skill project
   rmSync(root, { recursive: true, force: true });
 });
 
+test("init materializes the Claude + Cursor session hooks incl. session-end (B4)", () => {
+  const root = mkdtempSync(join(tmpdir(), "jspace-init-hooks-"));
+  init(root);
+
+  const claude = JSON.parse(readFileSync(join(root, ".claude", "settings.json"), "utf-8"));
+  expect(claude.hooks.SessionStart[0].hooks[0].command).toContain("jspace context session-start");
+  expect(claude.hooks.UserPromptSubmit[0].hooks[0].command).toContain("jspace context turn");
+  // SessionEnd shares a 1.5s budget unless a per-hook timeout raises it
+  expect(claude.hooks.SessionEnd[0].hooks[0].command).toContain("jspace context session-end");
+  expect(claude.hooks.SessionEnd[0].hooks[0].timeout).toBeGreaterThan(1.5);
+
+  const cursor = JSON.parse(readFileSync(join(root, ".cursor", "hooks.json"), "utf-8"));
+  expect(cursor.hooks.sessionStart[0].command).toContain("jspace context session-start");
+  expect(cursor.hooks.sessionEnd[0].command).toContain("jspace context session-end");
+
+  rmSync(root, { recursive: true, force: true });
+});
+
 test("init materializes the OpenCode plugin", () => {
   const root = mkdtempSync(join(tmpdir(), "jspace-init-opencode-"));
   init(root);
