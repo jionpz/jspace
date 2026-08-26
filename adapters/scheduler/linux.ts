@@ -147,9 +147,29 @@ export interface CrontabIO {
   writeCrontab(content: string): void;
 }
 
+const CRONTAB_MISSING_HINT =
+  "install the cron package first (Debian/Ubuntu: sudo apt-get install cron; RHEL/Fedora: sudo dnf install cronie), see docs/PLATFORMS.md";
+
+/** Non-null when the `crontab` command itself never ran (missing binary, spawn
+ *  error, timeout kill) — a different fault from crontab running and reporting
+ *  an error, and the only one the user fixes by installing cron. Without the
+ *  split the caller printed `crontab -l failed (status undefined)`, which names
+ *  neither the fault nor the fix. */
+export function crontabUnavailable(res: { status: number | null; signal?: NodeJS.Signals | null; stderr?: string; error?: Error }): string | null {
+  if (res.signal) return `crontab was killed by ${res.signal} (timeout?); retry, or check the cron package installation`;
+  if (res.error) return `crontab command not available (${res.error.message}); ${CRONTAB_MISSING_HINT}`;
+  if (res.status === null || res.status === undefined) {
+    const detail = (res.stderr ?? "").trim();
+    return `crontab command could not be executed${detail === "" ? "" : ` (${detail})`}; ${CRONTAB_MISSING_HINT}`;
+  }
+  return null;
+}
+
 const defaultIO: CrontabIO = {
   readCrontab(): string {
     const res = schedulerSpawn("crontab", ["-l"]);
+    const unavailable = crontabUnavailable(res);
+    if (unavailable !== null) fail(unavailable);
     if (res.status === 0) return (res.stdout ?? "").replace(/\s+$/, "") + "\n";
     if (res.status === 1) return ""; // no crontab
     fail(`crontab -l failed (status ${res.status}): ${(res.stderr ?? "").trim()}`);
@@ -157,6 +177,8 @@ const defaultIO: CrontabIO = {
   },
   writeCrontab(content: string): void {
     const r = schedulerSpawn("crontab", ["-"], { input: content });
+    const unavailable = crontabUnavailable(r);
+    if (unavailable !== null) fail(unavailable);
     if (r.status !== 0) fail(`crontab write failed: ${(r.stderr ?? "").trim()}`);
   },
 };
@@ -278,6 +300,8 @@ export const linuxAdapter: SchedulerAdapter & { io?: CrontabIO; spawn?: Schedule
     writeFileSync(backup, existing, "utf-8");
     if (merged.trim() === "") {
       const r = schedulerSpawn("crontab", ["-r"]);
+      const unavailable = crontabUnavailable(r);
+      if (unavailable !== null) fail(unavailable);
       if (r.status !== 0 && r.status !== 1) fail(`crontab -r failed: ${(r.stderr ?? "").trim()}`);
       return ["jspace: ok: removed jspace crons (empty crontab removed)"];
     }
