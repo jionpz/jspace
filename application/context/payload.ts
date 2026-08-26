@@ -94,14 +94,18 @@ export function renderTurn(state: WorkbenchState, opts: TurnOptions = {}): strin
   return "";
 }
 
-const WRITEBACK_NUDGE = "收工前若本次有值得留存的事实，说「收工」触发 memory-writeback（每会话提醒一次；不自动写 gbrain）";
+/** The one in-session write-back reminder (B4). Actionable on purpose: names the
+ *  trigger phrase, the skill, and the provenance tag retro counts — a vague
+ *  "记得写回" produced zero `source:session` pages. Still only a reminder. */
+const WRITEBACK_NUDGE =
+  "收工写回：本次若有值得留存的事实（进展/决策/教训），说一句「收工」触发 memory-writeback，写回页带 tags: source:session；没有则静默结束（每会话只提醒一次，本提示不写 gbrain）";
 
 /** Pre-compact passive reminder (only nudge, never auto-write): the session is about to compact;
  *  surface the state that could be lost + remind that write-back stays explicit
  *  (never auto). This is an injection, NOT a gbrain write — the discipline is
  *  "你说收工才写". */
 export function renderPreCompact(state: WorkbenchState, root: string): string {
-  const workbenchBlock = `<jspace-workbench>JSpace 工作台 ${root}。会话即将 compaction：以下状态若需持久化，请显式触发收工（memory-writeback），本提醒不自动写 gbrain。\n</jspace-workbench>`;
+  const workbenchBlock = `<jspace-workbench>JSpace 工作台 ${root}。会话即将 compaction：以下状态若需持久化，说一句「收工」显式触发 memory-writeback（写回页带 tags: source:session），本提醒不自动写 gbrain。\n</jspace-workbench>`;
   const stateLinesText = stateLines(state);
   const banner = incidentBanner(state);
   const parts = [workbenchBlock];
@@ -109,14 +113,14 @@ export function renderPreCompact(state: WorkbenchState, root: string): string {
   if (stateLinesText.length > 0) {
     parts.push(`<current-state>\n${stateLinesText.join("\n")}\n</current-state>`);
   }
-  parts.push(`<next-action>\n${nextAction(state)}\n</next-action>`);
+  parts.push(`<next-action>\n${nextAction(state, "closing")}\n</next-action>`);
   return parts.join("\n\n");
 }
 
 /** Session-end settlement reminder (Grok SessionEnd): the session is closing;
  *  same discipline — surface state + remind explicit write-back, never auto. */
 export function renderSessionEnd(state: WorkbenchState, root: string): string {
-  const workbenchBlock = `<jspace-workbench>JSpace 工作台 ${root}。会话结束：如需记忆本次事实，请显式触发收工（memory-writeback），本提醒不自动写 gbrain。\n</jspace-workbench>`;
+  const workbenchBlock = `<jspace-workbench>JSpace 工作台 ${root}。会话结束：如需记忆本次事实，说一句「收工」显式触发 memory-writeback（写回页带 tags: source:session），本提醒不自动写 gbrain。\n</jspace-workbench>`;
   const stateLinesText = stateLines(state);
   const banner = incidentBanner(state);
   const parts = [workbenchBlock];
@@ -124,7 +128,7 @@ export function renderSessionEnd(state: WorkbenchState, root: string): string {
   if (stateLinesText.length > 0) {
     parts.push(`<current-state>\n${stateLinesText.join("\n")}\n</current-state>`);
   }
-  parts.push(`<next-action>\n${nextAction(state)}\n</next-action>`);
+  parts.push(`<next-action>\n${nextAction(state, "closing")}\n</next-action>`);
   return parts.join("\n\n");
 }
 
@@ -169,8 +173,12 @@ function stateLines(state: WorkbenchState): string[] {
   return lines;
 }
 
-/** Priority: broken hub > pending writes > open cron incident > inbox. */
-function nextAction(state: WorkbenchState): string {
+/** Priority: broken hub > pending writes > open cron incident > inbox.
+ *  `closing` (pre-compact / session-end) always appends the write-back action:
+ *  at that moment it is the point of the injection, not a filler for an
+ *  otherwise-idle workbench — and "按 AGENTS.md 路由进入域工作" is nonsense
+ *  advice for a session that is ending. */
+function nextAction(state: WorkbenchState, mode: "start" | "closing" = "start"): string {
   const actions: string[] = [];
   if (state.hubBroken) actions.push("先跑 jspace doctor --dir . 修复注册表");
   if (state.pendingCount > 0) actions.push(`先跑 jspace pending apply 落盘 ${state.pendingCount} 笔暂存写`);
@@ -179,6 +187,16 @@ function nextAction(state: WorkbenchState): string {
     actions.push(`处理 cron 失败: ${truncateId(inc.cronId)}[${inc.failureClass}]（jspace cron check）`);
   }
   if (state.inboxCount > 0) actions.push(`inbox 有 ${state.inboxCount} 份待整理，可说「整理一下 inbox」`);
+  if (mode === "closing") {
+    actions.push(CLOSING_WRITEBACK_ACTION);
+    return actions.join("；");
+  }
   if (actions.length === 0) actions.push("按 AGENTS.md 路由进入域工作；当前无待办");
   return actions.join("；");
 }
+
+/** Closing-event write-back action: same executable shape as the turn nudge
+ *  (trigger phrase + skill + provenance tag), phrased for a session that is
+ *  about to lose its context. Still a nudge — nothing here writes gbrain. */
+const CLOSING_WRITEBACK_ACTION =
+  "本次若有持久事实，说一句「收工」触发 memory-writeback（写回页带 tags: source:session）；无则静默结束";

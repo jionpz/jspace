@@ -83,6 +83,9 @@ test("pre-compact emits a passive reminder + state, recommends explicit actions 
   // the reminder nudges an EXPLICIT action (user-initiated apply), never auto-writes
   expect(r).toContain("jspace pending apply"); // explicit command is the recommendation
   expect(r).toContain("<next-action>");
+  // the write-back action rides along with the pending one, not instead of it
+  expect(r).toContain("说一句「收工」触发 memory-writeback");
+  expect(r).toContain("source:session");
 });
 
 test("session-end emits a settlement reminder + state, never auto-writes", () => {
@@ -96,6 +99,30 @@ test("session-end emits a settlement reminder + state, never auto-writes", () =>
   const clean = renderSessionEnd(empty, "/wb");
   expect(clean).toContain("会话结束");
   expect(clean).toContain("本提醒不自动写 gbrain");
+});
+
+test("closing events: next-action is the executable write-back line, never routing advice (B)", () => {
+  for (const render of [renderPreCompact, renderSessionEnd]) {
+    const clean = render(empty, "/wb");
+    const action = clean.slice(clean.indexOf("<next-action>"), clean.indexOf("</next-action>"));
+    // names the trigger phrase, the skill, and the provenance tag retro counts
+    expect(action).toContain("「收工」");
+    expect(action).toContain("memory-writeback");
+    expect(action).toContain("tags: source:session");
+    expect(action).toContain("无则静默结束"); // no facts -> silence, not a forced write
+    // a session that is closing is never told to go route into a domain
+    expect(action).not.toContain("按 AGENTS.md 路由");
+    expect(action).not.toContain("当前无待办");
+
+    // higher-priority state keeps its place; the write-back line comes last
+    const busy = render({ ...empty, pendingCount: 2, pendingProducers: ["asset-ingest"] }, "/wb");
+    const busyAction = busy.slice(busy.indexOf("<next-action>"), busy.indexOf("</next-action>"));
+    expect(busyAction.indexOf("jspace pending apply")).toBeLessThan(busyAction.indexOf("memory-writeback"));
+  }
+  // session-start is unaffected: an idle workbench still gets routing advice
+  const start = renderSessionStart(empty, "/wb");
+  expect(start).toContain("当前无待办");
+  expect(start).not.toContain("memory-writeback");
 });
 
 test("many domains -> current-state caps at 5, available caps at 12 with tails", () => {
@@ -167,9 +194,11 @@ test("turn write-back nudge: lowest priority, single line, only when opted in (B
   expect(renderTurn(empty)).toBe("");
 
   const nudged = renderTurn(empty, { writebackNudge: true });
-  expect(nudged).toContain("收工");
+  expect(nudged).toContain("「收工」"); // the exact trigger phrase, not a vague "记得写回"
   expect(nudged).toContain("memory-writeback");
-  expect(nudged).toContain("不自动写 gbrain"); // nudge only, never an auto write
+  expect(nudged).toContain("tags: source:session"); // the tag retro counts write-back rate on
+  expect(nudged).toContain("静默结束"); // no facts -> silence, never a forced write
+  expect(nudged).toContain("不写 gbrain"); // nudge only, never an auto write
   expect(nudged.split("\n").length).toBe(1);
   expect(Buffer.byteLength(nudged, "utf-8")).toBeLessThan(512);
 
