@@ -9,6 +9,7 @@ import { findIndex } from "../registry/helpers.ts";
 import { ackIncidents } from "./incidents.ts";
 import { loadCrons, parseSchedule, saveCrons } from "./definitions.ts";
 import { isWindowsInstallable } from "../../core/shared/schedule.ts";
+import { assertHarnessSupportsTools } from "../../adapters/harness/registry.ts";
 
 export interface CronInstalledCheck {
   isInstalled: (cronId: string) => boolean;
@@ -23,6 +24,7 @@ export function cronAdd(
   disabled: boolean,
   deps: CronInstalledCheck,
   platform: NodeJS.Platform = process.platform,
+  tools?: string,
 ): CmdResult {
   const data = loadCrons(root);
   if (!isId(id)) fail(`invalid cron id: ${id} (lowercase letters, digits, hyphens)`);
@@ -31,6 +33,7 @@ export function cronAdd(
     fail(`invalid harness: ${harness} (choose from ${HARNESSES.join(", ")})`);
   }
   if (!prompt.trim()) fail("prompt must be non-empty");
+  assertHarnessSupportsTools(harness, tools);
   parseSchedule(schedule); // validate
   // Same boundary as `cron install`: win32 only schedules DAILY/WEEKLY (month=*).
   // Reject at add time instead of letting a non-installable cron through to a
@@ -38,7 +41,14 @@ export function cronAdd(
   if (platform === "win32" && !isWindowsInstallable(schedule)) {
     fail(`cron ${id}: schedule "${schedule}" not supported on Windows (MVP: DAILY/WEEKLY with month=*); "jspace cron install" cannot create it`);
   }
-  data.crons.push({ id, schedule, harness: harness as Harness, prompt, enabled: !disabled });
+  data.crons.push({
+    id,
+    schedule,
+    harness: harness as Harness,
+    prompt,
+    enabled: !disabled,
+    ...(tools !== undefined ? { tools } : {}),
+  });
   saveCrons(root, data);
   const lines = [`jspace: ok: added cron: ${id} (${schedule}, ${harness}, ${disabled ? "disabled" : "enabled"})`];
   if (deps.isInstalled(id)) {

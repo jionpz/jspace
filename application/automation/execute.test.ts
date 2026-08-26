@@ -220,3 +220,11 @@ test("inbox-tidy with batch log updated by the harness -> ok (positive control, 
     rmSync(fh, { recursive: true, force: true });
   }
 });
+
+test("cron run rejects tools on harness without tool restriction (fail loud)", async () => {
+  writeFileSync(join(root, ".jspace", "cron.json"), JSON.stringify({
+    schema_version: 1,
+    crons: [{ id: "probe", schedule: "0 9 * * 1", harness: "opencode", prompt: "p", tools: "Read", enabled: true }],
+  }));
+  await expect(run({ cronId: "probe", dryRun: true })).rejects.toThrow(/does not support --tools/);
+});

@@ -38,6 +38,9 @@ const caps = Bun.YAML.parse(readFileSync(join(ROOT, "adapters/harness/capabiliti
       sessions?: { name?: string; source?: string }[];
       session_start?: { path?: string; format?: string; key?: string };
       lifecycle?: { session_start?: string; session_end?: string; fallback?: string; crash_recovery?: string };
+      supports_tool_restriction?: boolean;
+      argv_flags?: { permission?: string };
+      cron_env?: { allow_prefixes?: string[]; allow_keys?: string[] };
     }
   >;
 };
@@ -260,6 +263,18 @@ for (const [h, cap] of Object.entries(caps.harnesses)) {
     JSON.stringify(grades) === JSON.stringify(want),
     `${h} table=[${grades.join("/")}] caps=[${want.join("/")}]`,
   );
+}
+
+// ---- 11. supports_tool_restriction matches argv_flags.permission --------------
+for (const [h, cap] of Object.entries(caps.harnesses)) {
+  const hasPermission = cap.argv_flags?.permission !== undefined;
+  const supports = cap.supports_tool_restriction === true;
+  check(
+    `11.${h}-tool-restriction`,
+    supports === hasPermission,
+    `${h} supports_tool_restriction=${supports} vs permission flag ${hasPermission}`,
+  );
+  check(`11.${h}-cron-env`, cap.cron_env?.allow_prefixes !== undefined, `${h} declares cron_env.allow_prefixes`);
 }
 
 if (failures.length > 0) {

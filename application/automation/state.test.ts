@@ -1,17 +1,19 @@
 // application/automation/state.test.ts — structured runs + incidents state.
 // Run: bun test application/automation/state.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { lastRun, readRuns, writeRun, type RunRecord } from "./runs.ts";
+import { lastRun, readRuns, writeRun, RUNS_KEEP_PER_CRON, type RunRecord } from "./runs.ts";
 import {
   ackIncidents,
   openIncidents,
   openOrUpdate,
   readIncidents,
   resolveIncidents,
+  RESOLVED_INCIDENT_RETENTION_DAYS,
 } from "./incidents.ts";
+import { cronFailures } from "./status.ts";
 
 let root: string;
 beforeEach(() => {
@@ -94,4 +96,53 @@ test("damaged run/incident records surface as issues, valid ones still readable"
   const incs = readIncidents(root);
   expect(incs.records).toHaveLength(1); // the valid incident still loads
   expect(incs.issues.map((i) => i.path)).toEqual(["broken.json"]);
+});
+
+test(`writeRun prunes to ${RUNS_KEEP_PER_CRON} records per cron while lastRun stays newest`, () => {
+  const total = RUNS_KEEP_PER_CRON + 15;
+  for (let i = 0; i < total; i++) {
+    const hh = String(Math.floor(i / 60)).padStart(2, "0");
+    const mm = String(i % 60).padStart(2, "0");
+    const id = `6f3c5a20-0000-4000-8000-${String(i).padStart(12, "0")}`;
+    writeRun(root, "nightly", run(id, i % 2 === 0 ? "ok" : "failed", `2026-08-04T${hh}${mm}00`));
+  }
+  const { records } = readRuns(root, "nightly");
+  expect(records.length).toBe(RUNS_KEEP_PER_CRON);
+  expect(lastRun(root, "nightly")?.startedAt).toBe(`2026-08-04T${String(Math.floor((total - 1) / 60)).padStart(2, "0")}${String((total - 1) % 60).padStart(2, "0")}00`);
+  const runsDir = join(root, ".jspace", "state", "runs", "nightly");
+  const filesOnDisk = readdirSync(runsDir).filter((f) => f.endsWith(".json"));
+  expect(filesOnDisk.length).toBe(RUNS_KEEP_PER_CRON);
+});
+
+test("resolveIncidents prunes resolved incidents older than retention window", () => {
+  const incDir = join(root, ".jspace", "state", "incidents");
+  mkdirSync(incDir, { recursive: true });
+  const stale = {
+    schema_version: 1,
+    id: "6f3c5a20-0000-4000-8000-000000000001",
+    cronId: "nightly",
+    failureClass: "failed",
+    status: "resolved",
+    openedAt: "2026-01-01T120000",
+    resolvedAt: "2026-01-01T120000",
+    evidence: ["run-old"],
+  };
+  writeFileSync(join(incDir, `${stale.id}.json`), JSON.stringify(stale));
+  openOrUpdate(root, "other", "failed", "run-new");
+  resolveIncidents(root, "other");
+  expect(readIncidents(root).records.some((i) => i.id === stale.id)).toBe(false);
+  expect(RESOLVED_INCIDENT_RETENTION_DAYS).toBe(30);
+});
+
+test("cronFailures tolerates dangling evidence run ids after prune", () => {
+  mkdirSync(join(root, ".jspace"), { recursive: true });
+  writeFileSync(join(root, ".jspace", "cron.json"), JSON.stringify({
+    schema_version: 1,
+    crons: [{ id: "nightly", schedule: "0 9 * * 1", harness: "claude", prompt: "p", enabled: true }],
+  }));
+  openOrUpdate(root, "nightly", "failed", RUN_A);
+  const res = cronFailures(root);
+  expect(res.exitCode).toBe(1);
+  expect(res.lines.join("\n")).toContain(RUN_A);
+  expect(() => cronFailures(root)).not.toThrow();
 });

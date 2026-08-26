@@ -198,6 +198,12 @@ test("schtasksArgs: unsupported schedules -> null", () => {
   expect(schtasksArgs(mk("dom", "0 0 1 6 *"), "C:\\jspace.exe", "C:\\wb", "x")).toBeNull();
 });
 
+test("schtasksArgs rejects /tr longer than 260 characters", () => {
+  const cron: CronDefinition = { id: "inbox-tidy", schedule: "0 21 * * *", harness: "claude", prompt: "x", enabled: true };
+  const longRoot = "C:\\" + "x".repeat(300);
+  expect(() => schtasksArgs(cron, "C:\\bin\\jspace.exe", longRoot, "JSpaceCron_tag_inbox-tidy")).toThrow(/exceeds 260/);
+});
+
 test("isWindowsInstallable", () => {
   expect(isWindowsInstallable("0 21 * * *")).toBe(true);
   expect(isWindowsInstallable("0 21 * * 0")).toBe(true);

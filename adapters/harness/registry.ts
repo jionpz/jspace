@@ -31,6 +31,13 @@ function resolveCaps(raw: HarnessCapabilitiesFile): Record<string, HarnessCapabi
     if (hasSessionStart && data.session_start === undefined) {
       fail(`capabilities: ${name} declares a session-start event but no session_start materialization path`);
     }
+    const hasPermission = data.argv_flags?.permission !== undefined;
+    if (data.supports_tool_restriction !== hasPermission) {
+      fail(`capabilities: ${name} supports_tool_restriction must match argv_flags.permission presence`);
+    }
+    if (data.cron_env === undefined) {
+      fail(`capabilities: ${name} is missing cron_env declaration`);
+    }
     harnesses[name] = { ...data, name };
   }
   return harnesses;
@@ -53,11 +60,24 @@ export function harnessNames(): string[] {
   return Object.keys(HARNESSES);
 }
 
-/** Capability keys valid in cron.json `harness` (headless-capable only). */
+/** Cron harness keys valid in cron.json `harness` (headless-capable only). */
 export function cronHarnessNames(): string[] {
   return Object.values(HARNESSES)
     .filter((c) => c.cron_harness_enum_value !== null)
     .map((c) => c.cron_harness_enum_value as string);
+}
+
+/** Whether a harness supports per-cron tool restriction (`--tools` / cron.json `tools`). */
+export function supportsToolRestriction(harness: string): boolean {
+  return getCapability(harness).supports_tool_restriction;
+}
+
+/** Fail loud when `tools` is set but the harness cannot honor tool restriction. */
+export function assertHarnessSupportsTools(harness: string, tools?: string): void {
+  if (tools === undefined || tools.trim() === "") return;
+  if (!supportsToolRestriction(harness)) {
+    fail(`harness ${harness} does not support --tools (tool restriction is not available for this harness)`);
+  }
 }
 
 /** Workbench-relative skill projection dirs (per-harness + shared). Derives

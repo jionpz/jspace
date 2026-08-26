@@ -69,11 +69,16 @@ export function parseSchtasksXml(xml: string): { schedule: string; argv: string 
 }
 
 /** Build schtasks args for a cron (DAILY/WEEKLY subset). Null when not expressible. */
+export const SCHTASKS_TR_MAX_LEN = 260;
+
 export function schtasksArgs(cron: CronDefinition, jspaceBin: string, root: string, taskName: string): string[] | null {
   const d = parseSchedule(cron.schedule);
   if (!isWindowsInstallable(cron.schedule)) return null;
   const st = `${String(d.Hour).padStart(2, "0")}:${String(d.Minute).padStart(2, "0")}`;
   const tr = `"${jspaceBin}" cron run --dir "${root}" --id ${cron.id}`;
+  if (tr.length > SCHTASKS_TR_MAX_LEN) {
+    fail(`cron ${cron.id}: schtasks /tr exceeds ${SCHTASKS_TR_MAX_LEN} characters (${tr.length}); shorten the workbench or jspace binary path`);
+  }
   const base = ["/create", "/tn", taskName, "/tr", tr, "/st", st, "/f", "/it"];
   if (d.Weekday === undefined) {
     return [...base, "/sc", "DAILY"];

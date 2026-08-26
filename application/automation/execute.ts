@@ -24,6 +24,7 @@ import { lastRun, writeRun } from "./runs.ts";
 import { openOrUpdate, resolveIncidents } from "./incidents.ts";
 import { acquireLockWithClock } from "./lock.ts";
 import { harnessArgv } from "../../adapters/harness/argv.ts";
+import { assertHarnessSupportsTools } from "../../adapters/harness/registry.ts";
 import { isFile } from "../fs.ts";
 import { localDate, localStamp } from "../time.ts";
 
@@ -195,6 +196,7 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   // Skill-target crons validate + compile HERE, before the dry-run return: a
   // missing/stale skill fails with a fix action and never reaches execution.
   const harness = opts.harnessOverride ?? cron.harness;
+  assertHarnessSupportsTools(harness, cron.tools);
   const argv = harnessArgv(harness, resolveCronPrompt(cron, root, skillCtx), deps.platform, deps.harnessBin, cron.tools);
   if (opts.dryRun) {
     return { lines: [`jspace: dry-run: would run in ${root}:`, `  $ ${argv.join(" ")}`] };
@@ -220,7 +222,7 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
     const fhRoot = deps.filehubRoot(root);
     const { isInboxTask, batchLog, batchBefore } = validateInboxGuard(cron, root, fhRoot);
 
-    const spawned = await spawnProcess(argv, { cwd: root, platform: deps.platform, timeoutMs: opts.timeoutSec * 1000, env: cronSpawnEnv(deps.platform) });
+    const spawned = await spawnProcess(argv, { cwd: root, platform: deps.platform, timeoutMs: opts.timeoutSec * 1000, env: cronSpawnEnv(deps.platform, harness) });
     const exited = spawned.exit;
     const output = spawned.output;
     const timedOut = spawned.timedOut;
