@@ -82,20 +82,137 @@ jobs:
           ./${{ matrix.artifact }} init --force /tmp/jspace-smoke
           ./${{ matrix.artifact }} doctor --dir /tmp/jspace-smoke
 
-      # Cron smoke — placeholder. Disabled because a full cron install/status
-      # cycle needs the platform scheduler and is covered by the manual matrix
-      # in docs/PLATFORMS.md (doctor assertion table).
-      - name: Cron smoke (placeholder, disabled)
-        if: false
+      # Cron CRUD smoke (B3) — asserts the scheduler write / read-back / uninstall
+      # loop against the REAL platform scheduler, plus the doctor rows that
+      # depend on it (cron.not_installed before install, cron.stale_task for an
+      # orphaned task, neither after a clean uninstall).
+      # Deliberately NOT asserted: that a task actually fires. crond/launchd
+      # timing on a hosted runner is not a trustworthy signal, and a scheduled
+      # run would need a real harness CLI. Real firing stays in the manual matrix
+      # (docs/PLATFORMS.md「真机验证台账」).
+      - name: Cron CRUD smoke (Linux crontab)
+        if: runner.os == 'Linux'
         shell: bash
         run: |
-          cd /tmp/jspace-smoke
-          ../${{ matrix.artifact }} cron add smoke-test --schedule "0 21 * * *" --harness claude --prompt "smoke"
-          ../${{ matrix.artifact }} cron run smoke-test --dry-run
-          ../${{ matrix.artifact }} cron install
-          ../${{ matrix.artifact }} cron status smoke-test
-          ../${{ matrix.artifact }} cron uninstall
-          ../${{ matrix.artifact }} doctor --dir /tmp/jspace-smoke
+          set -euo pipefail
+          BIN="$PWD/${{ matrix.artifact }}"
+          WB=/tmp/jspace-cron-smoke
+          # Runner images ship cron, but never assume it: a missing crontab would
+          # otherwise turn this assertion into a silent skip.
+          if ! command -v crontab >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq cron
+          fi
+          rm -rf "$WB"
+          "$BIN" init --force "$WB"
+          "$BIN" cron add smoke-test --dir "$WB" --schedule "0 21 * * *" --harness claude --prompt "ci cron crud smoke"
+
+          before=$("$BIN" doctor --dir "$WB" --json 2>/dev/null)
+          [[ "$before" == *'"cron.not_installed"'* ]] || { echo "::error::enabled cron before install must report cron.not_installed"; exit 1; }
+
+          plan=$("$BIN" cron install --dry-run --dir "$WB")
+          [[ "$plan" == *"[create]"* ]] || { echo "::error::cron install --dry-run planned no create op"; exit 1; }
+
+          "$BIN" cron install --dir "$WB"
+          ct=$(crontab -l)
+          [[ "$ct" == *"jspace crons"* ]] || { echo "::error::managed crontab block missing after cron install"; exit 1; }
+          [[ "$ct" == *"smoke-test"* ]] || { echo "::error::smoke-test line missing from the managed crontab block"; exit 1; }
+
+          status=$("$BIN" cron status smoke-test --dir "$WB")
+          [[ "$status" == *"never run"* ]] || { echo "::error::cron status did not report 'never run'"; exit 1; }
+
+          after=$("$BIN" doctor --dir "$WB" --json 2>/dev/null)
+          [[ "$after" != *'"cron.not_installed"'* ]] || { echo "::error::doctor still reports cron.not_installed after install"; exit 1; }
+          # non-downgrade side of issue #10: a real host is never "unverifiable"
+          [[ "$after" != *"_unverifiable"* ]] || { echo "::error::real host must not degrade cron health to unverifiable"; exit 1; }
+
+          again=$("$BIN" cron install --dir "$WB")
+          [[ "$again" == *"up to date"* ]] || { echo "::error::second cron install is not a no-op (reconciliation drift)"; exit 1; }
+
+          "$BIN" cron remove smoke-test --dir "$WB"
+          orphan=$("$BIN" doctor --dir "$WB" --json 2>/dev/null)
+          [[ "$orphan" == *'"cron.stale_task"'* ]] || { echo "::error::orphaned scheduler task must report cron.stale_task"; exit 1; }
+
+          "$BIN" cron uninstall --dir "$WB"
+          gone=$(crontab -l 2>/dev/null || true)
+          [[ "$gone" != *"jspace crons"* ]] || { echo "::error::managed crontab block survived cron uninstall"; exit 1; }
+
+          "$BIN" doctor --dir "$WB"
+          echo "cron CRUD smoke OK (linux / crontab)"
+
+      - name: Cron CRUD smoke (Windows schtasks)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bin = Join-Path $PWD '${{ matrix.artifact }}'
+          $wb  = Join-Path $env:RUNNER_TEMP 'jspace-cron-smoke'
+          if (Test-Path -LiteralPath $wb) { Remove-Item -LiteralPath $wb -Recurse -Force }
+          & $bin init --force $wb
+          & $bin cron add smoke-test --dir $wb --schedule "0 21 * * *" --harness claude --prompt "ci cron crud smoke"
+
+          $before = (& $bin doctor --dir $wb --json) -join "`n"
+          if ($before -notmatch 'cron\.not_installed') { throw "enabled cron before install must report cron.not_installed" }
+
+          $plan = (& $bin cron install --dry-run --dir $wb) -join "`n"
+          if ($plan -notmatch '\[create\]') { throw "cron install --dry-run planned no create op" }
+
+          & $bin cron install --dir $wb
+          $tasks = (schtasks /query /fo csv /nh) -join "`n"
+          if ($tasks -notmatch 'JSpaceCron_') { throw "no JSpaceCron_* task registered after cron install" }
+
+          $status = (& $bin cron status smoke-test --dir $wb) -join "`n"
+          if ($status -notmatch 'never run') { throw "cron status did not report 'never run'" }
+
+          $after = (& $bin doctor --dir $wb --json) -join "`n"
+          if ($after -match 'cron\.not_installed') { throw "doctor still reports cron.not_installed after install" }
+
+          $again = (& $bin cron install --dir $wb) -join "`n"
+          if ($again -notmatch 'up to date') { throw "second cron install is not a no-op (reconciliation drift)" }
+
+          & $bin cron remove smoke-test --dir $wb
+          $orphan = (& $bin doctor --dir $wb --json) -join "`n"
+          if ($orphan -notmatch 'cron\.stale_task') { throw "orphaned scheduled task must report cron.stale_task" }
+
+          & $bin cron uninstall --dir $wb
+          $gone = (schtasks /query /fo csv /nh) -join "`n"
+          if ($gone -match 'JSpaceCron_') { throw "scheduled task survived cron uninstall" }
+
+          # Windows scheduling subset: a dom-pinned (MONTHLY-shaped) schedule has
+          # no schtasks mapping and must be refused at add time, not silently
+          # accepted into a cron that can never install.
+          $rejected = $false
+          $out = ''
+          try {
+            $out = (& $bin cron add win-monthly --dir $wb --schedule "0 21 1 * *" --harness claude --prompt "unsupported" 2>&1) -join "`n"
+            if ($LASTEXITCODE -ne 0) { $rejected = $true }
+          } catch {
+            $out = $_.Exception.Message
+            $rejected = $true
+          }
+          if (-not $rejected) { throw "dom-pinned schedule must be rejected on Windows, got: $out" }
+          if ($out -notmatch 'not supported on Windows') { throw "unsupported-schedule error text changed: $out" }
+
+          & $bin doctor --dir $wb
+          Write-Host "cron CRUD smoke OK (windows / schtasks)"
+
+      # macOS stays plan-only: launchd agents are bound to a real user GUI
+      # session, which a hosted runner does not reliably provide, so a bootstrap
+      # there would be flaky rather than informative. This still exercises
+      # schedule parsing + plist content compilation + reconciliation planning.
+      - name: Cron plan smoke (macOS, no launchd mutation)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN="$PWD/${{ matrix.artifact }}"
+          WB=/tmp/jspace-cron-smoke
+          rm -rf "$WB"
+          "$BIN" init --force "$WB"
+          "$BIN" cron add smoke-test --dir "$WB" --schedule "0 21 * * *" --harness claude --prompt "ci cron crud smoke"
+          plan=$("$BIN" cron install --dry-run --dir "$WB")
+          [[ "$plan" == *"[create]"* ]] || { echo "::error::cron install --dry-run planned no create op"; exit 1; }
+          "$BIN" doctor --dir "$WB"
+          echo "cron plan smoke OK (macos / launchd install left to the manual matrix)"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
