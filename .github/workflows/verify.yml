@@ -66,8 +66,8 @@ jobs:
       # guard keeps them from drifting from the source (a rename here reds).
       - name: Docs↔source drift guard (doctor/cron warning literals)
         run: |
-          grep -q "cron daemon not running; scheduled tasks won't fire until it starts" application/diagnostics/doctor.ts
-          grep -q "crontab command not found on this system" application/diagnostics/doctor.ts
+          grep -rq "cron daemon not running; scheduled tasks won't fire until it starts" application/diagnostics/
+          grep -rq "crontab command not found on this system" application/diagnostics/
           grep -q "already succeeded today" application/automation/execute.ts
           grep -q "no such cron" application/automation/execute.ts
 

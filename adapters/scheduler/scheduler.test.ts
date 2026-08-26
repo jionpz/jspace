@@ -10,7 +10,7 @@ import { makeSchedulerSpawn, type SchedulerSpawn, type SchedulerSpawnImpl, type 
 import { isWindowsInstallable } from "../../core/shared/schedule.ts";
 import { buildPlist } from "./darwin.ts";
 import { parseSchedule } from "../../core/shared/schedule.ts";
-import { linuxAdapter, crontabBlock, crontabLine, crontabUnavailable, replaceManagedBlock, parseManagedLine, extractTagBlock, pidNamespaceIsolated, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
+import { linuxAdapter, makeLinuxAdapter, crontabBlock, crontabLine, crontabUnavailable, replaceManagedBlock, parseManagedLine, extractTagBlock, pidNamespaceIsolated, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
 import { darwinAdapter, plistPath, parsePlistName, plistBelongsToTag, scheduleFromIntervalDict, argvFromPlistStdout } from "./darwin.ts";
 import { schtasksArgs, parseOpContent, parseSchtasksXml, win32Adapter } from "./win32.ts";
 import { planReconciliation } from "../../application/automation/scheduler.ts";
@@ -419,15 +419,15 @@ test("linux applyBatch: empty enabled removes this workbench's whole block, pres
     crontabBlock([mkCron("b1", "0 3 * * *")], "tagB", "/wb/b", "/bin/jspace", "/bin", "/home/u");
   const root = mkdtempSync(join(tmpdir(), "jspace-lin-ab-"));
   let written = "";
-  const savedIO = linuxAdapter.io;
-  linuxAdapter.io = {
-    readCrontab: () => crontab,
-    writeCrontab: (c) => { written = c; },
-  };
+  const adapter = makeLinuxAdapter({
+    io: {
+      readCrontab: () => crontab,
+      writeCrontab: (c) => { written = c; },
+    },
+  });
   try {
-    linuxAdapter.applyBatch([], [], tagA, root, LINUX_ENV);
+    adapter.applyBatch([], [], tagA, root, LINUX_ENV);
   } finally {
-    linuxAdapter.io = savedIO;
     rmSync(root, { recursive: true, force: true });
   }
   expect(written).not.toContain(CRON_BLOCK_START(tagA));
@@ -445,16 +445,13 @@ test("linux applyBatch: non-empty enabled rebuilds the whole block from the enab
   const root = mkdtempSync(join(tmpdir(), "jspace-lin-ab-"));
   const run = (): string => {
     let written = "";
-    const savedIO = linuxAdapter.io;
-    linuxAdapter.io = {
-      readCrontab: () => crontab,
-      writeCrontab: (c) => { written = c; },
-    };
-    try {
-      linuxAdapter.applyBatch([], enabled, tagA, root, LINUX_ENV);
-    } finally {
-      linuxAdapter.io = savedIO;
-    }
+    const adapter = makeLinuxAdapter({
+      io: {
+        readCrontab: () => crontab,
+        writeCrontab: (c) => { written = c; },
+      },
+    });
+    adapter.applyBatch([], enabled, tagA, root, LINUX_ENV);
     return written;
   };
   try {
@@ -493,16 +490,11 @@ const PROC_NOT_ISOLATED = "Name:\tfoo\nNSpid:\t205\n";
 const PROC_ISOLATED = "Name:\tfoo\nNSpid:\t42 205\n"; // nested namespace: two values
 
 function runHealth(p: { pgrep: number; crontabBin: string; crontabL: number }, procStatus: string) {
-  const savedSpawn = linuxAdapter.spawn;
-  const savedRead = linuxAdapter.readProcStatus;
-  linuxAdapter.spawn = fakeHealthSpawn(p);
-  linuxAdapter.readProcStatus = () => procStatus;
-  try {
-    return linuxAdapter.health!({ jspaceBinary: "/bin/jspace", home: "/home/u", path: "/bin" });
-  } finally {
-    linuxAdapter.spawn = savedSpawn;
-    linuxAdapter.readProcStatus = savedRead;
-  }
+  const adapter = makeLinuxAdapter({
+    spawn: fakeHealthSpawn(p),
+    readProcStatus: () => procStatus,
+  });
+  return adapter.health!({ jspaceBinary: "/bin/jspace", home: "/home/u", path: "/bin" });
 }
 
 // A machine without the cron package used to fail `cron install` with

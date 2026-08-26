@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import type { CommandSpec } from "../../application/commands/command.ts";
 import { workspaceDiff, workspaceUpgrade } from "../../application/workspace/workspace.ts";
-import { doctorWorkbench } from "../../application/diagnostics/doctor.ts";
+import { doctorWorkbench, type CronHealthDeps } from "../../application/diagnostics/doctor.ts";
 import { installSkills, type InstallDeps } from "../../application/skills/install.ts";
 import { cmdUpdate } from "../update.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
@@ -61,6 +61,58 @@ const workspaceDiffSpec: CommandSpec = {
   handler: (ctx, args) => workspaceDiff(ctx.root, BUNDLE_MANIFEST, b(args.json), ASSETS),
 };
 
+export interface WorkspaceUpgradeHandlerDeps {
+  workspaceUpgrade: typeof workspaceUpgrade;
+  refreshExternalSkills: () => string[];
+  doctorWorkbench: typeof doctorWorkbench;
+  cronDeps: CronHealthDeps;
+  manifest: typeof BUNDLE_MANIFEST;
+  assets: typeof ASSETS;
+  readFile: typeof readFileOrNull;
+  writeFile: (p: string, c: string) => void;
+}
+
+const defaultUpgradeDeps = (): WorkspaceUpgradeHandlerDeps => ({
+  workspaceUpgrade,
+  refreshExternalSkills,
+  doctorWorkbench,
+  cronDeps,
+  manifest: BUNDLE_MANIFEST,
+  assets: ASSETS,
+  readFile: readFileOrNull,
+  writeFile: (p, c) => writeBytesAtomic(p, c),
+});
+
+/** `workspace upgrade` handler — exported for CLI combo tests with injected deps. */
+export function workspaceUpgradeHandler(
+  ctx: { root: string },
+  args: Record<string, unknown>,
+  deps: WorkspaceUpgradeHandlerDeps = defaultUpgradeDeps(),
+): ReturnType<typeof workspaceUpgrade> {
+  const result = deps.workspaceUpgrade(
+    ctx.root,
+    {
+      dryRun: b(args.dryRun),
+      acceptConflicts: b(args.acceptConflicts),
+      rollbackId: optS(args.rollback),
+    },
+    { manifest: deps.manifest, assets: deps.assets, readFile: deps.readFile, writeFile: deps.writeFile },
+  );
+  // dry-run is a preview, rollback restores a historical state: neither
+  // should run the follow-up doctor or skill refresh (both can report
+  // transient mismatches)
+  if (result.exitCode || b(args.dryRun) || s(args.rollback)) return result;
+  const refreshLines = deps.refreshExternalSkills();
+  const doctor = deps.doctorWorkbench(ctx.root, deps.cronDeps);
+  return {
+    ...result,
+    lines: [...result.lines, ...refreshLines, ...doctor.lines],
+    warnings: doctor.warnings,
+    errors: doctor.errors,
+    exitCode: doctor.exitCode,
+  };
+}
+
 const workspaceUpgradeSpec: CommandSpec = {
   name: "upgrade",
   summary: "upgrade the workbench to the running bundle (plan + journal + rollback)",
@@ -69,30 +121,7 @@ const workspaceUpgradeSpec: CommandSpec = {
     { name: "--accept-conflicts", dest: "acceptConflicts", takesValue: false, help: "overwrite locally modified managed files" },
     { name: "--rollback", takesValue: true, metavar: "ID", help: "restore a previous upgrade from its journal" },
   ],
-  handler: (ctx, args) => {
-    const result = workspaceUpgrade(
-      ctx.root,
-      {
-        dryRun: b(args.dryRun),
-        acceptConflicts: b(args.acceptConflicts),
-        rollbackId: optS(args.rollback),
-      },
-      { manifest: BUNDLE_MANIFEST, assets: ASSETS, readFile: readFileOrNull, writeFile: (p, c) => writeBytesAtomic(p, c) },
-    );
-    // dry-run is a preview, rollback restores a historical state: neither
-    // should run the follow-up doctor or skill refresh (both can report
-    // transient mismatches)
-    if (result.exitCode || b(args.dryRun) || s(args.rollback)) return result;
-    const refreshLines = refreshExternalSkills();
-    const doctor = doctorWorkbench(ctx.root, cronDeps);
-    return {
-      ...result,
-      lines: [...result.lines, ...refreshLines, ...doctor.lines],
-      warnings: doctor.warnings,
-      errors: doctor.errors,
-      exitCode: doctor.exitCode,
-    };
-  },
+  handler: (ctx, args) => workspaceUpgradeHandler(ctx, args),
 };
 
 export const workspaceSpec: CommandSpec = {
