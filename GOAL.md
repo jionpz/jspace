@@ -13,7 +13,7 @@
 1. **上午进入工作**：在工作台目录启动 `claude`（或 pi / codex）。会话读 AGENTS.md → 识别我在跟进「X 项目」→ 从 gbrain 注入 X 项目的最新事实（上次进展、待办、关键决策）→ 直接接着干，不需要我复述背景。
 2. **收到一份客户 PPT**：丢进文件管理中心的 `_inbox/`。说一句"整理一下 inbox"，AI 把它改名为 `2026-08-01-acme-kickoff.pptx`、归档到 `projects/acme/decks/`、在项目 `index.md` 登记一行、往 gbrain 写一条事实（这份 deck 是什么 + 文件指针）。
 3. **随口一问**："上季度 Acme 报价单里的单价是多少？" → gbrain 召回事实与文件指针 → 会话打开那份 excel 核对 → 给出答案并引用出处。
-4. **收工**：会话结束前，本次的持久事实（带项目/域归属）自动写回 gbrain，产出文件归位到文件中心。
+4. **收工**：会话结束时被提醒一次，说一句"收工"，本次的持久事实（带项目/域归属）写回 gbrain，产出文件归位到文件中心。**提醒自动，写入显式**——这是设计红线，不是待补的自动化（见「记忆协议」）。
 5. **夜里**：cron 触发无头 harness（`claude -p` / `codex exec` / `pi -p`）：清理 inbox 残留、生成本周项目周报 md 存进文件中心、把摘要写进 gbrain。
 6. **换一台机器**：git 拉取工作台，资产由网盘/Obsidian Sync 同步，记忆层同步其文本源后重建索引——继续工作。
 
@@ -53,7 +53,8 @@
 
 ## 记忆协议（精准召回从哪来）
 
-- 会话开始：按域/项目检索注入；会话结束：把持久事实带归属（domain/project 标签、统一的实体 slug）写回。
+- 会话开始：按域/项目检索注入；会话结束：把持久事实带归属（domain/project 标签、统一的实体 slug、来源 tag `source:session`）写回。
+- **写回是显式动作，永不自动**：hook / 每会话一次轻提示只提醒（点名触发词「收工」+ skill `memory-writeback` + 该带的 tag），从不代写 gbrain。所以"写回率"量的是真的写了几次，不是被提醒了几次；取证命令见 `workbench-retro` 检查 1。
 - 资产入脑只入三样：**这是什么、关键事实、指针**；原文件永远留在资产层。指针 = `Pointer`（绝对路径，本机真理）+ `rel_path`（相对 filehub 根，机器无关，M5 起）；换机按「目标机 filehub 根 + rel_path」重解析。
 - 精准 = 一致的实体命名 + 归属标签 + 写回纪律。三者由工作台规则与 jspace-use 指南保障，不靠人自觉。
 - 各 harness 的会话能力分级（session-start / session-end / 显式 fallback / crash recovery 的 automated/best-effort/manual/unsupported）见工作台 `.jspace/skills/jspace-use/references/harnesses.md`「Lifecycle 能力矩阵」；本段为愿景措辞，实际能力以矩阵为准（不虚报自动化）。
@@ -93,6 +94,7 @@
   - 待真实使用验证：首次无头 `workbench-retro` cron（2026-08-16 周日 23:00）；写回腿的习惯养成（当前 gbrain 写入仍全部来自 cron，0 条来自日常会话）。
   - **写回腿工程侧已就位（2026-08-26，B4）**——注意这只是「接线 + 可观测」，**不是指标达标**：① claude `SessionEnd` / cursor `sessionEnd` 有官方事件证据，seed 接线 `jspace context session-end` 并升 best_effort；opencode/pi/codex 无语义匹配事件，**保持 manual 不虚报**（逐 harness 证据见开发仓库 `docs/session-end-hooks.md`）。② 两个已接线的 harness 其 session-end 输出都是 fire-and-forget（注不回会话），所以真实提醒面是 `jspace context turn` 的**每会话一次**收工轻提示（去重锚点 `.jspace/state/briefing.json`）。③ 写侧新增来源 tag（`source:session` / `source:cron`），`workbench-retro` 检查 1 由此能**数**出写回率而不是凭感觉。④ 提醒与 hook **都不写 gbrain**，写回仍是显式动作。
   - **待真实使用验证（不伪造数据）**：连续两周 `gbrain list --type note --tag source:session` 落窗口计数 > 0。当前为 0 且**属预期**——来源 tag 是新约定，此前的页都没有这个 tag（retro 会把它们单独记成「无来源 tag」桶，不折算进任何一条腿）。到期把真实数字与结论回写本条目与对应 retro 页。
+  - **纪律面补强（2026-08-26 架构复审后）**：接线就位但"靠自觉"的两处缺口收掉——① 提醒文案从"请显式触发收工"改成可执行三件套（触发词「收工」+ skill `memory-writeback` + `tags: source:session`），closing 事件的 next-action 不再回落成"按 AGENTS.md 路由"；② 定时层"从没启用过"这个静默默认值有了可见性：`jspace doctor --verbose` 报 `cron.all_disabled`（info），first-use 第 4.5 步必须问用户并给 enable → rehearsal → install 序列，retro 检查 4 每周复核。**模板 cron 仍出厂 `enabled: false`**（未接线机器上不该有东西被拉起），开启始终是用户的显式选择。
 - **H1 ✅ 安全与韧性硬化轮（2026-08-25）**：M6 之后 main 再收七笔（v1.0.14 之上）——① 无头 cron 降权：env 白名单 + per-cron headless tools 覆盖（write-only crons 去 Bash）+ inbox 不可信数据提示；② low-security 硬化：https-only 下载、expandTilde 规范化、plist Label 校验、cmdEscapeArg % 转义；③ symlink 逃逸收容（realpath 前缀门禁 confinedWithin）；④ 测试可靠性：darwin 调和假绿修复、import-boundary 强化、漂移门禁硬化（lifecycle 表校验 + cron target 静态校验 + CI 补齐）。命名沿用提交自标「H1 完成」（f23e7b2）。
   - 待真实使用验证：Linux/Windows 真机调度复核（同 M3 开放项）。
 - 顺序理由：cron 的第一批任务操作资产层，故 M2 在 M3 前；里程碑随真实使用可重排，重排时更新本文件。

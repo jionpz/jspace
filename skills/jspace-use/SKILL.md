@@ -35,7 +35,7 @@ triggers:
 JSpace 工作台 = 本地工作控制平面:根 `AGENTS.md` 是入口面,其余官方资产一律在 `.jspace/`。三层:
 
 - **控制平面**:`AGENTS.md` JSPACE 块(域/资源路由规则)+ `.jspace/hub.json`(域/资源索引)+ `.jspace/cron.json`(定时任务声明)。
-- **记忆层**:gbrain 统一记忆库(PGLite + 知识图谱 + 本地 embedding),会话开始检索式注入、结束写回持久事实。
+- **记忆层**:gbrain 统一记忆库(PGLite + 知识图谱 + 本地 embedding)。会话开始检索式注入(hook,best_effort);**收工写回始终显式**——hook 与轻提示只提醒、从不写 gbrain,写入由你说「收工」触发 `memory-writeback`(能力分级见 `~/.agents/skills/jspace-use/references/harnesses.md`)。
 - **资产层**:filehub 文件中心,重资产归位 `filehub/`,要点写进 gbrain reference 页。
 
 **位置即所有权**:`AGENTS.md` 块内 = managed、块外 = user;`.jspace/skills/` = seed(未改随升级刷新,本地改动保留);`.jspace/hub.json` / `cron.json` = user 数据(永不覆盖);`.jspace/marker.json` / `local.json` / `state/` = machine 状态。升级边界与所有权详情见 `README.md`「目录边界与升级范围」;域/资源/skill 创建规则与 cron 运维等治理细节 → 第 8 章。
@@ -51,8 +51,25 @@ JSpace 工作台 = 本地工作控制平面:根 `AGENTS.md` 是入口面,其余�
 2. **Registry health**:`jspace doctor --dir .`;`hub.json` 合法 JSON;域文件夹/id 一致;每资源恰一 primary。细则 `~/.agents/skills/jspace-use/references/registry.md`。
 3. **File center**:问用户选 filehub 根 → `jspace filehub init <根> --register`;暂不配则告知降级暂存区。**首启验收**:放一份示例文件进 `_inbox/` 跑一次「整理一下 inbox」,确认入库→gbrain 页→中文召回闭环。
 4. **Harness wiring**:问用户用哪个 harness,选一个跑同一条命令 `jspace harness wire --harness <claude|grok|opencode|cursor|pi> --dir .`(幂等写该端 gbrain MCP + session-start briefing + 打印能力边界;Cursor 还链官方 skills 到 `~/.cursor/skills/`;claude 的旧入口 `jspace gbrain wire` 仍是等价别名)。细则 `~/.agents/skills/jspace-use/references/harnesses.md`。
-4.5. **Scheduled tasks(可选,推荐启用)**:看 `.jspace/cron.json` 里声明的任务与时段;需要定时执行就 `jspace cron install --dir .`;正式跑之前建议先 `jspace cron run --id <name> --dir .` 手动演练一次。**可跳过**——跳过不会让 doctor 报错,但 cron 不会自动执行。
-5. **Final smoke + sign-off**:`jspace doctor` + `jq hub.json` + `gbrain doctor --fast`;报 configured/already-OK/missing-deferred。若有启用的 cron,再确认 `jspace cron status --dir .` 显示已安装/可运行;选择跳过 cron 的标 `deferred` 不报错。
+4.5. **Scheduled tasks(默认推荐启用;**必须问用户一次**,不许默默跳过)**:出厂 `.jspace/cron.json` 四个任务全是 `enabled: false`(未接线的机器上不该有东西被拉起),所以**不动它 = 定时层永久空转**。给用户念清代价再问:
+
+   | 不开的后果 | 谁停转 |
+   |---|---|
+   | `_inbox/` 只在你想起来时才整理 | 资产飞轮(inbox-tidy) |
+   | 没有周报、没有周记忆巩固页 | 记忆飞轮(weekly-report / memory-consolidate) |
+   | 纪律腐化没人取证(写回率/断指针/僵尸域) | 自省飞轮(workbench-retro) |
+
+   一键开启(最短序列,逐条 rehearsal 后再装调度):
+   ```bash
+   for id in inbox-tidy weekly-report memory-consolidate workbench-retro; do jspace cron enable "$id" --dir .; done
+   jspace cron run inbox-tidy --dir .        # rehearsal gate:先手跑一次验证契约(逐个跑一遍最稳)
+   jspace cron install --dir .               # 装进系统调度(launchd / crontab / schtasks)
+   jspace cron status --dir .                # 确认已安装
+   ```
+   - **只想开一部分**:`jspace cron enable <id> --dir .` 逐条开(推荐至少开 `inbox-tidy` + `workbench-retro`——一条转资产、一条转纪律)。
+   - **harness 未接线/配额未配就先别装调度**:先做第 4 步,再 rehearsal。`cron run` 失败是安全失败(记 incident + `jspace cron check` 可见,不改任何数据);`cron install` 只登记调度、不代跑。
+   - **用户确认要跳过**:标 `deferred` 并告知 `jspace doctor --verbose`(或 `--json`)会持续报 `cron.all_disabled`(info,不是错误——info 默认只计数不打印),想开时回到本步。
+5. **Final smoke + sign-off**:`jspace doctor` + `jq hub.json` + `gbrain doctor --fast`;报 configured/already-OK/missing-deferred。若有启用的 cron,再确认 `jspace cron status --dir .` 显示已安装/可运行;选择跳过 cron 的标 `deferred`(`jspace doctor --verbose` 只报 `cron.all_disabled` info,不失败)。
 
 ## 3. 日常会话路由
 
@@ -65,7 +82,9 @@ SessionStart hook(`.claude/settings.json`)注入 `<current-state>`(域/pending/c
 读 `workspace/<domain>/README.md` + `domain.json`(域入口与细节);该域有 `AGENTS.md` / `runbook.md` 则一并读。域该不该建/怎么建 → 第 8 章。
 
 ### 收工
-有持久事实(进展/决策/教训)→ `memory-writeback`;有产出文件 → `asset-ingest`(先归位本体,再写 gbrain 指针)。都没有则静默结束。
+有持久事实(进展/决策/教训)→ 说一句「收工」跑 `memory-writeback`,**写回页带 `tags: source:session`**(写回率取证的唯一依据);有产出文件 → `asset-ingest`(先归位本体,再写 gbrain 指针)。都没有则静默结束。
+
+会话里最多出现**一次**收工轻提示(`jspace context turn`,无更高优先级状态时才出;去重锚点 `.jspace/state/briefing.json`),claude/cursor 另有 session-end hook。**提醒 ≠ 写入**:三者都不写 gbrain,不触发 `memory-writeback` 就等于本次没沉淀。
 
 ### 每周体检
 `jspace doctor --dir .` 看 `info` 级体检项(僵尸域 / 待归档项目 / 失效指针,见第 8 章「退役与回收」);`jspace workspace diff` 看升级差异。
@@ -73,6 +92,14 @@ SessionStart hook(`.claude/settings.json`)注入 `<current-state>`(域/pending/c
 ## 4. gbrain 记忆
 
 记忆层用法(写回纪律 / 召回 / 指针 / 周快照):**深入章节 → `~/.agents/skills/jspace-use/references/gbrain.md`**。要点:状态写固定 slug 覆盖、知识 append-only 新页、每页带 `project` + `tags` + `source`、embedding 不可达 `embed_skip: true` 保底、promotion 记忆→知识。写回走 `memory-writeback`、召回走 `memory-recall`(各自 SKILL.md),本指南不重复其纪律。
+
+**写回率自查(随手可跑;正式取证在 `workbench-retro` 检查 1)**:
+
+```bash
+gbrain list --type note --tag source:session -n 20   # 会话沉淀的写入(分子)
+gbrain list --type note --tag source:cron -n 20      # 定时归纳的写入(另一半)
+```
+两边一比就知道「记忆在长,长的是 cron 归纳的还是会话沉淀的」。`source:session` 长期为 0 = 收工写回这条腿没在转(提醒发了但没人触发写回),按第 3 章「收工」补上;来源 tag 语义 → `~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」。
 
 ## 5. 资源与资产
 
@@ -139,6 +166,7 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 - **定义即代码**:定义在 `.jspace/cron.json`(声明式:schedule + harness + prompt),git 同步、应用前 review。
 - **契约归 skill,不写内联 prompt**:官方周期任务用 `target: {kind: "skill", skill: <名>, entrypoint: "weekly"}`,`input` 只留一句薄引导——契约正文在 SKILL.md(随 `workspace upgrade` 刷新)。**内联长 prompt 会被永久冻结**:`cron.json` 是 user 数据,升级永不覆盖。
 - **存量迁移**:老工作台的 `weekly-report` / `memory-consolidate` 若仍是内联 prompt,`jspace doctor` 会报 `cron.inline_prompt_legacy`(info)。改法:把该 cron 的 `prompt` 字段换成上面的 `target` 结构(自定义 cron 不受影响,内联 prompt 是它们的正常形态)。
+- **出厂全禁用,开启是显式动作**:模板四个任务都是 `enabled: false`(未接线机器上不该有东西被拉起)。开启序列 = `jspace cron enable <id>` → `jspace cron run <id>`(rehearsal)→ `jspace cron install` → `jspace cron status`,首启版本见第 2 章 4.5。**全禁用时 `jspace doctor --verbose` 报 `cron.all_disabled`(info,不是错误;info 默认只计数)**——它就是"定时层从没启用过"的提示;真要全手动,把这条当已知状态即可。
 - **rehearsal gate**:机器侧 `jspace cron install` 前,先 `jspace cron run` 各任务一次验证契约。
 - **运维细节** → `~/.agents/skills/jspace-use/references/headless-ops.md`(无头代理/账号/配额/失败可见性)。
 

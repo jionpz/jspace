@@ -118,18 +118,20 @@ gbrain stats                                        # pages_by_type:看 type 契
 **证据**
 ```bash
 jspace cron check          # 未 ack incident + pending 暂存写 + 各 cron 状态
+jspace cron list           # 定时层到底启用了没(出厂全 enabled:false)
 jspace ingest list         # in-progress / cleanup-pending journal
 jspace pending list        # gbrain 锁冲突暂存
 ls .jspace/logs/cron/*/ | tail -20
 ```
 
 **判读**
+- 所有 cron 都 `enabled: false`(等价信号:`jspace doctor --verbose` 报 `cron.all_disabled`)→ **定时层从未启用**:资产整理与周自省两条腿根本没在转,本次 retro 必然是会话内手跑的。这条优先于下面所有失败判读——没运行过自然没失败。
 - `needs_attention > 0` → **有未处置失败**。
 - ingest journal 存在 in-progress/cleanup-pending 且 ≥2 天未推进 → **入库中断未续跑**。
 - pending 暂存 ≥1 条且 ≥1 天未 apply → **写入堆积**。
 - 同一 cron 本周失败 ≥2 次 → **重复失败**(区别于偶发:偶发=1 次且下次成功)。
 
-**分级**:未处置失败/中断/堆积 → 立即可做(附续跑或 ack 命令);重复失败 → 需你决策(要查根因,可能是配额/网关/契约问题)。
+**分级**:未处置失败/中断/堆积 → 立即可做(附续跑或 ack 命令);重复失败 → 需你决策(要查根因,可能是配额/网关/契约问题);定时层从未启用 → 需你决策(给 `jspace-use` 第 2 章 4.5 的 enable → rehearsal → install 序列,让用户定开哪几条)。
 
 ---
 
