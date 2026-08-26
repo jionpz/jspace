@@ -106,8 +106,15 @@ export function cronSpawnEnv(platform: string, harness: string): Record<string, 
   ]);
   const allowPrefixes = [...cap.cron_env.allow_prefixes];
   const out: Record<string, string> = {};
+  // Bun hides HTTP(S)_PROXY etc. from Object.keys(process.env) while still
+  // allowing direct reads — so allowKeys must be copied by explicit lookup,
+  // not only by enumerating process.env.
+  for (const key of allowKeys) {
+    const v = process.env[key];
+    if (v !== undefined) out[key] = v;
+  }
   for (const key of Object.keys(process.env)) {
-    if (key.startsWith("GBRAIN_") || allowKeys.has(key) || allowPrefixes.some((p) => key.startsWith(p))) {
+    if (key.startsWith("GBRAIN_") || allowPrefixes.some((p) => key.startsWith(p))) {
       out[key] = process.env[key] as string;
     }
   }
