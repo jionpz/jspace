@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/08-06-workbench-context-wiring/research/trellis-injection-methodology.md", "reason": "方法论 §1-§4 注入点/payload 分块/体积手段/可靠性七条、§7 第 10 条为何不抄脚本——本任务的设计依据"}
+{"file": ".trellis/tasks/08-06-workbench-context-wiring/prd.md", "reason": "父任务需求全集与跨子任务验收；本任务对应 R2"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "本任务新增 application/context/ 模块族，需遵守分层与依赖方向"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "hook 永不阻断会话是核心约束：CmdResult/fail() 语义与结构化诊断的既有做法"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "CommandSpec 与依赖注入的既有风格；新命令族须与现有 doctor/cron 一致"}

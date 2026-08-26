@@ -1,0 +1,4 @@
+{"file": "application/workspace/manifest.test.ts", "reason": "ownershipFor 映射 + diffBundle seed/user 语义回归"}
+{"file": "application/workspace/workspace.test.ts", "reason": "upgrade plan/阻断/覆盖策略回归"}
+{"file": "templates/workbench/README.md", "reason": "目录边界与升级范围文档(产物一致性核对)"}
+{"file": "cli/manifest.generated.ts", "reason": "再生后 ownership 字段正确性核对"}

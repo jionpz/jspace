@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/08-08-gbrain-skillsdir-wiring/prd.md", "reason": "需求、背景（gbrain 源码证据）、AC"}
+{"file": ".trellis/tasks/08-08-gbrain-skillsdir-wiring/design.md", "reason": "~/.claude.json 读写安全、模块划分、幂等"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "新增 application/gbrain/ 模块族的分层约束"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "CommandSpec 风格与依赖注入模式"}
+{"file": "skills/jspace-use/references/gbrain.md", "reason": "首次启用接线节的现有结构（S4 文档改这里）"}

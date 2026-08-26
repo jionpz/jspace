@@ -1,0 +1,6 @@
+{"file": "prd.md", "reason": "范围/验收:死代码/文档漂移/重复收敛,保留边界"}
+{"file": "implement.md", "reason": "执行计划:Phase A-D 机械改动 + 验证 + 边界"}
+{"file": "research/audit-summary.md", "reason": "三档分类(A可安全删/B需确认/C保留)+ 优先级 — 执行核对基准"}
+{"file": "research/audit-dead-code.md", "reason": "死代码清单(file:line + 判断依据)"}
+{"file": "research/audit-duplication.md", "reason": "重复实现清单(sha256Of/safeReadFile 等)"}
+{"file": "research/audit-docs.md", "reason": "漂移文档清单(.gitattributes/package.json/spec 措辞)"}

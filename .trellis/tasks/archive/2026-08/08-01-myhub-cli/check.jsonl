@@ -1,0 +1,1 @@
+{"file": "AGENTS.md", "reason": "Quality Checks 一节是验收基线（py_compile、init+doctor 冒烟、无 myhub 残留、根目录无日常注册表）；.trellis/spec/ 规范均为未填充占位模板，无适用条目"}

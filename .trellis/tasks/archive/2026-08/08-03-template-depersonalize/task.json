@@ -1,0 +1,28 @@
+{
+  "id": "template-depersonalize",
+  "name": "template-depersonalize",
+  "title": "M5 模板去个人化（分发前置）",
+  "description": "GOAL.md M5 分发（R7）前置：清理 templates/workbench 中 owner 个人内容（workspace/jspace-dev、agent-infra 两域、hub.json 内 owner 路径），产出中性默认域模板；与 cli/embed.ts devRoot 安装态行为联动验证。完成后再将 jspace release 面向公开分发。紧随 08-03-one-click-install 之后执行。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-03",
+  "completedAt": "2026-08-03",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "milestone": "M5"
+  }
+}

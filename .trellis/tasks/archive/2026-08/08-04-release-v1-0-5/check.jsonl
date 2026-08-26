@@ -1,0 +1,6 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/index.md", "reason": "Authoritative backend conventions and layer ownership review baseline."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify unlink/write failures stay visible, nonzero, and actionable."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Full quality gates, schema compatibility, generated assets, and fixture safety review."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify cleanup recovery decisions use structured journal state rather than prose."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Check contract propagation from journal through CLI, docs, embedded assets, and release artifacts."}

@@ -1,0 +1,32 @@
+{
+  "id": "multi-harness-support",
+  "name": "multi-harness-support",
+  "title": "Multi-Harness Support: Claude/OpenCode/Pi/Grok (issue #5)",
+  "description": "工作台外接 harness 支持:Claude 全接 / Codex argv / Pi argv / 无 Grok -> 4 harness 深度对齐 + capabilities.yaml 单一事实源 + 防漂移 CI。issue #5 构建方案。总工作量 ~5.5 天",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-09",
+  "completedAt": "2026-08-10",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-09-harness-capabilities",
+    "08-09-harness-grok",
+    "08-09-harness-opencode",
+    "08-09-harness-pi",
+    "08-09-harness-consistency"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

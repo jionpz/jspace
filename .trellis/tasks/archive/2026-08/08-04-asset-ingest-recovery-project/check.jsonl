@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/08-04-asset-ingest-recovery-project/prd.md", "reason": "验收标准 AC-E1~E6，check 的核对基线"}
+{"file": ".trellis/tasks/08-04-asset-ingest-recovery-project/design.md", "reason": "实现契约对照：journal 状态机/补偿、envelope 幂等、scanner 同步、skill 接线"}
+{"file": "skills/asset-ingest/SKILL.md", "reason": "步骤顺序修正后无孤儿/失败留 inbox 措辞与机械补偿一致（F4 关闭）"}
+{"file": "cli/cron.ts", "reason": "findPendingApplies 过滤与 `.APPLY.json` 新基线一致；inbox-batch 日志同一路径（F3/RE4）"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "质量门与测试约定（tsc/bun test/fixtures，不碰真实环境）"}

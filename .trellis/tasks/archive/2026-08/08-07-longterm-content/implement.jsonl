@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/08-06-workbench-context-wiring/research/trellis-injection-methodology.md", "reason": "方法论 §2 体积手段、§3 单一事实源与可见降级纪律——瘦身与日常章重写的依据"}
+{"file": ".trellis/tasks/08-06-workbench-context-wiring/prd.md", "reason": "父任务需求全集；本任务对应 R3，并需回填 AC8"}
+{"file": "GOAL.md", "reason": "内容取舍的最高对齐物：长期使用画面、资产协议、记忆协议、非目标"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "所有权模型与安全红线；退役动作必须标注需用户确认"}

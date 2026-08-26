@@ -1,0 +1,6 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend layer boundaries and authoritative guideline routing for the cleanup state-machine change."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "CmdResult nonzero behavior, actionable retry messages, and prohibition on silent failure."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Typed contract discipline, fault-injection tests, generated freshness, and no real-environment mutation."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Structured journal state remains machine truth; prose output must not replace recovery state."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cleanup semantics cross core/application/CLI/skill/generated bundle boundaries."}

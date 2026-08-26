@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/08-04-skill-manifest-harness-ops/prd.md", "reason": "验收标准 AC-D1~D7，check 的核对基线"}
+{"file": ".trellis/tasks/08-04-skill-manifest-harness-ops/design.md", "reason": "实现契约对照：manifest 驱动的物化、validateSkillTarget、引用可达、矩阵分级"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "质量门与测试约定（tsc/bun test/freshness）"}
+{"file": "docs/PLATFORMS.md", "reason": "argv 分级与 lifecycle 矩阵一致性（AC-D7），不虚报自动化"}
+{"file": "skills/jspace-bootstrap/SKILL.md", "reason": "bootstrap 远程安装守卫与 gbrain 健康检查可复验检查对照（AC-D5）"}

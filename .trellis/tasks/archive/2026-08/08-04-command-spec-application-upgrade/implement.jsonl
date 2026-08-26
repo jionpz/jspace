@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/08-03-architecture-evolution-refactor/prd.md", "reason": "父任务需求 R3/R4/R6/R10、AC4/AC5/AC13/AC16、Product Invariants 与 F1-F8 复核状态"}
+{"file": ".trellis/tasks/08-03-architecture-evolution-refactor/design.md", "reason": "目标架构母版：模块边界(§3)、CommandSpec(§5)、distribution/ownership(§8)、升级 journal(§8.4)"}
+{"file": ".trellis/tasks/08-03-architecture-evolution-refactor/implement.md", "reason": "Child B 边界(排除 project CLI/local v2)、跨 child review gates、依赖的已落地契约"}
+{"file": ".trellis/tasks/08-04-command-spec-application-upgrade/prd.md", "reason": "本任务需求 RB1-RB7 与验收 AC-B1~B10"}
+{"file": ".trellis/tasks/08-04-command-spec-application-upgrade/design.md", "reason": "CommandSpec 类型与解析引擎、ownership 规则、diff/upgrade 判定表、materialized journal 契约"}

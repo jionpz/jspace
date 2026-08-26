@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/08-02-cross-platform-migration/prd.md", "reason": "验收对照:跨子任务 acceptance criteria"}
+{"file": ".trellis/tasks/08-02-cross-platform-migration/design.md", "reason": "实现与设计一致性核对"}
+{"file": "AGENTS.md", "reason": "治理/红线一致性核对"}

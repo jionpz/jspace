@@ -1,0 +1,32 @@
+{
+  "id": "review-fixes",
+  "name": "review-fixes",
+  "title": "评审修复：P0 红线 + cron 收敛 + 可靠性 + 测试 + 文档",
+  "description": "基于 08-05-project-review 报告的修复工作。父任务持有需求地图与跨子任务验收；5 个子任务：P0 红线中性化 / cron 子系统收敛 / 数据一致性修补 / 零覆盖补测 / 文档-spec 同步。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-05",
+  "completedAt": "2026-08-05",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-05-fix-p0-redline",
+    "08-05-fix-cron-convergence",
+    "08-05-fix-reliability",
+    "08-05-fix-test-coverage",
+    "08-05-fix-docs-spec"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

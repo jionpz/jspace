@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/08-06-workbench-context-wiring/research/trellis-injection-methodology.md", "reason": "方法论 §5 多-harness 同字节物化、§8 可迁移清单——本任务的设计依据"}
+{"file": ".trellis/tasks/08-06-workbench-context-wiring/prd.md", "reason": "父任务需求全集与跨子任务验收；本任务对应 R1、R5"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "本任务改 application/workspace/manifest.ts 与 cli/embed.ts，需遵守分层与依赖方向"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "所有权模型（seed/user/managed）与安全红线是本任务的硬约束，勿破坏 upgrade 语义"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "本任务要消除 manifest.ts 与 embed.ts 两处手写的同一映射规则，属典型复用改造"}

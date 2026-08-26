@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "project add 命令的 CommandSpec/DI/gates 硬约束;extract.py 不在 spec 内,但命令层必须对齐既有模式"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "project add 的 fail()/CmdResult/结构化诊断语义;extract.py 的失败即停报错对齐此约定"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "分层约束:application 不 import cli;project add 复用 registry 层 domain/resource 既有模式"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "project add/list 复用 workbench-state.ts 原子写 + hub/local 配对写;改动既有常量/文案前先 grep"}

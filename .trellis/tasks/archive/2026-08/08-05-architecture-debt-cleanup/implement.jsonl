@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/08-05-architecture-debt-cleanup/research/architecture-analysis.md", "reason": "全项目重复代码/门面/逃逸证据清单（file:line），5 项需求共用的事实源"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "层结构与依赖纪律：application 不 import cli、adapters 叶子依赖惯例；约束 item 3/4/5 的落点"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "去重方法论：item 5 readJsonRecords/localDate 收敛的判定标准"}
+{"file": "GOAL.md", "reason": "JSpace 顶层对齐物（per jspace-no-trellis-spec）：子代理上下文基准"}

@@ -1,0 +1,30 @@
+{
+  "id": "workbench-context-wiring",
+  "name": "workbench-context-wiring",
+  "title": "工作台上下文通路对齐 harness 官方机制",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-06",
+  "completedAt": "2026-08-08",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-07-discovery-alignment",
+    "08-07-context-injection",
+    "08-07-longterm-content"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

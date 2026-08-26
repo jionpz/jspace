@@ -1,0 +1,33 @@
+{
+  "id": "issue3-followup",
+  "name": "issue3-followup",
+  "title": "Code Review Round 2 Follow-up: 修复 LOCK_STALE 回归 + 收尾 P2 部分修复",
+  "description": "GitHub issue #3: 修复 P0-5 LOCK_STALE_MS 单位回归 + 收尾 P2-6/P2-5/P2-1/P2-2 + P3/P4 小清理。基线 HEAD 24818b3, bun test 426/0 fail, tsc ✓。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-09",
+  "completedAt": "2026-08-09",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-09-p0-lock-stale",
+    "08-09-p2-ingest-health",
+    "08-09-p2-decoder-helper",
+    "08-09-p2-scheduler-boundary",
+    "08-09-p2-schema-version",
+    "08-09-p3-p4-cleanup"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

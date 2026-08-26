@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/08-04-spec-ci-final-integration/prd.md", "reason": "验收标准 AC-F1~F5，check 的核对基线"}
+{"file": ".trellis/tasks/08-04-spec-ci-final-integration/design.md", "reason": "spec 内容大纲与 CI 补强步骤，check 对照"}
+{"file": ".github/workflows/verify.yml", "reason": "补强后质量门（freshness 含 skills.generated.ts、全链 init、scheduler smoke）"}
+{"file": ".trellis/tasks/08-03-architecture-evolution-refactor/prd.md", "reason": "父 AC1-AC18 映射核对，每项附 Child A-E 证据锚点"}
+{"file": ".trellis/spec/backend/index.md", "reason": "填充后真实指南索引，非模板"}

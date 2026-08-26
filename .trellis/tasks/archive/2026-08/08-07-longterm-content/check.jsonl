@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/08-07-longterm-content/prd.md", "reason": "AC-C1~C8 是本次检查的验收清单，尤其 AC-C2 gbrain 路由实测"}
+{"file": "GOAL.md", "reason": "核对内容改动是否仍与终局画面一致，尤其不虚报自动化"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "核对 doctor 诊断分级与噪音纪律、退役动作的确认要求"}

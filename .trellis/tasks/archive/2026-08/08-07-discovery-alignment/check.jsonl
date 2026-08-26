@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/08-07-discovery-alignment/prd.md", "reason": "AC-A1~A10 是本次检查的验收清单"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "门禁项与所有权模型；重点核对 upgrade 是否仍尊重 user/seed 边界"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "1:1 改 1:N 跨 manifest/journal/diff/init 多处，需按跨层清单逐一核对遗漏"}

@@ -1,0 +1,31 @@
+{
+  "id": "cross-platform-migration",
+  "name": "cross-platform-migration",
+  "title": "JSpace 全链三平台迁移: CLI 迁 bun+TS + GitHub CI 发布",
+  "description": "把 bin/jspace 从 Python 迁到 bun+TS 并编译三平台二进制;gbrain/harness 接线与 bootstrap skill 跨平台化;上 GitHub Actions 出三平台 release 产物",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-02",
+  "completedAt": "2026-08-02",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-02-cli-bun-ts",
+    "08-02-gbrain-harness-wiring",
+    "08-02-bootstrap-skill",
+    "08-02-github-ci-release"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

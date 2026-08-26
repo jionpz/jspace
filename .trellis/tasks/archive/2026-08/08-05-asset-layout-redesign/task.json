@@ -1,0 +1,30 @@
+{
+  "id": "asset-layout-redesign",
+  "name": "asset-layout-redesign",
+  "title": "工作台资产布局与文档重构 — 官方资产落位原则 + AGENTS.md 重写 + 升级迁移",
+  "description": "长期运行下官方资产落位没有稳定原则(skill 三连跳);工作台 AGENTS.md 是开发仓库 AGENTS.md 的派生;cron 运行时 skill 路径引用与放置迁移脱节(compileSkillTarget/execute 仍查根 skills/)。用户确认尚无使用者,可大面积重构。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-05",
+  "completedAt": "2026-08-05",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-05-skill-path-single-source",
+    "08-05-upgrade-stale-cleanup",
+    "08-05-workbench-agents-redesign"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

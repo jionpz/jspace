@@ -1,0 +1,30 @@
+{
+  "id": "cli-ux-fixes",
+  "name": "cli-ux-fixes",
+  "title": "CLI 三处体验修复:版本串精度/doctor 噪音/init 接口",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-06",
+  "completedAt": "2026-08-06",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-06-version-string-precision",
+    "08-06-doctor-cron-noise",
+    "08-06-init-dir-flag"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

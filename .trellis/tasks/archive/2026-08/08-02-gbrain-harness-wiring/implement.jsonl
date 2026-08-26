@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/08-02-gbrain-harness-wiring/prd.md", "reason": "子任务需求与验收"}
+{"file": ".trellis/tasks/08-02-gbrain-harness-wiring/implement.md", "reason": "执行清单"}
+{"file": ".trellis/tasks/08-02-cross-platform-migration/research/harness-ci-facts.md", "reason": "harness 配置路径/Windows 支持事实"}
+{"file": "skills/jspace-bootstrap/references/harnesses.md", "reason": "待改写的接线文档(POSIX 现状)"}
+{"file": "skills/harness-config/references/harnesses.md", "reason": "待改写的接线文档(POSIX 现状)"}
+{"file": "AGENTS.md", "reason": "项目治理对齐"}

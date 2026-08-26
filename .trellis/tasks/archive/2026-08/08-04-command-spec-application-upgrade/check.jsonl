@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/08-04-command-spec-application-upgrade/prd.md", "reason": "AC-B1~B10 验收清单（fixture command、--dir 统一、JSON/退出码、manifest freshness、diff/upgrade、init 禁令）"}
+{"file": ".trellis/tasks/08-04-command-spec-application-upgrade/design.md", "reason": "§8.3 diff 判定表、§7 ownership 规则、渲染/退出码契约、journal 位置，用于逐条核对实现"}
+{"file": ".trellis/tasks/08-03-architecture-evolution-refactor/prd.md", "reason": "父任务 Product Invariants（不得降低项）与 AC4/AC5/AC16 归属"}
+{"file": ".trellis/spec/backend/index.md", "reason": "项目 backend 约定索引（目录/错误/日志；当前为占位，实现后按实际约定核对）"}

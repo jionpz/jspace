@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/08-08-skill-nav-quality/prd.md", "reason": "需求与方案 A 决策（多 harness → ~/.agents 统一）"}
+{"file": ".trellis/tasks/08-08-skill-nav-quality/design.md", "reason": "物化命令/引用映射/C1 更新设计"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "新增 application/skills/ 模块分层"}
+{"file": "skills/harness-config/SKILL.md", "reason": "rsync --ignore-existing 幂等自装语义参考（~/.agents/skills 目标）"}
+{"file": "scripts/check-skills.ts", "reason": "C1 正则更新对象"}

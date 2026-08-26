@@ -1,0 +1,32 @@
+{
+  "id": "code-review-fixes",
+  "name": "code-review-fixes",
+  "title": "Issue #2: Code Review 一致性/正确性/CI 缺口修复(20项)",
+  "description": "全仓审查发现的 20 个问题点修复: P0 正确性/死链×4, P1 CI 缺口×3, P2 架构×7, P3 文档/脚本×4, P4 结构观察×2。源自 GitHub issue #2。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-09",
+  "completedAt": "2026-08-09",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-09-p0-correctness-deadlinks",
+    "08-09-p1-ci-gaps",
+    "08-09-p2-data-integrity-refactor",
+    "08-09-p2-architecture-cleanup",
+    "08-09-p3-p4-docs-structural"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

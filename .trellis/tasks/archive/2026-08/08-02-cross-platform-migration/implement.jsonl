@@ -1,0 +1,8 @@
+{"file": ".trellis/tasks/08-02-cross-platform-migration/prd.md", "reason": "父任务源需求/跨子任务验收"}
+{"file": ".trellis/tasks/08-02-cross-platform-migration/design.md", "reason": "总体架构 D1-D6、风险、平台决策"}
+{"file": ".trellis/tasks/08-02-cross-platform-migration/implement.md", "reason": "父级执行顺序/评审门/回滚"}
+{"file": ".trellis/tasks/08-02-cross-platform-migration/research/empirical-bun-probe.md", "reason": "bun 编译模式实测真值(路径/嵌入/交叉编译/体积)"}
+{"file": ".trellis/tasks/08-02-cross-platform-migration/research/cli-bun-ts.md", "reason": "bun+TS CLI 跨平台事实"}
+{"file": ".trellis/tasks/08-02-cross-platform-migration/research/harness-ci-facts.md", "reason": "harness 路径/CI runner 事实"}
+{"file": "AGENTS.md", "reason": "项目治理对齐(JSpace 不用 Trellis spec)"}
+{"file": "GOAL.md", "reason": "项目目标对齐"}

@@ -1,0 +1,29 @@
+{
+  "id": "open-questions-o4-o2",
+  "name": "open-questions-o4-o2",
+  "title": "开放问题攻坚：#4 office 解析深度 + #2 文件中心选址迁移",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-03",
+  "completedAt": "2026-08-03",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-03-office-deep-extract",
+    "08-03-filehub-migration"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

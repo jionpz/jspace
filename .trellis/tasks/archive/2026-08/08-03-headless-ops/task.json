@@ -1,0 +1,30 @@
+{
+  "id": "headless-ops",
+  "name": "headless-ops",
+  "title": "无头执行的运维(#3)：失败可见性硬化 + 账号/配额文档",
+  "description": "GOAL 开放问题 #3:会话检查硬化(cron failures 命令 + SessionStart hook)+ 账号/配额运维文档 + 真实运行验证。父任务统一集成与最终验证。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-03",
+  "completedAt": "2026-08-03",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-03-cron-failures-surface",
+    "08-03-session-start-hook",
+    "08-03-quota-ops-docs"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

@@ -1,0 +1,7 @@
+{"file": "prd.md", "reason": "需求、约束、验收标准 — 实施范围边界"}
+{"file": "design.md", "reason": "架构决策:目录命名、SKILL 指南化结构、单一事实源加固、跨引用同步"}
+{"file": "implement.md", "reason": "执行计划:Phase A-H checklist、验证命令、回退点"}
+{"file": "research/audit-references.md", "reason": "全量 jspace-bootstrap 引用清单(按子系统分组的 file:line) — 实施逐条核对"}
+{"file": "research/audit-generation.md", "reason": "gen-assets 生成链路契约与改名影响面"}
+{"file": "research/audit-ownership.md", "reason": "升级/所有权/journal 全 manifest 泛化 — 确认零机制改动"}
+{"file": "research/audit-test-contract.md", "reason": "测试耦合分类:必红 3 个 / 过时 2 个 / 泛化不受影响"}

@@ -1,0 +1,32 @@
+{
+  "id": "pre-release-architecture-convergence",
+  "name": "pre-release-architecture-convergence",
+  "title": "发布前架构收敛",
+  "description": "修复跨平台 scheduler 收敛与多工作台隔离，统一关键 machine truth 合同，并收敛依赖边界和 CLI 热点。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": "scheduler, machine-state contracts, architecture boundaries",
+  "package": null,
+  "priority": "P0",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-05",
+  "completedAt": "2026-08-05",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "adapters/scheduler/",
+    "application/automation/",
+    "application/workspace/",
+    "core/contracts/",
+    "cli/commands/registry.ts"
+  ],
+  "notes": "",
+  "meta": {}
+}

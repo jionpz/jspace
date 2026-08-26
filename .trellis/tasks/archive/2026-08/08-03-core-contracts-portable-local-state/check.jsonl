@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "复核 central decoder/effective projection 是否真正替代所有局部 raw casts，并检查跨层模板一致性"}
+{"file": ".trellis/tasks/08-03-core-contracts-portable-local-state/research/state-contract-audit.md", "reason": "按消费者清单、状态边界和测试缺口执行回归核对"}

@@ -1,0 +1,28 @@
+{
+  "id": "jspace-update",
+  "name": "jspace-update",
+  "title": "jspace update 自更新命令",
+  "description": "CLI 内置自更新:jspace update 从 GitHub Releases 检测并升级到最新版本。含构建时版本注入(修复内置 VERSION 过期)、release 资产下载+SHA-256 校验+自替换(Windows 运行中 exe 覆盖策略)、update/--check/--version 子命令。对应 v1 self-update 后续项。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-03",
+  "completedAt": "2026-08-03",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "milestone": "M5"
+  }
+}

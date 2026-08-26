@@ -1,0 +1,28 @@
+{
+  "id": "one-click-install",
+  "name": "one-click-install",
+  "title": "一键脚本安装（M5 分发子项）",
+  "description": "为 JSpace CLI 提供跨平台一键安装：install.sh(macOS/Linux) + install.ps1(Windows)，从 GitHub Releases 下载匹配二进制、SHA-256 校验、安装到 PATH、附带卸载脚本。对应 GOAL.md M5 分发里程碑。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-03",
+  "completedAt": "2026-08-03",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "milestone": "M5"
+  }
+}

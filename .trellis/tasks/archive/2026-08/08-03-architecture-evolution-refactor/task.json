@@ -1,0 +1,32 @@
+{
+  "id": "architecture-evolution-refactor",
+  "name": "architecture-evolution-refactor",
+  "title": "架构澄清与可持续演进重构",
+  "description": "发布前统一状态、CLI、调度、升级与 skills 契约，闭合跨层日常运维。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-03",
+  "completedAt": "2026-08-04",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-04-command-spec-application-upgrade",
+    "08-04-cron-scheduler-reconciliation",
+    "08-04-skill-manifest-harness-ops",
+    "08-04-asset-ingest-recovery-project",
+    "08-04-spec-ci-final-integration"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "Child A (core contracts + portable/local state) 已于 2026-08-04 落地并提交 (29117d3):core/contracts/{hub,local,workbench,distribution,ids,paths,diagnostics,files}.ts + core/registry/{effective,inspect}.ts + adapters/fs/workbench-state.ts + 对应测试 + 模板 .gitignore。原子任务目录 08-03-core-contracts-portable-local-state 已归档删除,children 引用于 2026-08-04 摘除。\n\nChild B (CommandSpec + application + workspace upgrade) 已于 2026-08-04 完成 (提交 2d75214→eb3b026 共 9 commits):declarative CommandSpec 单一来源 + application use cases (init/doctor/domain/resource/filehub/inbox) + 统一 --dir/--json/--dry-run/退出码;bundle manifest (ownershipFor/materializedRel) + freshness;workspace diff/upgrade + materialized journal + conflict/rollback;init --force 禁令 + CI verify 门;doctor --json (code/severity)。AC-B1~B10 全绿,128 测试,application 层无 cli 反向依赖。下一 gate:创建并激活 Child C (cron invocation + scheduler reconciliation + incidents)。\n\nChild C (cron 调用契约 + scheduler 对账 + incidents) 已于 2026-08-04 完成 (提交 9da28cd→953293f 共 6 commits):CronRunInvocation 契约 + argv round-trip (审计 F1 关闭);runs/incidents 结构化状态 (prose→JSON);execute use case + harness adapter + F3 统一日志契约;planReconciliation + workbench tag 隔离 (真实 apply 的 tag 卸载为已知遗留);平台矩阵 (incidents/harness)。AC-C1~C10 全绿,139 测试,审计 F1/F3 关闭。下一 gate:创建并激活 Child D (skill manifest + harness 能力矩阵 + 日常运维闭环)。",
+  "meta": {}
+}

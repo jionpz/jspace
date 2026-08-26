@@ -1,0 +1,8 @@
+{"file": ".trellis/tasks/08-04-skill-manifest-harness-ops/prd.md", "reason": "Child D 需求与验收（RD1-RD6 / AC-D1~D7），实施对齐的唯一契约"}
+{"file": ".trellis/tasks/08-04-skill-manifest-harness-ops/design.md", "reason": "技术设计：SkillsManifest 契约、gen-assets 由 manifest 驱动、cron skill target（最小闭环）、lifecycle 矩阵落位"}
+{"file": ".trellis/tasks/08-03-architecture-evolution-refactor/prd.md", "reason": "父任务源需求 R6/R7/R10 与审计 F2/F8 证据及 file:line 锚点"}
+{"file": "templates/workbench/AGENTS.md", "reason": "4 required skills 声明 + gbrain resolver rows；manifest↔AGENTS 一致性 contract test 的对照基线"}
+{"file": "skills/harness-config/references/harnesses.md", "reason": "官方核查（2026-08-02）的 harness 接线/Session 注入通道研究，lifecycle 能力矩阵分级依据"}
+{"file": "docs/PLATFORMS.md", "reason": "harness argv 能力分级与平台调度矩阵；lifecycle 矩阵交叉引用的落位处（AC-D7）"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "后端目录结构与依赖方向约定（core/contracts 无副作用、application 消费注入依赖）"}
+{"file": ".trellis/tasks/08-03-architecture-evolution-refactor/design.md", "reason": "父任务技术设计 §7.3 skill targets、§9 Skill Lifecycle、§11 远程安装审批/gbrain 兼容——Child D 关键依据"}

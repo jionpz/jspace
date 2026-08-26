@@ -1,0 +1,4 @@
+{"file": "prd.md", "reason": "验收标准 AC1-AC9 — 检查对照清单"}
+{"file": "research/audit-references.md", "reason": "残留比对基准:逐文件确认 jspace-bootstrap 引用已收敛"}
+{"file": "research/audit-test-contract.md", "reason": "测试契约:确认改名后测试断言与期望结构一致"}
+{"file": "research/audit-issues.md", "reason": "问题清单 A1-C4:确认双重事实源/命名漂移/边界缺口已修复"}

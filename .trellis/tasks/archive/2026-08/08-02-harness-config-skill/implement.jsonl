@@ -1,0 +1,7 @@
+{"file": "skills/jspace-bootstrap/SKILL.md", "reason": "harness-config SKILL.md 的 frontmatter 格式与分阶段流程参照（同仓库 jspace-bootstrap 样式）"}
+{"file": "skills/jspace-bootstrap/references/harnesses.md", "reason": "gbrain MCP/CLI wiring 同源底稿，harness-config harnesses.md 需交叉核对后整合（不直接引用路径）"}
+{"file": "skills/jspace-bootstrap/references/gbrain.md", "reason": "gbrain wiring 细节（MCP/hooks/session 注入）底稿，供 harnesses.md 会话级配置部分交叉核对"}
+{"file": "research/claude-code.md", "reason": "Claude Code 官方文档研究产物：CLAUDE.md 位置/@import/symlink 跟随/hooks/MCP 配置方式（实现前查证）"}
+{"file": "research/codex.md", "reason": "OpenAI Codex 官方文档研究产物：用户级 AGENTS.md/config.toml MCP/features.hooks/session 注入（实现前查证）"}
+{"file": "research/pi.md", "reason": "Pi 官方文档研究产物：全局 AGENTS.md 路径与 /reload 语义/MCP/session 注入（实现前查证）"}
+{"file": "research/cursor.md", "reason": "Cursor 官方文档研究产物：.cursor/rules/*.mdc frontmatter/加载方式/mcp.json（实现前查证）"}

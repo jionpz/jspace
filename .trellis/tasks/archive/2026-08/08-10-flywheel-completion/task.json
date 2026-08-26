@@ -1,0 +1,32 @@
+{
+  "id": "flywheel-completion",
+  "name": "flywheel-completion",
+  "title": "工作中心飞轮补全",
+  "description": "2026-08-10 审查结论落地:接通分发链与工作台实况、补齐『越用越强』缺失的工作流进化飞轮、硬化漂移检测。父任务持有需求集与任务地图,子任务独立交付。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-10",
+  "completedAt": "2026-08-11",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-10-p0-workbench-reconnect",
+    "08-10-skill-workbench-retro",
+    "08-10-cron-contract-skills",
+    "08-10-project-lifecycle-checklist",
+    "08-10-doctor-drift-checks"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "约束 JSON 只在边界 decode 一次，消费者复用 typed projection，并检查模板/运行消费者一致性"}
+{"file": ".trellis/tasks/08-03-core-contracts-portable-local-state/research/state-contract-audit.md", "reason": "记录现有 hub/marker 数据流、所有 raw registry 消费点、父任务继承决策与测试缺口"}

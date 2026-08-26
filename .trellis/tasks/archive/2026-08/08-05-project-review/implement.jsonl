@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "评审对齐基准：分层总览与 gates 快查"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "架构分层与依赖方向核对基准（维度 1）"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "错误处理约定核对基准（维度 2）"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Gates/CommandSpec/DI/ownership/安全红线核对基准（维度 3/5）"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "结构化 state vs 日志核对基准（维度 2/3）"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "跨层数据流审查方法论（维度 1/2/5）"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "重复/复用审查方法论（维度 1）"}

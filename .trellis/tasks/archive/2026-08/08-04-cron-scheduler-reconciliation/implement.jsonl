@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/08-03-architecture-evolution-refactor/prd.md", "reason": "父任务需求 R5/R9、AC6/AC7/AC8、Product Invariants 与 F1-F8 复核状态（F1/F3 为本任务核心）"}
+{"file": ".trellis/tasks/08-03-architecture-evolution-refactor/design.md", "reason": "目标架构母版：scheduler/harness adapters(§7)、incident 生命周期(§7.4)、CronRunInvocation(§7.1)、distribution 契约"}
+{"file": ".trellis/tasks/08-03-architecture-evolution-refactor/implement.md", "reason": "Child C 边界（排除 skill manifest/gbrain envelope）、跨 child review gates、依赖的已落地契约"}
+{"file": ".trellis/tasks/08-04-cron-scheduler-reconciliation/prd.md", "reason": "本任务需求 RC1-RC6 与验收 AC-C1~C10"}
+{"file": ".trellis/tasks/08-04-cron-scheduler-reconciliation/design.md", "reason": "CronRunInvocation 契约、planReconciliation 判定表、runs/incidents schema、F3 日志契约"}

@@ -1,0 +1,8 @@
+{"file": ".trellis/tasks/08-04-asset-ingest-recovery-project/prd.md", "reason": "Child E 需求与验收（RE1-RE6 / AC-E1~E6），实施对齐的唯一契约"}
+{"file": ".trellis/tasks/08-04-asset-ingest-recovery-project/design.md", "reason": "技术设计：IngestJournalV1 状态机+补偿、PendingWriteEnvelopeV1、jspace ingest/pending 命令族、project 对齐"}
+{"file": ".trellis/tasks/08-03-architecture-evolution-refactor/prd.md", "reason": "父任务源需求 R2/R7 与审计 F3/F4 证据及 AC10/AC11 锚点"}
+{"file": ".trellis/tasks/08-03-architecture-evolution-refactor/design.md", "reason": "父任务技术设计 §10 journaled sequence（validate→stage→write/stage gbrain→index→commit）"}
+{"file": "skills/asset-ingest/SKILL.md", "reason": "当前步骤顺序（F4 先移动后写脑）与批量模式，需修正为 journal 驱动"}
+{"file": "skills/asset-ingest/references/batch.md", "reason": "批量两遍式/幂等/.processing 细节，journal 续跑与补偿的 skill 侧基线"}
+{"file": "cli/cron.ts", "reason": "findPendingApplies scanner（`*.APPLY.md`→`.APPLY.json` 同步点）"}
+{"file": "core/contracts/hub.ts", "reason": "Project 稳定 id 契约，resolveProjectId 对齐依据"}

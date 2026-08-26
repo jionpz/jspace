@@ -1,0 +1,28 @@
+{
+  "id": "doctor-cron-noise",
+  "name": "doctor-cron-noise",
+  "title": "doctor 噪音:未安装 cron 降级为 info",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-06",
+  "completedAt": "2026-08-06",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-06-cli-ux-fixes",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "title": "doctor 噪音:模板 cron 默认关闭 + filehub 降 info"
+  }
+}

@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/08-02-github-ci-release/prd.md", "reason": "子任务需求与验收"}
+{"file": ".trellis/tasks/08-02-github-ci-release/implement.md", "reason": "执行清单"}
+{"file": ".trellis/tasks/08-02-cross-platform-migration/research/harness-ci-facts.md", "reason": "runner 标签/arm64/release 上传实践"}
+{"file": ".trellis/tasks/08-02-cross-platform-migration/research/cli-bun-ts.md", "reason": "compile/target 用法与交叉编译"}
+{"file": "AGENTS.md", "reason": "项目治理对齐"}

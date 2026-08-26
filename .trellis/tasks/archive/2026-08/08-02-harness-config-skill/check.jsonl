@@ -1,0 +1,5 @@
+{"file": "research/claude-code.md", "reason": "核对 references/harnesses.md 的 Claude Code 接线结论是否与官方文档研究一致（symlink/@import/MCP）"}
+{"file": "research/codex.md", "reason": "核对 references/harnesses.md 的 Codex 接线结论是否与官方文档研究一致（AGENTS.md/config.toml/hooks）"}
+{"file": "research/pi.md", "reason": "核对 references/harnesses.md 的 Pi 接线结论是否与官方文档研究一致（AGENTS.md 路径/MCP）"}
+{"file": "research/cursor.md", "reason": "核对 references/harnesses.md 的 Cursor 接线结论是否与官方文档研究一致（.mdc frontmatter/mcp.json）"}
+{"file": "skills/jspace-bootstrap/references/harnesses.md", "reason": "核对 harness-config 与 bootstrap 同源内容不冲突、无陈旧 myhub 引用"}

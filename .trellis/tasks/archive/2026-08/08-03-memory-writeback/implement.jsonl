@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "skills/jspace-bootstrap/references/gbrain.md", "reason": "写回纪律源:state 覆盖 vs 知识 append-only + 晋升"}
+{"file": "templates/workbench/AGENTS.md", "reason": "End-of-Work Capture 散文 + Approved skills/Brain operations 登记处"}
+{"file": "skills/asset-ingest/SKILL.md", "reason": "写侧资产 skill:命名空间/纪律参照,防重叠"}

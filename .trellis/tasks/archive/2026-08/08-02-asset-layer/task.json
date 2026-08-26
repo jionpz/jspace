@@ -1,0 +1,31 @@
+{
+  "id": "asset-layer",
+  "name": "asset-layer",
+  "title": "M2 资产层最小协议",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "jionpz",
+  "assignee": "jionpz",
+  "createdAt": "2026-08-02",
+  "completedAt": "2026-08-02",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-02-filehub-scaffold",
+    "08-02-bootstrap-filehub",
+    "08-02-inbox-batch",
+    "08-02-domain-project-link"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "M2 资产层最小协议 完成(main, commits ba283f0/2fb7bca/a1aa8ca/adc4551)。4 子任务全交付:filehub init+注册+doctor 校验;asset-ingest 批量模式(两遍式/人工调整/无头);bootstrap Phase 3 文件中心+本地 Ollama embedding 默认;域↔项目挂接规则。待真实环境验证:① 真实资料 入库→gbrain→中文召回 端到端(live gbrain);② 双机重建冒烟(GOAL 开放问题 #1)。下一步:M3 cron(批量管线已就绪,可无头驱动)。",
+  "meta": {}
+}

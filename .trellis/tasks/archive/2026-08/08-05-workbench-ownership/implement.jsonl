@@ -1,0 +1,6 @@
+{"file": "application/workspace/manifest.ts", "reason": "ownershipFor/diffBundle/recreateOnMissing 主改点"}
+{"file": "application/workspace/workspace.ts", "reason": "upgrade plan 过滤 + 冲突阻断 + schema 迁移前置"}
+{"file": "core/contracts/distribution.ts", "reason": "AssetOwnership 枚举(managed/seed/user)契约"}
+{"file": "core/contracts/hub.ts", "reason": "hub schema version 与 decoder(迁移机制目标)"}
+{"file": "application/workspace/journal.ts", "reason": "材料化 journal:recorded 哈希决定 seed 刷新 vs 用户修改"}
+{"file": "scripts/gen-assets.ts", "reason": "ownershipFor 生成 bundle;改后需再生 manifest.generated.ts"}

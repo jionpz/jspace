@@ -1,0 +1,7 @@
+{"file": ".trellis/tasks/08-04-spec-ci-final-integration/prd.md", "reason": "Child F 需求与验收（RF1-RF5 / AC-F1~F5），实施对齐的唯一契约"}
+{"file": ".trellis/tasks/08-04-spec-ci-final-integration/design.md", "reason": "spec/backend 内容大纲、verify.yml 补强、术语/文档同步、全链验收+AC 映射方法"}
+{"file": ".trellis/tasks/08-03-architecture-evolution-refactor/prd.md", "reason": "父任务 R10 / AC13 / AC14 源需求与 AC1-AC18 清单"}
+{"file": ".github/workflows/verify.yml", "reason": "既有 PR/push 质量门，补强点（skills.generated.ts freshness、scheduler smoke、全链 init）"}
+{"file": ".github/workflows/build.yml", "reason": "既有 6 平台 tag 发布矩阵，保留不回退"}
+{"file": ".trellis/spec/backend/index.md", "reason": "待填充的 spec/backend 模板，Child F 填充为真实约定"}
+{"file": "README.md", "reason": "术语权威（JSpace/JWorkspace/工作台），文档同步基线"}

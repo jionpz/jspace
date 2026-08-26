@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "skills/asset-ingest/references/gbrain-write.md", "reason": "写侧纪律:要加 rel_path frontmatter"}
+{"file": "skills/memory-recall/references/discipline.md", "reason": "读侧纪律:要加换机解析规则"}
+{"file": "docs/MEMORY-ACCEPTANCE.md", "reason": "M4 验收协议:加换机解析扩展节,原断言不动"}
+{"file": "skills/jspace-bootstrap/references/gbrain.md", "reason": "gbrain 机制(embedding/export/import/多 brain)"}

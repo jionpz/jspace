@@ -1,0 +1,7 @@
+{"file": ".trellis/tasks/08-02-bootstrap-skill/prd.md", "reason": "子任务需求与验收"}
+{"file": ".trellis/tasks/08-02-bootstrap-skill/implement.md", "reason": "执行清单"}
+{"file": ".trellis/tasks/08-02-cross-platform-migration/research/harness-ci-facts.md", "reason": "jq/find/sort 替代、bun 安装方式事实"}
+{"file": "skills/jspace-bootstrap/SKILL.md", "reason": "待改写的主 skill 文档"}
+{"file": "skills/jspace-bootstrap/references/gbrain.md", "reason": "gbrain 解析/离线策略参考"}
+{"file": "skills/jspace-bootstrap/references/registry.md", "reason": "registry 校验参考"}
+{"file": "AGENTS.md", "reason": "项目治理对齐"}

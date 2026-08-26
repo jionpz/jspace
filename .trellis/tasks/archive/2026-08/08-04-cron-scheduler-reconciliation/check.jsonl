@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/08-04-cron-scheduler-reconciliation/prd.md", "reason": "AC-C1~C10 验收清单（argv round-trip、reconciliation、incidents、F3、运维命令）"}
+{"file": ".trellis/tasks/08-04-cron-scheduler-reconciliation/design.md", "reason": "§4 CronRunInvocation argv 形状、§6.1 planReconciliation 判定、§7 incidents 状态机、§9 F3 路径，用于逐条核对实现"}
+{"file": ".trellis/tasks/08-03-architecture-evolution-refactor/prd.md", "reason": "父任务 Product Invariants（不降低项）与 AC6/AC7/AC8 归属；R5 运维状态机定义"}
+{"file": ".trellis/spec/backend/index.md", "reason": "项目 backend 约定索引（目录/错误/日志；当前为占位，实现后按实际约定核对）"}

@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "门禁与 CommandSpec/CmdResult/DI 约定：check item 3 门面迁移是否符合质量基线"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "fail()/CmdResult/退出码契约：check item 3 cron check 退出语义、item 4 契约测试"}
+{"file": "AGENTS.md", "reason": "根治理文档：安全红线 + 声明式 agents 分层约定，check 阶段的合规基线"}

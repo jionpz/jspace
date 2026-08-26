@@ -1,0 +1,3 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "docs/MEMORY-ACCEPTANCE.md", "reason": "召回纪律源：skill 断言链/诊断/降级提示的引用基准"}
+{"file": "skills/asset-ingest/SKILL.md", "reason": "写侧 skill 格式与纪律参照（读侧对称）"}
