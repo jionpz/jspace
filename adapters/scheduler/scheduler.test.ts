@@ -12,7 +12,7 @@ import { buildPlist } from "./darwin.ts";
 import { parseSchedule } from "../../core/shared/schedule.ts";
 import { linuxAdapter, makeLinuxAdapter, crontabBlock, crontabLine, crontabUnavailable, replaceManagedBlock, parseManagedLine, extractTagBlock, pidNamespaceIsolated, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
 import { darwinAdapter, plistPath, parsePlistName, plistBelongsToTag, scheduleFromIntervalDict, argvFromPlistStdout } from "./darwin.ts";
-import { schtasksArgs, parseOpContent, parseSchtasksXml, win32Adapter } from "./win32.ts";
+import { schtasksArgs, parseOpContent, parseSchtasksXml, win32Adapter, csvTaskName, cronIdFromTaskName, queryTasksFromOutput } from "./win32.ts";
 import { planReconciliation } from "../../application/automation/scheduler.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 
@@ -336,6 +336,27 @@ test("P0: win32 buildContent /tn is the inspect/uninstall task-name handle (DAIL
     expect(tn).toBe(win32Adapter.identity(tag, id).taskId); // single source of the task-name handle
     expect(tn).toMatch(/^JSpaceCron_tagA_/); // queryTasks()/inspect()/uninstallAll() prefix
   }
+});
+
+test("P0: win32 queryTasks CSV parse tolerates the schtasks leading-backslash task path — real runner sample (B3 smoke regression)", () => {
+  const tag = "1aawhej"; // real GH runner workbench tag from the failing run
+  const out = [
+    '"\\HostedComputeAgent","N/A","Running"',
+    '"\\JSpaceCron_1aawhej_smoke-test","8/26/2026 9:00:00 PM","Ready"',
+    '"\\MicrosoftEdgeUpdateTaskMachineCore{8277B197-04F3-432A-BEDF-7A5D833ACEE1}","N/A","Disabled"',
+  ].join("\r\n") + "\r\n";
+  // a `\`-prefixed task must survive the tag filter — before the fix the
+  // startsWith(prefix) match dropped every row and doctor reds not_installed
+  const rows = queryTasksFromOutput(out, tag);
+  expect(rows).toEqual(["JSpaceCron_1aawhej_smoke-test"]);
+  // normalized handle == identity()/`/create /tn` handle, so reconciliation
+  // sees installed==desired and a re-install is a no-op (never re-create)
+  expect(csvTaskName(rows[0])).toBe("JSpaceCron_1aawhej_smoke-test");
+  expect(cronIdFromTaskName(rows[0], tag)).toBe("smoke-test");
+  // the raw `\`-prefixed task-path form parses to the same id
+  expect(cronIdFromTaskName("\\JSpaceCron_1aawhej_smoke-test", tag)).toBe("smoke-test");
+  // other-tag + no-backslash rows are filtered out, never misattributed
+  expect(queryTasksFromOutput('"JSpaceCron_other_smoke-test","N/A","Ready"\r\n', tag)).toEqual([]);
 });
 
 test("P0: darwin reconciliation converges — plist identity == inspect parse", () => {

@@ -10,10 +10,36 @@ import { taskIdFor, workbenchTag, type InstalledTask, type SchedulerAdapter, typ
 function queryTasks(tag: string): string[] {
   const res = schedulerSpawn("schtasks", ["/query", "/fo", "csv", "/nh"]);
   const out = res.status === 0 ? (res.stdout ?? "") : "";
-  const prefix = win32TaskName(tag, ""); // JSpaceCron_<tag>_ — inspect/uninstall prefix
+  return queryTasksFromOutput(out, tag);
+}
+
+/** Normalize a schtasks CSV task-name cell: strip the CSV quotes AND the leading
+ *  `\` schtasks renders for every task (task-path form `\JSpaceCron_<tag>_<id>`).
+ *  Every downstream handle — inspect() taskId, `/query /tn` and `/delete /tn`
+ *  spawns, uninstallAll — uses the normalized bare form, which is exactly the
+ *  identity()/`/create /tn` handle, so planReconciliation sees installed==desired
+ *  and a second install is a true no-op. (A bare `JSpaceCron_…` prefix match on
+ *  the raw `\`-prefixed rows silently returns nothing, which read back as an
+ *  empty set and reds doctor as cron.not_installed.) */
+export function csvTaskName(raw: string): string {
+  return raw.split(",")[0].replace(/^"|"$/g, "").replace(/^\\/, "");
+}
+
+/** cronId embedded in a schtasks task-name handle (accepts the `\`-prefixed
+ *  task-path form or the bare logical form). */
+export function cronIdFromTaskName(taskName: string, tag: string): string {
+  return csvTaskName(taskName).slice(win32TaskName(tag, "").length);
+}
+
+/** Parse `schtasks /query /fo csv /nh` stdout into normalized task-name handles
+ *  matching this workbench tag. Pure (no spawn) so the CSV format contract is
+ *  unit-tested. */
+export function queryTasksFromOutput(out: string, tag: string): string[] {
+  const prefix = win32TaskName(tag, ""); // JSpaceCron_<tag>_
   return out
     .split(/\r?\n/)
-    .map((l) => l.split(",")[0].replace(/^"|"$/g, ""))
+    .filter((l) => l.trim() !== "")
+    .map((l) => csvTaskName(l))
     .filter((n) => n.startsWith(prefix));
 }
 
@@ -138,7 +164,7 @@ export const win32Adapter: SchedulerAdapter = {
       const parsed = res.status === 0 ? parseSchtasksXml(res.stdout ?? "") : null;
       return {
         taskId: n,
-        cronId: n.slice(win32TaskName(tag, "").length),
+        cronId: cronIdFromTaskName(n, tag),
         schedule: parsed?.schedule ?? "",
         argv: parsed?.argv ?? "",
       };
