@@ -32,7 +32,7 @@ PR #26 的全部五项改动出现在 `cursor/febel-post-m6-roadmap-6abc` 上，
 
 - [ ] AC1 `git log` 显示 merge commit，`origin/cursor/review-followup-optimizations-e64e` 的 5 个提交（a7606ca…7b3a147）进入当前分支祖先。
 - [ ] AC2 `application/context/payload.ts` 无硬编码技能名单；`bun test application/context/payload.test.ts` 绿（含「7 技能全列出」用例）。
-- [ ] AC3 `rg "TRELLIS-BRAIN-OPS" templates/ skills/ scripts/skill-frontmatter.ts scripts/check-skills.ts` 无命中（doctor 残留检查 `checks/skills.ts` 里的旧拼写按 R4 保留）。
+- [ ] AC3 旧 marker `TRELLIS-BRAIN-OPS` 在 `templates/` `skills/` 与功能 marker 常量（`scripts/skill-frontmatter.ts` 的 `BRAIN_BEGIN/END`、`scripts/check-skills.ts` 的正则）中零使用；允许的残留仅两处：doctor 残留检查 `checks/skills.ts`（按 R4 必须保留）与 `skill-frontmatter.ts` 顶部改名说明注释（历史名文档化，PR #26 自带）。
 - [ ] AC4 `bunx tsc --noEmit` 通过。
 - [ ] AC5 `bun test` 全绿。
 - [ ] AC6 `bun run scripts/gen-assets.ts` 后 `git status` 无生成物残留 diff；`check-skills` / `check-harness-consistency` / `check-manifest-integrity` 三脚本全过。

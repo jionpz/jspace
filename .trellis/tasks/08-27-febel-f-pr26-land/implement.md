@@ -37,7 +37,7 @@
 - [ ] 4.6 语义抽查（对应 AC2/AC3）：
   - `bun run cli/main.ts init /tmp/jspace-smoke && bun run cli/main.ts doctor --dir /tmp/jspace-smoke`
   - smoke 工作台 `AGENTS.md` 含 `JSPACE-BRAIN-OPS` marker、7 技能 resolver 行。
-  - `rg "TRELLIS-BRAIN-OPS" templates/ skills/ scripts/skill-frontmatter.ts scripts/check-skills.ts` 零命中。
+  - `rg "TRELLIS-BRAIN-OPS" templates/ skills/ scripts/check-skills.ts` 零命中；`scripts/skill-frontmatter.ts` 仅剩顶部改名说明注释一处命中（功能常量 `BRAIN_BEGIN/END` 已用新拼写）。
 
 ## 阶段 5：留痕 + 提交 + 推送
 
