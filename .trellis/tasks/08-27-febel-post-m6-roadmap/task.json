@@ -1,0 +1,32 @@
+{
+  "id": "febel-post-m6-roadmap",
+  "name": "febel-post-m6-roadmap",
+  "title": "FEBEL 终局推进任务地图（post-M6/H1）",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "cloud-agent",
+  "assignee": "cloud-agent",
+  "createdAt": "2026-08-27",
+  "completedAt": null,
+  "branch": "cursor/febel-post-m6-roadmap-6abc",
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-27-febel-f-pr26-land",
+    "08-27-febel-e-writeback-flywheel",
+    "08-27-febel-b-platform-ledger",
+    "08-27-febel-eco-second-machine",
+    "08-27-febel-l-usage-flywheel"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

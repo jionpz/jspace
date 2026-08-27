@@ -1,0 +1,29 @@
+{
+  "id": "febel-e-writeback-flywheel",
+  "name": "febel-e-writeback-flywheel",
+  "title": "E: 会话写回飞轮可观测与习惯门禁",
+  "description": "写回率可观测、doctor/retro/context 门禁，不破显式写回红线",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "cloud-agent",
+  "assignee": "cloud-agent",
+  "createdAt": "2026-08-27",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "08-27-febel-post-m6-roadmap",
+  "relatedFiles": [],
+  "notes": "E 规划完成（不 start）：prd.md + design.md。缺口=doctor 离线 info 习惯门禁（非 gbrain 真写回率）；retro/jspace-use 仅口径交叉引用；指标达标属 L。",
+  "meta": {
+    "planning": "febel-e-experience-subagent",
+    "design": "design.md"
+  }
+}
