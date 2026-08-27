@@ -73,13 +73,20 @@ M6 写回腿工程侧已就位（B4，2026-08-26）：
 
 ## Acceptance Criteria
 
-- [ ] AC1：存在 doctor **info** 诊断（码名以 `design.md` 为准），触发条件仅依赖离线 `briefing.json`（及明确阈值），单测覆盖阳性 / 阴性 / 无 briefing。
-- [ ] AC2：该诊断在 `jspace doctor` 默认模式下不导致失败（exit 仍仅由 error 决定）；`--verbose` 或 `--json` 可看到码与文案。
-- [ ] AC3：文案含「收工」+ `memory-writeback` + `source:session` 自查命令，且含「不写 gbrain / 仅提醒核对」语义。
-- [ ] AC4：全仓检索确认无新增「doctor/context → gbrain list/put」路径用于本门禁。
-- [ ] AC5：`skills/jspace-use`（§6 或等价）提及新诊断码；retro 检查 1 有交叉引用或明确「无需改公式」的决策留痕（本 PRD Key Decisions）。
-- [ ] AC6：`bunx tsc --noEmit`、相关 `bun test`（doctor / briefing）、改 skill 则 `bun run scripts/gen-assets.ts` + check-skills / harness / manifest 全过。
-- [ ] AC7：无任何提交或测试夹具写入带 `source:session` 的「假装用户收工」数据作为验收依据。
+- [x] AC1：存在 doctor **info** 诊断（码名以 `design.md` 为准），触发条件仅依赖离线 `briefing.json`（及明确阈值），单测覆盖阳性 / 阴性 / 无 briefing。
+  → `memory.writeback_habit_unverified`（`application/diagnostics/checks/writeback.ts`，`WRITEBACK_HABIT_SESSION_THRESHOLD = 5`）；唯一输入是 `readBriefing(root).state`。design §7 矩阵 5 条全覆盖（无 briefing / 阈值下 / 无 nudge 字段 / nudge=0 / 阳性 / session_count=20 且 exit 仍 ok）。
+- [x] AC2：该诊断在 `jspace doctor` 默认模式下不导致失败（exit 仍仅由 error 决定）；`--verbose` 或 `--json` 可看到码与文案。
+  → severity 恒为 `info`；单测断言默认模式 `lines`/`warnings` 不含正文、`--verbose` 含。烟测 `/tmp/jspace-smoke`（session_count=7, nudge=6）exit=0，`--verbose` 打印本码。
+- [x] AC3：文案含「收工」+ `memory-writeback` + `source:session` 自查命令，且含「不写 gbrain / 仅提醒核对」语义。
+  → 文案断言：`「收工」` / `memory-writeback` / `gbrain list --type note --tag source:session -n 20` / `workbench-retro check 1` / `doctor never queries gbrain` / `never writes gbrain`。
+- [x] AC4：全仓检索确认无新增「doctor/context → gbrain list/put」路径用于本门禁。
+  → `checks/writeback.ts` 只 import `readBriefing`；无 spawn/exec、无 `gbrain put` / `pending stage`。`application/context/*` 零改动。
+- [x] AC5：`skills/jspace-use`（§6 或等价）提及新诊断码；retro 检查 1 有交叉引用或明确「无需改公式」的决策留痕（本 PRD Key Decisions）。
+  → jspace-use §6 新增一条码说明（处置指向 §4 自查 + retro 检查 1）；retro `references/checks.md` 检查 1「提醒面」判读加一句交叉引用，来源比公式零修改。
+- [x] AC6：`bunx tsc --noEmit`、相关 `bun test`（doctor / briefing）、改 skill 则 `bun run scripts/gen-assets.ts` + check-skills / harness / manifest 全过。
+  → tsc 通过；`bun test` 688 pass / 0 fail（doctor.test.ts 70 pass）；gen-assets 重跑无残留 diff；check-skills / check-harness-consistency / check-manifest-integrity 全过。
+- [x] AC7：无任何提交或测试夹具写入带 `source:session` 的「假装用户收工」数据作为验收依据。
+  → 夹具仅写 `.jspace/state/briefing.json`（session_count + writeback_nudge_for_session），测试文件内已注释说明；`claimWritebackNudge` 频率语义未改。
 
 ## Non-goals
 
