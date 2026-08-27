@@ -6,6 +6,7 @@
     "moduleResolution": "bundler",
     "types": ["bun-types"],
     "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
     "verbatimModuleSyntax": false,
     "strict": true,
     "noEmit": true,

@@ -39,7 +39,7 @@
     },
     {
       "path": "templates/workbench/AGENTS.md",
-      "sha256": "7f40703e2c0e5e88d3ed6f17529a2711e89ae35146fcd384e515e1b740451b22",
+      "sha256": "9632d03c6cfdd4cd415284e0cb5268a02f59a104e10fb451ee99dad41152ef92",
       "ownership": "seed"
     },
     {
@@ -59,7 +59,7 @@
     },
     {
       "path": "skills/jspace-use/SKILL.md",
-      "sha256": "190c063c8f41e632b6ff71401ffd890d7a710eff0921b871c3cee3073e052402",
+      "sha256": "2b241824f4f23f7d47a7d0e6e3a2f40ae3061b5f190a1112311c593f471d5a3f",
       "ownership": "seed"
     },
     {

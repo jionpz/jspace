@@ -601,14 +601,21 @@ test("registered project (ascii id bound to a free-form asset dir) -> no registr
 // stale template dump there survives forever, injecting a second contradictory
 // copy of the rules into every session.
 
-const MANAGED_BLOCK = `<!-- JSPACE:START -->\n# JSpace 工作台\n<!-- TRELLIS-BRAIN-OPS:BEGIN -->\n- **jspace-use**: x\n<!-- TRELLIS-BRAIN-OPS:END -->\n<!-- JSPACE:END -->\n`;
+const MANAGED_BLOCK = `<!-- JSPACE:START -->\n# JSpace 工作台\n<!-- JSPACE-BRAIN-OPS:BEGIN -->\n- **jspace-use**: x\n<!-- JSPACE-BRAIN-OPS:END -->\n<!-- JSPACE:END -->\n`;
 
 test("stale generated marker outside the managed block -> agentsmd.stale_outside_block", () => {
-  writeFileSync(join(root, "AGENTS.md"), `${MANAGED_BLOCK}\n# 旧模板全文\n<!-- TRELLIS-BRAIN-OPS:BEGIN -->\n- **jspace-bootstrap**: x\n<!-- TRELLIS-BRAIN-OPS:END -->\n`);
+  writeFileSync(join(root, "AGENTS.md"), `${MANAGED_BLOCK}\n# 旧模板全文\n<!-- JSPACE-BRAIN-OPS:BEGIN -->\n- **jspace-bootstrap**: x\n<!-- JSPACE-BRAIN-OPS:END -->\n`);
   const r = doctorWorkbench(root, stubDeps());
   expect(codes(r)).toContain("agentsmd.stale_outside_block");
   const diags = (r.data as { diagnostics: { code: string; severity: string }[] }).diagnostics;
   expect(diags.find((d) => d.code === "agentsmd.stale_outside_block")?.severity).toBe("warning");
+});
+
+test("LEGACY TRELLIS marker residue outside the block is still detected after the rename", () => {
+  // pre-rename workbenches dumped the old template with TRELLIS-* markers; the
+  // residue check must keep matching the retired spelling forever
+  writeFileSync(join(root, "AGENTS.md"), `${MANAGED_BLOCK}\n# 旧模板全文\n<!-- TRELLIS-BRAIN-OPS:BEGIN -->\n- **jspace-bootstrap**: x\n<!-- TRELLIS-BRAIN-OPS:END -->\n`);
+  expect(codes(doctorWorkbench(root, stubDeps()))).toContain("agentsmd.stale_outside_block");
 });
 
 test("retired skill name outside the block -> agentsmd.stale_outside_block", () => {

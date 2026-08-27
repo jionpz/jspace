@@ -6,10 +6,20 @@
 //   - "Brain operations" resolver rows  <- frontmatter `triggers`
 // The former "Skill Governance" list was removed (harness skill selectors read
 // frontmatter directly).
-// Markers (TRELLIS-BRAIN-OPS) delimit the generated region;
+// Markers (JSPACE-BRAIN-OPS) delimit the generated region;
 // everything outside is hand-written prose preserved verbatim.
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
+// Renamed from the historical TRELLIS-BRAIN-OPS (pre-jspace naming). Safe
+// because (verified against gbrain source, src/core/check-resolvable.ts
+// parseResolverEntries): the external gbrain resolver parses only `## heading`
+// lines and `- **skill-name**: triggers` rows — never HTML comments — and a
+// GitHub-wide code search for the old marker found no external consumer. The
+// marker lives INSIDE the JSPACE:START/END block, which `workspace upgrade`
+// replaces wholesale, so existing workbenches migrate on their next upgrade
+// with no dual-marker shim. The OLD spelling survives only in the doctor
+// residue check (checks/skills.ts), which must keep detecting legacy dumps.
 
 export interface SkillFrontmatter {
   name: string;
@@ -17,8 +27,8 @@ export interface SkillFrontmatter {
   triggers: string[];
 }
 
-const BRAIN_BEGIN = "<!-- TRELLIS-BRAIN-OPS:BEGIN -->";
-const BRAIN_END = "<!-- TRELLIS-BRAIN-OPS:END -->";
+const BRAIN_BEGIN = "<!-- JSPACE-BRAIN-OPS:BEGIN -->";
+const BRAIN_END = "<!-- JSPACE-BRAIN-OPS:END -->";
 
 /**
  * Parse the frontmatter block between the two leading `---` fences.

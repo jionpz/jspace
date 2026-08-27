@@ -3,6 +3,7 @@
 import { expect, test } from "bun:test";
 import type { WorkbenchState } from "./collect.ts";
 import { renderSessionStart, renderTurn, renderPreCompact, renderSessionEnd } from "./payload.ts";
+import skillsManifest from "../../skills-manifest.json";
 
 const empty: WorkbenchState = {
   domains: [],
@@ -64,6 +65,15 @@ test("3 domains + 2 pending + 1 incident + inbox -> all populated, next-action h
   expect(r).toContain("先跑 jspace pending apply 落盘 2 笔暂存写");
   expect(r).toContain("处理 cron 失败: inbox-tidy[failed]");
   expect(r).toContain("inbox 有 4 份待整理");
+});
+
+test("session-start skills line lists every manifest workbench skill (no hardcoded drift)", () => {
+  // <available> renders only with at least one domain path to list
+  const r = renderSessionStart(doms(1), "/wb");
+  const avail = r.slice(r.indexOf("<available>"), r.indexOf("</available>"));
+  for (const s of skillsManifest.workbench) {
+    expect(avail).toContain(s.name);
+  }
 });
 
 test("broken hub -> alert line in current-state and top-priority next-action", () => {
