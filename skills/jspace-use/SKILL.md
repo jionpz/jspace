@@ -88,7 +88,7 @@ SessionStart hook(`.claude/settings.json`)注入 `<current-state>`(域/pending/c
 会话里最多出现**一次**收工轻提示(`jspace context turn`,无更高优先级状态时才出;去重锚点 `.jspace/state/briefing.json`),claude/cursor 另有 session-end hook。**提醒 ≠ 写入**:三者都不写 gbrain,不触发 `memory-writeback` 就等于本次没沉淀。
 
 ### 每周体检
-`jspace doctor --dir .` 看 `info` 级体检项(僵尸域 / 待归档项目 / 失效指针,见第 8 章「退役与回收」);`jspace workspace diff` 看升级差异。
+`jspace doctor --dir .` 看 `info` 级体检项(僵尸域 / 待归档项目 / 失效指针,见第 8 章「退役与回收」);`jspace workspace diff` 看升级差异。想确认三个飞轮**在转**(而不只是机制在)→ 走使用里程清单 `~/.agents/skills/jspace-use/references/usage-mileage.md`。
 
 ## 4. gbrain 记忆
 
@@ -101,6 +101,8 @@ gbrain list --type note --tag source:session -n 20   # 会话沉淀的写入(分
 gbrain list --type note --tag source:cron -n 20      # 定时归纳的写入(另一半)
 ```
 两边一比就知道「记忆在长,长的是 cron 归纳的还是会话沉淀的」。`source:session` 长期为 0 = 收工写回这条腿没在转(提醒发了但没人触发写回),按第 3 章「收工」补上;来源 tag 语义 → `~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」。
+
+要把这条腿**验成达标**(连续两周落窗口计数 > 0)而不只是随手看一眼,用取证协议 `~/.agents/skills/jspace-use/references/usage-mileage.md`(含窗口口径、禁伪造红线、retro 无头首跑与三飞轮清单)。
 
 ## 5. 资源与资产
 
@@ -250,6 +252,7 @@ gbrain put project/<id>/state < <终态正文>
 - 逐 harness 接线(Claude Code / Grok Build / OpenCode / Pi / Cursor 各自 `harness-<name>.md` + capabilities 全景)→ `~/.agents/skills/jspace-use/references/harnesses.md`
 - 无头执行运维(账号/配额/失败可见性)→ `~/.agents/skills/jspace-use/references/headless-ops.md`
 - 首次启用 golden run → `~/.agents/skills/jspace-use/references/example-first-use.md`
+- 使用里程验证(retro 无头首跑 / 两周写回取证 / 三飞轮清单)→ `~/.agents/skills/jspace-use/references/usage-mileage.md`
 
 ## 自检(做完跑这条)
 
@@ -266,5 +269,6 @@ jq .jspace/hub.json           # 合法 JSON
 - `~/.agents/skills/jspace-use/references/harnesses.md` — harness 支持全景(capabilities render)+ 逐 harness 接线 `harness-{claude,grok,opencode,pi,cursor}.md`
 - `~/.agents/skills/jspace-use/references/headless-ops.md` — 无头运维(账号/配额/失败可见性)
 - `~/.agents/skills/jspace-use/references/example-first-use.md` — 首次启用 golden run(S5 产出)
+- `~/.agents/skills/jspace-use/references/usage-mileage.md` — 使用里程协议(三飞轮关闭条件 + 取证台账 + 禁伪造红线)
 
 > **Note**:官方 skill 只随 `jspace init` 物化;既有工作台经 `jspace workspace upgrade` 刷新(未修改的模板/skill 随升级更新,本地改动保留为 `skip`);`jspace init --force .` 对已有工作台会拒绝(用 upgrade,不用 init)。

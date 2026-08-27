@@ -125,15 +125,18 @@ gbrain list --type note --tag source:session -n 50
 
 ## Acceptance Criteria
 
-- [ ] 本 PRD 含完整 R1/R2/R3 协议（步骤、口径、禁止项、关闭条件），可交给真实工作台操作者无需再发明流程
-- [ ] **M7 草案**完整条目见下节，可直接粘贴进 `GOAL.md`（经父任务确认）；本任务执行期间**不**直接改 `GOAL.md`，除非用户明确只要落地草案
-- [ ] 证据台账模板可用；任何关闭勾选都要求真实路径/数字，不允许「机制已建」替代「使用已发生」
-- [ ] 与 E 边界写清：L 不实现 doctor/context 工程；E 不拥有 M7 文案与两周窗口协议所有权
-- [ ] 无业务代码变更、无伪造 gbrain 数据、任务保持 `planning`（本轮不 `task.py start`）
+> 落地轮（2026-08-27，用户「继续进」并授权写 GOAL）已把交付面从「PRD 持有协议」升级为「协议发行 + M7 入 GOAL」。原第 2、5 条的「不改 GOAL / 保持 planning」限制被该授权取代，改动记录见下方勾选说明。
 
-## GOAL M7 草案（粘贴用；勿在本任务直接改 GOAL.md）
+- [x] 完整 R1/R2/R3 协议（步骤、口径、禁止项、关闭条件）可交给真实工作台操作者无需再发明流程 —— **已发行**为 `skills/jspace-use/references/usage-mileage.md`（本 PRD 的 R1–R3 是同一份口径的规划来源）
+- [x] **M7 条目已写入 `GOAL.md`**（H1 之后，标 `⏳ 开放`）：三腿关闭条件 + 非目标 + 「待验证」占位，未填任何数字；M6 写回腿段交叉引用 M7 与 R2
+- [x] 证据台账模板可用（发行文档末节，含「已验证 / 替代关闭 / 挂账开放」用词纪律）；关闭勾选一律要求真实路径与数字
+- [x] 与 E 边界写清：发行文档「与 doctor 的关系」一节点明 `memory.writeback_habit_unverified`（info）只提示自查、不是写回率证明，精确计数归本协议与 retro 检查 1
+- [x] 无 CLI 业务逻辑变更（仅 md + gen-assets 生成物）、无伪造 gbrain 数据、`bunx tsc --noEmit` / `bun test`（690 pass）/ 三 check 脚本全绿
+- [ ] **usage 项保持开放**（有意不勾）：R1 无头首跑、R2 两周计数、R3 资产闭环都要真实工作台取证，本任务只交付协议与槽位
 
-> 下列为父任务归档前拟写入 `GOAL.md`「里程碑」列表、插在 M6/H1 之后的草案。日期与数字在真实取证后填入；关闭前保持「待验证」子段。
+## GOAL M7 草案（已于 2026-08-27 落地，本节留档对照）
+
+> 下列草案已写入 `GOAL.md`「演进里程碑」H1 之后（实际文案在落地时做了两处收敛：检查清单指向已发行的 `skills/jspace-use/references/usage-mileage.md` 而非本地 PRD；`cron run` 与开放问题 #5「真实触发」的 claim 边界写进条目正文）。日期与数字仍待真实取证；关闭前保持「待验证」子段。
 
 ```markdown
 - **M7（使用里程）** — 建造→使用拐点的验收槽（起草于 FEBEL-L；父任务确认后入 GOAL）：
@@ -181,9 +184,9 @@ gbrain list --type note --tag source:session -n 50
 
 ## Non-Goals
 
-- 不改 `skills/` / `templates/` / `cli/` 业务实现（若协议暴露文档缺口，另开任务或交 E）
-- 不 start / 不实现 / 不 commit（本子代理轮次）
+- 不改 `cli/` 业务实现（落地轮只动 md 与 gen-assets 生成物；`skills/` 文档面按发行需要新增/接线）
 - 不关闭 B/Eco 真机项
+- 不用本轮交付关闭 M7 任何一条腿（协议发行 ≠ 使用已发生）
 
 ## Notes
 

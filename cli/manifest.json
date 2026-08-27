@@ -59,7 +59,7 @@
     },
     {
       "path": "skills/jspace-use/SKILL.md",
-      "sha256": "e963a72da50f8a0c487169a6ee3009fae74e9d3feb42fb783ce6afc4eb1ed768",
+      "sha256": "753086250dcb790e85e976c42e4f40e70d1a7a18c0ad113a8e89c53f7f0cad41",
       "ownership": "seed"
     },
     {
@@ -115,6 +115,11 @@
     {
       "path": "skills/jspace-use/references/registry.md",
       "sha256": "130979dabb1cec54e8ec329415801ab9e7e43d3e716715f910925de7e2f71d3b",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/jspace-use/references/usage-mileage.md",
+      "sha256": "1ef03283662c71c75521c24ae88159745ce577071698a9169efe1c2c7b445f54",
       "ownership": "seed"
     },
     {
@@ -204,7 +209,7 @@
     },
     {
       "path": "skills/workbench-retro/references/checks.md",
-      "sha256": "90a18998f020a0c9d28a7d49e36a12a32982df56b294d79002b7057654ac3d06",
+      "sha256": "1f64f812d60c6bb27501354bacf2c9392f60fcc6341a12b64f68b7edcaba5498",
       "ownership": "seed"
     },
     {
