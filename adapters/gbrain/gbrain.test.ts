@@ -3,7 +3,7 @@
 // fake runner — the real gbrain CLI is never invoked.
 // Run: bun test adapters/gbrain/gbrain.test.ts
 import { expect, test } from "bun:test";
-import { realGbrain, type GbrainRun } from "./gbrain.ts";
+import { realGbrain, resolveGbrainCliBin, type GbrainRun } from "./gbrain.ts";
 import type { SpawnOpts, SpawnResult } from "../process/spawn.ts";
 
 type Call = { argv: string[]; opts: SpawnOpts };
@@ -103,4 +103,35 @@ test("list: empty output -> ok true, zero rows", async () => {
   const r = await g.list();
   expect(r.ok).toBe(true);
   expect(r.rows).toEqual([]);
+});
+
+test("explicit bin arg overrides argv[0] for get/put/list (CLI shim path)", async () => {
+  const { run, calls } = fakeRun(() => okRes("s\tnote\t2026-08-01\tt\n"));
+  const g = realGbrain(run, 1000, "/opt/kb/gbrain");
+  await g.get("x");
+  await g.put("x", "body");
+  await g.list();
+  expect(calls.map((c) => c.argv[0])).toEqual(["/opt/kb/gbrain", "/opt/kb/gbrain", "/opt/kb/gbrain"]);
+});
+
+test("resolveGbrainCliBin: $GBRAIN_BIN trimmed; blank/undefined falls back to bare gbrain", () => {
+  expect(resolveGbrainCliBin("/tmp/custom-gbrain")).toBe("/tmp/custom-gbrain");
+  expect(resolveGbrainCliBin("  /tmp/custom-gbrain  ")).toBe("/tmp/custom-gbrain");
+  expect(resolveGbrainCliBin(undefined)).toBe("gbrain");
+  expect(resolveGbrainCliBin("")).toBe("gbrain");
+  expect(resolveGbrainCliBin("   ")).toBe("gbrain");
+});
+
+test("realGbrain default bin follows $GBRAIN_BIN at call time", async () => {
+  const prev = process.env.GBRAIN_BIN;
+  const { run, calls } = fakeRun(() => okRes());
+  try {
+    process.env.GBRAIN_BIN = "/tmp/custom-gbrain";
+    const g = realGbrain(run);
+    await g.get("x");
+    expect(calls[0].argv[0]).toBe("/tmp/custom-gbrain");
+  } finally {
+    if (prev === undefined) delete process.env.GBRAIN_BIN;
+    else process.env.GBRAIN_BIN = prev;
+  }
 });

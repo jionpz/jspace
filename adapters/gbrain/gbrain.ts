@@ -4,21 +4,9 @@
 // (async, timeout SIGTERM→SIGKILL, 1MiB output cap) — never a bare spawnSync,
 // which would hang a harness hook forever when gbrain stalls (issue #8 #8).
 import { spawnProcess, type SpawnOpts, type SpawnResult } from "../process/spawn.ts";
+import type { GbrainDeps } from "../../core/contracts/gbrain.ts";
 
-/** Port consumed by the application layer. get/put/list are async: a stalled
- *  gbrain resolves as `{ok:false}` after the timeout instead of blocking the
- *  caller. */
-export interface GbrainDeps {
-  get: (slug: string) => Promise<{ ok: boolean; content?: string }>;
-  put: (slug: string, content: string) => Promise<{ ok: boolean; error?: string }>;
-  /** List pages with optional type/tag filters. Rows are slug+updatedAt pairs,
-   *  machine-parseable for prefix filtering (no slug-prefix filter upstream). */
-  list: (opts?: { type?: string; tag?: string; limit?: number }) => Promise<{
-    ok: boolean;
-    rows?: { slug: string; updatedAt: string }[];
-    error?: string;
-  }>;
-}
+export type { GbrainDeps };
 
 /** The process runner (spawnProcess); injectable for tests. */
 export type GbrainRun = (argv: string[], opts: SpawnOpts) => Promise<SpawnResult>;
@@ -27,22 +15,38 @@ export type GbrainRun = (argv: string[], opts: SpawnOpts) => Promise<SpawnResult
  *  that a stuck gbrain releases the hook. */
 export const GBRAIN_TIMEOUT_MS = 30_000;
 
-export function realGbrain(run: GbrainRun = spawnProcess, timeoutMs: number = GBRAIN_TIMEOUT_MS): GbrainDeps {
+/** Resolve argv[0] for gbrain CLI calls: `$GBRAIN_BIN` (trimmed) → bare
+ *  `"gbrain"` on PATH. Unlike `defaultGbrainBin` in application/harness/wire.ts
+ *  (used when writing absolute MCP config paths), this adapter does not probe
+ *  PATH or `~/.bun/bin` — callers already degrade on `{ok:false}`, and users
+ *  who need a non-PATH binary set `$GBRAIN_BIN` (the documented override for
+ *  CLI shims / alternate KBs). Evaluated at call time so env changes take
+ *  effect without reloading the module. */
+export function resolveGbrainCliBin(envBin: string | undefined = process.env.GBRAIN_BIN): string {
+  const trimmed = envBin?.trim();
+  return trimmed ? trimmed : "gbrain";
+}
+
+export function realGbrain(
+  run: GbrainRun = spawnProcess,
+  timeoutMs: number = GBRAIN_TIMEOUT_MS,
+  bin: string = resolveGbrainCliBin(),
+): GbrainDeps {
   const base: SpawnOpts = { cwd: process.cwd(), platform: process.platform, timeoutMs };
   return {
     async get(slug) {
-      const r = await run(["gbrain", "get", slug], base);
+      const r = await run([bin, "get", slug], base);
       // stdout only — stderr noise must not corrupt the page body used for dedup hashing
       return r.exit === 0 && !r.timedOut ? { ok: true, content: r.stdout } : { ok: false };
     },
     async put(slug, content) {
-      const r = await run(["gbrain", "put", slug], { ...base, input: content });
+      const r = await run([bin, "put", slug], { ...base, input: content });
       return r.exit === 0 && !r.timedOut
         ? { ok: true }
         : { ok: false, error: `${r.stderr}${r.stdout}`.trim().slice(0, 300) || "gbrain put failed" };
     },
     async list(opts) {
-      const argv = ["gbrain", "list"];
+      const argv = [bin, "list"];
       if (opts?.type !== undefined) argv.push("--type", opts.type);
       if (opts?.tag !== undefined) argv.push("--tag", opts.tag);
       if (opts?.limit !== undefined) argv.push("--limit", String(opts.limit));

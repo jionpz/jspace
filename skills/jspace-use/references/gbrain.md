@@ -4,6 +4,9 @@
 
 `$GBRAIN_BIN` -> `which gbrain`(Windows `where gbrain`) -> `~/.bun/bin/gbrain`(Windows `%USERPROFILE%\.bun\bin\gbrain.exe`).
 
+- **harness MCP 接线**（`jspace gbrain wire` / `jspace harness wire`）走完整三步，写入配置的是**绝对路径**（非登录 shell 可能没有 PATH）。
+- **jspace 自身派生的 gbrain 调用**（`context` 项目注入 / `project list --status` / `pending apply`）只认 `$GBRAIN_BIN`（未设则裸名 `gbrain` 走 OS PATH）。替代 KB 的 CLI shim 经 `$GBRAIN_BIN` 指向即可，无需改 jspace。
+
 ## Skill routing wiring (skillsDir)
 
 gbrain 的 skill resolver(`autoDetectSkillsDir`)只认 `$GBRAIN_SKILLS_DIR` / 根 `skills/` 目录,**不读**工作台的 `.jspace/skills/`。未接线时,resolver 走根 `skills/`(若无则回退 gbrain 安装路径的内置 skill)——**官方 skill 路由会静默断**。接线:
@@ -25,6 +28,18 @@ jspace gbrain wire --dir <工作台>   # 把 GBRAIN_SKILLS_DIR=<工作台>/.jspa
 - `gbrain serve` - MCP server over stdio for harnesses
 - `gbrain doctor [--json] [--fast]` - health: resolver, pgvector, RLS, embeddings
 - `gbrain upgrade` / `gbrain check-update`
+
+## Backend contract（后端契约分层）
+
+jspace **不封装** gbrain（GOAL 非目标）。替代知识库的接入方式 = 实现同形 CLI（可执行名经 `$GBRAIN_BIN` 指向），不是在 jspace 内加后端选择开关。
+
+| 层级 | 动词 | 消费方 | 硬约束 |
+|---|---|---|---|
+| **Tier 1**（代码硬依赖） | `get <slug>`（body→stdout）、`put <slug>`（body←stdin）、`list [--type\|--tag\|--limit]`（TSV `slug\ttype\tupdated_at\ttitle`） | `adapters/gbrain` → pending / context / project | get 字节稳定往返（sha256 去重）；tag 支持含 `:` 的值；超时→`ok:false` 不阻塞 |
+| **Tier 2**（skills / 会话） | `search` / `query` / `delete`（软删）/ `serve`（stdio MCP，server 名须为 `gbrain`）/ `doctor --json` / `stats` / `check-resolvable` / `init` | 7 个 workbench skills + harness MCP | query top-1 含 slug；embedding 不可达时写入仍成功（`embed_skip`）；list `-n` ≡ `--limit` |
+| **Tier 3**（运维） | `export` / `import` / `embed --all` / `upgrade` / `check-update` / `models doctor` | first-use、换机迁移、升级前检查 | 可选；缺则迁移走手工 |
+
+数据模型（六命名空间 + frontmatter + tag 路由）见下文 Memory model——与具体 KB 实现无关，是记忆层本体。
 
 ## 版本兼容与升级前健康检查
 
