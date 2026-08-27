@@ -62,7 +62,7 @@ ls .jspace/logs/cron/*/                  # cron 活动痕迹
 jq '.session_count, .writeback_nudge_for_session' .jspace/state/briefing.json   # 会话计数 / 轻提示已用到第几个会话
 ```
 - 文件不存在或 `session_count` 本周没涨 → **session-start hook 没在跑**(提醒面根本没接上):归 `立即可做`,附 `jspace doctor --dir .` 看 `briefing.stale` 与 `harness.session_start_not_wired`。
-- `session_count` 在涨、`writeback_nudge_for_session` 也在跟 → 提醒发出去了但没人写回,是**习惯问题不是接线问题**:归 `需你决策`,别去改接线。
+- `session_count` 在涨、`writeback_nudge_for_session` 也在跟 → 提醒发出去了但没人写回,是**习惯问题不是接线问题**:归 `需你决策`,别去改接线。这一情形下 `jspace doctor --verbose` 也会报 `memory.writeback_habit_unverified`(info 级习惯门禁,不是接线故障;doctor 不查 gbrain,精确计数仍以本检查的来源比为准)。
 - 各 harness 的 session-end 能力边界(哪些是 best_effort、哪些只有 turn 轻提示)→ `~/.agents/skills/jspace-use/references/harnesses.md`。
 
 **分级**:单项目缺口 → 需你决策(问「X 项目这周的进展要不要补记」);会话腿/整体停摆 → 需你决策 + 在报告开头单独点出;hook 没接上 → 立即可做。

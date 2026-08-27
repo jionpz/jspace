@@ -120,6 +120,8 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 ```
 命令细节以 `jspace <cmd> --help` 为准;跨平台权威矩阵(外部稳定依赖,不随工作台物化)见 `docs/PLATFORMS.md`。
 
+- **`memory.writeback_habit_unverified`(info,`jspace doctor --verbose` / `--json` 可见)**:会话已有一定里程且收工轻提示发出过,但 **doctor 不查 gbrain**——它只提示「提醒面在转,请自己核对写回腿」,不是「写回率 = 0」的证明。处置:跑第 4 章的 `gbrain list --type note --tag source:session -n 20` 自查(精确计数走 `workbench-retro` 检查 1);真有事实要留,说一句「收工」跑 `memory-writeback`(带 `tags: source:session`)。这条永远是 info,不影响 exit;全手动写回是合法选择,当已知状态即可。接线是否坏了看 `briefing.stale` / `harness.session_start_not_wired`,不看这条。
+
 ## 7. 边界与故障排查
 
 - **本指南 vs 其它事实源**:本指南是「怎么用」的入口;`AGENTS.md` 是常驻路由与红线(每会话注入;域/skill/cron 治理细节 → 第 8 章);CLI `--help` 是命令细节;`docs/PLATFORMS.md` 是跨平台能力矩阵;各 skill `SKILL.md` 是能力边界。**不复制、只指引**。

@@ -935,3 +935,57 @@ test("briefing missing/old -> briefing.stale; recent -> none (issue #13)", () =>
   );
   expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("briefing.stale");
 });
+
+// Write-back habit gate (E). Fixtures are briefing state only: no gbrain page
+// with source:session is ever created here — faking provenance would make the
+// very metric retro check 1 measures meaningless.
+const HABIT = "memory.writeback_habit_unverified";
+function setBriefing(state: Record<string, unknown>): void {
+  mkdirSync(join(root, ".jspace", "state"), { recursive: true });
+  writeFileSync(
+    join(root, ".jspace", "state", "briefing.json"),
+    JSON.stringify({ schema_version: 1, last_session_start_at: new Date().toISOString(), ...state }),
+  );
+}
+
+test("no briefing -> no writeback habit gate (a fresh workbench is never nagged)", () => {
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain(HABIT);
+});
+
+test("session_count below threshold -> no writeback habit gate", () => {
+  setBriefing({ session_count: 3, writeback_nudge_for_session: 3 });
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain(HABIT);
+});
+
+test("nudge never claimed -> no writeback habit gate (that is a wiring question)", () => {
+  setBriefing({ session_count: 5 });
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain(HABIT);
+  setBriefing({ session_count: 5, writeback_nudge_for_session: 0 });
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain(HABIT);
+});
+
+test("sessions past threshold with a nudge spent -> memory.writeback_habit_unverified (info)", () => {
+  setBriefing({ session_count: 5, writeback_nudge_for_session: 2 });
+  const r = doctorWorkbench(root, stubDeps());
+  expect(codes(r)).toContain(HABIT);
+  const d = (r.data as { diagnostics: { code: string; severity: string; path: string; message: string }[] }).diagnostics.find((x) => x.code === HABIT);
+  expect(d?.severity).toBe("info"); // never warning: an all-manual cadence is legitimate
+  expect(d?.path).toBe("memory.writeback");
+  expect(d?.message).toContain("「收工」");
+  expect(d?.message).toContain("memory-writeback");
+  expect(d?.message).toContain("gbrain list --type note --tag source:session -n 20");
+  expect(d?.message).toContain("workbench-retro check 1");
+  // doctor cannot measure the rate, so it must not claim it did
+  expect(d?.message).toContain("doctor never queries gbrain");
+  expect(d?.message).toContain("never writes gbrain");
+});
+
+test("writeback habit gate never fails doctor and is verbose-only in human output", () => {
+  setBriefing({ session_count: 20, writeback_nudge_for_session: 20 });
+  const quiet = doctorWorkbench(root, stubDeps());
+  expect(quiet.exitCode ?? 0).toBe(0);
+  expect((quiet.warnings ?? []).some((w) => w.includes("source:session"))).toBe(false);
+  expect(quiet.lines.some((l) => l.includes("source:session"))).toBe(false);
+  const verbose = doctorWorkbench(root, stubDeps(), true);
+  expect(verbose.lines.some((l) => l.includes("source:session"))).toBe(true);
+});
