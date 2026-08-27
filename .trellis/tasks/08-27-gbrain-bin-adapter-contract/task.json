@@ -1,0 +1,31 @@
+{
+  "id": "gbrain-bin-adapter-contract",
+  "name": "gbrain-bin-adapter-contract",
+  "title": "gbrain $GBRAIN_BIN 对齐与后端契约文档",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "cloud-agent",
+  "assignee": "cloud-agent",
+  "createdAt": "2026-08-27",
+  "completedAt": null,
+  "branch": "cursor/gbrain-bin-adapter-contract-22c9",
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": "https://github.com/jionpz/jspace/pull/27",
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "adapters/gbrain/gbrain.ts",
+    "adapters/gbrain/gbrain.test.ts",
+    "core/contracts/gbrain.ts",
+    "skills/jspace-use/references/gbrain.md"
+  ],
+  "notes": "",
+  "meta": {}
+}
