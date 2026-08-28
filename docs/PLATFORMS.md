@@ -92,7 +92,7 @@ bin/jspace cron uninstall              # 期望:任务移除
 
 ### Windows 登录/登出边界 runbook(可勾选,M5)
 
-产品边界:任务用 `/it`(交互令牌)创建,**默认仅在用户登录时运行**;登出后该槽不触发,登录后按下一个槽正常运行。这是明示的产品边界,不视为 bug。argv 侧的合同(`/it` 必在、`/ru` `/rp` 这类「无论是否登录都运行」开关必不在)由 `adapters/scheduler/scheduler.test.ts` 的「win32 create argv always carries /it」单测锁定;下面是真机侧的可勾选协议。
+产品边界:任务用 `/it`(交互令牌)创建,**默认仅在用户登录时运行**;登出后该槽不触发,登录后按下一个槽正常运行。这是明示的产品边界,不视为 bug。argv 侧的合同(`/it` 必在、`/ru` `/rp` 这类「无论是否登录都运行」开关必不在)由 `adapters/scheduler/scheduler.test.ts` 的「win32 create argv always carries /it and never a logged-out escalation switch」单测锁定;下面是真机侧的可勾选协议。
 
 - [ ] **1. 登录态注册**:`cron install` 后 `schtasks /query /tn JSpaceCron_<wb-id>_<id>` 应存在(CI 已断言注册/读回,见「CI cron 冒烟」)。
 - [ ] **2. 登录态钟点触发**(可选,属「真实触发 runbook」范畴):按下面的 Windows 真实触发 runbook 设近时点,确认到点后 `.jspace/state/runs/<id>/` 出现新 run。
@@ -115,7 +115,7 @@ bin/jspace cron uninstall              # 期望:任务移除
 - `jspace cron run <id>`(人工或脚本直跑)——绕过调度器。
 - `schtasks /Run /tn <task>`——经 Task Scheduler 执行,但**非钟点触发**;最多记为「调度器可执行入口冒烟」。
 
-### Linux:临时「下一分钟」cron
+### Linux:临时「下一分钟」cron(实取 +2 分钟余量)
 
 用一个只活几分钟的临时 cron,避免动真实任务。全程不需要 root(用户 crontab)。
 
