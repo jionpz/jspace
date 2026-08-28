@@ -41,6 +41,8 @@ jspace **不封装** gbrain（GOAL 非目标）。替代知识库的接入方式
 
 数据模型（六命名空间 + frontmatter + tag 路由）见下文 Memory model——与具体 KB 实现无关，是记忆层本体。
 
+**多机 / 换机**：Tier 3 的 `export` / `import` / `embed --all` 是换机唯一通道（记忆走文本规范源、资产走既有分层同步、指针靠 `rel_path` 在目标机重解析）；在**真实第二机**上跑通的完整步骤、断言、降级分级与证据台账见 `~/.agents/skills/memory-recall/references/real-second-machine-protocol.md`。
+
 ## 版本兼容与升级前健康检查
 
 - **支持范围**:本工作台按首次启用(first-use)验收通过的 gbrain 版本校准(2026-08 基线);声明「支持/已验证」= 该版本经 `gbrain doctor --json` 全绿 + 端到端验收通过。升级前用 `gbrain check-update` 查看目标版本,不跨未知大版本盲升。
