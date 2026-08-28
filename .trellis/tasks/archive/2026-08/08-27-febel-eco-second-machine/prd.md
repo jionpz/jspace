@@ -83,12 +83,12 @@
 
 ## Acceptance Criteria
 
-- [ ] **AC1** PRD（本文）含完整 P0–P7 协议大纲，且每阶段有可观察断言；明确机器 B = 物理第二机，排除同机模拟关闭路径。
-- [ ] **AC2** 协议显式引用并服从既有纪律源：`gbrain-write.md` rel_path、`discipline.md` §8、`memory-acceptance.md` M5 扩展、`migration.md`、`gbrain.md` Tier 3；无冲突第二语义。
-- [ ] **AC3** 「GOAL 回写槽」字段表（R5）齐全：日期、双机标识、路径分歧、资产同步、export/import、rel_path、召回、问一句、边、裁决、教训、证据路径；并给出 GOAL #1 / M5 句的目标回写形态。
-- [ ] **AC4** 降级与替代关闭（R4）写明哪些可 partial、哪些不可关闭；图谱边保持 N/A 诚实路径。
-- [ ] **AC5** Non-goals 含：不封装 gbrain、不云环境假绿、不改业务代码完成本规划交付。
-- [ ] **AC6**（执行轮，非本规划关闭条件）真机跑完 P0–P7 后：R5 槽位填满 + `GOAL.md` 回写 + 证据在任务 notes；规划轮**不要求**本环境执行 P0–P7。
+- [x] **AC1** PRD（本文）含完整 P0–P7 协议大纲，且每阶段有可观察断言；明确机器 B = 物理第二机，排除同机模拟关闭路径。 — 已**发行**为 `skills/memory-recall/references/real-second-machine-protocol.md`：阶段总览表 + P0–P7 逐节命令与断言；「真的是第二机吗」三条判据（主机标识 / filehub 绝对根 / brain 数据目录各自独立）与红线 1（同机第二目录、`GBRAIN_HOME` 旁路、容器、CI/Cloud 均等同 M5 模拟）成文。
+- [x] **AC2** 协议显式引用并服从既有纪律源：`gbrain-write.md` rel_path、`discipline.md` §8、`memory-acceptance.md` M5 扩展、`migration.md`、`gbrain.md` Tier 3；无冲突第二语义。 — 末节「与既有纪律文档的关系」逐条列出唯一源与本协议的关系（断言与通过标准仍归 memory-acceptance，P4 直接引用 discipline §8 不复述规则）；`memory-acceptance.md` 反向增「真实第二机（Eco）」短节指回，`gbrain.md` Backend contract 增「多机 / 换机」一句。
+- [x] **AC3** 「GOAL 回写槽」字段表（R5）齐全：日期、双机标识、路径分歧、资产同步、export/import、rel_path、召回、问一句、边、裁决、教训、证据路径；并给出 GOAL #1 / M5 句的目标回写形态。 — 协议「证据台账模板（`eco.*`）」12 字段齐全 + 「GOAL 回写形态」小节（#1 替换句、M5 升级句、`partial` 时必须分腿写清）。
+- [x] **AC4** 降级与替代关闭（R4）写明哪些可 partial、哪些不可关闭；图谱边保持 N/A 诚实路径。 — 协议降级表四行（embedding 不可达 → 指针腿可过、召回腿降级；长期单机 → 挂账开放不可关闭；边/backlink → `n/a-no-wikilinks` 不阻塞；资产部分同步 → `partial` 须写抽样口径）+ 用词纪律「真机已验证 / 替代关闭（含边界句）/ 挂账开放」，与 B 的 Closing Taxonomy 同源。
+- [x] **AC5** Non-goals 含：不封装 gbrain、不云环境假绿、不改业务代码完成本规划交付。 — 协议红线 2/3 成文；本轮零业务逻辑改动（md + gen-assets 生成物），`bunx tsc --noEmit` 通过、`bun test` 690 pass / 0 fail、三 check 脚本全过、`init` 冒烟确认协议随工作台物化并投影到各 harness。
+- [ ] **AC6**（执行轮，非本规划关闭条件）真机跑完 P0–P7 后：R5 槽位填满 + `GOAL.md` 回写 + 证据在任务 notes；规划轮**不要求**本环境执行 P0–P7。 — **有意不勾**：本轮只发行协议并在 GOAL 留槽，未执行任何 P 阶段、未填任何 `eco.*` 字段；真机窗口由用户实际换机触发。
 
 ## Key Decisions
 
@@ -110,3 +110,4 @@
 - 父任务：`08-27-febel-post-m6-roadmap`（Eco 行）。
 - 前序裁决证据（本地）：`archive/2026-08/08-03-m5-distribution/notes.md`。
 - 轻量任务：PRD-only 即可进入「待真机执行」；若执行轮需拆命令级 checklist，再补 `implement.md`，仍不把同机模拟写入 Acceptance 关闭条件。
+- **发行轮实录（2026-08-28，PR [#28](https://github.com/jionpz/jspace/pull/28)）**：用户「继续推进」→ 把 R2 大纲与 R4/R5 从 PRD 升格为随工作台物化的 skill 参考 `skills/memory-recall/references/real-second-machine-protocol.md`（R6 原写「协议落地属后续执行轮」，此处指的是**真机执行**轮；发行本身不需要真机，故本轮完成发行、真机执行仍挂账）。GOAL #1 与 M5 句改为「协议已发行，待真机（`eco.verdict` 待填）」，**未填任何 verdict**。commit `8795d0b`。
