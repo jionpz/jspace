@@ -40,7 +40,7 @@ ls .jspace/logs/cron/*/                  # cron 活动痕迹
 - **写回率 = `session_writes / (session_writes + cron_writes)`**,分母为 0 时记「本周无写入」,不写 0%(0/0 不是 0)。
 - `session_writes == 0` 且 `cron_writes > 0` → **会话写回腿停摆**:飞轮只有定时那条腿在转。整体性问题,报告开头单独点出。
 - `session_writes == 0` 且 `cron_writes == 0` 且有活动信号 → **写回腿整体停摆**(比上一条更严重)。
-- `session_writes > 0` → 记实际条数与比例,**不评价好坏**(基线数据,供跨周对比;单周数字没意义,走向才有)。
+- `session_writes > 0` → 记实际条数与比例,**不评价好坏**(基线数据,供跨周对比;单周数字没意义,走向才有)。跨周的达标口径(连续两周 > 0)与回写纪律见 `~/.agents/skills/jspace-use/references/usage-mileage.md` R2——本检查只负责**本周**这一行数字,不下「习惯已养成」的结论。
 - `untagged_writes > 0` → **不要**把它算进任何一条腿。分两种情况写:
   - 页的 `updated_at` 早于本约定上线 → 记「历史页,无来源 tag」,只在基线里标注数量,不进判读;
   - 页是本周新写的却没 tag → **写侧纪律缺口**(某个 skill 没按 `~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」打标),归 `需你决策`,指明是哪个 slug/哪个 skill。
@@ -62,7 +62,7 @@ ls .jspace/logs/cron/*/                  # cron 活动痕迹
 jq '.session_count, .writeback_nudge_for_session' .jspace/state/briefing.json   # 会话计数 / 轻提示已用到第几个会话
 ```
 - 文件不存在或 `session_count` 本周没涨 → **session-start hook 没在跑**(提醒面根本没接上):归 `立即可做`,附 `jspace doctor --dir .` 看 `briefing.stale` 与 `harness.session_start_not_wired`。
-- `session_count` 在涨、`writeback_nudge_for_session` 也在跟 → 提醒发出去了但没人写回,是**习惯问题不是接线问题**:归 `需你决策`,别去改接线。
+- `session_count` 在涨、`writeback_nudge_for_session` 也在跟 → 提醒发出去了但没人写回,是**习惯问题不是接线问题**:归 `需你决策`,别去改接线。这一情形下 `jspace doctor --verbose` 也会报 `memory.writeback_habit_unverified`(info 级习惯门禁,不是接线故障;doctor 不查 gbrain,精确计数仍以本检查的来源比为准)。
 - 各 harness 的 session-end 能力边界(哪些是 best_effort、哪些只有 turn 轻提示)→ `~/.agents/skills/jspace-use/references/harnesses.md`。
 
 **分级**:单项目缺口 → 需你决策(问「X 项目这周的进展要不要补记」);会话腿/整体停摆 → 需你决策 + 在报告开头单独点出;hook 没接上 → 立即可做。

@@ -1,0 +1,29 @@
+{
+  "id": "febel-e-writeback-flywheel",
+  "name": "febel-e-writeback-flywheel",
+  "title": "E: 会话写回飞轮可观测与习惯门禁",
+  "description": "写回率可观测、doctor/retro/context 门禁，不破显式写回红线",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "cloud-agent",
+  "assignee": "cloud-agent",
+  "createdAt": "2026-08-27",
+  "completedAt": "2026-08-27",
+  "branch": "cursor/febel-post-m6-roadmap-6abc",
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": "8845d06",
+  "pr_url": "https://github.com/jionpz/jspace/pull/28",
+  "subtasks": [],
+  "children": [],
+  "parent": "08-27-febel-post-m6-roadmap",
+  "relatedFiles": [],
+  "notes": "E 实现完成：doctor info 码 memory.writeback_habit_unverified（application/diagnostics/checks/writeback.ts，阈值 session_count>=5 且 writeback_nudge_for_session>=1，离线只读 briefing.json）+ jspace-use §6 登记 + retro 检查 1 交叉引用。AC1-AC7 全勾（tsc / bun test 688 pass / gen-assets 无残留 diff / 三 check 脚本全过）。红线守住：doctor 不查 gbrain、severity 恒 info、nudge 频率与 context 写入行为零改动、夹具不伪造 source:session。真实窗口 source:session > 0 属 L。",
+  "meta": {
+    "planning": "febel-e-experience-subagent",
+    "design": "design.md"
+  }
+}

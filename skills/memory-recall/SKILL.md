@@ -54,6 +54,7 @@ gbrain models doctor --json        # 确认 embedding_reachability(仅确认,不
 - 断言链/变体负对照/诊断终止/降级提示/canonical 面约束细则 → `~/.agents/skills/memory-recall/references/discipline.md`
 - 换机/导入后指针解析(rel_path 重解析)→ `~/.agents/skills/memory-recall/references/discipline.md` §8
 - 可复跑验收协议(基线/重跑)→ `~/.agents/skills/memory-recall/references/memory-acceptance.md`
+- 换到**另一台物理机**上验证记忆与指针(export/import + rel_path 重解析 + 证据台账)→ `~/.agents/skills/memory-recall/references/real-second-machine-protocol.md`
 - 写侧 embedding 降级细节 → `~/.agents/skills/asset-ingest/references/gbrain-write.md`
 
 ## Golden run
@@ -72,5 +73,6 @@ gbrain query "<问题>"       # top-1 == 目标 slug
 ## 参考
 - `~/.agents/skills/memory-recall/references/discipline.md` — 断言链/变体负对照/诊断终止/降级/换机解析
 - `~/.agents/skills/memory-recall/references/memory-acceptance.md` — 可复跑验收协议(基线 2026-08-03 通过)
+- `~/.agents/skills/memory-recall/references/real-second-machine-protocol.md` — 真实第二机演练协议(P0–P7 + eco 证据台账)
 - `~/.agents/skills/memory-recall/references/example-recall.md` — golden run(S5 产出)
 - `~/.agents/skills/asset-ingest/references/gbrain-write.md` — 写侧纪律(读侧触发时参考)

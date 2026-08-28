@@ -171,3 +171,28 @@ test("spawnProcess separates stdout from stderr", async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("missing executable -> exit 1 with the error in RESULT stderr, nothing on process stderr", async () => {
+  if (process.platform === "win32") return;
+  const dir = mkdtempSync(join(tmpdir(), "jspace-spawn-"));
+  const errWrite = process.stderr.write.bind(process.stderr);
+  let leaked = "";
+  // capture anything the adapter would print directly (the old console.error
+  // path put "spawn error" noise at the top of every session when gbrain was
+  // not installed yet — an expected pre-first-use state)
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    leaked += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf-8");
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    const res = await spawnProcess(["definitely-not-a-real-executable-jspace"], { cwd: dir, platform: "linux", timeoutMs: 5000 });
+    expect(res.exit).toBe(1);
+    expect(res.timedOut).toBe(false);
+    expect(res.stderr).toContain("jspace: spawn error:");
+    expect(res.output).toContain("jspace: spawn error:");
+    expect(leaked).not.toContain("spawn error");
+  } finally {
+    process.stderr.write = errWrite;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

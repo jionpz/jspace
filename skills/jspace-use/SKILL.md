@@ -67,6 +67,7 @@ JSpace 工作台 = 本地工作控制平面:根 `AGENTS.md` 是入口面,其余�
    jspace cron status --dir .                # 确认已安装
    ```
    - **只想开一部分**:`jspace cron enable <id> --dir .` 逐条开(推荐至少开 `inbox-tidy` + `workbench-retro`——一条转资产、一条转纪律)。
+   - **第 4 步选的不是 Claude Code?先改 harness 字段**:出厂 `.jspace/cron.json` 四个任务都是 `"harness": "claude"`;选了其他 harness 就把各任务的 `harness` 改成对应值(`grok`/`opencode`/`pi`/`codex`;Cursor 无 headless CLI 不进 cron enum,cron 改用其中一个无头 harness),否则 rehearsal 会因本机没有 claude 可执行文件而失败。cron.json 是 user 数据,改后升级不覆盖。
    - **harness 未接线/配额未配就先别装调度**:先做第 4 步,再 rehearsal。`cron run` 失败是安全失败(记 incident + `jspace cron check` 可见,不改任何数据);`cron install` 只登记调度、不代跑。
    - **用户确认要跳过**:标 `deferred` 并告知 `jspace doctor --verbose`(或 `--json`)会持续报 `cron.all_disabled`(info,不是错误——info 默认只计数不打印),想开时回到本步。
 5. **Final smoke + sign-off**:`jspace doctor` + `jq hub.json` + `gbrain doctor --fast`;报 configured/already-OK/missing-deferred。若有启用的 cron,再确认 `jspace cron status --dir .` 显示已安装/可运行;选择跳过 cron 的标 `deferred`(`jspace doctor --verbose` 只报 `cron.all_disabled` info,不失败)。
@@ -87,7 +88,7 @@ SessionStart hook(`.claude/settings.json`)注入 `<current-state>`(域/pending/c
 会话里最多出现**一次**收工轻提示(`jspace context turn`,无更高优先级状态时才出;去重锚点 `.jspace/state/briefing.json`),claude/cursor 另有 session-end hook。**提醒 ≠ 写入**:三者都不写 gbrain,不触发 `memory-writeback` 就等于本次没沉淀。
 
 ### 每周体检
-`jspace doctor --dir .` 看 `info` 级体检项(僵尸域 / 待归档项目 / 失效指针,见第 8 章「退役与回收」);`jspace workspace diff` 看升级差异。
+`jspace doctor --dir .` 看 `info` 级体检项(僵尸域 / 待归档项目 / 失效指针,见第 8 章「退役与回收」);`jspace workspace diff` 看升级差异。想确认三个飞轮**在转**(而不只是机制在)→ 走使用里程清单 `~/.agents/skills/jspace-use/references/usage-mileage.md`。
 
 ## 4. gbrain 记忆
 
@@ -100,6 +101,8 @@ gbrain list --type note --tag source:session -n 20   # 会话沉淀的写入(分
 gbrain list --type note --tag source:cron -n 20      # 定时归纳的写入(另一半)
 ```
 两边一比就知道「记忆在长,长的是 cron 归纳的还是会话沉淀的」。`source:session` 长期为 0 = 收工写回这条腿没在转(提醒发了但没人触发写回),按第 3 章「收工」补上;来源 tag 语义 → `~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」。
+
+要把这条腿**验成达标**(连续两周落窗口计数 > 0)而不只是随手看一眼,用取证协议 `~/.agents/skills/jspace-use/references/usage-mileage.md`(含窗口口径、禁伪造红线、retro 无头首跑与三飞轮清单)。
 
 ## 5. 资源与资产
 
@@ -118,6 +121,8 @@ jspace cron check                      # cron 失败 + pending 暂存写聚合
 jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pending 收尾)
 ```
 命令细节以 `jspace <cmd> --help` 为准;跨平台权威矩阵(外部稳定依赖,不随工作台物化)见 `docs/PLATFORMS.md`。
+
+- **`memory.writeback_habit_unverified`(info,`jspace doctor --verbose` / `--json` 可见)**:会话已有一定里程且收工轻提示发出过,但 **doctor 不查 gbrain**——它只提示「提醒面在转,请自己核对写回腿」,不是「写回率 = 0」的证明。处置:跑第 4 章的 `gbrain list --type note --tag source:session -n 20` 自查(精确计数走 `workbench-retro` 检查 1);真有事实要留,说一句「收工」跑 `memory-writeback`(带 `tags: source:session`)。这条永远是 info,不影响 exit;全手动写回是合法选择,当已知状态即可。接线是否坏了看 `briefing.stale` / `harness.session_start_not_wired`,不看这条。
 
 ## 7. 边界与故障排查
 
@@ -247,6 +252,7 @@ gbrain put project/<id>/state < <终态正文>
 - 逐 harness 接线(Claude Code / Grok Build / OpenCode / Pi / Cursor 各自 `harness-<name>.md` + capabilities 全景)→ `~/.agents/skills/jspace-use/references/harnesses.md`
 - 无头执行运维(账号/配额/失败可见性)→ `~/.agents/skills/jspace-use/references/headless-ops.md`
 - 首次启用 golden run → `~/.agents/skills/jspace-use/references/example-first-use.md`
+- 使用里程验证(retro 无头首跑 / 两周写回取证 / 三飞轮清单)→ `~/.agents/skills/jspace-use/references/usage-mileage.md`
 
 ## 自检(做完跑这条)
 
@@ -263,5 +269,6 @@ jq .jspace/hub.json           # 合法 JSON
 - `~/.agents/skills/jspace-use/references/harnesses.md` — harness 支持全景(capabilities render)+ 逐 harness 接线 `harness-{claude,grok,opencode,pi,cursor}.md`
 - `~/.agents/skills/jspace-use/references/headless-ops.md` — 无头运维(账号/配额/失败可见性)
 - `~/.agents/skills/jspace-use/references/example-first-use.md` — 首次启用 golden run(S5 产出)
+- `~/.agents/skills/jspace-use/references/usage-mileage.md` — 使用里程协议(三飞轮关闭条件 + 取证台账 + 禁伪造红线)
 
 > **Note**:官方 skill 只随 `jspace init` 物化;既有工作台经 `jspace workspace upgrade` 刷新(未修改的模板/skill 随升级更新,本地改动保留为 `skip`);`jspace init --force .` 对已有工作台会拒绝(用 upgrade,不用 init)。

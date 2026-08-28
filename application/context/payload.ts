@@ -4,6 +4,7 @@
 // give paths not content, truncate lists with an explicit "and N more" tail
 // (never drop silently), keep session-start under 4KiB.
 import type { WorkbenchState } from "./collect.ts";
+import skillsManifest from "../../skills-manifest.json";
 
 const MAX_STATE_DOMAINS = 5;
 const MAX_CRON_LINES = 5;
@@ -11,7 +12,11 @@ const MAX_LIST_LINES = 12;
 const MAX_CRON_ID_CHARS = 48;
 const MAX_SESSION_START_BYTES = 4 * 1024;
 
-const SKILL_LIST = "jspace-use / asset-ingest / memory-recall / memory-writeback";
+/** Workbench skill roster for the <available> block, derived from
+ *  skills-manifest.json (the single source for which skills ship in the binary
+ *  — see scripts/gen-assets.ts). A hardcoded copy froze at 4 names while the
+ *  manifest grew to 7; deriving makes that drift impossible. */
+const SKILL_LIST = skillsManifest.workbench.map((s) => s.name).join(" / ");
 
 /** Open-incident banner (issue #13): put failures at the very top of context
  *  output so a session that does not run `jspace cron check` still sees them. */

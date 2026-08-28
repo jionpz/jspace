@@ -99,7 +99,7 @@ function pass(label: string): void {
       workbenchFms = [];
     }
     const brainRows = new Map(workbenchFms.map((fm) => [fm.name, fm.triggers.join(" | ")]));
-    const brainMatch = agents.match(/^<!-- TRELLIS-BRAIN-OPS:BEGIN -->\n([\s\S]*?)\n<!-- TRELLIS-BRAIN-OPS:END -->/m);
+    const brainMatch = agents.match(/^<!-- JSPACE-BRAIN-OPS:BEGIN -->\n([\s\S]*?)\n<!-- JSPACE-BRAIN-OPS:END -->/m);
     if (!brainMatch) {
       fail("C2 no Brain operations marker region found");
     } else {

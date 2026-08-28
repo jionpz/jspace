@@ -580,3 +580,50 @@ test("health: no crontab binary -> crontab missing-cmd (confirmed cannot install
   const h = runHealth({ pgrep: 1, crontabBin: "", crontabL: 1 }, PROC_NOT_ISOLATED);
   expect(h.crontab).toBe("missing-cmd"); // confirmed fault, distinct from "missing"
 });
+
+// ---- scheduling-semantics contract (GOAL#5 ② Linux catch-up / ③ Windows logon) ----
+// These two product boundaries are documented in docs/PLATFORMS.md as "not a
+// bug": Linux crontab skips a missed slot, and a Windows task only fires while
+// the user is logged on. Both hold only as long as the emitted argv stays
+// exactly what the OS default means, so the argv itself is the contract — a
+// future "convenience" flag would silently change the documented semantics.
+
+test("win32 create argv always carries /it and never a logged-out escalation switch", () => {
+  const mk = (id: string, schedule: string): CronDefinition => ({ id, schedule, harness: "claude", prompt: "x", enabled: true });
+  // /ru (run-as, e.g. SYSTEM) and /rp (stored password) are the two switches
+  // that make schtasks run while nobody is logged on; /it is what pins the task
+  // to the interactive token of the logged-on user.
+  const loggedOutSwitches = ["/ru", "/rp"];
+  const cases = [mk("inbox-tidy", "0 21 * * *"), mk("weekly", "0 21 * * 0")];
+  for (const cron of cases) {
+    const args = schtasksArgs(cron, "C:\\bin\\jspace.exe", "C:\\wb", `JSpaceCron_tag_${cron.id}`);
+    expect(args).not.toBeNull();
+    expect(args).toContain("/it");
+    for (const sw of loggedOutSwitches) expect(args).not.toContain(sw);
+  }
+  // Same assertion through the real write path (buildContent is what applyBatch
+  // spawns), so a bypass of schtasksArgs cannot drop /it unnoticed.
+  const content = win32Adapter.buildContent(cases[0], "tag", "C:\\wb", { jspaceBinary: "C:\\bin\\jspace.exe", home: "C:\\Users\\u", path: "C:\\bin" });
+  const argv = JSON.parse(content) as string[];
+  expect(argv).toContain("/it");
+  for (const sw of loggedOutSwitches) expect(argv).not.toContain(sw);
+});
+
+test("linux install writes plain 5-field crontab entries — no anacron/@reboot catch-up wrapper", () => {
+  const mk = (id: string, schedule: string): CronDefinition => ({ id, schedule, harness: "claude", prompt: "x", enabled: true });
+  const block = crontabBlock([mk("inbox-tidy", "0 21 * * *"), mk("weekly", "30 22 * * 0")], "tag", "/wb", "/bin/jspace", "/usr/bin:/bin", "/home/u");
+  const lines = block.trim().split("\n");
+  expect(lines[0]).toBe(CRON_BLOCK_START("tag"));
+  expect(lines[lines.length - 1]).toBe(CRON_BLOCK_END("tag"));
+  const entries = lines.slice(1, -1);
+  expect(entries).toHaveLength(2);
+  for (const e of entries) {
+    // exactly the 5 calendar fields, then the run command: no @reboot/@daily
+    // special schedule, no anacron/run-parts indirection, no missed-run scan.
+    expect(e).toMatch(/^\d+ \d+ \* \* (\*|\d)  cd '\/wb' && /);
+    expect(e).toContain("cron run --dir '/wb' --id ");
+  }
+  expect(block).not.toContain("@");
+  expect(block.toLowerCase()).not.toContain("anacron");
+  expect(block.toLowerCase()).not.toContain("run-parts");
+});

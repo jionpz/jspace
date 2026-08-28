@@ -126,7 +126,8 @@ export function cronSpawnEnv(platform: string, harness: string): Record<string, 
 
 /** Spawn `argv` and wait for exit, streaming stdout+stderr (capped at
  *  MAX_OUTPUT_BYTES). Arms a hard kill after `timeoutMs`. Never throws on a
- *  child error — a spawn failure resolves as exit 1 (the caller reports it). */
+ *  child error — a spawn failure resolves as exit 1 with the error message
+ *  appended to the result's stderr (the caller reports it). */
 export async function spawnProcess(argv: string[], opts: SpawnOpts): Promise<SpawnResult> {
   const defaultPath = opts.platform === "win32" ? "C:\\Windows\\system32;C:\\Windows" : "/usr/local/bin:/usr/bin:/bin";
   const env = opts.env ?? { ...process.env, PATH: process.env.PATH ?? defaultPath };
@@ -180,7 +181,12 @@ export async function spawnProcess(argv: string[], opts: SpawnOpts): Promise<Spa
   }, opts.timeoutMs);
 
   const exited = await new Promise<number>((resolveExit) => {
-    child.on("error", (e) => { console.error(`jspace: spawn error: ${e.message}`); resolveExit(1); });
+    // Spawn failure (e.g. executable not in PATH) routes into the RESULT's
+    // stderr, not this process's stderr: callers that report failures (cron
+    // run log, gbrain put/list error field) still get the message, while an
+    // expected state — gbrain not yet installed when a session-start hook
+    // probes it — no longer prints noise at the top of every session.
+    child.on("error", (e) => { pushErr(Buffer.from(`jspace: spawn error: ${e.message}\n`)); resolveExit(1); });
     child.on("exit", (code) => resolveExit(code ?? 1));
   });
   clearTimeout(timer);
