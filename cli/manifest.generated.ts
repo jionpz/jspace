@@ -3,7 +3,7 @@
 import type { DistributionManifestV1 } from "../core/contracts/distribution.ts";
 export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   schema_version: 1,
-  bundle_version: "1.0.16",
+  bundle_version: "1.0.17",
   files: [
   { path: "templates/workbench/.claude/settings.json", sha256: "e58f63934ddef681f113eb50e6457447e4f1d000f1f78dbfd1fa571ac86f59fd", ownership: "seed" },
   { path: "templates/workbench/.cursor/hooks.json", sha256: "a8dbae5353c3380c0c640ae4881f6175a5578fc863516eb671ef4e13f9f2cf70", ownership: "seed" },
