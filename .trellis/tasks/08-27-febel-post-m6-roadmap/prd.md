@@ -82,7 +82,7 @@ M0–M6 与 H1 已闭合：控制平面 / 记忆 / 资产 / 定时 / 自省 / �
 
 - [ ] 五个子任务均有可测试的 Acceptance；usage-only 项以「协议 + GOAL 回写槽」而非假绿关闭——E/B/Eco/L 已核验通过，**F 待 PRD 补全后复核**
 - [ ] 任一子任务合入后不破坏：显式写回红线、不引入常驻运行时、不封装 gbrain
-- [ ] 父任务归档前：`GOAL.md` 增加 **M7（使用里程）** 条目——草案已由 L 起草（见其 PRD「GOAL M7 草案」节），父任务确认后写入；M7 允许带「待真实使用验证」开放子项入 GOAL，**不等数字达标**
+- [x] 父任务归档前：`GOAL.md` 增加 **M7（使用里程）** 条目（L 已入 GOAL，2026-08-27）——草案已由 L 起草（见其 PRD「GOAL M7 草案」节），父任务确认后写入；M7 允许带「待真实使用验证」开放子项入 GOAL，**不等数字达标**
 - [ ] B / Eco 的台账与 GOAL 回写用词服从 B 的 Closing Taxonomy：`真机已验证 / 替代关闭（含效力边界句）/ 挂账开放`；禁止 CRUD、`jspace cron run`、`schtasks /Run` 冒充真实触发
 - [ ] 术语防混用：`jspace cron run` 在 L（retro 无头首跑 rehearsal，可作最低关闭条）与 B（真实触发，禁止用它关闭）承载不同 claim——GOAL/台账回写时点名区分
 - [ ] `bunx tsc --noEmit`、`bun test`、三 check 脚本在工程类子任务（F / E / B 的 E 型交付）合入后仍绿

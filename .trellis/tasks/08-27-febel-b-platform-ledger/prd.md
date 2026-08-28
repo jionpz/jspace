@@ -91,29 +91,29 @@ GOAL.md 开放问题 **#5（Linux/Windows 真机调度复核）** 已于 2026-08
 
 ### 横切
 
-- [ ] AC0.1 四条在 PLATFORMS 台账均有终态（真机已验证 **或** 替代关闭含效力边界句）；无「用 CRUD smoke 冒充触发」表述。
-- [ ] AC0.2 `GOAL.md` #5 更新为四条逐条关闭结论（或显式「替代挂账」），与台账一致。
-- [ ] AC0.3 本任务若改代码：仅限文档、单测合同、文案澄清；**不**改变补跑/登录语义。`bunx tsc --noEmit` + `bun test` 绿；改 templates/skills/capabilities 则 gen-assets + 三 check。
+- [x] AC0.1 四条在 PLATFORMS 台账均有终态（真机已验证 **或** 替代关闭含效力边界句）；无「用 CRUD smoke 冒充触发」表述。 — 台账新增**状态词表**（未验证 / 工程已闭合·真机待使用 / 替代关闭 / 真机已验证，效力递增）+ 红线句（CI smoke、`cron run` 直跑、`schtasks /Run` 均不得写成真实触发）；四条拆为独立行（Linux/Windows 的 CRUD 行改为**只**覆盖 CRUD，显式指向触发行）。
+- [x] AC0.2 `GOAL.md` #5 更新为四条逐条关闭结论（或显式「替代挂账」），与台账一致。 — 标题改为「部分关闭（08-26）→ 残余四条工程闭合、真机复核挂账（08-27）」，逐条写 E/A + *效力边界* + 末尾「真机复核待…」四项。
+- [x] AC0.3 本任务若改代码：仅限文档、单测合同、文案澄清；**不**改变补跑/登录语义。`bunx tsc --noEmit` + `bun test` 绿；改 templates/skills/capabilities 则 gen-assets + 三 check。 — 生产代码零改动（仅 `scheduler.test.ts` +2 合同单测、`docs/PLATFORMS.md`、`GOAL.md`）；tsc 通过，`bun test` 690 pass / 0 fail（688 → 690）；未碰 templates/skills/capabilities，三 check 仍全过。
 
 ### ① 真实触发
 
-- [ ] AC1.1（E）PLATFORMS 有可复跑「真实触发 runbook」+ 证据模板；明文排除 `cron run` / CI 等到 / 单独用 `/Run` 关闭。
-- [ ] AC1.2（H 或 A）Linux 与 Windows 台账行终态为「真机已验证」**或**「替代关闭」+ 边界（CRUD≠fire）。
+- [x] AC1.1（E）PLATFORMS 有可复跑「真实触发 runbook」+ 证据模板；明文排除 `cron run` / CI 等到 / 单独用 `/Run` 关闭。 — 新增 §真实触发 runbook：定义句（调度器**自行**拉起 + runs/logs 证据）、三条排除项、Linux「当前 +2 分钟」bash 协议（含判读：harness 失败仍算触发成立，无 run 文件才是不成立）、Windows DAILY 近时点 PowerShell 协议、九字段证据模板。
+- [x] AC1.2（H 或 A）Linux 与 Windows 台账行终态为「真机已验证」**或**「替代关闭」+ 边界（CRUD≠fire）。 — 无 Linux 常驻机/Windows 真机，按 E 型终态「**工程已闭合 / 真机待使用**」入账（PRD 的 A「替代挂账」同族，边界句更强：只证明「已按正确 argv 注册」，未证明能被 spawn 并跑完）。runbook 的 CRUD 命令形态已在开发容器实跑校验（装 cron 包 → add → install → `crontab -l` 见受管块 → status → uninstall → 块消失）；该容器**无 cron 守护进程**（`pgrep -x cron` 空），已在证据列写明，未声称任何触发观察。
 
 ### ② 错过即跳过
 
-- [ ] AC2.1（E）linux adapter 合同审计结论已文档化；无 jspace 侧补跑实现。
-- [ ] AC2.2（H 或 A）台账「补跑语义」行终态为真机错过实验 **或** 替代关闭（平台固有语义 + 审计）。
+- [x] AC2.1（E）linux adapter 合同审计结论已文档化；无 jspace 侧补跑实现。 — 新增 §补跑语义合同：`crontabLine` 只发标准五字段行、无 `@reboot`/anacron/`run-parts`/missed-run 扫描；`applyBatch`/`uninstallAll` 不注册附加单元；整仓生产代码 grep `anacron|@reboot|StartWhenAvailable|catch-up` 零命中；澄清 `execute.ts` 的 `todaySuccess` 是**去重闸门**（抑制重复）而非补跑产生器。
+- [x] AC2.2（H 或 A）台账「补跑语义」行终态为真机错过实验 **或** 替代关闭（平台固有语义 + 审计）。 — **替代关闭（A）**：审计 + 新增合同单测「linux install writes plain 5-field crontab entries — no anacron/@reboot catch-up wrapper」+ 文档硬化（「关机错过」不是 bug）。边界：Vixie/cronie 用户 crontab 固有语义、未做停 daemon 跨槽实验、anacron/systemd timer 环境不在合同内；节末留 H 型错过实验协议。
 
 ### ③ Windows 登出
 
-- [ ] AC3.1（E）`/it` 合同有单测锁定；PLATFORMS 登出协议可勾选。
-- [ ] AC3.2（H 或 A）登出台账行终态为真机观察 **或** 替代关闭（`/it` + OS 默认登录态）。
+- [x] AC3.1（E）`/it` 合同有单测锁定；PLATFORMS 登出协议可勾选。 — 原单测只在 `parseOpContent` 的 fixture 里**顺带**出现 `/it`（不是断言），属缺口：新增「win32 create argv always carries /it and never a logged-out escalation switch」——DAILY/WEEKLY 及真实写路径 `win32Adapter.buildContent` 都断言含 `/it`，并**禁止** `/ru`（run-as SYSTEM）与 `/rp`（存储密码）。「Windows 额外两步」升级为四步可勾选 runbook（含「锁屏/休眠 ≠ 登出」判读）。
+- [x] AC3.2（H 或 A）登出台账行终态为真机观察 **或** 替代关闭（`/it` + OS 默认登录态）。 — **替代关闭（A）**：argv 合同单测 + 产品边界文档；边界句写明未观察真实登出、依赖 Task Scheduler 登录态默认语义、CI schtasks CRUD 不构成登出已验证。
 
 ### ④ 沙盒 namespace
 
-- [ ] AC4.1（E）降级单测 + 非降级 CI 断言仍成立；缺口已补。
-- [ ] AC4.2（H 或 A）沙盒台账行终态为 WSL2+Codex（或等价 bwrap）观察 **或** 替代关闭（单测降级 + CI 非降级），边界句保留。
+- [x] AC4.1（E）降级单测 + 非降级 CI 断言仍成立；缺口已补。 — 审计结论：**无缺口**。`scheduler.test.ts` 覆盖 `pidNamespaceIsolated` 解析 + `health()` 三态 + missing-cmd；`doctor.test.ts` 已有「`*_unverifiable` severity 是 `info` + 不误报 `not_installed`/`daemon_stopped` + exit 0」与反向「可核实宿主保留两 warning」断言；非降级侧在 `verify.yml` + CI cron 冒烟。故本条不新增单测，只在台账证据列点名到具体断言。
+- [x] AC4.2（H 或 A）沙盒台账行终态为 WSL2+Codex（或等价 bwrap）观察 **或** 替代关闭（单测降级 + CI 非降级），边界句保留。 — 终态「**工程已闭合 / 真机待使用**」+ 脚注 `[^ns-wsl2]`：WSL2 + Codex sandbox 或 `bwrap --unshare-pid` 的可复跑复核步骤（先确认 `NSpid:` ≥2 值 → 期望 info 降级 + exit 0 → 宿主重跑期望无 `*_unverifiable`）。
 
 ## Non-Goals
 
@@ -140,6 +140,18 @@ GOAL.md 开放问题 **#5（Linux/Windows 真机调度复核）** 已于 2026-08
 | ② | Linux 错过跳过 | 合同审计 + 文档；可选真机跨槽；默认可 A | E+A（H 增强） | 合同基于用户 crontab 固有语义，非全发行版实测 |
 | ③ | Windows 登出 | 锁 `/it` 单测 + 文档；登出观察可选；默认可 A | E+A（H 增强） | 未登出观察时依赖 Task Scheduler 登录态默认行为 |
 | ④ | 沙盒 namespace | 单测+CI 非降级作 A；H=WSL2+Codex | E+A（H 建议） | 降级路径无真实嵌套 namespace观察 |
+
+## Delivery Log（E 型交付，2026-08-27）
+
+| 文件 | 变更 |
+|---|---|
+| `docs/PLATFORMS.md` | 新增 §真实触发 runbook（定义 + 排除项 + Linux/Windows 协议 + 证据模板）、§补跑语义合同（审计结论 + 边界 + H 型错过实验协议）；「Windows 额外两步」→ §Windows 登录/登出边界 runbook（四步可勾选）；台账加状态词表 + 红线句，四条残余拆独立行并入账；加 `[^ns-wsl2]` 复核脚注；三处指针（调度后端表下的诚实声明、手动验证矩阵引言）指向新节 |
+| `GOAL.md` | 开放问题 #5 逐条 E/A 关闭结论 + 效力边界 + 「真机复核待…」四项 |
+| `adapters/scheduler/scheduler.test.ts` | +2 合同单测（win32 `/it` 必在 & `/ru`/`/rp` 禁止；linux 受管块只含标准五字段行、无 anacron/@reboot/run-parts） |
+
+生产代码零改动（不加 anacron、不改 `/it` 语义）。验证：`bunx tsc --noEmit` 通过；`bun test` 690 pass / 0 fail；`check-skills` / `check-harness-consistency` / `check-manifest-integrity` 全过。
+
+**留给 H 型（不阻塞本任务，挂在 PLATFORMS 台账 + GOAL #5 脚注）**：Linux 常驻机与 Windows 真机执行触发 runbook；Linux 停 daemon 跨槽实验；Windows 登出 runbook 第 3 步；WSL2 + Codex sandbox 复核降级。四条都只等真机使用，不等新工程。
 
 ## Notes
 
