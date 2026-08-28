@@ -126,3 +126,7 @@ gbrain doctor --fast      # brain 健康
 - [ ] embedding 不可达时写页 `embed_skip: true` 保底,首次启用未因此失败
 - [ ] Claude Code `mcpServers.gbrain` 已写入 `~/.claude.json`
 - [ ] Phase 4.5 cron 问过用户:开了则 `jspace cron status` 显示已安装且 `doctor --verbose` 无 `cron.all_disabled`;跳过则明确标 `deferred`(未默默略过)
+
+## After first-use — 使用里程(M7)
+
+first-use 只证明**机制可配**;三个飞轮是否在转,走独立验收协议 `~/.agents/skills/jspace-use/references/usage-mileage.md`(R1 retro 无头首跑 / R2 连续两周写回 / R3 资产闭环)。**不是首启必跑项**,真实使用后再填证据台账;禁伪造 `source:session`。
