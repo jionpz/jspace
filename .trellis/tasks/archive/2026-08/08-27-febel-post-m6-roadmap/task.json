@@ -3,7 +3,7 @@
   "name": "febel-post-m6-roadmap",
   "title": "FEBEL 终局推进任务地图（post-M6/H1）",
   "description": "",
-  "status": "planning",
+  "status": "completed",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -11,11 +11,11 @@
   "creator": "cloud-agent",
   "assignee": "cloud-agent",
   "createdAt": "2026-08-27",
-  "completedAt": null,
+  "completedAt": "2026-08-28",
   "branch": "cursor/febel-post-m6-roadmap-6abc",
   "base_branch": "main",
   "worktree_path": null,
-  "commit": null,
+  "commit": "2d0e344",
   "pr_url": "https://github.com/jionpz/jspace/pull/28",
   "subtasks": [],
   "children": [
@@ -27,6 +27,6 @@
   ],
   "parent": null,
   "relatedFiles": [],
-  "notes": "",
+  "notes": "FEBEL 5/5 子任务已归档；集成审视 2026-08-28；PR #28 ready for review",
   "meta": {}
 }

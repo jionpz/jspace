@@ -27,15 +27,7 @@ M0–M6 与 H1 已闭合：控制平面 / 记忆 / 资产 / 定时 / 自省 / �
 - 路由 / filehub / cron MVP / 记忆精度 / 分发 / workbench-retro / session-end 接线（B4）/ cron.all_disabled / 可执行收工文案 / `$GBRAIN_BIN` 契约（PR #27，任务已归档）
 - issue #13 主体（Pi session-start、briefing.stale、incident banner、first-use cron 引导）已在 main
 
-仍开放 / 待落地：
-
-| 维 | 缺口 | 子任务 |
-|---|---|---|
-| F | PR #26 未合 main：技能列表仍硬编码 4 个；投影列举 / spawn 噪声 / JSPACE-BRAIN-OPS / cron harness 提醒 | `08-27-febel-f-pr26-land` |
-| E | 写回腿工程已就位，**指标未达标**；doctor 侧缺「写回习惯可能静默」的轻量可见性（doctor 量不到精确写回率，精确数字归 retro 检查 1；不破显式写回红线） | `08-27-febel-e-writeback-flywheel` |
-| B | GOAL #5 仍开放：真实触发、Linux 错过跳过、Windows 登出、沙盒 namespace | `08-27-febel-b-platform-ledger` |
-| Eco | 真实第二机演练待实际使用；需可复跑协议与 GOAL 回写槽 | `08-27-febel-eco-second-machine` |
-| L | retro 无头首跑 / `source:session` 两周窗口 / 使用里程条目未形式化为 M7 | `08-27-febel-l-usage-flywheel` |
+**2026-08-28 终态**：五维子任务均已归档；工程层（F/E/B E 型）已合入 PR [#28](https://github.com/jionpz/jspace/pull/28)；使用层（M7 三腿、GOAL #5 H 型、Eco P0–P7）协议就位 + GOAL 诚实挂账，等真实使用/真机填数。
 
 ## Task Map（children）
 
