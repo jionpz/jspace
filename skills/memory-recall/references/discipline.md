@@ -26,6 +26,13 @@
 - Pointer 是**绝对路径**（本机真理，按机维护）；换机/导入场景按 §8 用 `rel_path` 重解析。
 - 四连全过才算该用例命中；任一断 → 回步骤 5 校准。
 
+### 3b. 取代检查（decisions / knowledge 命中后）
+
+- `gbrain get <slug>` 后检查 tags 是否含 `status:superseded`。
+- 若已 superseded → 读正文 `Supersedes: [[...]]` wikilink，跟随到现行页再作答；答案标注「该条已被 X 取代」。
+- 若含 `status:archived` 或 `status:deprecated` → 默认不作为确定依据；仅在用户明确问历史时引用。
+- 含 `status:provisional` → 可返回但须标注不确定。
+
 ## 4. 稳定性与双路径
 
 - **日常召回**：不强制 ≥3 次重跑（那是验收协议）；仅在「存疑 / 校准」时按协议重跑。

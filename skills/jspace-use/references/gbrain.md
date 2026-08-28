@@ -39,7 +39,7 @@ jspace **不封装** gbrain（GOAL 非目标）。替代知识库的接入方式
 | **Tier 2**（skills / 会话） | `search` / `query` / `delete`（软删）/ `serve`（stdio MCP，server 名须为 `gbrain`）/ `doctor --json` / `stats` / `check-resolvable` / `init` | 7 个 workbench skills + harness MCP | query top-1 含 slug；embedding 不可达时写入仍成功（`embed_skip`）；list `-n` ≡ `--limit` |
 | **Tier 3**（运维） | `export` / `import` / `embed --all` / `upgrade` / `check-update` / `models doctor` | first-use、换机迁移、升级前检查 | 可选；缺则迁移走手工 |
 
-数据模型（六命名空间 + frontmatter + tag 路由）见下文 Memory model——与具体 KB 实现无关，是记忆层本体。
+数据模型（命名空间 + frontmatter + tag 路由）见下文 Memory model——与具体 KB 实现无关，是记忆层本体。
 
 **多机 / 换机**：Tier 3 的 `export` / `import` / `embed --all` 是换机唯一通道（记忆走文本规范源、资产走既有分层同步、指针靠 `rel_path` 在目标机重解析）；在**真实第二机**上跑通的完整步骤、断言、降级分级与证据台账见 `~/.agents/skills/memory-recall/references/real-second-machine-protocol.md`。
 
@@ -69,22 +69,54 @@ embed_skip: true                            # required when no embedding is reac
 
 **Principle: 归属定根, 语义定叶, 写语义唯一.** Classification comes from the slug namespace — one page has exactly one home and one write semantics. `type` is uniform `note`; retrieval is routed by `tags`.
 
-### Six namespaces
+### Dimensional model (five orthogonal axes)
+
+Slug and tag together encode five axes. New types must answer all four placement questions: **who writes (skill), write semantics (derived from temporal form), routing tag (consumer), injection behavior**.
+
+| Axis | Question | Encoded by |
+|---|---|---|
+| **Scope (归属)** | Belongs to which project / domain / workbench? | slug root (`project/`, `knowledge/`, `profile/`, `assets/`, `records/`) |
+| **Epistemic form (认知形态)** | Working / episodic / semantic / index / procedural? | slug leaf + write semantics; fuzzy cases use `kind:*` tag |
+| **Temporal validity (时效)** | Current-only / permanent trace / periodic projection? | implied by form — overwrite vs append-only vs dated slug |
+| **Maturity (成熟度)** | Active / provisional / settled / superseded / archived? | `status:*` tag (body never rewritten) |
+| **Provenance (出处)** | Session vs cron flywheel leg; which harness? | `source:session` / `source:cron` tag + frontmatter `source:` |
+
+**Placement rules:**
+- slug = scope × form (归属定根、形态定叶)
+- tag = routing (retrieval intent) + maturity + provenance
+- write semantics = f(temporal form) — **never chosen independently**
+- Knowledge **domain** (what it's about) and **kind** (how to use it) are orthogonal — e.g. `knowledge/security/oauth-lifetime` with `kind:claim`, not `knowledge/facts/security/...`
+
+### Namespaces
 
 | Namespace | Write semantics | Content | Example |
 |---|---|---|---|
 | `project/<id>/state` | fixed slug **overwrite** | project status card: 是什么·到哪了·下一步·执行层指针·相关项目 | `project/jspace/state` |
-| `project/<id>/decisions/<主题>` | **append-only, immutable** | project decision: 决定+理由+日期+关联 | `project/jspace/decisions/不封装gbrain` |
-| `project/<id>/lessons/<主题>` | **append-only, immutable** | project-specific lesson / reusable point | `project/jspace/lessons/中文slug的教训` |
-| `knowledge/<域>/<主题>` | **append-only, immutable** | cross-project reusable knowledge (域 = generic knowledge domain, no project name) | `knowledge/governance/记忆积累全局规则` |
+| `project/<id>/decisions/<主题>` | **append-only, immutable body** | project decision: 决定+理由+日期+关联 | `project/jspace/decisions/不封装gbrain` |
+| `project/<id>/lessons/<主题>` | **append-only, immutable body** | project-specific lesson / reusable point | `project/jspace/lessons/中文slug的教训` |
+| `knowledge/<域>/<主题>` | **append-only, immutable body** | cross-project reusable knowledge (域 = generic knowledge domain, no project name) | `knowledge/governance/记忆积累全局规则` |
 | `assets/<项目id\|领域>/<语义名>` | overwrite / bump `-vN` | asset pointer page (file body stays in the asset layer) | `assets/tiyanying-52/回访登记` |
+| `profile/<主题>` | fixed slug **overwrite** | workbench-level preference / collaboration convention (not owned by any project) | `profile/沟通偏好` |
 | `records/consolidate\|retro/<date>` | dated slug, same-week overwrite | periodic snapshot / retro — the **time projection** of the other layers | `records/retro/2026-08-10` |
+| `records/project/<id>/<date>-<主题>` | **append-only, immutable body** | sparse project event (milestone / incident / scope change — not session log) | `records/project/acme/2026-08-10-storage-incident` |
 
-### Three boundary judgments
+**On-demand (not yet authorized):** `entity/<类型>/<名称>` — long-lived entity cards (partner, external system). Open only after a third real "nowhere to put this" case; until then, entity facts go to `knowledge/<域>/` with `kind:claim`.
+
+### Three boundary judgments (+ two extensions)
 
 1. **Belongs to a project** — names a project, changes it, or decides for it → `project/<id>/`. Code projects use the repo ascii slug (`project/wms/state`); business projects use the registered ascii id (`tiyanying-52`). Domain/technical topics never own a `project/` id.
 2. **Promotes to global** — reusable across projects → `knowledge/<域>/<主题>` (域 organizes, never carries a project name). A principle-level red line is knowledge under a governance domain.
 3. **Execution detail never enters gbrain** — task lists / iterations / bugs stay in the project's own framework (Trellis etc.); the state card carries only an **execution-layer pointer** field pointing at that framework, never copying its content.
+4. **Workbench preference, not project knowledge** — collaboration taste / default formats / "how I like reports" → `profile/<主题>` (overwrite). Do **not** put these in `knowledge/` — that namespace is append-only and write semantics would conflict.
+5. **Sparse project history, not state bloat** — a milestone, incident, or scope change that future sessions may need to explain "why it became this way" → `records/project/<id>/<date>-<主题>` (append). Ordinary progress and short-term todos stay in state; weekly consolidate is a summary, not a substitute for sparse events.
+
+**Decision vs lesson vs event:**
+- **Decision** — alternatives were considered and one path was committed → `decisions/`
+- **Lesson** — learned from reality without a formal choice among options → `lessons/` (or `knowledge/` if cross-project)
+- **Event** — needs audit trail / timeline / "what happened when" → `records/project/<id>/...`
+- **Mistake is not a top-level type** — a one-off error → event at most; a reusable pattern → lesson written as "under condition X, doing Y causes Z; use W instead" with `kind:pitfall` or `kind:failure-mode`
+
+**Project lesson vs cross-project knowledge:** when uncertain, write `project/<id>/lessons/` first. Promote to `knowledge/<域>/` only when a **second project actually reuses** the lesson — not when it merely "looks general".
 
 ### State card schema
 
@@ -117,6 +149,71 @@ source: <harness|skill>
 
 Update = `gbrain put project/<id>/state` overwrites the same slug, never a new page.
 
+**Before overwriting state:** if removed information may later explain "why it became this way", write a `decisions/` or `records/project/` page first, then overwrite state.
+
+### Profile card schema
+
+```markdown
+---
+type: note
+project: jspace                              # governance pages use a knowledge domain id
+tags: [profile]
+source: <harness|skill>
+---
+
+# <主题>
+
+… current preference / convention (overwrite on change) …
+```
+
+Update = `gbrain put profile/<主题>` overwrites the same slug. Session injection treats `profile` like `project` state cards — "always present" working memory, not query-on-demand semantic memory.
+
+### Epistemic kind tags (orthogonal to routing tags)
+
+On `decisions/`, `lessons/`, and `knowledge/` pages, add exactly one `kind:*` tag when the form is not obvious from slug alone. Coexists with routing tag `[knowledge]`:
+
+| kind tag | Meaning | Typical content |
+|---|---|---|
+| `kind:principle` | red line / norm — must / must-not | governance rules |
+| `kind:pitfall` | anti-pattern — don't do X because Y | distilled incident |
+| `kind:howto` | verified recipe — do X effectively | pre-skill procedure index |
+| `kind:claim` | factual assertion about the world | terms, definitions, stable facts |
+| `kind:heuristic` | usually works, exceptions allowed | rules of thumb |
+| `kind:failure-mode` | repeatable cause→effect risk pattern | causal chain |
+| `kind:procedure` | executable method index (body lives in runbook/skill) | pointer + summary only |
+
+**Procedural knowledge:** canonical steps belong in skill/runbook (third flywheel). gbrain stores **why** the procedure exists (decision trace) + pointer — never duplicate skill body in a knowledge page.
+
+### Maturity / status tags (lifecycle shell)
+
+Append-only pages: **body is immutable**; lifecycle metadata may be updated by **appending tags only** (never rewrite body to "fix" old knowledge).
+
+| status tag | Meaning | Default retrieval |
+|---|---|---|
+| *(none)* | active — treat as current | include |
+| `status:provisional` | active but not yet verified | return with uncertainty marker |
+| `status:settled` | accepted default basis | prefer in Q&A |
+| `status:superseded` | replaced by another page | exclude; follow `Supersedes:` wikilink in replacement |
+| `status:deprecated` | should not be used; may have no replacement | exclude |
+| `status:archived` | project ended or intentionally retired | exclude from injection; `gbrain get` still works |
+
+Pages without a status tag = **active** (same precedent as pre-B4 pages without provenance tag — no backfill required).
+
+**Optional frontmatter (sparse use):**
+- `as_of: YYYY-MM-DD` — time-sensitive claims (pricing, config, personnel)
+- Body wikilink `Supersedes: [[old/slug]]` on the **replacement** page when overturning a decision or knowledge page
+
+**Supersession protocol** (decisions / knowledge):
+1. Write **new page** with body containing `Supersedes: [[old/slug]]`
+2. Append `status:superseded` tag to old page (body untouched)
+3. Update state card's "current decisions" pointer to the new page
+
+Promotion ladder (explicit, never automatic):
+```
+session fact → state (candidate) → project decisions/lessons/events → knowledge/<域>/ → skill/template (leaves gbrain)
+```
+Promotion = copy-and-distill with wikilink evidence chain — never move/delete the source page.
+
 ### Retrieval routing (type-normalized)
 
 `gbrain list` filters by `--type` / `--tag` only (no slug-prefix filter). With `type` uniform, route by `tags`:
@@ -124,12 +221,15 @@ Update = `gbrain put project/<id>/state` overwrites the same slug, never a new p
 | tags | Pages | Retrieval use |
 |---|---|---|
 | `tags: [project]` | `project/<id>/state` | project injection / overview (`list --tag project`) |
+| `tags: [profile]` | `profile/<主题>` | workbench preference injection (with state cards) |
 | `tags: [knowledge]` | `project/<id>/lessons`, `project/<id>/decisions`, `knowledge/` | stable-knowledge Q&A |
 | `tags: [asset]` | `assets/` pointer pages | asset lookup |
 | `tags: [weekly]` | `records/consolidate\|retro/<date>` snapshots | weekly/retro; excluded from recent injection |
 
 - Snapshot pages keep the existing `tags: [weekly]` mitigation (dated pages must not mix into recent injection); consolidate additionally keeps `consolidate`.
-- Recent injection: `gbrain list --type note --tag project -n 50` (state cards), excluding `weekly`. Q&A: `--tag knowledge` / `--tag asset`.
+- Recent injection: `gbrain list --type note --tag project -n 50` (state cards) **and** `--tag profile` (preference cards), excluding `weekly` and `status:archived`. Q&A: `--tag knowledge` / `--tag asset`.
+- On Q&A hit for `decisions/` / `knowledge/`: if top-1 has `status:superseded`, follow `Supersedes:` wikilink to the current page before answering.
+- `kind:principle` pages are the only semantic-memory exception for injection — only when count stays tiny (governance red lines); if principles exceed one screen, retro should flag inflation.
 
 ### Provenance tag (which flywheel leg wrote it) — B4
 
@@ -150,12 +250,13 @@ Every write ALSO carries exactly one **provenance tag**, orthogonal to the routi
 
 Two write patterns; never mix them:
 
-1. **Stateful memory — fixed slug, overwrite.** Progress, todos, and current decisions write to the project state card (`project/<id>/state`). Updating = `gbrain put` the same slug again, not a new page. Keeps "current state" retrievable as one page instead of a noisy history.
-2. **Durable knowledge — append-only.** New lessons, decisions, and knowledge pages are new pages. Never overwrite a durable page to reflect today; write a new page or a superseding decision.
+1. **Stateful memory — fixed slug, overwrite.** Progress, todos, and current snapshot write to the project state card (`project/<id>/state`) or workbench profile (`profile/<主题>`). Updating = `gbrain put` the same slug again, not a new page. Keeps "current state" retrievable as one page instead of a noisy history.
+2. **Durable knowledge — append-only body.** New lessons, decisions, knowledge, and project event pages are new pages. Never overwrite a durable page's body to reflect today; write a new page or use the supersession protocol.
 
-- Every page carries `project` + `tags`; `source` marks provenance.
+- Every page carries `project` + `tags`; `source` marks harness provenance.
 - Never invent a slug — derive it from project/topic + a stable identifier (ascii project id).
 - Promotion: when a state fact becomes durable (a lesson, a settled decision), write a `project/<id>/lessons/<主题>` or `project/<id>/decisions/<主题>` page; don't overload the state card.
+- **Decay is retrieval-side, not deletion.** Mark candidates in retro/consolidate; after explicit confirmation, append `status:archived`. Archived pages exit injection and default Q&A but remain reachable via `gbrain get`.
 
 ### Dated memory record (periodic snapshot) — M4 authorized exception
 
