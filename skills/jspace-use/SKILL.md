@@ -253,6 +253,7 @@ gbrain put project/<id>/state < <终态正文>
 - 无头执行运维(账号/配额/失败可见性)→ `~/.agents/skills/jspace-use/references/headless-ops.md`
 - 首次启用 golden run → `~/.agents/skills/jspace-use/references/example-first-use.md`
 - 使用里程验证(retro 无头首跑 / 两周写回取证 / 三飞轮清单)→ `~/.agents/skills/jspace-use/references/usage-mileage.md`
+- 证据台账可复制模板 → `~/.agents/skills/jspace-use/references/usage-mileage-ledger-template.md`（复制到 `<wb>/.jspace/usage-mileage-ledger.md` 填写,勿提交 git）
 
 ## 自检(做完跑这条)
 
@@ -270,5 +271,6 @@ jq .jspace/hub.json           # 合法 JSON
 - `~/.agents/skills/jspace-use/references/headless-ops.md` — 无头运维(账号/配额/失败可见性)
 - `~/.agents/skills/jspace-use/references/example-first-use.md` — 首次启用 golden run(S5 产出)
 - `~/.agents/skills/jspace-use/references/usage-mileage.md` — 使用里程协议(三飞轮关闭条件 + 取证台账 + 禁伪造红线)
+- `~/.agents/skills/jspace-use/references/usage-mileage-ledger-template.md` — M7 证据台账可复制模板(本机实例勿回填仓库)
 
 > **Note**:官方 skill 只随 `jspace init` 物化;既有工作台经 `jspace workspace upgrade` 刷新(未修改的模板/skill 随升级更新,本地改动保留为 `skip`);`jspace init --force .` 对已有工作台会拒绝(用 upgrade,不用 init)。
