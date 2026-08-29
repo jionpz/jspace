@@ -69,6 +69,10 @@ embed_skip: true                            # required when no embedding is reac
 
 **Principle: 归属定根, 语义定叶, 写语义唯一.** Classification comes from the slug namespace — one page has exactly one home and one write semantics. `type` is uniform `note`; retrieval is routed by `tags`.
 
+### Taxonomy freeze (M7)
+
+**Frozen until M7 usage-mileage closes** (`~/.agents/skills/jspace-use/references/usage-mileage.md`): do **not** add new slug roots or routing tags without a Trellis task and real「第三次无处安放」evidence. Allowed without reopening taxonomy: discipline fixes, enforcement code (e.g. injection filters), retro checks, example drift fixes. `entity/<类型>/<名称>` remains on-demand only. Promotion to new `kind:*` values requires a consumer (injection query, retro count, or recall filter).
+
 ### Dimensional model (five orthogonal axes)
 
 Slug and tag together encode five axes. New types must answer all four placement questions: **who writes (skill), write semantics (derived from temporal form), routing tag (consumer), injection behavior**.

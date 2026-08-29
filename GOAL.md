@@ -103,6 +103,7 @@
   - **资产腿**：近两周至少一次「inbox 或会话入库 → 本体归位 → gbrain asset 指针」闭环可指认；或显式 deferred 且在 retro / doctor 可见。
   - **非目标**：不自动 session-end 写 gbrain；不用 CI 假数据关闭本里程碑；工程可观测（`memory.writeback_habit_unverified` 等 info 级门禁——doctor 不查 gbrain、量不到写回率）只提示自查，**不替代**本条要求的真实计数。
   - **FEBEL 工程落点（2026-08-28，PR [#28](https://github.com/jionpz/jspace/pull/28)）**：E → doctor info `memory.writeback_habit_unverified`（只提示自查，不量写回率）；B → `docs/PLATFORMS.md` 真机验证台账（#5 四条 E/A 闭合，H 型挂账）；Eco → `skills/memory-recall/references/real-second-machine-protocol.md` + GOAL #1 `eco.*` 回写槽；L → 本条协议与证据台账（`usage-mileage.md` R2/R3）。
+  - **记忆分类学冻结（2026-08-29，PR [#32](https://github.com/jionpz/jspace/pull/32) + [#33](https://github.com/jionpz/jspace/pull/33)）**：五轴模型 + 命名空间/tag 词表 + archived 注入过滤 + recall 路由修正已发行；**M7 关闭前不再扩 taxonomy**（见 `gbrain.md`「Taxonomy freeze」）。下一阶段的 ROI 在真实使用（写回习惯 / retro 裁决 / 资产闭环），不在新类型设计。
   - **待真实使用验证（尚未填数，不写假数字）**：① retro 无头首跑证据（日期 / 页 slug / log 路径：待验证）；② 两周 `source:session`（W1 / W2 计数：待验证）；③ 资产闭环或诚实 deferred（待验证）。三项各自填入真实证据前，本里程碑保持开放。
 - 顺序理由：cron 的第一批任务操作资产层，故 M2 在 M3 前；里程碑随真实使用可重排，重排时更新本文件。
 

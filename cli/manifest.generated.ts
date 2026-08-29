@@ -19,7 +19,7 @@ export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   { path: "skills/jspace-use/SKILL.md", sha256: "561fc52692bedb5016acd097094d1c284314f21f7a436d945bcde9b922aee6e0", ownership: "seed" },
   { path: "skills/jspace-use/agents/openai.yaml", sha256: "bcfce9990e7f8e1507e729c6c6afe2d93a61f20c34e2d78bb8caad6e3aa0a05c", ownership: "seed" },
   { path: "skills/jspace-use/references/example-first-use.md", sha256: "6aa614714e40fb60b2211f7df4182710aa630319baa8f3ce854cff9a52ce5888", ownership: "seed" },
-  { path: "skills/jspace-use/references/gbrain.md", sha256: "d1b2ca1f223e20d82f8835ef79f29c5ffb322c2ed376932a66ecc35003c3062d", ownership: "seed" },
+  { path: "skills/jspace-use/references/gbrain.md", sha256: "629808c7f807fda05d920768fbcce5f8e89d10493e1061671f0848be840a8327", ownership: "seed" },
   { path: "skills/jspace-use/references/harness-claude.md", sha256: "c38aa4164abcc876144c5188937ae481ee0523c0957125acdbd39a14dfac0e73", ownership: "seed" },
   { path: "skills/jspace-use/references/harness-cursor.md", sha256: "24f8b53cd1956bde0921b5a86969b0319519a549d412b16b9913ac36ba5bd961", ownership: "seed" },
   { path: "skills/jspace-use/references/harness-grok.md", sha256: "c6ee0624be3cccf2a26b4e8e433b87abb23b04d08217fff92c674c71bfa2b798", ownership: "seed" },
