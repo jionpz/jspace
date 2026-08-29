@@ -989,3 +989,40 @@ test("writeback habit gate never fails doctor and is verbose-only in human outpu
   const verbose = doctorWorkbench(root, stubDeps(), true);
   expect(verbose.lines.some((l) => l.includes("source:session"))).toBe(true);
 });
+
+const LEDGER = "usage.mileage_ledger_missing";
+
+test("no ledger template -> no usage mileage ledger hint", () => {
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain(LEDGER);
+});
+
+test("ledger template present but instance missing -> usage.mileage_ledger_missing (info)", () => {
+  const templatePath = join(root, ".jspace", "skills", "jspace-use", "references", "usage-mileage-ledger-template.md");
+  mkdirSync(join(templatePath, ".."), { recursive: true });
+  writeFileSync(templatePath, "# template\n");
+  const r = doctorWorkbench(root, stubDeps(), true);
+  expect(codes(r)).toContain(LEDGER);
+  const d = (r.data as { diagnostics: { code: string; severity: string; path: string }[] }).diagnostics.find((x) => x.code === LEDGER);
+  expect(d?.severity).toBe("info");
+  expect(d?.path).toBe("usage.mileage");
+});
+
+test("ledger instance present -> no usage mileage ledger hint", () => {
+  const templatePath = join(root, ".jspace", "skills", "jspace-use", "references", "usage-mileage-ledger-template.md");
+  const instancePath = join(root, ".jspace", "usage-mileage-ledger.md");
+  mkdirSync(join(templatePath, ".."), { recursive: true });
+  writeFileSync(templatePath, "# template\n");
+  writeFileSync(instancePath, "# instance\n");
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain(LEDGER);
+});
+
+test("usage mileage ledger hint never fails doctor", () => {
+  const templatePath = join(root, ".jspace", "skills", "jspace-use", "references", "usage-mileage-ledger-template.md");
+  mkdirSync(join(templatePath, ".."), { recursive: true });
+  writeFileSync(templatePath, "# template\n");
+  const quiet = doctorWorkbench(root, stubDeps());
+  expect(quiet.exitCode ?? 0).toBe(0);
+  expect(quiet.lines.some((l) => l.includes("usage-mileage-ledger"))).toBe(false);
+  const verbose = doctorWorkbench(root, stubDeps(), true);
+  expect(verbose.lines.some((l) => l.includes("usage-mileage-ledger"))).toBe(true);
+});

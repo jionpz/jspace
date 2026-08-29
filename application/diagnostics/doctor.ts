@@ -16,6 +16,7 @@ import { checkGBrain, checkCursorSkills } from "./checks/gbrain.ts";
 import { checkHarness } from "./checks/harness.ts";
 import { checkSessionStartHooks } from "./checks/session-hooks.ts";
 import { checkWritebackHabit } from "./checks/writeback.ts";
+import { checkUsageMileageLedger } from "./checks/usage-mileage.ts";
 import type { CronHealthDeps } from "./deps.ts";
 
 export type { CronHealthDeps, CronLike } from "./deps.ts";
@@ -52,6 +53,7 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps, verbose = fa
     ...checkHarness(root, cron),
     ...checkSessionStartHooks(root, cron),
     ...checkWritebackHabit(root),
+    ...checkUsageMileageLedger(root),
   ];
 
   const errors = diags.filter((d) => d.severity === "error").map((d) => d.message);
