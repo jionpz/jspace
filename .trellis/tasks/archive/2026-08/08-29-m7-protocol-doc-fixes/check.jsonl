@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Quality Check index for tsc/test/gen-assets gates"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Over-claiming automation; generated assets must match; no real-env mutation in tests"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Hook degrade-to-empty vs silent fake success"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Import boundary: application must not import cli"}

@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Layer map and quality gates for CLI/application work"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Keep collector in application/context; no cli import from application"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Hook must never block; tests use stubs not real gbrain; gen-assets freshness"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Session-start degrades to empty list on gbrain failure; exit 0"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Reuse parseNoteTags/isArchivedGbrainNote; do not invent a third collector abstraction"}
