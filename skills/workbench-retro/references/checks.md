@@ -177,6 +177,26 @@ rg -n '无法判定|跳过|模糊' <filehub>/.jspace-logs/inbox-batch.md | tail 
 
 ---
 
+## 检查 6b · 取代链健康(带毒语料)
+
+两条互相矛盾的 decision 同时 active,比丢一页记忆更危险——检索会给出**自信的错误答案**。
+
+**证据**
+```bash
+gbrain list --type note --tag knowledge -n 30    # 抽样 decisions/lessons/knowledge 页
+gbrain get project/<id>/decisions/<主题>          # 对本周更新的决策页:正文是否含 Supersedes:
+# 目视:同一项目是否存在「主题相近」的两页 decisions 都无 status:superseded
+```
+
+**判读**
+- 推翻决策时只写了新页、旧页未追加 `status:superseded` → **需你决策**,点名 slug,按 gbrain.md 取代协议三步补打。
+- 沿 `Supersedes:` 链走 >2 跳仍无 settled 页 → **需你决策**,链可能未完成。
+- 本周 `status:superseded` 新增 ≥1 且成对出现 Supersedes 回链 → 正常代谢,记 info。
+
+**分级**:取代链失守 → 需你决策(优先于一般规则进化候选)。
+
+---
+
 ## 报告结构(写 gbrain 页与呈现共用)
 
 ```markdown

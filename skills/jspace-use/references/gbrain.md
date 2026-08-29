@@ -228,6 +228,7 @@ Promotion = copy-and-distill with wikilink evidence chain — never move/delete 
 
 - Snapshot pages keep the existing `tags: [weekly]` mitigation (dated pages must not mix into recent injection); consolidate additionally keeps `consolidate`.
 - Recent injection: `gbrain list --type note --tag project -n 50` (state cards) **and** `--tag profile` (preference cards), excluding `weekly` and `status:archived`. Q&A: `--tag knowledge` / `--tag asset`.
+- **CLI enforcement (session-start)**: `jspace context session-start` → `collectActiveProjects()` skips state cards tagged `status:archived` and projects with `hub.json` `status: archived`; skipped rows do not consume the max-8 budget.
 - On Q&A hit for `decisions/` / `knowledge/`: if top-1 has `status:superseded`, follow `Supersedes:` wikilink to the current page before answering.
 - `kind:principle` pages are the only semantic-memory exception for injection — only when count stays tiny (governance red lines); if principles exceed one screen, retro should flag inflation.
 

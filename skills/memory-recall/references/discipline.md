@@ -14,6 +14,16 @@
 - **负对照**：候选页外的无关页不得排到第一。
 - 代价低时做；存疑/校准场景必做。
 
+### 2b. 周快照劫持（query top-1 路由）
+
+`weekly` tag 只隔离 **session 注入**,不隔离 `gbrain query`。语料 ≥200 页后,`records/consolidate/*` 常劫持「最近/上周/进展」类 query。
+
+**处置（必做）**:
+1. top-1 slug 匹配 `records/consolidate/*` 或 `records/retro/*` → **不得**把快照当答案。
+2. `gbrain get` 读快照正文,找 wikilink / 项目名 / 明确事实指针。
+3. 跳到源页(`project/*/state`、`decisions/`、`knowledge/`、`assets/`)再作答;答案引用**源 slug**,可注明「经由周快照 `<date>` 路由」。
+4. 快照无明确指针 → 换更具体 query,或 `gbrain list --tag project` / `--tag knowledge` 缩小面后重问。
+
 ## 3. 指针断言链（四连过才算命中）
 
 | 步 | 断言 | 命令 |
@@ -26,10 +36,11 @@
 - Pointer 是**绝对路径**（本机真理，按机维护）；换机/导入场景按 §8 用 `rel_path` 重解析。
 - 四连全过才算该用例命中；任一断 → 回步骤 5 校准。
 
-### 3b. 取代检查（decisions / knowledge 命中后）
+### 3b. 取代检查（decisions / knowledge 命中后 — 主流程必做）
 
 - `gbrain get <slug>` 后检查 tags 是否含 `status:superseded`。
 - 若已 superseded → 读正文 `Supersedes: [[...]]` wikilink，跟随到现行页再作答；答案标注「该条已被 X 取代」。
+- 沿链走 ≤2 跳仍无 settled 页 → 上报用户「取代链未完成」,不得猜测。
 - 若含 `status:archived` 或 `status:deprecated` → 默认不作为确定依据；仅在用户明确问历史时引用。
 - 含 `status:provisional` → 可返回但须标注不确定。
 

@@ -5,6 +5,8 @@ import type { GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
 import {
   collectActiveProjects,
   summarizeStateCard,
+  isArchivedGbrainNote,
+  parseNoteTags,
   MAX_ACTIVE_PROJECTS,
 } from "./project-states.ts";
 
@@ -68,6 +70,54 @@ test("collectActiveProjects: caps at MAX_ACTIVE_PROJECTS", async () => {
   const g = fakeGbrain({ list: async () => ({ ok: true, rows }) });
   const r = await collectActiveProjects(g);
   expect(r).toHaveLength(MAX_ACTIVE_PROJECTS);
+});
+
+test("collectActiveProjects: skips status:archived and backfills slots", async () => {
+  const archived = `---
+type: note
+project: old
+tags: [project, status:archived]
+---
+# old
+## 现在到哪了
+不应注入。
+`;
+  const g = fakeGbrain({
+    list: async () => ({
+      ok: true,
+      rows: [
+        { slug: "project/old/state", updatedAt: "2026-08-10" },
+        { slug: "project/new/state", updatedAt: "2026-08-09" },
+      ],
+    }),
+    get: async (slug) => {
+      if (slug === "project/old/state") return { ok: true, content: archived };
+      if (slug === "project/new/state") return { ok: true, content: CARD };
+      return { ok: false };
+    },
+  });
+  const r = await collectActiveProjects(g);
+  expect(r).toHaveLength(1);
+  expect(r[0].id).toBe("new");
+});
+
+test("collectActiveProjects: skips hub archived project ids", async () => {
+  const g = fakeGbrain({
+    list: async () => ({
+      ok: true,
+      rows: [{ slug: "project/paused/state", updatedAt: "2026-08-10" }],
+    }),
+    get: async () => ({ ok: true, content: CARD }),
+  });
+  const r = await collectActiveProjects(g, { excludeProjectIds: new Set(["paused"]) });
+  expect(r).toEqual([]);
+});
+
+test("parseNoteTags / isArchivedGbrainNote", () => {
+  expect(parseNoteTags(CARD)).toEqual(["project"]);
+  const tagged = CARD.replace("tags: [project]", "tags: [project, status:archived]");
+  expect(isArchivedGbrainNote(tagged)).toBe(true);
+  expect(isArchivedGbrainNote(CARD)).toBe(false);
 });
 
 test("collectActiveProjects: get failure still yields the id (recency is the signal)", async () => {

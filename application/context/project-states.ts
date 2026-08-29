@@ -22,11 +22,40 @@ export interface ProjectState {
   updatedAt: string;
 }
 
+export interface CollectActiveProjectsOptions {
+  /** hub.json projects with status archived — excluded even when the state card
+   *  lacks a status:archived tag (registry truth for ended projects). */
+  excludeProjectIds?: ReadonlySet<string>;
+}
+
+/** Parse `tags: [...]` from a gbrain note frontmatter (minimal YAML subset). */
+export function parseNoteTags(body: string): string[] {
+  if (!body.startsWith("---")) return [];
+  const end = body.indexOf("\n---", 3);
+  if (end < 0) return [];
+  const fm = body.slice(3, end);
+  const m = fm.match(/^tags:\s*\[([^\]]*)\]/m);
+  if (!m) return [];
+  return m[1].split(",").map((t) => t.trim()).filter(Boolean);
+}
+
+/** True when the note carries `status:archived` (retrieval-side lifecycle tag). */
+export function isArchivedGbrainNote(body: string): boolean {
+  return parseNoteTags(body).includes("status:archived");
+}
+
 /** Collect active project state cards. Never throws; any failure (gbrain
  *  missing / timeout / lock held) resolves to an empty list. The caller renders
  *  the project line only when non-empty — no noise when gbrain is unavailable.
+ *
+ *  Excludes: hub archived project ids; state cards tagged status:archived.
+ *  Skipped rows do not consume MAX_ACTIVE_PROJECTS slots — the next eligible
+ *  card fills the budget (PR #33 / fable P1 enforcement).
  */
-export async function collectActiveProjects(gbrain: GbrainDeps): Promise<ProjectState[]> {
+export async function collectActiveProjects(
+  gbrain: GbrainDeps,
+  opts: CollectActiveProjectsOptions = {},
+): Promise<ProjectState[]> {
   const listed = await gbrain.list({ type: "note", tag: "project", limit: 100 });
   if (!listed.ok || !listed.rows) return [];
 
@@ -37,9 +66,12 @@ export async function collectActiveProjects(gbrain: GbrainDeps): Promise<Project
   if (stateRows.length === 0) return [];
 
   const out: ProjectState[] = [];
-  for (const row of stateRows.slice(0, MAX_ACTIVE_PROJECTS)) {
+  for (const row of stateRows) {
+    if (out.length >= MAX_ACTIVE_PROJECTS) break;
     const id = row.slug.slice("project/".length, -"/state".length);
+    if (opts.excludeProjectIds?.has(id)) continue;
     const got = await gbrain.get(row.slug);
+    if (got.ok && got.content && isArchivedGbrainNote(got.content)) continue;
     const summary = got.ok && got.content ? summarizeStateCard(got.content) : "";
     out.push({ id, summary, updatedAt: row.updatedAt });
   }
