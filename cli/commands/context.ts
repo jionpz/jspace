@@ -13,6 +13,7 @@ import type { CommandSpec, CmdContext } from "../../application/commands/command
 import { collectWorkbenchState } from "../../application/context/collect.ts";
 import { collectActiveProjects, PROJECT_COLLECT_TIMEOUT_MS } from "../../application/context/project-states.ts";
 import { realGbrain } from "../../adapters/gbrain/gbrain.ts";
+import { loadHub } from "../../application/workspace/state.ts";
 import { gate, gatePre, promptHasSkipKeyword } from "../../application/context/gate.ts";
 import {
   renderSessionStart,
@@ -60,7 +61,17 @@ const sessionStartSpec: CommandSpec = {
       // R3: project state cards come from gbrain through the async port with a
       // short per-call timeout. A stalled gbrain resolves empty (never blocks
       // the hook) — the sync collectors above are unaffected.
-      state.projects = await collectActiveProjects(realGbrain(undefined, PROJECT_COLLECT_TIMEOUT_MS));
+      let excludeProjectIds: Set<string> | undefined;
+      try {
+        const hub = loadHub(g.root);
+        const archived = hub.projects.filter((p) => p.status === "archived").map((p) => p.id);
+        if (archived.length > 0) excludeProjectIds = new Set(archived);
+      } catch {
+        // hub unreadable — inject without registry filter; gbrain status:archived still applies
+      }
+      state.projects = await collectActiveProjects(realGbrain(undefined, PROJECT_COLLECT_TIMEOUT_MS), {
+        excludeProjectIds,
+      });
       const text = renderSessionStart(state, g.root);
       // Best-effort briefing timestamp: never blocks the hook if the write fails.
       try {

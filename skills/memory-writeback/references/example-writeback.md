@@ -10,7 +10,7 @@
 
 ### 1. 扫描:本会话有无持久事实
 - 决策:存储层定 PGLite(从「待定」→「已定」)→ **决策**
-- 教训:迁移脚本要幂等(可复用要点)→ **知识**(晋升信号:已提炼成教训)
+- 教训:迁移脚本要幂等(可复用要点)→ **项目经验**(晋升信号:已提炼成教训)
 - 进展:schema 定稿 / 下一步接线 → **状态**
 
 → 有持久事实,继续。(若本会话只是一次性操作或闲聊 → **静默结束**:不写页、不提示。)
@@ -20,8 +20,8 @@
 | 事实 | 类别 | 目标 slug | 写语义 |
 |---|---|---|---|
 | 进展 / 下一步 | 状态 | `project/acme/state` | 固定 slug **覆盖** |
-| 迁移幂等教训 | 知识 | `knowledge/acme/migration-idempotency` | **append-only 新页** |
-| 存储层选型 | 决策 | `decision/acme-storage-choice` | 固定 slug 覆盖 |
+| 迁移幂等教训 | 项目经验 | `project/acme/lessons/migration-idempotency` | **append-only 新页** |
+| 存储层选型 | 项目决策 | `project/acme/decisions/storage-choice` | **append-only 新页** |
 
 - project id `acme` 从 `hub.json` + 域 README + 既有 state 页确认(**不臆造**)。
 - 动手前先简述:将写什么 · 写哪 · 为何。
@@ -39,7 +39,7 @@ tags: [project, source:session]
 ## 进展 / 下一步
 - schema 定稿(存储层 PGLite);下一步 CLI 与 schema 接线。
 ## 当前决策
-- 存储层 PGLite(详见 `decision/acme-storage-choice`)。
+- 存储层 PGLite(详见 `project/acme/decisions/storage-choice`)。
 ```
 ```bash
 gbrain put project/acme/state < state.md
@@ -53,7 +53,7 @@ gbrain put project/acme/state < state.md
 type: note
 source: claude
 project: acme
-tags: [knowledge, lesson, source:session]
+tags: [knowledge, kind:pitfall, source:session]
 ---
 # 迁移脚本必须幂等
 重跑会重复插入 → 数据翻倍。写入前按幂等键 upsert/去重,重跑收敛同结果。
@@ -70,7 +70,7 @@ gbrain put project/acme/lessons/migration-idempotency < lesson.md
 type: note
 source: claude
 project: acme
-tags: [knowledge, decision, source:session]
+tags: [knowledge, source:session]
 ---
 # 存储层选型:PGLite
 存储层用 PGLite,不用 Postgres。理由:本地零依赖、随工作台物化,规模可控。

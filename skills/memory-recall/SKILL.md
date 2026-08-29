@@ -26,6 +26,7 @@ triggers:
 |---|---|---|
 |embedding 可达性(`gbrain models doctor --json`)| ok / 不可达 | `gbrain query`(hybrid) / `gbrain search`(关键词,**固定提示不得静默**) |
 | top-1 校验 | 稳定 / 存疑 | 作答 / 做变体查询 + 负对照 |
+| top-1 是周快照 / 已取代页 | 是 | 见步骤 2–3 路由修正,不得直接答快照/旧决策 |
 | 指针断言链(四连) | 全过 / 任一断 | 该用例命中 / 回校准 |
 | 未命中诊断(五类) | slug / tags / embedding 配置 / 措辞 / 纪律缺口 | 仅纪律缺口才 REPO+刷 JWorkspace;配置/措辞类只记录(ROI 护栏) |
 | 校准终止 | <3 轮稳定 / 3 轮未过 | 通过 / 显式终态:接受降级记验收文档 / 上报用户 |
@@ -44,10 +45,15 @@ gbrain models doctor --json        # 确认 embedding_reachability(仅确认,不
 ## 步骤(主流程骨架)
 
 1. **语义查询**:`gbrain query "<问题>"`;embedding 不可达 → `gbrain search` + 固定提示。
-2. **校验(防假阳性)**:确认 top-1;代价低时做变体查询(换说法,候选页应保持 top-1)+ 负对照(无关页不反超)。
-3. **指针断言链(四连过才算命中)**:`gbrain get` 取 Pointer → `test -f` → grep/打开找到那个数 → top-1 slug 一致。
-4. **作答并引用出处**:答案 + 文件**绝对路径** + gbrain slug(可点开、可复检)。
-5. **未命中 → 有终止校准**:按诊断五类处置,重跑 ≤3 轮或显式终态。
+2. **路由修正(必做,在作答前)** — top-1 slug 判定:
+   - **`records/consolidate/*` 或 `records/retro/*`** → 这是周快照/自省投影,**不得直接引用作答**。读正文里的项目/事实指针,`gbrain get` 跳到源页(`project/*/state`、`decisions/`、`knowledge/`、`assets/`),以源页为 canonical 答案;若无明确指针,换更具体 query 重问。
+   - **`decisions/` / `lessons/` / `knowledge/` 且 tags 含 `status:superseded`** → 读正文 `Supersedes: [[...]]`,跟随到现行页再答;答案标注「已被 X 取代」。
+   - **`status:archived` 或 `status:deprecated`** → 默认不作为当前依据;仅用户明确问历史时才引用。
+   - **`status:provisional`** → 可答但须标注不确定。
+3. **校验(防假阳性)**:确认 canonical slug;代价低时做变体查询 + 负对照。
+4. **指针断言链(四连过才算命中)**:`gbrain get` 取 Pointer → `test -f` → grep/打开找到那个数 → query top-1 与 canonical slug 一致(或快照已路由到源页)。
+5. **作答并引用出处**:答案 + 文件**绝对路径** + gbrain slug(可点开、可复检)。
+6. **未命中 → 有终止校准**:按诊断五类处置,重跑 ≤3 轮或显式终态。
 
 ## 按需深入(条件读指针)
 

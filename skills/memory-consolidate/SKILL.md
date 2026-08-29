@@ -24,7 +24,9 @@ triggers:
    - **dated memory record**(gbrain.md 授权的固定-slug 例外):每周**新页**,不是覆盖某个固定 slug。
    - frontmatter:`type: note`、`project: jspace`、`tags: [consolidate, weekly, <来源 tag>]`、`source: <harness>`
    - **来源 tag 按运行模式选**:无头(cron)运行 → `source:cron`;会话内触发 → `source:session`。state 回写(契约 2)同样带这条 tag。它是 `workbench-retro` 检查 1 量化写回率的取证基础,纪律源见 `~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」。
-   - 正文:按域/项目归纳近一周关键事实 + 指针。
+   - 正文:按域/项目归纳近一周关键事实 + 指针;末尾两节(无候选则写「无」):
+     - **晋升候选**:跨项目重复出现的 lessons、可升 knowledge 的条目(只列不动手)
+     - **衰减候选**:state N 周未更新、被新事实矛盾的 knowledge、长 superseded 链(只列不动手,retro 消费)
 2. **state 回写** → 对每个涉项项目 `project/<id>/state`(**固定 slug 覆盖**,更新当前状态)。
 3. **同周幂等**:同一周内重跑覆盖**同一页**,绝不新建第二页。
 

@@ -25,10 +25,12 @@ triggers:
 
 | 事实类别 | 目标 slug | 写语义 |
 |---|---|---|
-| 状态记忆(进展/待办/当前决策) | `project/<id>/state` | 固定 slug **覆盖**,`tags: [project]` |
+| 状态记忆(进展/待办/开放问题) | `project/<id>/state` | 固定 slug **覆盖**,`tags: [project]` |
 | 项目决策(决定+理由) | `project/<id>/decisions/<主题>` | **append-only 新页**(绝不覆盖) |
 | 项目专属经验(踩坑/可复用要点) | `project/<id>/lessons/<主题>` | **append-only 新页**(绝不覆盖) |
 | 跨项目可复用认识 | `knowledge/<域>/<主题>` | **append-only 新页**(绝不覆盖),域=通用知识域(不含项目名) |
+| 工作台偏好/协作约定 | `profile/<主题>` | 固定 slug **覆盖**,`tags: [profile]` |
+| 稀疏项目事件(里程碑/事故) | `records/project/<id>/<date>-<主题>` | **append-only 新页** |
 | 周快照 | — | **转 memory-consolidate**,本 skill 不写 |
 
 | 判断 | 取值 | 动作 |
@@ -46,6 +48,8 @@ gbrain put project/<id>/state < <正文文件>                # 状态:固定 sl
 gbrain put project/<id>/decisions/<主题> < <文件>         # 项目决策:append-only
 gbrain put project/<id>/lessons/<主题> < <文件>           # 项目经验:append-only
 gbrain put knowledge/<域>/<主题> < <文件>                 # 跨项目知识:append-only
+gbrain put profile/<主题> < <正文文件>                          # 工作台偏好:固定 slug 覆盖
+gbrain put records/project/<id>/<date>-<主题> < <文件>       # 稀疏项目事件:append-only
 gbrain get <slug>                                # 验证读回
 jspace pending stage <slug> --content <正文文件> --producer memory-writeback
 jspace pending apply                             # 锁空闲落 live(幂等)
