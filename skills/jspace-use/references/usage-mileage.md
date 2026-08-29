@@ -115,7 +115,7 @@ gbrain list --type note --tag source:cron -n 50      # 定时写入(对照)
 
 ## 证据台账（每台机器各填一份）
 
-放进**本机记录**（推荐:gbrain `records/retro/<date>` 页末尾附节、或工作台 `.jspace/` 下自建 `usage-mileage-ledger.md`——**gitignore、不回填本文件、不写假数字**）。
+放进**本机记录**：工作台 `<wb>/.jspace/usage-mileage-ledger.md`（**gitignore、不回填本文件、不写假数字**）。gbrain `records/retro/<date>` 是当周审计，不是台账替代位置。
 
 完整可复制模板见同目录 **`usage-mileage-ledger-template.md`**（随 `jspace init/upgrade` 物化;填完后的实例只留本机）。
 
@@ -150,9 +150,9 @@ gbrain list --type note --tag source:cron -n 50      # 定时写入(对照)
 | 1 | `jspace workspace upgrade --dir <wb>` | skill / 受管块刷新;`jspace doctor --dir <wb>` 无 error |
 | 2 | 确认 gbrain + embedding | `gbrain models doctor --json` → embedding 可达 |
 | 3 | `jspace gbrain wire --dir <wb>` + 重启 harness | `gbrain check-resolvable` 官方 skill 可达 |
-| 4 | 复制台账模板 | `cp .jspace/skills/jspace-use/references/usage-mileage-ledger-template.md <wb>/.jspace/usage-mileage-ledger.md`(或等价路径) |
+| 4 | 复制台账模板 | `cp .jspace/skills/jspace-use/references/usage-mileage-ledger-template.md <wb>/.jspace/usage-mileage-ledger.md` |
 | 5 | 填台账「机器元数据」节 | 工作台路径 / filehub 根 / harness / 起点日 |
-| 6 | enable 周期任务(显式) | `jspace cron enable memory-consolidate workbench-retro weekly-report inbox-tidy --dir <wb>`(按需 subset) |
+| 6 | enable 周期任务(显式) | `for id in memory-consolidate workbench-retro weekly-report inbox-tidy; do jspace cron enable "$id" --dir <wb>; done`（按需 subset） |
 | 7 | R1 rehearsal | `jspace cron run workbench-retro --dir <wb>` → 合格 retro 页 |
 | 8 | 约定收工习惯 | 会话结束说「收工」→ `memory-writeback`;**提醒 ≠ 写入** |
 | 9 | 记 W0 起点 | R2 计数起点周 = 来源 tag 约定生效后的第一个活动周 |

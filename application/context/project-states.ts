@@ -9,6 +9,10 @@ import type { GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
 /** Max project state cards surfaced in the session-start injection line. */
 export const MAX_ACTIVE_PROJECTS = 8;
 
+/** Max workbench preference cards surfaced in the session-start injection line.
+ *  Independent of MAX_ACTIVE_PROJECTS — profiles must not crowd out projects. */
+export const MAX_ACTIVE_PROFILES = 4;
+
 /** Per-call gbrain budget — short so a stuck gbrain releases the hook fast;
  *  far under the 10s session-start hook cap even with a retry. */
 export const PROJECT_COLLECT_TIMEOUT_MS = 2000;
@@ -26,6 +30,15 @@ export interface CollectActiveProjectsOptions {
   /** hub.json projects with status archived — excluded even when the state card
    *  lacks a status:archived tag (registry truth for ended projects). */
   excludeProjectIds?: ReadonlySet<string>;
+}
+
+export interface ProfileState {
+  /** Theme segment of slug `profile/<主题>` (may be Chinese). */
+  theme: string;
+  /** First non-heading content line after frontmatter, else "". */
+  summary: string;
+  /** updated_at date (YYYY-MM-DD) from gbrain list. */
+  updatedAt: string;
 }
 
 /** Parse `tags: [...]` from a gbrain note frontmatter (minimal YAML subset). */
@@ -76,6 +89,45 @@ export async function collectActiveProjects(
     out.push({ id, summary, updatedAt: row.updatedAt });
   }
   return out;
+}
+
+/** Collect active workbench preference cards (`profile/<主题>`). Never throws;
+ *  any failure resolves to an empty list — the 偏好 line is advisory, never a
+ *  gate. Independent of collectActiveProjects (own list, own MAX_ACTIVE_PROFILES
+ *  cap). Skipped archived / weekly rows do not consume slots.
+ */
+export async function collectActiveProfiles(gbrain: GbrainDeps): Promise<ProfileState[]> {
+  try {
+    const listed = await gbrain.list({ type: "note", tag: "profile", limit: 100 });
+    if (!listed.ok || !listed.rows) return [];
+
+    const profileRows = listed.rows.filter((r) => /^profile\/[^/]+$/.test(r.slug));
+    if (profileRows.length === 0) return [];
+
+    const out: ProfileState[] = [];
+    for (const row of profileRows) {
+      if (out.length >= MAX_ACTIVE_PROFILES) break;
+      const got = await gbrain.get(row.slug);
+      if (got.ok && got.content) {
+        if (isArchivedGbrainNote(got.content)) continue;
+        if (parseNoteTags(got.content).includes("weekly")) continue;
+      }
+      const summary = got.ok && got.content ? summarizeProfilePage(got.content) : "";
+      out.push({ theme: row.slug.slice("profile/".length), summary, updatedAt: row.updatedAt });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** First non-heading content line after frontmatter; truncate 80 + ellipsis.
+ *  Preference pages have no "现在到哪了" section — do not reuse summarizeStateCard. */
+export function summarizeProfilePage(body: string): string {
+  const content = stripFrontmatter(body);
+  const lines = content.split("\n").map((l) => l.trim()).filter((l) => l !== "");
+  const first = lines.find((l) => !l.startsWith("#"));
+  return first ? (first.length > 80 ? `${first.slice(0, 80)}…` : first) : "";
 }
 
 /** Pull a one-line summary from a state card body: the first non-empty line of

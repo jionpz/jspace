@@ -175,6 +175,12 @@ function stateLines(state: WorkbenchState): string[] {
       .join(" / ");
     lines.push(`项目: ${state.projects.length} 个活跃 — ${shown}`);
   }
+  if (state.profiles.length > 0) {
+    const shown = state.profiles
+      .map((p) => (p.summary ? `${p.theme}（${p.summary}）` : p.theme))
+      .join(" / ");
+    lines.push(`偏好: ${shown}`);
+  }
   return lines;
 }
 

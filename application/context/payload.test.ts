@@ -16,6 +16,7 @@ const empty: WorkbenchState = {
   inboxCount: 0,
   hubBroken: false,
   projects: [],
+  profiles: [],
 };
 
 function doms(n: number, prefix = "d"): WorkbenchState {
@@ -163,6 +164,25 @@ test("projects populated -> project line in current-state; none -> no line", () 
   expect(renderTurn(withProjects)).toBe("");
 });
 
+test("profiles populated -> 偏好 line after 项目; empty -> omitted; turn never emits 偏好", () => {
+  const withProfiles: WorkbenchState = {
+    ...empty,
+    projects: [{ id: "jspace", summary: "记忆模型重构设计期", updatedAt: "2026-08-10" }],
+    profiles: [
+      { theme: "沟通偏好", summary: "一句话", updatedAt: "2026-08-10" },
+      { theme: "报告格式", summary: "", updatedAt: "2026-08-09" },
+    ],
+  };
+  const r = renderSessionStart(withProfiles, "/wb");
+  expect(r).toContain("项目: 1 个活跃 — jspace（记忆模型重构设计期）");
+  expect(r).toContain("偏好: 沟通偏好（一句话） / 报告格式");
+  expect(r.indexOf("项目:")).toBeLessThan(r.indexOf("偏好:"));
+  expect(renderSessionStart(empty, "/wb")).not.toContain("偏好:");
+  expect(renderPreCompact(withProfiles, "/wb")).toContain("偏好: 沟通偏好（一句话） / 报告格式");
+  expect(renderTurn(withProfiles)).toBe("");
+  expect(renderTurn(withProfiles)).not.toContain("偏好:");
+});
+
 test("payload does not embed AGENTS.md content (dedup, AC-B8)", () => {
   const r = renderSessionStart(doms(3), "/wb");
   expect(r).not.toContain("JSPACE:START");
@@ -171,8 +191,16 @@ test("payload does not embed AGENTS.md content (dedup, AC-B8)", () => {
 });
 
 test("oversized workbench -> session-start stays under 4KiB and keeps core blocks", () => {
-  // 40 domains with very long paths to blow well past 4KiB
-  const state = doms(40, "very-long-domain-name-that-will-blow-the-budget");
+  // 40 domains with very long paths to blow well past 4KiB; profiles are
+  // already truncated at 80 chars so they must not push the payload over.
+  const state: WorkbenchState = {
+    ...doms(40, "very-long-domain-name-that-will-blow-the-budget"),
+    profiles: Array.from({ length: 4 }, (_, i) => ({
+      theme: `theme-${i}`,
+      summary: "字".repeat(80),
+      updatedAt: "2026-08-10",
+    })),
+  };
   const r = renderSessionStart(state, "/wb");
   expect(Buffer.byteLength(r, "utf-8")).toBeLessThanOrEqual(4 * 1024);
   expect(r).toContain("<jspace-workbench>");

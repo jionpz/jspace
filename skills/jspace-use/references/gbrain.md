@@ -170,7 +170,7 @@ source: <harness|skill>
 … current preference / convention (overwrite on change) …
 ```
 
-Update = `gbrain put profile/<主题>` overwrites the same slug. Session injection treats `profile` like `project` state cards — "always present" working memory, not query-on-demand semantic memory.
+Update = `gbrain put profile/<主题>` overwrites the same slug. Session injection treats `profile` like `project` state cards — "always present" working memory, not query-on-demand semantic memory. CLI: `collectActiveProfiles()` runs in parallel with `collectActiveProjects()` on `jspace context session-start`; independent budget (`MAX_ACTIVE_PROFILES=4`, does not consume the project max-8); skipped `status:archived` / `weekly` rows do not consume the cap.
 
 ### Epistemic kind tags (orthogonal to routing tags)
 
@@ -232,7 +232,7 @@ Promotion = copy-and-distill with wikilink evidence chain — never move/delete 
 
 - Snapshot pages keep the existing `tags: [weekly]` mitigation (dated pages must not mix into recent injection); consolidate additionally keeps `consolidate`.
 - Recent injection: `gbrain list --type note --tag project -n 50` (state cards) **and** `--tag profile` (preference cards), excluding `weekly` and `status:archived`. Q&A: `--tag knowledge` / `--tag asset`.
-- **CLI enforcement (session-start)**: `jspace context session-start` → `collectActiveProjects()` skips state cards tagged `status:archived` and projects with `hub.json` `status: archived`; skipped rows do not consume the max-8 budget.
+- **CLI enforcement (session-start)**: `jspace context session-start` → `collectActiveProjects()` skips state cards tagged `status:archived` and projects with `hub.json` `status: archived`; skipped rows do not consume the max-8 budget. Independently, `collectActiveProfiles()` lists `--tag profile`, keeps slugs matching `profile/<主题>` (single segment), skips `status:archived` and `weekly`, and caps at `MAX_ACTIVE_PROFILES=4` (skipped rows do not consume the cap). The two collectors run in parallel; either list failure degrades to an empty list without blocking the hook.
 - On Q&A hit for `decisions/` / `knowledge/`: if top-1 has `status:superseded`, follow `Supersedes:` wikilink to the current page before answering.
 - `kind:principle` pages are the only semantic-memory exception for injection — only when count stays tiny (governance red lines); if principles exceed one screen, retro should flag inflation.
 

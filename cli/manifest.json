@@ -69,12 +69,12 @@
     },
     {
       "path": "skills/jspace-use/references/example-first-use.md",
-      "sha256": "fe2f6793cb51767ef02fcb466ac12adaccc4e20dad079303fb457974627eec94",
+      "sha256": "39fa9fccf21a6aca292102dc8131e5db7a6effc8ca5ca2ad2ac01e6c73b3b9b4",
       "ownership": "seed"
     },
     {
       "path": "skills/jspace-use/references/gbrain.md",
-      "sha256": "629808c7f807fda05d920768fbcce5f8e89d10493e1061671f0848be840a8327",
+      "sha256": "9fc4d6a2de7f9e377a00e15146bdb3063c192b9eb10a36eb18e5f3fdbcde6e51",
       "ownership": "seed"
     },
     {
@@ -124,7 +124,7 @@
     },
     {
       "path": "skills/jspace-use/references/usage-mileage.md",
-      "sha256": "e6a8da90d5beab155ae10530f9d8e83299aa6e3d0dd6abcb34c3ba813d5b6d44",
+      "sha256": "690596d0982556ae711e3cbc320d689616919793916907ff893c58fe01a5f7bb",
       "ownership": "seed"
     },
     {

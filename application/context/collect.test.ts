@@ -48,6 +48,8 @@ test("empty workbench -> empty state, not broken", () => {
   expect(s.inboxCount).toBe(0);
   expect(s.cronIncidents).toEqual([]);
   expect(s.hubBroken).toBe(false);
+  expect(s.projects).toEqual([]);
+  expect(s.profiles).toEqual([]);
 });
 
 test("3 domains + 2 pending + 1 open incident + inbox -> all populated", () => {

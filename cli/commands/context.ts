@@ -11,7 +11,13 @@
 // protocol drives the process exit code).
 import type { CommandSpec, CmdContext } from "../../application/commands/command.ts";
 import { collectWorkbenchState } from "../../application/context/collect.ts";
-import { collectActiveProjects, PROJECT_COLLECT_TIMEOUT_MS } from "../../application/context/project-states.ts";
+import {
+  collectActiveProfiles,
+  collectActiveProjects,
+  PROJECT_COLLECT_TIMEOUT_MS,
+  type ProfileState,
+  type ProjectState,
+} from "../../application/context/project-states.ts";
 import { realGbrain } from "../../adapters/gbrain/gbrain.ts";
 import { loadHub } from "../../application/workspace/state.ts";
 import { gate, gatePre, promptHasSkipKeyword } from "../../application/context/gate.ts";
@@ -58,9 +64,9 @@ const sessionStartSpec: CommandSpec = {
       const g = gate("session-start", undefined, ctx.root);
       if (!g.emit) return { lines: [] }; // not a workbench / hooks off: silent exit 0
       const state = collectWorkbenchState(g.root);
-      // R3: project state cards come from gbrain through the async port with a
-      // short per-call timeout. A stalled gbrain resolves empty (never blocks
-      // the hook) — the sync collectors above are unaffected.
+      // R3: project + profile cards come from gbrain through the async port with
+      // a short per-call timeout. The two lists run in parallel on one instance;
+      // either failure degrades to [] without blocking the other or the hook.
       let excludeProjectIds: Set<string> | undefined;
       try {
         const hub = loadHub(g.root);
@@ -69,9 +75,13 @@ const sessionStartSpec: CommandSpec = {
       } catch {
         // hub unreadable — inject without registry filter; gbrain status:archived still applies
       }
-      state.projects = await collectActiveProjects(realGbrain(undefined, PROJECT_COLLECT_TIMEOUT_MS), {
-        excludeProjectIds,
-      });
+      const gbrain = realGbrain(undefined, PROJECT_COLLECT_TIMEOUT_MS);
+      const [projects, profiles] = await Promise.all([
+        collectActiveProjects(gbrain, { excludeProjectIds }).catch((): ProjectState[] => []),
+        collectActiveProfiles(gbrain).catch((): ProfileState[] => []),
+      ]);
+      state.projects = projects;
+      state.profiles = profiles;
       const text = renderSessionStart(state, g.root);
       // Best-effort briefing timestamp: never blocks the hook if the write fails.
       try {

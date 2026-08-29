@@ -13,7 +13,7 @@ import { readIncidents } from "../automation/incidents.ts";
 import { readJournals } from "../ingest/journal.ts";
 import { countInbox } from "../registry/inbox.ts";
 import { readEnvelopes } from "../pending/envelope.ts";
-import type { ProjectState } from "./project-states.ts";
+import type { ProfileState, ProjectState } from "./project-states.ts";
 import { loadHub } from "../workspace/state.ts";
 import { resolveFilehubRoot } from "../registry/filehub-lookup.ts";
 import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
@@ -42,6 +42,10 @@ export interface WorkbenchState {
    *  collectors never touch it. Empty when gbrain is unavailable — the
    *  project line is advisory, never a gate. */
   projects: ProjectState[];
+  /** Active workbench preference cards, surfaced by the session-start injection
+   *  leg. Populated by collectActiveProfiles (async, gbrain-backed); the sync
+   *  collectors never touch it. Independent of `projects` (own cap of 4). */
+  profiles: ProfileState[];
   /** hub.json is missing or malformed — the gate turns this into a visible
    *  alert instead of a silent "clean state" (visible-degradation rule). */
   hubBroken: boolean;
@@ -107,6 +111,7 @@ export function collectWorkbenchState(root: string, deps: CollectDeps = realDeps
     inboxCount: 0,
     hubBroken: false,
     projects: [],
+    profiles: [],
   };
 
   // hub.json / domains — a broken hub is surfaced, not swallowed.

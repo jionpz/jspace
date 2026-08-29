@@ -126,7 +126,8 @@ gbrain doctor --fast      # brain 健康
 - [ ] embedding 不可达时写页 `embed_skip: true` 保底,首次启用未因此失败
 - [ ] Claude Code `mcpServers.gbrain` 已写入 `~/.claude.json`
 - [ ] Phase 4.5 cron 问过用户:开了则 `jspace cron status` 显示已安装且 `doctor --verbose` 无 `cron.all_disabled`;跳过则明确标 `deferred`(未默默略过)
-- [ ] Phase 5.5 证据台账已复制(或明确 deferred);`doctor --verbose` 无 `usage.mileage_ledger_missing`
+- [ ] Phase 5.5 证据台账已复制 → `doctor --verbose` 无 `usage.mileage_ledger_missing`
+- [ ] 明确跳过 M7 跟踪 → `usage.mileage_ledger_missing` 仍为 info，`jspace doctor` 不失败
 
 ## Phase 5.5 — M7 证据台账(推荐,非阻塞)
 
