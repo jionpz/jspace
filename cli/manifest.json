@@ -14,7 +14,7 @@
     },
     {
       "path": "templates/workbench/.gitignore",
-      "sha256": "0f2e16c43f69d5da1cbffb1ff533c71f45eebe132b475471f0c014f6d204fd55",
+      "sha256": "aabe5230ed1c83d0728ec2cd43d0e730d0d4a9b412083d8518f732ff6ae4f7f8",
       "ownership": "seed"
     },
     {
@@ -59,7 +59,7 @@
     },
     {
       "path": "skills/jspace-use/SKILL.md",
-      "sha256": "561fc52692bedb5016acd097094d1c284314f21f7a436d945bcde9b922aee6e0",
+      "sha256": "6c4c324aad6d1d87f3e3b126c71b861fd382ad842c49a056f1c874bca19bc5f0",
       "ownership": "seed"
     },
     {
@@ -118,8 +118,13 @@
       "ownership": "seed"
     },
     {
+      "path": "skills/jspace-use/references/usage-mileage-ledger-template.md",
+      "sha256": "4bdfed0cdfcc1490b64fd7c13eca811ea509890edc9960775147e21bf2176183",
+      "ownership": "seed"
+    },
+    {
       "path": "skills/jspace-use/references/usage-mileage.md",
-      "sha256": "1ef03283662c71c75521c24ae88159745ce577071698a9169efe1c2c7b445f54",
+      "sha256": "e6a8da90d5beab155ae10530f9d8e83299aa6e3d0dd6abcb34c3ba813d5b6d44",
       "ownership": "seed"
     },
     {

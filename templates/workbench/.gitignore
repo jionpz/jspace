@@ -4,3 +4,5 @@
 .jspace/local.json
 # .jspace/state/ — 运行时状态槽(预留;cron 结构化状态等),不进 git
 .jspace/state/
+# .jspace/usage-mileage-ledger.md — M7 证据台账本机实例(含真实路径/数字),不进 git
+.jspace/usage-mileage-ledger.md

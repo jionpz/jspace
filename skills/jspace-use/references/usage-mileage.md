@@ -113,17 +113,120 @@ gbrain list --type note --tag source:cron -n 50      # 定时写入(对照)
 
 ---
 
-## 证据台账模板(每台机器各填一份)
+## 证据台账（每台机器各填一份）
 
-放进本机记录(如 gbrain `records/retro/<date>` 页的附节,或工作台内的使用记录),**不回填本文件**。
+放进**本机记录**（推荐:gbrain `records/retro/<date>` 页末尾附节、或工作台 `.jspace/` 下自建 `usage-mileage-ledger.md`——**gitignore、不回填本文件、不写假数字**）。
 
-| 项 | 日期 | 证据(命令 / 路径 / 数字) | 结论 |
+完整可复制模板见同目录 **`usage-mileage-ledger-template.md`**（随 `jspace init/upgrade` 物化;填完后的实例只留本机）。
+
+### 用词纪律
+
+| 词 | 含义 | 何时用 |
+|---|---|---|
+| **已验证** | 有真实命令输出 / 路径 / 数字行 | 能贴证据 |
+| **替代关闭** | 用 A 类证据关闭 B 类 claim | **必须**附一句效力边界 |
+| **挂账开放** | 已知缺什么、怎么补 | 未达标但不装关闭 |
+| **无法判定** | 命令跑不通 / 依赖不可达 | 不猜、不用 proxy 冒充精确数 |
+
+三者不可混用;不许把「挂账开放」写成「已验证」。
+
+### GOAL M7 回写槽（腿关闭时复制到开发仓库 `GOAL.md` M7 条目）
+
+```markdown
+- R1 retro 首跑:<date> / 页 `records/retro/<date>` / log `<wb>/.jspace/logs/cron/workbench-retro/<ts>.md` / verdict:已验证|部分关闭
+- R2 两周 session:<W1 起止> writes=<n> ; <W2 起止> writes=<n> ; retro 页 slug=… ; verdict:已验证|挂账开放
+- R3 资产闭环:<date> / 本体 `<filehub>/…` / 指针 `assets/…` ; 或 deferred:<原因+可见位置>
+- Taxonomy freeze: M7 关闭前未扩 slug 根 / 新 routing tag（是|否|N/A）
+```
+
+---
+
+## 首周启动清单（M7 kickoff，有序 10 步）
+
+在工作台根 `<wb>` 执行;每步留证据行进台账。
+
+| 步 | 动作 | 合格信号 |
+|---|---|---|
+| 1 | `jspace workspace upgrade --dir <wb>` | skill / 受管块刷新;`jspace doctor --dir <wb>` 无 error |
+| 2 | 确认 gbrain + embedding | `gbrain models doctor --json` → embedding 可达 |
+| 3 | `jspace gbrain wire --dir <wb>` + 重启 harness | `gbrain check-resolvable` 官方 skill 可达 |
+| 4 | 复制台账模板 | `cp .jspace/skills/jspace-use/references/usage-mileage-ledger-template.md <wb>/.jspace/usage-mileage-ledger.md`(或等价路径) |
+| 5 | 填台账「机器元数据」节 | 工作台路径 / filehub 根 / harness / 起点日 |
+| 6 | enable 周期任务(显式) | `jspace cron enable memory-consolidate workbench-retro weekly-report inbox-tidy --dir <wb>`(按需 subset) |
+| 7 | R1 rehearsal | `jspace cron run workbench-retro --dir <wb>` → 合格 retro 页 |
+| 8 | 约定收工习惯 | 会话结束说「收工」→ `memory-writeback`;**提醒 ≠ 写入** |
+| 9 | 记 W0 起点 | R2 计数起点周 = 来源 tag 约定生效后的第一个活动周 |
+| 10 | _ack taxonomy freeze_ | 台账勾选:「M7 关闭前不扩 taxonomy」已读 |
+
+---
+
+## 台账结构摘要（详表见 template 文件）
+
+### A. 机器元数据（填一次）
+
+- 工作台根 `<wb>`、filehub 根、主 harness、无头 cron harness
+- M7 起点日、R2 的 W0 周起止
+- 升级前 gbrain 页数快照(可选):`gbrain list --type note -n 1` 或 stats
+
+### B. R1 · 自省腿
+
+| 项 | 日期 | 证据 | 结论 |
 |---|---|---|---|
-| R1 rehearsal | | `cron run` exit + log 路径 + retro 页 slug | 合格 / 不合格 / 无法判定 |
-| R1 自然触发(可选) | | runs 与 logs 时间戳 + `cron check` | 已验证 / 未做 |
-| R2 W1 `session_writes` | | `gbrain list --tag source:session` 摘要 | N = ? |
-| R2 W2 `session_writes` | | 同上 | N = ? |
-| R3 资产闭环 | | 本体路径 + 指针页 slug | 已闭环 / deferred |
-| 总控 | | `jspace doctor` 摘要 | 无 error / 有 error(列出) |
+| rehearsal | | exit + log 路径 + `records/retro/<date>` slug + doctor 前后 | 合格/不合格/无法判定 |
+| 自然触发(可选) | | runs/logs 时间戳 + `jspace cron check` | 已验证/未做 |
+| 检查 6b 取代链 | | retro 报告「取代链」一节或手动抽样 | 健康/带毒/无法判定 |
 
-用词纪律:**已验证**(有真实证据行)/ **替代关闭**(必须附一句效力边界)/ **挂账开放**(写清缺什么)。三者不可混用,也不许把第三种写成前两种。
+### C. R2 · 记忆腿（每周一行，至少 W1–W2）
+
+| 周次 | 窗口起止 | session_writes | cron_writes | 无 tag 桶 | retro slug | 达标 |
+|---|---|---|---|---|---|---|
+| W0(可选) | | | | | | 起点 |
+| W1 | | | | | | Y/N |
+| W2 | | | | | | Y/N |
+
+取证命令(每周同口径):
+
+```bash
+gbrain list --type note --tag source:session -n 50
+gbrain list --type note --tag source:cron -n 50
+```
+
+**记忆腿关闭** = W1 与 W2 连续 `session_writes > 0`。
+
+### D. R3 · 资产腿
+
+| 项 | 日期 | 本体路径 | 指针 slug | 结论 |
+|---|---|---|---|---|
+| 闭环 #1 | | `<filehub>/projects|areas/…` | `assets/…` | 已闭环 |
+| deferred(若无) | | — | — | 原因 + doctor/retro 可见 |
+
+### E. 纪律与冻结（每周或 retro 时更新）
+
+- [ ] 本周有显式 `memory-writeback` 且新页带 `source:session`
+- [ ] 无伪造 tag / 无 hook 代写
+- [ ] retro 只提议未擅自改 hub/skill
+- [ ] **Taxonomy freeze**:本周未新增 slug 根 / routing tag(或已记 Trellis + 证据)
+- [ ] 已完结项目 state 已 `status:archived` 或 hub `archived`(P33 注入过滤)
+- [ ] consolidate 快照含晋升/衰减候选且 retro 有裁决(只列/已处理/跳过)
+
+### F. M7 总判定（关闭前填）
+
+| 腿 | 关闭? | 证据指针 |
+|---|---|---|
+| 自省 R1 | | 台账 B 节 + GOAL 回写槽 |
+| 记忆 R2 | | 台账 C 节 W1+W2 |
+| 资产 R3 | | 台账 D 节 |
+| **M7 整体** | 开放 / 已关闭 | 复制 GOAL 回写槽到开发仓库 |
+
+---
+
+## 与 retro / consolidate 的分工
+
+| 产出 | 写哪里 | 台账怎么接 |
+|---|---|---|
+| `records/retro/<date>` | gbrain | 每周围栏「retro slug」;可粘贴写回率数字 |
+| `records/consolidate/<date>` | gbrain | 晋升/衰减候选 → 台账 E 节裁决 |
+| 本台账 | 本机 `.jspace/usage-mileage-ledger.md` | 三腿关闭的**主索引**;GOAL 回写从此复制 |
+
+retro 页是**当周审计**;台账是**跨周里程计**——两者数字应一致,冲突以 `gbrain list --tag` 为准。
+
