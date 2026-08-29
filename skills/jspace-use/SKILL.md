@@ -70,7 +70,12 @@ JSpace 工作台 = 本地工作控制平面:根 `AGENTS.md` 是入口面,其余�
    - **第 4 步选的不是 Claude Code?先改 harness 字段**:出厂 `.jspace/cron.json` 四个任务都是 `"harness": "claude"`;选了其他 harness 就把各任务的 `harness` 改成对应值(`grok`/`opencode`/`pi`/`codex`;Cursor 无 headless CLI 不进 cron enum,cron 改用其中一个无头 harness),否则 rehearsal 会因本机没有 claude 可执行文件而失败。cron.json 是 user 数据,改后升级不覆盖。
    - **harness 未接线/配额未配就先别装调度**:先做第 4 步,再 rehearsal。`cron run` 失败是安全失败(记 incident + `jspace cron check` 可见,不改任何数据);`cron install` 只登记调度、不代跑。
    - **用户确认要跳过**:标 `deferred` 并告知 `jspace doctor --verbose`(或 `--json`)会持续报 `cron.all_disabled`(info,不是错误——info 默认只计数不打印),想开时回到本步。
-5. **Final smoke + sign-off**:`jspace doctor` + `jq hub.json` + `gbrain doctor --fast`;报 configured/already-OK/missing-deferred。若有启用的 cron,再确认 `jspace cron status --dir .` 显示已安装/可运行;选择跳过 cron 的标 `deferred`(`jspace doctor --verbose` 只报 `cron.all_disabled` info,不失败)。**启用 cron 后**,M7 使用里程(三飞轮是否在转)的取证协议见 `~/.agents/skills/jspace-use/references/usage-mileage.md`——不是首启必跑项,而是真实使用后的验收清单。
+5. **Final smoke + sign-off**:`jspace doctor` + `jq hub.json` + `gbrain doctor --fast`;报 configured/already-OK/missing-deferred。若有启用的 cron,再确认 `jspace cron status --dir .` 显示已安装/可运行;选择跳过 cron 的标 `deferred`(`jspace doctor --verbose` 只报 `cron.all_disabled` info,不失败)。
+5.5. **M7 证据台账(推荐,非阻塞)**:复制模板到本机实例,供真实使用后的三飞轮取证:
+   ```bash
+   cp .jspace/skills/jspace-use/references/usage-mileage-ledger-template.md .jspace/usage-mileage-ledger.md
+   ```
+   填「机器元数据」节(工作台根 / filehub / harness / M7 起点日);勾选 taxonomy freeze 已读。**不伪造** `source:session`。未复制时 `jspace doctor --verbose` 报 `usage.mileage_ledger_missing`(info,不失败)。协议全文 → `~/.agents/skills/jspace-use/references/usage-mileage.md`——不是首启必跑项,而是真实使用后的验收清单;启用 cron 后按台账 R1 rehearsal 起步。
 
 ## 3. 日常会话路由
 
@@ -123,6 +128,7 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 命令细节以 `jspace <cmd> --help` 为准;跨平台权威矩阵(外部稳定依赖,不随工作台物化)见 `docs/PLATFORMS.md`。
 
 - **`memory.writeback_habit_unverified`(info,`jspace doctor --verbose` / `--json` 可见)**:会话已有一定里程且收工轻提示发出过,但 **doctor 不查 gbrain**——它只提示「提醒面在转,请自己核对写回腿」,不是「写回率 = 0」的证明。处置:跑第 4 章的 `gbrain list --type note --tag source:session -n 20` 自查(精确计数走 `workbench-retro` 检查 1);真有事实要留,说一句「收工」跑 `memory-writeback`(带 `tags: source:session`)。这条永远是 info,不影响 exit;全手动写回是合法选择,当已知状态即可。接线是否坏了看 `briefing.stale` / `harness.session_start_not_wired`,不看这条。
+- **`usage.mileage_ledger_missing`(info,`jspace doctor --verbose` / `--json` 可见)**:M7 证据台账模板已物化但本机 `.jspace/usage-mileage-ledger.md` 尚未创建。处置:按第 2 章 5.5 复制模板并填机器元数据;协议 → `usage-mileage.md`。info 不失败;暂不做 M7 跟踪时可忽略。
 
 ## 7. 边界与故障排查
 
