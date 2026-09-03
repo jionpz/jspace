@@ -14,9 +14,11 @@ import { collectWorkbenchState } from "../../application/context/collect.ts";
 import {
   collectActiveProfiles,
   collectActiveProjects,
+  collectRecentKnowledge,
   PROJECT_COLLECT_TIMEOUT_MS,
   type ProfileState,
   type ProjectState,
+  type RecentKnowledgeEntry,
 } from "../../application/context/project-states.ts";
 import { realGbrain } from "../../adapters/gbrain/gbrain.ts";
 import { loadHub } from "../../application/workspace/state.ts";
@@ -76,12 +78,14 @@ const sessionStartSpec: CommandSpec = {
         // hub unreadable — inject without registry filter; gbrain status:archived still applies
       }
       const gbrain = realGbrain(undefined, PROJECT_COLLECT_TIMEOUT_MS);
-      const [projects, profiles] = await Promise.all([
+      const [projects, profiles, recentKnowledge] = await Promise.all([
         collectActiveProjects(gbrain, { excludeProjectIds }).catch((): ProjectState[] => []),
         collectActiveProfiles(gbrain).catch((): ProfileState[] => []),
+        collectRecentKnowledge(gbrain).catch((): RecentKnowledgeEntry[] => []),
       ]);
       state.projects = projects;
       state.profiles = profiles;
+      state.recentKnowledge = recentKnowledge;
       const text = renderSessionStart(state, g.root);
       // Best-effort briefing timestamp: never blocks the hook if the write fails.
       try {

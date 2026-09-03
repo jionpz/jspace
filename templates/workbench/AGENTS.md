@@ -74,6 +74,10 @@ Ask before: creating a project-local skill; creating a domain when confidence is
 
 Before finishing a work session, quietly check whether anything should be preserved (durable domain/resource fact, rule for future agents, repeated workflow, candidate skill). **When something durable was learned, run `memory-writeback` skill to persist it to gbrain** (session-fact write-back: state 覆盖 / knowledge append-only / promotion; 每页 `tags` 带 **`source:session`** —— 写回率取证的唯一依据). If nothing durable was learned, do not mention the check.
 
+**Mid-session write-back**：不必等到收工才写回——当一个重要决策已定、一个教训已总结、一个项目阶段已完成时，**主动提议**「要不要现在把这个写进记忆？」然后跑 `memory-writeback`。这比攒到最后一起写更不容易遗漏。
+
+**归位纠正即偏好沉淀**：用户纠正了文件归位后，把纠正写成 `profile/filing-prefs` 页（`memory-writeback` 的 profile 分类），下次 `asset-ingest` 归位时自动读取。
+
 **提醒 ≠ 写入**：session-end hook 与每会话一次的收工轻提示（`jspace context turn`）都只提醒、从不写 gbrain；不跑 `memory-writeback` 就等于本次没沉淀。写回率自查 → `gbrain list --type note --tag source:session -n 20`。
 
 ## Scheduled Tasks (cron)

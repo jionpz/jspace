@@ -157,6 +157,49 @@ function stripFrontmatter(body: string): string {
   return end >= 0 ? body.slice(end + 4) : body;
 }
 
+/** Max recent knowledge entries (decisions/lessons/knowledge) in session-start. */
+export const MAX_RECENT_KNOWLEDGE = 5;
+
+export interface RecentKnowledgeEntry {
+  slug: string;
+  /** First non-heading content line (truncated). */
+  summary: string;
+  updatedAt: string;
+}
+
+/** Collect recent decisions, lessons, and knowledge pages for session-start
+ *  injection. Gives the AI awareness of what was learned in prior sessions,
+ *  not just the current state — the missing "越用越懂我" signal.
+ *  Never throws; any failure resolves to an empty list. */
+export async function collectRecentKnowledge(gbrain: GbrainDeps): Promise<RecentKnowledgeEntry[]> {
+  try {
+    const listed = await gbrain.list({ type: "note", tag: "knowledge", limit: 50 });
+    if (!listed.ok || !listed.rows) return [];
+
+    const eligible = listed.rows.filter(
+      (r) =>
+        /^project\/[^/]+\/decisions\//.test(r.slug) ||
+        /^project\/[^/]+\/lessons\//.test(r.slug) ||
+        /^knowledge\//.test(r.slug),
+    );
+
+    const out: RecentKnowledgeEntry[] = [];
+    for (const row of eligible) {
+      if (out.length >= MAX_RECENT_KNOWLEDGE) break;
+      const got = await gbrain.get(row.slug);
+      if (got.ok && got.content) {
+        if (isArchivedGbrainNote(got.content)) continue;
+        if (parseNoteTags(got.content).includes("status:superseded")) continue;
+      }
+      const summary = got.ok && got.content ? summarizeProfilePage(got.content) : "";
+      out.push({ slug: row.slug, summary, updatedAt: row.updatedAt });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 /** Full project overview for the overview view (R4): three-sentence skeleton
  *  (是什么·到哪了·下一步) plus related-project wikilinks. */
 export interface ProjectOverview {
