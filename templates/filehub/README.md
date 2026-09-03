@@ -7,7 +7,7 @@
 ## 结构(PARA 变体,最小起步,靠使用涌现细化)
 
 - `_inbox/` — 新文件一律先落这里,等待整理。说一句「整理一下 inbox」即可批量归档。
-- `projects/<项目>/` — 进行中的项目:`index.md`(dashboard)+ `docs/` `decks/` `data/` `notes/`
+- `projects/<项目>/` — 进行中的项目:`index.md`(dashboard)+ 固定子目录(`docs/` 文档报告 / `decks/` 演示 / `data/` 表格数据 / `notes/` 笔记草稿;首次入库时自动创建)
 - `areas/<领域>/` — 长期职责域(无明确终点的工作)
 - `archive/<年>/` — 结项与冷资料
 

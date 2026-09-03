@@ -58,7 +58,7 @@ gbrain query <关键词>
 
 ## 步骤(主流程骨架)
 
-1. **识别**:定类型/归属;查重(`gbrain get assets/<id>/<语义名>`)→ 冲突按决策表。
+1. **识别**:定类型/归属;**先读 `gbrain get profile/filing-prefs`**（如存在）应用用户归位偏好;查重(`gbrain get assets/<id>/<语义名>`)→ 冲突按决策表。
 2. **暂存**:`jspace ingest begin ...`(jspace 复制到目标、source 留 inbox、写 journal,返回 id)。
 3. **入脑**:写 gbrain asset 指针页(slug `assets/<projectId>/<语义名>`,模板见 `~/.agents/skills/asset-ingest/references/gbrain-write.md`)→ 成功 `advance --gbrain`;锁冲突 `jspace pending stage`。
 4. **登记+提交**:`advance --index` → `advance --complete`(jspace 移除 source)。

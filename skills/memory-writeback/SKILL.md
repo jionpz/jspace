@@ -18,7 +18,8 @@ triggers:
 **分工**:asset-ingest = 资产写侧(asset 指针页);本 skill = 会话事实写侧(state/决策/经验/跨项目知识);memory-recall = 读侧;memory-consolidate = 周快照(cron,本 skill 不写)。
 
 ## 何时用 / 何时不用
-- ✅ 用:收工时把进展/决策/教训/规则写回 gbrain。
+- ✅ 用:收工时把进展/决策/教训/规则写回 gbrain。**也可以在会话中段用**——一个重要决策刚定下来、一个教训刚总结出来、一个项目阶段刚完成时，不必等到收工。
+- ✅ 用:用户纠正了文件归位后,把纠正写成 `profile/filing-prefs` 页(归位偏好学习)。
 - ❌ 不用:文件本体归位 → `asset-ingest`(本 skill 有产出文件时转它,不重复文件移动);读侧召回 → `memory-recall`;周快照 → memory-consolidate cron 任务。
 
 ## 决策表
@@ -30,6 +31,7 @@ triggers:
 | 项目专属经验(踩坑/可复用要点) | `project/<id>/lessons/<主题>` | **append-only 新页**(绝不覆盖) |
 | 跨项目可复用认识 | `knowledge/<域>/<主题>` | **append-only 新页**(绝不覆盖),域=通用知识域(不含项目名) |
 | 工作台偏好/协作约定 | `profile/<主题>` | 固定 slug **覆盖**,`tags: [profile]` |
+| 归位偏好(文件放哪的纠正) | `profile/filing-prefs` | 固定 slug **覆盖**,`tags: [profile]` |
 | 稀疏项目事件(里程碑/事故) | `records/project/<id>/<date>-<主题>` | **append-only 新页** |
 | 周快照 | — | **转 memory-consolidate**,本 skill 不写 |
 
