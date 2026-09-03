@@ -54,7 +54,7 @@
     },
     {
       "path": "templates/filehub/README.md",
-      "sha256": "a32c69b04d24d5a7ca824931b2251f2566850f8493dc9efffc21157c38934241",
+      "sha256": "1f9962bc44ea978ba26f17cd3cc3e343f1885c972f6c2020280d05bf2e3f1638",
       "ownership": "managed"
     },
     {
@@ -129,12 +129,12 @@
     },
     {
       "path": "skills/asset-ingest/SKILL.md",
-      "sha256": "62f78bcac2248cb6f881c0790fb9c3692ce4dbb4c78368b6276d98757caeef86",
+      "sha256": "ff6ce1afefd5c0eaa4fd404b68b0db78c87904bbf73a68b23a25f7fd3bd16bab",
       "ownership": "seed"
     },
     {
       "path": "skills/asset-ingest/references/batch.md",
-      "sha256": "5ff2361f2489ec892e85cbce172bd6b33e10875b262f57e3a1a2e3ef8ee9f348",
+      "sha256": "072985c3816a38ebbdb10f557ccb80e8c4f0c7ce1c04081039bf7f6ca54b9c35",
       "ownership": "seed"
     },
     {
@@ -149,7 +149,7 @@
     },
     {
       "path": "skills/asset-ingest/references/filing.md",
-      "sha256": "a36ee325491b378f76c852256f4add4cb698d07161c1fc2409a5e1af7c134363",
+      "sha256": "b66a7629fabde412098337c6fd5866574bf17c6da322db9e19d0c69958d4dc25",
       "ownership": "seed"
     },
     {
