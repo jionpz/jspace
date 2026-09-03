@@ -54,7 +54,7 @@
     },
     {
       "path": "templates/filehub/README.md",
-      "sha256": "855c9962dc98cba384d80f476a2b003033267a227a238fca6eb11106f2b58ce7",
+      "sha256": "a32c69b04d24d5a7ca824931b2251f2566850f8493dc9efffc21157c38934241",
       "ownership": "managed"
     },
     {
@@ -149,7 +149,7 @@
     },
     {
       "path": "skills/asset-ingest/references/filing.md",
-      "sha256": "38b26dd0eb7e0a35e01c464d0e88dc1f45185a5b6d595482e81f15577ef0ffab",
+      "sha256": "a36ee325491b378f76c852256f4add4cb698d07161c1fc2409a5e1af7c134363",
       "ownership": "seed"
     },
     {
