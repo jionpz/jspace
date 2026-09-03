@@ -87,12 +87,15 @@ export function renderTurn(state: WorkbenchState, opts: TurnOptions = {}): strin
     return `<jspace-state>cron: ${id}[${inc.failureClass}] 失败未确认（jspace cron check）</jspace-state>`;
   }
   if (state.inboxCount > 0) {
+    // inbox alone never starves the writeback nudge: when both are pending, emit
+    // a combined line so the session sees both the inbox hint AND the once-per-
+    // session write-back reminder (flywheel-boost: inbox previously crowded out
+    // the nudge every session, producing zero `source:session` pages).
+    if (opts.writebackNudge) {
+      return `<jspace-state>inbox: ${state.inboxCount} 份待整理（「整理一下 inbox」）；${WRITEBACK_NUDGE}</jspace-state>`;
+    }
     return `<jspace-state>inbox: ${state.inboxCount} 份待整理（「整理一下 inbox」）</jspace-state>`;
   }
-  // Lowest priority, at most once per session (B4 flywheel): most harnesses have
-  // no usable session-end hook, and the two that do discard the hook's output —
-  // so this line is the only in-session write-back reminder. It nudges an
-  // EXPLICIT action; nothing here ever writes gbrain.
   if (opts.writebackNudge) {
     return `<jspace-state>${WRITEBACK_NUDGE}</jspace-state>`;
   }
@@ -180,6 +183,12 @@ function stateLines(state: WorkbenchState): string[] {
       .map((p) => (p.summary ? `${p.theme}（${p.summary}）` : p.theme))
       .join(" / ");
     lines.push(`偏好: ${shown}`);
+  }
+  if (state.recentKnowledge.length > 0) {
+    const shown = state.recentKnowledge
+      .map((k) => (k.summary ? `${k.slug}（${k.summary}）` : k.slug))
+      .join(" / ");
+    lines.push(`近期沉淀: ${shown}`);
   }
   return lines;
 }

@@ -17,6 +17,7 @@ const empty: WorkbenchState = {
   hubBroken: false,
   projects: [],
   profiles: [],
+  recentKnowledge: [],
 };
 
 function doms(n: number, prefix = "d"): WorkbenchState {
@@ -183,6 +184,21 @@ test("profiles populated -> 偏好 line after 项目; empty -> omitted; turn nev
   expect(renderTurn(withProfiles)).not.toContain("偏好:");
 });
 
+test("recentKnowledge populated -> 近期沉淀 line after 偏好; empty -> omitted", () => {
+  const withKnowledge: WorkbenchState = {
+    ...empty,
+    recentKnowledge: [
+      { slug: "project/acme/decisions/tech-stack", summary: "选 React 不选 Vue", updatedAt: "2026-08-10" },
+      { slug: "knowledge/governance/naming", summary: "ascii slug 约定", updatedAt: "2026-08-09" },
+    ],
+  };
+  const r = renderSessionStart(withKnowledge, "/wb");
+  expect(r).toContain("近期沉淀: project/acme/decisions/tech-stack（选 React 不选 Vue） / knowledge/governance/naming（ascii slug 约定）");
+  expect(renderSessionStart(empty, "/wb")).not.toContain("近期沉淀:");
+  expect(renderPreCompact(withKnowledge, "/wb")).toContain("近期沉淀:");
+  expect(renderTurn(withKnowledge)).toBe("");
+});
+
 test("payload does not embed AGENTS.md content (dedup, AC-B8)", () => {
   const r = renderSessionStart(doms(3), "/wb");
   expect(r).not.toContain("JSPACE:START");
@@ -240,15 +256,25 @@ test("turn write-back nudge: lowest priority, single line, only when opted in (B
   expect(nudged.split("\n").length).toBe(1);
   expect(Buffer.byteLength(nudged, "utf-8")).toBeLessThan(512);
 
-  // every actionable state outranks the nudge — it never replaces a real todo
+  // high-priority states (pending/incident/broken) still outrank the nudge
   const pending = { ...empty, pendingCount: 1, pendingProducers: ["asset-ingest"] };
   const inc = { ...empty, cronIncidents: [{ cronId: "x", failureClass: "failed" }] };
-  const inbox = { ...empty, inboxCount: 3 };
   const broken = { ...empty, hubBroken: true };
-  for (const s of [pending, inc, inbox, broken]) {
+  for (const s of [pending, inc, broken]) {
     expect(renderTurn(s, { writebackNudge: true })).toBe(renderTurn(s));
     expect(renderTurn(s, { writebackNudge: true })).not.toContain("memory-writeback");
   }
+  // inbox no longer starves the nudge: both coexist (flywheel-boost)
+  const inbox = { ...empty, inboxCount: 3 };
+  const inboxNudged = renderTurn(inbox, { writebackNudge: true });
+  expect(inboxNudged).toContain("inbox: 3 份待整理");
+  expect(inboxNudged).toContain("memory-writeback");
+  expect(inboxNudged).toContain("source:session");
+  expect(inboxNudged.split("\n").length).toBe(1);
+  expect(Buffer.byteLength(inboxNudged, "utf-8")).toBeLessThan(512);
+  // inbox without nudge opt-in is still inbox-only
+  expect(renderTurn(inbox)).toBe("<jspace-state>inbox: 3 份待整理（「整理一下 inbox」）</jspace-state>");
+  expect(renderTurn(inbox)).not.toContain("memory-writeback");
   // domains alone are not actionable, so the nudge does surface there
   expect(renderTurn(doms(2), { writebackNudge: true })).toContain("memory-writeback");
 });
