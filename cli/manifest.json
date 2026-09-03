@@ -39,7 +39,7 @@
     },
     {
       "path": "templates/workbench/AGENTS.md",
-      "sha256": "9632d03c6cfdd4cd415284e0cb5268a02f59a104e10fb451ee99dad41152ef92",
+      "sha256": "2ed6ee92d5922124cd26412cb90b9a5a7eae3fae8ceaae38061c42c926694c2f",
       "ownership": "seed"
     },
     {
@@ -54,7 +54,7 @@
     },
     {
       "path": "templates/filehub/README.md",
-      "sha256": "18ae3bff4f969ad7d84389fbba871879b5a29270ab127f41d9bfdb3817614924",
+      "sha256": "855c9962dc98cba384d80f476a2b003033267a227a238fca6eb11106f2b58ce7",
       "ownership": "managed"
     },
     {
@@ -129,12 +129,12 @@
     },
     {
       "path": "skills/asset-ingest/SKILL.md",
-      "sha256": "214b378ea81e5531b3e1a2e60c322e955a3b0712fede7c0131790db86bcf389b",
+      "sha256": "62f78bcac2248cb6f881c0790fb9c3692ce4dbb4c78368b6276d98757caeef86",
       "ownership": "seed"
     },
     {
       "path": "skills/asset-ingest/references/batch.md",
-      "sha256": "8e98250cf8f14779fbb4627a22f61051fae487c19d1eccb561f0f909dd0d8744",
+      "sha256": "5ff2361f2489ec892e85cbce172bd6b33e10875b262f57e3a1a2e3ef8ee9f348",
       "ownership": "seed"
     },
     {
@@ -149,7 +149,7 @@
     },
     {
       "path": "skills/asset-ingest/references/filing.md",
-      "sha256": "a20677c6600a899041fac285762fcbc9b32962bbf56699624b51e0024b63d623",
+      "sha256": "38b26dd0eb7e0a35e01c464d0e88dc1f45185a5b6d595482e81f15577ef0ffab",
       "ownership": "seed"
     },
     {
@@ -199,7 +199,7 @@
     },
     {
       "path": "skills/memory-writeback/SKILL.md",
-      "sha256": "1e443ad5f85cb4e334e009b1dce185e33c1cafe3cb502698d5aad0bd59202824",
+      "sha256": "07c6efa0e46e5006262329061d38bdd4a45fd4cb68b6c5489af768ec7365fd47",
       "ownership": "seed"
     },
     {
@@ -209,7 +209,7 @@
     },
     {
       "path": "skills/memory-writeback/references/writeback.md",
-      "sha256": "9d77922a64a12e498e6b59265b8d67d51c8d5271fef2184c6e0cb0dbdbaa1cb2",
+      "sha256": "ae9c6c26347b7b6e4afb6e5abfceb357a5a9651582033cc82aeb44df56758593",
       "ownership": "seed"
     },
     {
