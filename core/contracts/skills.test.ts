@@ -88,6 +88,14 @@ test("install_path constrained by scope", () => {
   expectIssue(g, "skills.entry.install_path.missing");
 });
 
+test("skill names are unique across workbench + global", () => {
+  // the same name in both scopes would install twice (issue #37 follow-up)
+  const g = validManifest();
+  g.workbench = [entry("dup", "workbench")];
+  g.global = [entry("dup", "global")];
+  expectIssue(g, "skills.entry.name.duplicate");
+});
+
 test("unknown fields are rejected", () => {
   expectIssue({ ...validManifest(), extra: 1 }, "skills.unknown-field");
   expectIssue({ ...validManifest(), workbench: [{ ...entry("x", "workbench"), entrypoint: "skills/x/SKILL.md" }] }, "skills.entry.unknown-field");

@@ -96,7 +96,7 @@ function summarizeInstall(r: InstallResult, root: string, dryRun: boolean): stri
 
 export const skillsSpec: CommandSpec = {
   name: "skills",
-  summary: "manage the official workbench skills in the user-level ~/.agents/skills/",
+  summary: "manage official skills (workbench + machine-global) in the user-level ~/.agents/skills/",
   description:
     "The user-level ~/.agents/skills/ is the multi-harness uniform location (Claude/Grok/Pi/OpenCode " +
     "all read user-level paths). `skills install` materializes the official skills there — the " +

@@ -46,19 +46,21 @@ export function decodeSkillsManifest(input: unknown): DecodeResult<SkillsManifes
   }
   checkNoUnknownFields(input, ["schema_version", "workbench", "global"], "skills", "skills.unknown-field", issues);
   readVersion(issues, "skills.version.unsupported", "skills.version", input.schema_version, [1]);
-  const workbench = decodeEntries(input.workbench, "workbench", issues);
-  const global = decodeEntries(input.global, "global", issues);
+  // names are unique ACROSS workbench+global (SkillEntry contract) — one shared
+  // set, otherwise the same name could install twice (issue #37 follow-up).
+  const seen = new Set<string>();
+  const workbench = decodeEntries(input.workbench, "workbench", issues, seen);
+  const global = decodeEntries(input.global, "global", issues, seen);
   if (!issues.ok) return failure(issues.issues);
   return success({ schema_version: 1, workbench, global });
 }
 
-function decodeEntries(raw: unknown, group: string, issues: IssueCollector): SkillEntry[] {
+function decodeEntries(raw: unknown, group: string, issues: IssueCollector, seen: Set<string>): SkillEntry[] {
   const out: SkillEntry[] = [];
   if (!Array.isArray(raw)) {
     issues.add(`skills.${group}.type`, `skills.${group}`, `${group} must be an array`);
     return out;
   }
-  const seen = new Set<string>();
   raw.forEach((item, i) => {
     const prefix = `skills.${group}[${i}]`;
     if (!isRecord(item)) {
