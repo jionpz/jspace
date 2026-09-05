@@ -181,18 +181,27 @@ export function replaceErrorMessage(err: unknown, target: string): string {
   return `替换 ${target} 失败: ${msg}。请重跑一键安装脚本修复（jspace --version 可确认当前二进制是否仍可用）`;
 }
 
-/** Shared guidance for a suffixed local build whose version number equals the
- *  latest release (issue #40): numeric equality proves nothing about content,
- *  so neither `--check` nor a bare `update` may claim "up to date" for one.
+/** Shared guidance for a suffixed local build whose version number is not older
+ *  than the latest release (issue #40): the numeric comparison proves nothing
+ *  about content, so neither `--check` nor a bare `update` may claim "up to
+ *  date" for one. The wording splits on equal vs numerically newer — "same
+ *  number" would be as false for a `1.0.18-local` build as "up to date" is.
  *  Both call sites emit these lines verbatim; switching to the official binary
  *  stays an explicit `--version` decision. `target` is a normalized `vX.Y.Z`
  *  tag from `resolveTargetVersion`. */
 export function localBuildUpToDateGuidance(current: string, target: string): string[] {
   const show = (v: string): string => v.replace(/^v/, "");
   const tag = target.startsWith("v") ? target : `v${target}`;
+  const equal = compareVersions(current, target) === 0;
+  const risk = equal
+    ? `与最新发布 ${show(target)} 版本号相同，但内容可能不同，数值比对不足以确认与官方发布一致`
+    : `数值上高于最新发布 ${show(target)}，本地构建内容与官方发布没有对应关系，版本自检不适用`;
+  const switchHint = equal
+    ? `切换到官方发布版：jspace update --version ${tag}`
+    : `切回官方发布版：jspace update --version ${tag}（版本号会回退）`;
   return [
-    `当前为本地构建（${show(current)}，版本号带后缀，如 -local）：与最新发布 ${show(target)} 版本号相同，但内容可能不同，数值比对不足以确认与官方发布一致。`,
-    `切换到官方发布版：jspace update --version ${tag}；保留本地改动则从源码重新构建（bun run build，见 docs/PLATFORMS.md）。`,
+    `当前为本地构建（${show(current)}，版本号带后缀，如 -local）：${risk}。`,
+    `${switchHint}；保留本地改动则从源码重新构建（bun run build，见 docs/PLATFORMS.md）。`,
   ];
 }
 
@@ -394,8 +403,9 @@ export async function cmdUpdate(check: boolean, targetVersion?: string, deps: Up
     return;
   }
   if (upToDate && !targetVersion) {
-    // An env-provided version (install.sh passes JSPACE_VERSION) counts like an
-    // explicit --version flag: a deliberate switch to the official build.
+    // An env-provided JSPACE_VERSION is the documented env equivalent of an
+    // explicit --version flag (see the update --version option help): a
+    // deliberate switch to the official build.
     if (suffixed && !env.JSPACE_VERSION) {
       for (const line of localBuildUpToDateGuidance(current, target)) log(line);
       return;

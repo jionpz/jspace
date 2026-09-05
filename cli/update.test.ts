@@ -362,6 +362,28 @@ test("localBuildUpToDateGuidance names the content risk and both escape hatches"
   expect(joined).not.toContain("已是最新");
 });
 
+test("localBuildUpToDateGuidance stays truthful when the local build is numerically newer than latest", () => {
+  // 1.0.18-local vs latest v1.0.17: "same number" would be as false as "up to date"
+  const lines = localBuildUpToDateGuidance("1.0.18-local", "v1.0.17");
+  const joined = lines.join("\n");
+  expect(joined).not.toContain("版本号相同");
+  expect(joined).toContain("高于最新发布 1.0.17");
+  expect(joined).toContain("jspace update --version v1.0.17");
+  expect(joined).toContain("回退");
+  expect(joined).not.toContain("已是最新");
+});
+
+test("cmdUpdate --check warns with the ahead wording for a suffixed build newer than latest", async () => {
+  const { lines, log } = logCapture();
+  const { fetch } = releaseApiFetch("jspace-linux-x64", new Uint8Array(), "v1.0.17");
+  await cmdUpdate(true, undefined, localDeps({ version: "1.0.18-local", fetchImpl: fetch, log }));
+  expect(lines.slice(0, 2)).toEqual(["当前版本: 1.0.18-local", "最新版本: 1.0.17"]);
+  const joined = lines.join("\n");
+  expect(joined).not.toContain("已是最新");
+  expect(joined).not.toContain("版本号相同");
+  expect(joined).toContain("高于最新发布 1.0.17");
+});
+
 test("cmdUpdate --check warns instead of claiming up-to-date for a suffixed local build", async () => {
   const { lines, log } = logCapture();
   const { fetch } = releaseApiFetch("jspace-linux-x64", new Uint8Array(), "v1.0.17");
