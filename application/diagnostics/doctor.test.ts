@@ -287,6 +287,49 @@ test("nested _inbox dir counts as ONE item (top-level semantics; single countInb
   expect(diag!.message).toContain("2 unfiled file(s)");
 });
 
+test("_inbox with only resident README + .skip-inbox-tidy dir -> NO inbox_unfiled (issue #38)", () => {
+  // Structure, not payload: the permanent false warning must be gone.
+  writeFileSync(
+    join(root, ".jspace", "hub.json"),
+    JSON.stringify({
+      schema_version: 1,
+      domains: [{ id: "files", path: "workspace/files" }],
+      resources: [{ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] }],
+      projects: [],
+    }),
+  );
+  const fh = join(root, "filehub");
+  mkdirSync(join(fh, "_inbox", "deep-learn"), { recursive: true });
+  writeFileSync(join(fh, "_inbox", "README.md"), "drop-zone contract");
+  writeFileSync(join(fh, "_inbox", "deep-learn", ".skip-inbox-tidy"), "");
+  writeFileSync(join(fh, "_inbox", "deep-learn", "note.md"), "x");
+  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ schema_version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
+  const r = doctorWorkbench(root, stubDeps());
+  expect(codes(r)).not.toContain("filehub.inbox_unfiled");
+});
+
+test("_inbox payload next to resident/exempt entries still warns with the exact count", () => {
+  writeFileSync(
+    join(root, ".jspace", "hub.json"),
+    JSON.stringify({
+      schema_version: 1,
+      domains: [{ id: "files", path: "workspace/files" }],
+      resources: [{ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] }],
+      projects: [],
+    }),
+  );
+  const fh = join(root, "filehub");
+  mkdirSync(join(fh, "_inbox", "deep-learn"), { recursive: true });
+  writeFileSync(join(fh, "_inbox", "README.md"), "drop-zone contract");
+  writeFileSync(join(fh, "_inbox", "deep-learn", ".skip-inbox-tidy"), "");
+  writeFileSync(join(fh, "_inbox", "real-report.pdf"), "x");
+  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ schema_version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
+  const r = doctorWorkbench(root, stubDeps());
+  const diag = (r.data as { diagnostics: { code: string; message: string }[] }).diagnostics.find((d) => d.code === "filehub.inbox_unfiled");
+  expect(diag).toBeDefined();
+  expect(diag!.message).toContain("1 unfiled file(s)");
+});
+
 test("malformed .APPLY.json -> filehub.pending_decode warning (P2-6)", () => {
   writeFileSync(
     join(root, ".jspace", "hub.json"),

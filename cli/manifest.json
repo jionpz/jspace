@@ -134,7 +134,7 @@
     },
     {
       "path": "skills/asset-ingest/references/batch.md",
-      "sha256": "072985c3816a38ebbdb10f557ccb80e8c4f0c7ce1c04081039bf7f6ca54b9c35",
+      "sha256": "e64aa26d8d6b5a9fc455d070994affb4496b691cdf3b209817e0bbf26a263015",
       "ownership": "seed"
     },
     {
@@ -149,7 +149,7 @@
     },
     {
       "path": "skills/asset-ingest/references/filing.md",
-      "sha256": "b66a7629fabde412098337c6fd5866574bf17c6da322db9e19d0c69958d4dc25",
+      "sha256": "5ac52aeaf2d0ca3e3c30ade9ef72a476732ea46431956b544c55187292131e2a",
       "ownership": "seed"
     },
     {

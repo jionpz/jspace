@@ -12,7 +12,7 @@
 
 **归位前先读上下文**：① `gbrain get profile/filing-prefs`（如存在）——用户历次纠正积累的归位规则；② `ls` 目标项目目录——观察已有组织方式并延续。两者在确定性判断中使用。
 
-遍历 `_inbox/` 剩余文件(排除:点文件、`.processing` 已完成项、skip 清单)。
+遍历 `_inbox/` 剩余文件(排除:点文件、常驻契约文件 `README.md` / `AGENTS.md`、`.processing` 已完成项、skip 清单)。命中 `.skip-inbox-tidy` 豁免标记的目录**整目录跳过并计入「跳过」**(原因:豁免标记),不搬动其内容——与 unfiled 计数(`inbox status` / doctor / context hook)同一口径,见 filing.md「投放口常驻文件与豁免标记」。
 
 **确定性**判定(全部满足):
 1. 类型明确:`pdf / ppt / txt / md / excel` 之一(由扩展名 + 内容判断);
@@ -43,7 +43,7 @@
 
 ## 汇总与机械校验
 
-- 汇总:`成功 / 跳过 / 失败 + 原因`,以及计数对比(批量前后 `_inbox/` 文件数一致,排除点文件与 `.processing`)。
+- 汇总:`成功 / 跳过 / 失败 + 原因`,以及计数对比(批量前后 `_inbox/` 文件数一致,排除点文件、常驻契约文件与 `.skip-inbox-tidy` 豁免目录)。
 - 查重预检:确定性判断里已含「`gbrain get` 未存在」,防擅自覆盖。
 - 召回自检:每份(或抽样)贴出实际 `gbrain query <关键词>` 输出;未命中 → 检查 slug/tags/embedding,不得静默。
 
