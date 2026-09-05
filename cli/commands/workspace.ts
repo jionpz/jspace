@@ -10,7 +10,7 @@ import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
 import { ASSETS } from "../assets.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
 import { b, cronDeps, optS, readFileOrNull, s } from "./helpers.ts";
-import { userSkillsRoot } from "./skills.ts";
+import { userSkillsRoot, embeddedSkillAssets } from "./skills.ts";
 
 /** After a successful workbench upgrade, refresh the user-level ~/.agents/skills/
  *  copies of the official skills (hash-compare: changed files re-written, identical
@@ -18,8 +18,7 @@ import { userSkillsRoot } from "./skills.ts";
  *  the multi-harness docs live, and it must not drift stale past the bundle. */
 function refreshExternalSkills(): string[] {
   const deps: InstallDeps = {
-    assetKeys: () => Object.keys(ASSETS),
-    assetContent: (k) => ASSETS[k],
+    ...embeddedSkillAssets(),
     userSkillsRoot,
     writeFile: (p, c) => writeBytesAtomic(p, c),
     exists: existsSync,
@@ -31,7 +30,7 @@ function refreshExternalSkills(): string[] {
       }
     },
   };
-  const names = SKILLS_MANIFEST.workbench.map((skill) => skill.name);
+  const names = [...SKILLS_MANIFEST.workbench, ...SKILLS_MANIFEST.global].map((skill) => skill.name);
   const r = installSkills(deps, names, { refresh: true });
   const updated = r.skills.flatMap((skill) => skill.updated.map((rel) => `${skill.name}/${rel}`));
   if (updated.length === 0) return ["jspace: ok: user-level skills up to date (~/.agents/skills)"];

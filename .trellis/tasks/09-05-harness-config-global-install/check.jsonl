@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/09-05-harness-config-global-install/prd.md", "reason": "验收标准 AC1-AC7 是检查的对照基准"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "门禁（tsc/bun test/gen-assets 无 diff/check-* 全过）与所有权模型检查依据"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "检查写失败必须 exit 1（issue #8 #9 语义）、info/warning 分级是否符合诊断模式"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "检查 install deps 并集是否复用现有 InstallDeps 注入而非复制逻辑、两命令组装是否抽公共函数"}

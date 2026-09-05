@@ -58,6 +58,32 @@ test("skills install: dry-run success path has no errors/warnings", () => {
   expect(r.lines.join("\n")).toContain("(dry-run)");
 });
 
+test("skills install: covers machine-global skills (manifest.global, issue #37)", () => {
+  // The handler must request workbench AND global names; with a union key set
+  // (ASSETS ∪ GLOBAL_SKILLS, as wired by embeddedSkillAssets), harness-config
+  // files land under ~/.agents/skills/ like any official skill.
+  const written = new Map<string, string>();
+  const deps: InstallDeps = {
+    assetKeys: () => [
+      "skills/jspace-use/SKILL.md",
+      "skills/harness-config/SKILL.md",
+      "skills/harness-config/scripts/detect.sh",
+    ],
+    assetContent: () => "# test",
+    userSkillsRoot: () => join(tmp, ".agents", "skills"),
+    exists: () => false,
+    readFile: () => null,
+    writeFile: (p, c) => void written.set(p, c),
+    dryRun: false,
+  };
+  const r = installHandler(ctx(), { refresh: false }, deps);
+  expect(r.exitCode).toBeUndefined();
+  expect(r.errors ?? []).toHaveLength(0);
+  expect([...written.keys()].some((k) => k.endsWith("harness-config/SKILL.md"))).toBe(true);
+  expect([...written.keys()].some((k) => k.endsWith("harness-config/scripts/detect.sh"))).toBe(true);
+  expect(r.lines.join("\n")).toContain("harness-config@");
+});
+
 test("gbrain wire: write failure -> errors + exit 1, not a silent warning", () => {
   const deps: WireDeps = {
     readJson: () => ({ mcpServers: { gbrain: { command: "gbrain", env: {} } } }),

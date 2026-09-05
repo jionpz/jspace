@@ -34,6 +34,10 @@ export interface SkillsDeps {
    *  Injected from cli for the same reason as officialSkillNames (diffBundle
    *  needs BUNDLE_MANIFEST). Omitted => the check is skipped silently. */
   bundleStaleSkills?: (root: string) => string[];
+  /** Machine-global skills (manifest.global) with their per-machine install
+   *  target (tilde already expanded at the cli wiring). Injected for the
+   *  skills.global_missing check (issue #37); omitted => check skipped. */
+  globalSkills?: () => Array<{ name: string; installPath: string }>;
 }
 
 export interface GbrainDeps {

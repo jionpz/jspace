@@ -81,7 +81,7 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
       "version": "1",
       "scope": "global",
       "dependencies": [],
-      "install_source": "~/.agents/skills/harness-config"
+      "install_path": "~/.agents/skills/harness-config"
     }
   ]
 };

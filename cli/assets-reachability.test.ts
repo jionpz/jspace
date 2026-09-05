@@ -10,6 +10,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { posix } from "node:path";
 import { ASSETS } from "./assets.generated.ts";
+import { GLOBAL_SKILLS } from "./global-skills.generated.ts";
 import { SKILLS_MANIFEST } from "./skills.generated.ts";
 
 /** Bundled .md files that land in the workbench (filehub is on-demand). */
@@ -19,6 +20,17 @@ function workbenchMds(): Array<[string, string]> {
     if (key.startsWith("templates/filehub/")) return false;
     return key.startsWith("templates/workbench/") || key.startsWith("skills/");
   });
+}
+
+/** Machine-global skill .md files (GLOBAL_SKILLS, issue #37) — installed to the
+ *  per-machine ~/.agents/skills/<name>/, never materialized into a workbench. */
+function globalMds(): Array<[string, string]> {
+  return Object.entries(GLOBAL_SKILLS).filter(([key]) => key.endsWith(".md"));
+}
+
+/** Every embedded file (workbench bundle + global skills). */
+function allEmbeddedKeys(): string[] {
+  return [...Object.keys(ASSETS), ...Object.keys(GLOBAL_SKILLS)];
 }
 
 /** Extract backtick paths and markdown link targets from an md body. */
@@ -75,28 +87,34 @@ test("every manifest workbench skill is bundled", () => {
   }
 });
 
-test("harness-config stays machine-global (not bundled, install_source declared)", () => {
+test("harness-config stays machine-global (separate GLOBAL_SKILLS map, install_path declared)", () => {
   const names = new Set(SKILLS_MANIFEST.workbench.map((s) => s.name));
   expect(names.has("harness-config"), "harness-config must not be a workbench skill").toBe(false);
   expect(
     Object.keys(ASSETS).some((k) => k.startsWith("skills/harness-config/")),
-    "harness-config must not be embedded in the bundle",
+    "harness-config must not be embedded in the workbench bundle (it must never materialize into a workbench)",
   ).toBe(false);
   const global = SKILLS_MANIFEST.global.find((s) => s.name === "harness-config");
   expect(global, "harness-config must be declared in manifest.global").toBeDefined();
-  expect(global?.install_source).toBeTruthy();
+  expect(global?.install_path).toBeTruthy();
+  // issue #37: a declared global skill must have an acquisition path — every
+  // global skill's files ship in GLOBAL_SKILLS so `skills install` can land it.
+  for (const g of SKILLS_MANIFEST.global) {
+    const files = Object.keys(GLOBAL_SKILLS).filter((k) => k.startsWith(`skills/${g.name}/`));
+    expect(files.length > 0, `global skill has no embedded files: ${g.name}`).toBe(true);
+    expect(files.some((k) => k.endsWith("/SKILL.md")), `global skill missing SKILL.md: ${g.name}`).toBe(true);
+  }
 });
 
 test("bundle-internal references resolve to an embedded file or dir", () => {
   const failures: string[] = [];
-  for (const [key, body] of workbenchMds()) {
+  const exists = (target: string) =>
+    allEmbeddedKeys().some((k) => k === target || k.startsWith(`${target}/`)); // file or dir prefix
+  for (const [key, body] of [...workbenchMds(), ...globalMds()]) {
     for (const ref of refsOf(body)) {
       const target = resolve(key, ref);
       if (target === null) continue;
-      const exists =
-        ASSETS[target] !== undefined ||
-        Object.keys(ASSETS).some((k) => k.startsWith(`${target}/`)); // dir prefix
-      if (!exists) failures.push(`${key}: unresolved ref \`${ref}\``);
+      if (!exists(target)) failures.push(`${key}: unresolved ref \`${ref}\``);
     }
   }
   expect(failures).toEqual([]);

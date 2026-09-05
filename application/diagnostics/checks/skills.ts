@@ -158,6 +158,22 @@ export function checkSkills(root: string, deps: SkillsDeps): RegistryDiagnostic[
   }
 
   {
+    // Machine-global skills (manifest.global, e.g. harness-config) live at a
+    // per-machine path outside the workbench; a declared-but-absent install is
+    // how official docs' references turn into dead links (issue #37). info:
+    // the skill is optional machine-level tooling, not a workbench fault.
+    for (const g of deps.globalSkills?.() ?? []) {
+      if (isFile(join(g.installPath, "SKILL.md"))) continue;
+      diags.push({
+        severity: "info",
+        code: "skills.global_missing",
+        path: `skills.${g.name}`,
+        message: `machine-global skill not installed: ${g.name} has no SKILL.md at ${g.installPath} (official skill docs reference it); run jspace skills install`,
+      });
+    }
+  }
+
+  {
     const agentsPath = join(root, "AGENTS.md");
     const body = isFile(agentsPath) ? readFileSync(agentsPath, "utf-8") : null;
     const endIdx = body?.indexOf(BLOCK_END) ?? -1;

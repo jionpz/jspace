@@ -1,7 +1,7 @@
 # Harness wiring reference
 
 > 完整推荐配置、全局治理文档(`~/.agents/agents.md`)接线与逐 harness 差异见 **`harness-config` skill**;本文件是 JSpace 工作台对 harness 支持集的**权威声明**(单一来源,与 `adapters/harness/capabilities.yaml` 保持一致)。
-> **`harness-config` 是机器级全局 skill**,**不随本工作台物化**(不在 `skills/` 下);需要时按其 Phase 1 自装到 `~/.agents/skills/harness-config` 后再用,勿假设工作台已内置。
+> **`harness-config` 是机器级全局 skill**,**不随本工作台物化**(不在 `skills/` 下);由 `jspace skills install` 安装/刷新到 `~/.agents/skills/harness-config`(fill-gaps,不覆盖本地编辑),缺失时 `jspace doctor` 会以 `skills.global_missing` 提示。
 > `<gbrain>` = gbrain 二进制绝对路径,按 `$GBRAIN_BIN` → `command -v gbrain`(Windows `where gbrain`) → `~/.bun/bin/gbrain` 解析(Windows:`%USERPROFILE%\.bun\bin\gbrain.exe`)。
 
 支持集 = **五个会话 harness（Claude Code / Grok Build / OpenCode / Pi / Cursor）+ codex cron 兼容**。用户选其一会话 harness 使用,wire 那一个;hermes 可选(提及即可,不主动推广)。所有 harness 经 MCP/CLI 读写同一 gbrain 库。

@@ -1,12 +1,14 @@
 // cli/commands/skills.ts — `jspace skills install` — materialize the official
-// workbench skills into the user-level `~/.agents/skills/` directory. This is
-// the multi-harness uniform location (Claude/Grok/Pi/OpenCode read user-level
-// paths; `~` expands per machine, machine-agnostic, no harness-specific var).
+// skills (workbench + machine-global, issue #37) into the user-level
+// `~/.agents/skills/` directory. This is the multi-harness uniform location
+// (Claude/Grok/Pi/OpenCode read user-level paths; `~` expands per machine,
+// machine-agnostic, no harness-specific var).
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CommandSpec, CmdContext, CmdResult } from "../../application/commands/command.ts";
 import { installSkills, type InstallDeps, type InstallResult } from "../../application/skills/install.ts";
 import { ASSETS } from "../assets.generated.ts";
+import { GLOBAL_SKILLS } from "../global-skills.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
 import { expandTilde } from "../embed.ts";
 import { b } from "./helpers.ts";
@@ -28,9 +30,19 @@ function readFileOrNull(abs: string): string | null {
   }
 }
 
+/** Union view over the two embedded skill content maps — workbench skills in
+ *  ASSETS, machine-global skills (harness-config) in GLOBAL_SKILLS (issue #37).
+ *  installSkills is prefix+key based, so it needs no scope awareness. Shared by
+ *  `skills install` and `workspace upgrade`'s user-level refresh. */
+export function embeddedSkillAssets(): Pick<InstallDeps, "assetKeys" | "assetContent"> {
+  return {
+    assetKeys: () => [...Object.keys(ASSETS), ...Object.keys(GLOBAL_SKILLS)],
+    assetContent: (k) => ASSETS[k] ?? GLOBAL_SKILLS[k],
+  };
+}
+
 const installDeps = (dryRun: boolean): InstallDeps => ({
-  assetKeys: () => Object.keys(ASSETS),
-  assetContent: (k) => ASSETS[k],
+  ...embeddedSkillAssets(),
   userSkillsRoot,
   writeFile: writeWithDirs,
   exists: existsSync,
@@ -46,7 +58,7 @@ export function installHandler(
   deps: InstallDeps = installDeps(ctx.dryRun),
 ): CmdResult {
   try {
-    const names = SKILLS_MANIFEST.workbench.map((s) => s.name);
+    const names = [...SKILLS_MANIFEST.workbench, ...SKILLS_MANIFEST.global].map((s) => s.name);
     const r = installSkills(deps, names, { refresh: b(args?.refresh) });
     const root = userSkillsRoot();
     return { lines: summarizeInstall(r, root, ctx.dryRun) };
@@ -57,7 +69,7 @@ export function installHandler(
 
 const installSpec: CommandSpec = {
   name: "install",
-  summary: "materialize official skills into ~/.agents/skills/ (multi-harness uniform location)",
+  summary: "materialize official skills (workbench + machine-global) into ~/.agents/skills/ (multi-harness uniform location)",
   features: { dryRun: true },
   options: [
     { name: "--refresh", dest: "refresh", takesValue: false, help: "refresh changed official files (hash-compare; default: fill gaps only, preserve local edits)" },
@@ -84,10 +96,11 @@ function summarizeInstall(r: InstallResult, root: string, dryRun: boolean): stri
 
 export const skillsSpec: CommandSpec = {
   name: "skills",
-  summary: "manage the official workbench skills in the user-level ~/.agents/skills/",
+  summary: "manage official skills (workbench + machine-global) in the user-level ~/.agents/skills/",
   description:
     "The user-level ~/.agents/skills/ is the multi-harness uniform location (Claude/Grok/Pi/OpenCode " +
-    "all read user-level paths). `skills install` materializes the official workbench skills there, " +
+    "all read user-level paths). `skills install` materializes the official skills there — the " +
+    "workbench skills plus the machine-global ones (manifest.global, e.g. harness-config, issue #37) — " +
     "filling gaps without overwriting local edits (idempotent, like harness-config).",
   features: { dir: true },
   children: [installSpec],

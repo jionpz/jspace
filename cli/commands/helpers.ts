@@ -9,6 +9,7 @@ import { loadCrons, parseSchedule } from "../../application/automation/definitio
 import { schedulerAdapter } from "../../adapters/scheduler/index.ts";
 import { installedCronIdsForRoot, schedulerEnv } from "../scheduler.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
+import { expandTilde } from "../embed.ts";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
 import { diffBundle } from "../../application/workspace/manifest.ts";
 import { readMaterializedJournal } from "../../application/workspace/journal.ts";
@@ -76,6 +77,10 @@ export const cronDeps = {
   linuxCronHealth: () => schedulerAdapter(process.platform)?.health?.(schedulerEnv()) ?? { crontab: "missing", service: "stopped" },
   officialSkillNames: () => SKILLS_MANIFEST.workbench.map((s) => s.name),
   bundleStaleSkills,
+  globalSkills: () =>
+    SKILLS_MANIFEST.global
+      .filter((s) => s.install_path !== undefined)
+      .map((s) => ({ name: s.name, installPath: expandTilde(s.install_path!) })), // install_path is contract-required for global; ! is filter-guaranteed
   readUserClaudeJson,
   readHarnessConfig: readFileOrNull,
   harnessBinOnPath: (name: string) => binaryOnPath(name, process.platform),

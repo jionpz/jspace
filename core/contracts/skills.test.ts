@@ -13,7 +13,7 @@ function entry(name: string, scope: SkillEntry["scope"]): SkillEntry {
     scope,
     dependencies: [],
     description: `skill ${name}`,
-    ...(scope === "global" ? { install_source: `~/.agents/skills/${name}` } : {}),
+    ...(scope === "global" ? { install_path: `~/.agents/skills/${name}` } : {}),
   };
 }
 
@@ -77,15 +77,23 @@ test("dependencies must be an array of valid ids", () => {
   expectIssue(badId, "skills.entry.dependencies.invalid");
 });
 
-test("install_source constrained by scope", () => {
-  // workbench must NOT carry install_source
+test("install_path constrained by scope", () => {
+  // workbench must NOT carry install_path
   const wb = validManifest();
-  wb.workbench = [{ ...entry("x", "workbench"), install_source: "~/.agents/x" }];
-  expectIssue(wb, "skills.entry.install_source.invalid");
-  // global MUST carry install_source
+  wb.workbench = [{ ...entry("x", "workbench"), install_path: "~/.agents/x" }];
+  expectIssue(wb, "skills.entry.install_path.invalid");
+  // global MUST carry install_path
   const g = validManifest();
-  g.global = [{ ...entry("x", "global") as SkillEntry, install_source: undefined }];
-  expectIssue(g, "skills.entry.install_source.missing");
+  g.global = [{ ...entry("x", "global") as SkillEntry, install_path: undefined }];
+  expectIssue(g, "skills.entry.install_path.missing");
+});
+
+test("skill names are unique across workbench + global", () => {
+  // the same name in both scopes would install twice (issue #37 follow-up)
+  const g = validManifest();
+  g.workbench = [entry("dup", "workbench")];
+  g.global = [entry("dup", "global")];
+  expectIssue(g, "skills.entry.name.duplicate");
 });
 
 test("unknown fields are rejected", () => {
