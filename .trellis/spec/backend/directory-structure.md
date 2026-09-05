@@ -17,9 +17,18 @@ application/         # use cases: business logic, CommandSpec framework, CmdResu
   workspace/  automation/  registry/  ingest/  pending/
 cli/                 # CommandSpec tree + main entry + generated assets + cron/update
 scripts/             # build-time: gen-assets / gen-version / build-all
-skills/ + skills-manifest.json   # workbench skills (manifest is the packaging source of truth; jspace init materializes them into the workbench's .jspace/skills/)
+skills/ + skills-manifest.json   # official skills (manifest is the packaging source of truth)
 templates/           # workbench / filehub templates (embedded into the binary)
 ```
+
+### Skill embedding: two maps, one rule (issue #37)
+
+`skills-manifest.json` declares two scopes, and gen-assets embeds them into **two separate generated maps**:
+
+- `workbench` → `cli/assets.generated.ts` (`ASSETS`) — materialized into every workbench (`.jspace/skills/<name>/` + harness projections) via `materializedRels`, which maps **every** `skills/…` key in `ASSETS` to workbench paths.
+- `global` → `cli/global-skills.generated.ts` (`GLOBAL_SKILLS`) — machine-level skills (e.g. `harness-config`), installed only to the per-machine `~/.agents/skills/<name>/` by `skills install` and refreshed by `workspace upgrade` (union view in `cli/commands/skills.ts` `embeddedSkillAssets`).
+
+**The rule**: global-scope skill content must never enter `ASSETS`. Workbench materialization machinery (`materializedRels` / `materializeTree` / `diffBundle`) reads only `ASSETS`, so keeping the maps separate is what structurally guarantees a global skill can never leak into a workbench — do not "unify" the maps, and do not add scope-aware branches to the materialization path. Global entries declare `install_path` (their machine target; contract-required) and `assets-reachability.test.ts` asserts the invariant.
 
 ## Workbench Layout (generated)
 

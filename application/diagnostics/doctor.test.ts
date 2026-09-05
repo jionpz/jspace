@@ -425,6 +425,30 @@ test(".agents/skills projection drift is detected like .claude", () => {
   expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("skills.projection_drift");
 });
 
+test("global skill install target missing -> skills.global_missing (info, issue #37)", () => {
+  const r = doctorWorkbench(
+    root,
+    stubDeps({ globalSkills: () => [{ name: "harness-config", installPath: join(root, "absent", "harness-config") }] }),
+  );
+  expect(codes(r)).toContain("skills.global_missing");
+  const data = r.data as { diagnostics: { code: string; severity: string; message: string }[] };
+  const d = data.diagnostics.find((x) => x.code === "skills.global_missing");
+  expect(d?.severity).toBe("info"); // optional machine-level skill: never a fault
+  expect(d?.message).toContain("jspace skills install");
+});
+
+test("global skill installed (SKILL.md present) -> no skills.global_missing", () => {
+  const dir = join(root, "installed", "harness-config");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "SKILL.md"), "# harness-config");
+  const r = doctorWorkbench(root, stubDeps({ globalSkills: () => [{ name: "harness-config", installPath: dir }] }));
+  expect(codes(r)).not.toContain("skills.global_missing");
+});
+
+test("globalSkills not injected -> skills.global_missing check skipped silently", () => {
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("skills.global_missing");
+});
+
 test("legacy official copy in root skills/ -> skills.legacy_root_copy; user skills untouched", () => {
   mkdirSync(join(root, "skills", "jspace-use"), { recursive: true });
   mkdirSync(join(root, "skills", "my-user-skill"), { recursive: true });

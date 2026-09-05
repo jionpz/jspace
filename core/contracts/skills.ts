@@ -26,7 +26,7 @@ export interface SkillEntry {
   scope: SkillScope; // workbench = bundled + materialized; global = machine-level, not bundled
   dependencies: string[]; // cross-skill references (e.g. memory-recall -> asset-ingest)
   entrypoints?: string[]; // semantic entries a cron skill target may invoke (e.g. asset-ingest: batch)
-  install_source?: string; // global only: install/upgrade source (e.g. ~/.agents/skills/harness-config)
+  install_path?: string; // global only: machine-level install target (e.g. ~/.agents/skills/harness-config; tilde expands per machine)
   description?: string; // optional; single source for descriptions is SKILL.md frontmatter (gen-assets renders from it)
 }
 
@@ -36,7 +36,7 @@ export interface SkillsManifestV1 {
   global: SkillEntry[]; // machine-global optional skills (harness-config)
 }
 
-const ENTRY_FIELDS = ["name", "version", "scope", "dependencies", "entrypoints", "install_source", "description"] as const;
+const ENTRY_FIELDS = ["name", "version", "scope", "dependencies", "entrypoints", "install_path", "description"] as const;
 
 export function decodeSkillsManifest(input: unknown): DecodeResult<SkillsManifestV1> {
   const issues = new IssueCollector();
@@ -107,13 +107,13 @@ function decodeEntries(raw: unknown, group: string, issues: IssueCollector): Ski
         });
       }
     }
-    // scope constraint: install_source only for global, and required for global.
-    const hasInstall = item.install_source !== undefined;
+    // scope constraint: install_path only for global, and required for global.
+    const hasInstall = item.install_path !== undefined;
     if (scope === "workbench" && hasInstall) {
-      issues.add("skills.entry.install_source.invalid", `${prefix}.install_source`, "install_source is only valid for global skills");
+      issues.add("skills.entry.install_path.invalid", `${prefix}.install_path`, "install_path is only valid for global skills");
     }
     if (scope === "global" && !hasInstall) {
-      issues.add("skills.entry.install_source.missing", `${prefix}.install_source`, "global skills must declare install_source");
+      issues.add("skills.entry.install_path.missing", `${prefix}.install_path`, "global skills must declare install_path");
     }
     if (issues.issues.length === before) {
       out.push({
@@ -122,7 +122,7 @@ function decodeEntries(raw: unknown, group: string, issues: IssueCollector): Ski
         scope: scope as SkillScope,
         dependencies: Array.isArray(item.dependencies) ? (item.dependencies as string[]) : [],
         ...(entrypoints !== undefined ? { entrypoints } : {}),
-        ...(hasInstall ? { install_source: item.install_source as string } : {}),
+        ...(hasInstall ? { install_path: item.install_path as string } : {}),
         ...(description !== undefined ? { description } : {}),
       });
     }

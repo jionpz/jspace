@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/09-05-harness-config-global-install/research/issue-37.md", "reason": "完整 issue 原文：问题描述、影响面（13 处引用）、期望行为与复现步骤"}
+{"file": ".trellis/spec/backend/index.md", "reason": "分层架构总览（core/contracts → application → cli）与门禁速查，动手前必读"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "新模块落位与依赖方向规则：生成模块进 cli/，检查逻辑进 application/diagnostics/"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "decoder 诊断模式（契约更名 install_path 需同步消息码）与 CmdResult 错误语义"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "门禁清单、DI 注入模式（SkillsDeps/InstallDeps 扩展须遵循）、CommandSpec 约定"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "本任务贯穿 gen-assets 生成管线 → 契约 → CLI → application 四层，需跨层数据流检查"}
