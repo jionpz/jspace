@@ -11,6 +11,7 @@
 | 项目经验 | `project/<id>/lessons/<主题>` | **append-only 新页** | 教训 / 项目专属要点 |
 | 跨项目知识 | `knowledge/<域>/<主题>` | **append-only 新页** | 跨项目可复用认识(域=通用知识域) |
 | 工作台偏好 | `profile/<主题>` | 固定 slug **覆盖**,`tags: [profile]` | 协作约定 / 默认格式 |
+| 归位偏好 | `profile/filing-prefs` | 固定 slug **覆盖**,`tags: [profile]` | 文件放哪的用户纠正 |
 | 项目事件 | `records/project/<id>/<date>-<主题>` | **append-only 新页** | 里程碑 / 事故 / 范围变更(稀疏,非会话日志) |
 | 周快照 | `records/consolidate/<日期>` | **转 memory-consolidate** | 本周汇总（本 skill 不写） |
 
@@ -28,6 +29,7 @@
    ├─ 任务/bug/迭代细节？ → 不进 gbrain;state「执行层」留指针
    ├─ 可执行流程且已重复 ≥3 次？ → skill 化;gbrain 只写决策留痕
    ├─ 工作台偏好/协作约定？ → profile/<主题>(覆盖)
+   ├─ 用户纠正了文件归位？ → profile/filing-prefs(覆盖,asset-ingest 归位前读取)
    ├─ 归属某项目？
    │   ├─ 现在到哪/下一步/开放问题 → state(覆盖)
    │   ├─ 已定的行动承诺 → decisions/<主题>(新页)

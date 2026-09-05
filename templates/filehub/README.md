@@ -7,7 +7,7 @@
 ## 结构(PARA 变体,最小起步,靠使用涌现细化)
 
 - `_inbox/` — 新文件一律先落这里,等待整理。说一句「整理一下 inbox」即可批量归档。
-- `projects/<项目>/` — 进行中的项目:`index.md`(dashboard)+ `docs/` `decks/` `data/` `notes/`
+- `projects/<项目>/` — 进行中的项目:`index.md`(dashboard)+ AI 根据内容和上下文自主组织子目录(不预设固定分类;用户纠正积累为归位偏好)
 - `areas/<领域>/` — 长期职责域(无明确终点的工作)
 - `archive/<年>/` — 结项与冷资料
 
@@ -39,7 +39,7 @@ created: YYYY-MM-DD
 ...
 
 ## 关键文件
-- [[docs/xxx|说明]]
+- [[2026-08-01-xxx-v1.pdf|说明]]
 
 ## 下一步
 - [ ] ...

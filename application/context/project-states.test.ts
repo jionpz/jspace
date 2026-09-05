@@ -5,12 +5,14 @@ import type { GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
 import {
   collectActiveProjects,
   collectActiveProfiles,
+  collectRecentKnowledge,
   summarizeStateCard,
   summarizeProfilePage,
   isArchivedGbrainNote,
   parseNoteTags,
   MAX_ACTIVE_PROJECTS,
   MAX_ACTIVE_PROFILES,
+  MAX_RECENT_KNOWLEDGE,
 } from "./project-states.ts";
 
 function fakeGbrain(over: Partial<GbrainDeps> = {}): GbrainDeps {
@@ -254,6 +256,56 @@ test("collectActiveProfiles: get failure still yields the theme (recency is the 
   });
   const r = await collectActiveProfiles(g);
   expect(r).toEqual([{ theme: "沟通偏好", summary: "", updatedAt: "2026-08-10" }]);
+});
+
+test("collectRecentKnowledge: filters decisions/lessons/knowledge, skips archived+superseded", async () => {
+  const superseded = `---
+type: note
+tags: [knowledge, status:superseded]
+---
+# old
+旧的。
+`;
+  const live = `---
+type: note
+tags: [knowledge]
+---
+# naming
+ascii slug 约定。
+`;
+  const g = fakeGbrain({
+    list: async () => ({
+      ok: true,
+      rows: [
+        { slug: "project/acme/decisions/tech-stack", updatedAt: "2026-08-10" },
+        { slug: "project/acme/lessons/deploy", updatedAt: "2026-08-09" },
+        { slug: "knowledge/governance/naming", updatedAt: "2026-08-08" },
+        { slug: "project/acme/state", updatedAt: "2026-08-07" }, // filtered out (state card)
+        { slug: "profile/沟通偏好", updatedAt: "2026-08-06" }, // filtered out (profile)
+      ],
+    }),
+    get: async (slug) => {
+      if (slug === "knowledge/governance/naming") return { ok: true, content: live };
+      if (slug === "project/acme/decisions/tech-stack") return { ok: true, content: superseded };
+      return { ok: false };
+    },
+  });
+  const r = await collectRecentKnowledge(g);
+  expect(r).toHaveLength(2);
+  expect(r.map((k) => k.slug)).toEqual(["project/acme/lessons/deploy", "knowledge/governance/naming"]);
+  expect(r[1].summary).toBe("ascii slug 约定。");
+});
+
+test("collectRecentKnowledge: failure -> empty, never throws", async () => {
+  expect(await collectRecentKnowledge(fakeGbrain({ list: async () => { throw new Error("boom"); } }))).toEqual([]);
+  expect(await collectRecentKnowledge(fakeGbrain({ list: async () => ({ ok: false, error: "lock" }) }))).toEqual([]);
+});
+
+test("collectRecentKnowledge: caps at MAX_RECENT_KNOWLEDGE", async () => {
+  const rows = Array.from({ length: 10 }, (_, i) => ({ slug: `knowledge/k${i}/topic`, updatedAt: `2026-08-${i + 1}` }));
+  const g = fakeGbrain({ list: async () => ({ ok: true, rows }) });
+  const r = await collectRecentKnowledge(g);
+  expect(r).toHaveLength(MAX_RECENT_KNOWLEDGE);
 });
 
 test("summarizeProfilePage: first non-heading line, truncated at 80 chars", () => {

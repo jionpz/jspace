@@ -50,6 +50,7 @@ test("empty workbench -> empty state, not broken", () => {
   expect(s.hubBroken).toBe(false);
   expect(s.projects).toEqual([]);
   expect(s.profiles).toEqual([]);
+  expect(s.recentKnowledge).toEqual([]);
 });
 
 test("3 domains + 2 pending + 1 open incident + inbox -> all populated", () => {
