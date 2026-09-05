@@ -68,6 +68,7 @@ MVP 只支持能映射到 Task Scheduler 的 **DAILY / WEEKLY**:
 - **Windows x64 例外**:GitHub Windows runner 上 baseline bun runtime 下载被持续阻断,因此发布/CI 的 Windows x64 二进制用**非 baseline** `bun-windows-x64`(需 AVX2)。`scripts/build-all.ts`、`package.json build:win` 与 CI 矩阵保持一致(单一权威,AC9),本地 `bun run build:all` 产出的 `bin/jspace-windows-x64.exe` 与 Release 资产同 target。
 - arm64 目标(`bun-*-arm64`)无需 baseline 区分。
 - **AVX-less 机器的护栏**:因为 Windows x64 发布产物需要 AVX2,`jspace update` 与 `install.ps1` 都在替换前跑一次 `--version` 自检,跑不起来就丢弃下载、保留现有二进制(见下方「一键安装验证矩阵」的边界与约定)。这是「未获 AVX-less 硬件」那条台账行的替代关闭条件。
+- **本地构建版本后缀(同号不同内容)**:非发布构建经 `git describe` 自带后缀(如 `1.0.17-5-gabc`),手工 `JSPACE_BUILD_VERSION=1.0.17-local` 注入同样合法。版本号相同**不代表内容相同**:带后缀的本地构建与同号官方 Release 内容可能有差异,因此 `jspace update --check` / `update` 对这类构建不做「已是最新」判定,而是明示风险与两条出路——切官方二进制用 `jspace update --version vX.Y.Z`(显式指定才覆盖),保留本地改动则从源码重新 `bun run build`。
 
 
 ```bash

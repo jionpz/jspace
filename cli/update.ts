@@ -47,6 +47,15 @@ export function isDevVersion(v: string): boolean {
   return v.startsWith("0.0.0");
 }
 
+/** True iff the version is exactly `X.Y.Z` (leading `v` allowed) — the same
+ *  shape `normalizeReleaseTag` accepts. A suffixed version (`1.0.17-local`,
+ *  `1.0.17-5-gabc`) is a local build: it numerically compares equal to its tag,
+ *  but equal numbers prove nothing about content (issue #40), so the update
+ *  self-check must not treat it as up-to-date. */
+export function isPlainReleaseVersion(v: string): boolean {
+  return /^v?\d+\.\d+\.\d+$/.test(v.trim());
+}
+
 /** Map the running platform/arch to the release asset name. */
 export function assetFor(platform: string, arch: string): string {
   const os =
@@ -170,6 +179,21 @@ export function replaceErrorMessage(err: unknown, target: string): string {
     return `无法替换 ${target}（${code}）：文件被占用。请关闭正在运行的 jspace 进程后重试`;
   }
   return `替换 ${target} 失败: ${msg}。请重跑一键安装脚本修复（jspace --version 可确认当前二进制是否仍可用）`;
+}
+
+/** Shared guidance for a suffixed local build whose version number equals the
+ *  latest release (issue #40): numeric equality proves nothing about content,
+ *  so neither `--check` nor a bare `update` may claim "up to date" for one.
+ *  Both call sites emit these lines verbatim; switching to the official binary
+ *  stays an explicit `--version` decision. `target` is a normalized `vX.Y.Z`
+ *  tag from `resolveTargetVersion`. */
+export function localBuildUpToDateGuidance(current: string, target: string): string[] {
+  const show = (v: string): string => v.replace(/^v/, "");
+  const tag = target.startsWith("v") ? target : `v${target}`;
+  return [
+    `当前为本地构建（${show(current)}，版本号带后缀，如 -local）：与最新发布 ${show(target)} 版本号相同，但内容可能不同，数值比对不足以确认与官方发布一致。`,
+    `切换到官方发布版：jspace update --version ${tag}；保留本地改动则从源码重新构建（bun run build，见 docs/PLATFORMS.md）。`,
+  ];
 }
 
 /** fetch that turns network-level failures into a clear user-facing error. */
@@ -354,17 +378,33 @@ export async function cmdUpdate(check: boolean, targetVersion?: string, deps: Up
   }
   const target = await resolveTargetVersion(targetVersion || env.JSPACE_VERSION, () => latestTag(f));
   const upToDate = compareVersions(current, target) >= 0;
+  // A suffixed version (1.0.17-local, 1.0.17-5-gabc) numerically compares equal
+  // to its tag, but equal numbers do not prove equal content (issue #40).
+  const suffixed = !isPlainReleaseVersion(current);
   const show = (v: string): string => v.replace(/^v/, "");
 
   if (check) {
     log(`当前版本: ${show(current)}`);
     log(`最新版本: ${show(target)}`);
+    if (upToDate && suffixed) {
+      for (const line of localBuildUpToDateGuidance(current, target)) log(line);
+      return;
+    }
     log(upToDate ? "已是最新" : `可更新到 ${show(target)}`);
     return;
   }
   if (upToDate && !targetVersion) {
-    log(`已是最新版本: ${show(current)}`);
-    return;
+    // An env-provided version (install.sh passes JSPACE_VERSION) counts like an
+    // explicit --version flag: a deliberate switch to the official build.
+    if (suffixed && !env.JSPACE_VERSION) {
+      for (const line of localBuildUpToDateGuidance(current, target)) log(line);
+      return;
+    }
+    if (!suffixed) {
+      log(`已是最新版本: ${show(current)}`);
+      return;
+    }
+    // suffixed + explicit env JSPACE_VERSION: intentional switch — fall through.
   }
 
   log(`正在更新 jspace ${show(current)} -> ${show(target)} ...`);

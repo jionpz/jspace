@@ -11,10 +11,12 @@ import { join } from "node:path";
 import {
   compareVersions,
   isDevVersion,
+  isPlainReleaseVersion,
   assetFor,
   cmdUpdate,
   expectedHash,
   githubApiFailure,
+  localBuildUpToDateGuidance,
   normalizeReleaseTag,
   probeFailureMessage,
   probeVerdict,
@@ -44,6 +46,15 @@ test("isDevVersion detects the build placeholder", () => {
   expect(isDevVersion("0.0.0-dev")).toBe(true);
   expect(isDevVersion("0.0.0")).toBe(true);
   expect(isDevVersion("v1.0.2")).toBe(false);
+});
+
+test("isPlainReleaseVersion accepts only pure X.Y.Z (leading v allowed)", () => {
+  expect(isPlainReleaseVersion("1.0.17")).toBe(true);
+  expect(isPlainReleaseVersion("v1.0.17")).toBe(true);
+  expect(isPlainReleaseVersion("1.0.17-local")).toBe(false);
+  expect(isPlainReleaseVersion("1.0.17-5-gabc")).toBe(false);
+  // the dev placeholder is also "suffixed"; isDevVersion just runs first
+  expect(isPlainReleaseVersion("0.0.0-dev")).toBe(false);
 });
 
 test("assetFor maps platform/arch to release asset names", () => {
@@ -309,3 +320,145 @@ test.if(posix && process.getuid !== undefined && process.getuid() !== 0)(
     }
   },
 );
+
+// ------------------- issue #40: suffixed local build must not read as up-to-date
+
+/** fetch stub serving the releases API lookup plus (optionally) release assets,
+ *  recording every URL so tests can prove no download happened. */
+function releaseApiFetch(asset: string, bytes: Uint8Array, tag: string): {
+  fetch: typeof fetch;
+  calls: string[];
+} {
+  const calls: string[] = [];
+  const checksums = `${sha256OfBytes(bytes)}  ${asset}\n`;
+  const f = (async (input: string) => {
+    calls.push(String(input));
+    if (String(input).endsWith("/releases/latest")) {
+      return new Response(JSON.stringify({ tag_name: tag }));
+    }
+    if (String(input).endsWith("checksums.txt")) return new Response(checksums);
+    return new Response(bytes);
+  }) as unknown as typeof fetch;
+  return { fetch: f, calls };
+}
+
+function logCapture(): { lines: string[]; log: (line: string) => void } {
+  const lines: string[] = [];
+  return { lines, log: (line: string) => lines.push(line) };
+}
+
+function localDeps(over: Partial<UpdateDeps>): UpdateDeps {
+  return { platform: "linux", arch: "x64", env: {}, ...over };
+}
+
+test("localBuildUpToDateGuidance names the content risk and both escape hatches", () => {
+  const lines = localBuildUpToDateGuidance("1.0.17-local", "v1.0.17");
+  const joined = lines.join("\n");
+  expect(joined).toContain("本地构建");
+  expect(joined).toContain("内容可能不同");
+  expect(joined).toContain("jspace update --version v1.0.17");
+  expect(joined).toContain("bun run build");
+  // the exact up-to-date claim must never appear in the guidance itself
+  expect(joined).not.toContain("已是最新");
+});
+
+test("cmdUpdate --check warns instead of claiming up-to-date for a suffixed local build", async () => {
+  const { lines, log } = logCapture();
+  const { fetch } = releaseApiFetch("jspace-linux-x64", new Uint8Array(), "v1.0.17");
+  await cmdUpdate(true, undefined, localDeps({ version: "1.0.17-local", fetchImpl: fetch, log }));
+  // factual lines stay, the up-to-date claim is replaced by the guidance block
+  expect(lines.slice(0, 2)).toEqual(["当前版本: 1.0.17-local", "最新版本: 1.0.17"]);
+  expect(lines.join("\n")).not.toContain("已是最新");
+  expect(lines.join("\n")).toContain("本地构建");
+  expect(lines.join("\n")).toContain("jspace update --version v1.0.17");
+});
+
+test("cmdUpdate refuses to auto-download over a matching suffixed local build (guidance, exit 0)", async () => {
+  const { dir, exe } = fixtureInstall();
+  const { lines, log } = logCapture();
+  const { fetch, calls } = releaseApiFetch(
+    "jspace-linux-x64",
+    new TextEncoder().encode("NEW-GOOD"),
+    "v1.0.17",
+  );
+  await cmdUpdate(
+    false,
+    undefined,
+    localDeps({
+      execPath: exe,
+      version: "1.0.17-local",
+      fetchImpl: fetch,
+      probe: () => {
+        throw new Error("probe must not run");
+      },
+      log,
+    }),
+  );
+  // no throw = exit 0. Only the latestTag lookup ran — never the binary fetch.
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toContain("/releases/latest");
+  expect(lines.join("\n")).toContain("本地构建");
+  expect(lines.join("\n")).toContain("jspace update --version v1.0.17");
+  expect(lines.join("\n")).not.toContain("已是最新版本");
+  expect(readFileSync(exe, "utf-8")).toBe("CURRENT-BINARY");
+  expect(readdirSync(dir)).toEqual(["jspace"]);
+});
+
+test("cmdUpdate --check keeps the normal update path for a numerically older suffixed build", async () => {
+  const { lines, log } = logCapture();
+  const { fetch } = releaseApiFetch("jspace-linux-x64", new Uint8Array(), "v1.0.17");
+  await cmdUpdate(true, undefined, localDeps({ version: "1.0.16-local", fetchImpl: fetch, log }));
+  expect(lines).toEqual(["当前版本: 1.0.16-local", "最新版本: 1.0.17", "可更新到 1.0.17"]);
+});
+
+test("cmdUpdate still updates a numerically older suffixed build (1.0.16-local -> v1.0.17)", async () => {
+  const { dir, exe } = fixtureInstall();
+  const bytes = new TextEncoder().encode("NEW-GOOD");
+  const { fetch } = releaseApiFetch("jspace-linux-x64", bytes, "v1.0.17");
+  await cmdUpdate(
+    false,
+    undefined,
+    localDeps({
+      execPath: exe,
+      version: "1.0.16-local",
+      fetchImpl: fetch,
+      probe: () => ({ exit: 0, output: "jspace 1.0.17\n" }),
+      log: () => {},
+    }),
+  );
+  expect(readFileSync(exe, "utf-8")).toBe("NEW-GOOD");
+  expect(readdirSync(dir)).toEqual(["jspace"]);
+});
+
+test("cmdUpdate keeps the existing up-to-date output for a pure X.Y.Z build", async () => {
+  const { lines, log } = logCapture();
+  const { fetch } = releaseApiFetch("jspace-linux-x64", new Uint8Array(), "v1.0.17");
+  await cmdUpdate(true, undefined, localDeps({ version: "1.0.17", fetchImpl: fetch, log }));
+  expect(lines).toEqual(["当前版本: 1.0.17", "最新版本: 1.0.17", "已是最新"]);
+
+  const bare = logCapture();
+  const { fetch: f2, calls } = releaseApiFetch("jspace-linux-x64", new Uint8Array(), "v1.0.17");
+  await cmdUpdate(false, undefined, localDeps({ version: "1.0.17", fetchImpl: f2, log: bare.log }));
+  expect(bare.lines).toEqual(["已是最新版本: 1.0.17"]);
+  expect(calls).toHaveLength(1); // latestTag lookup only, no download
+});
+
+test("an explicit env JSPACE_VERSION switches a suffixed local build to the official binary", async () => {
+  const { dir, exe } = fixtureInstall();
+  const bytes = new TextEncoder().encode("NEW-GOOD");
+  const { fetch } = releaseApiFetch("jspace-linux-x64", bytes, "v1.0.17");
+  await cmdUpdate(
+    false,
+    undefined,
+    localDeps({
+      execPath: exe,
+      version: "1.0.17-local",
+      env: { JSPACE_VERSION: "v1.0.17" },
+      fetchImpl: fetch,
+      probe: () => ({ exit: 0, output: "jspace 1.0.17\n" }),
+      log: () => {},
+    }),
+  );
+  expect(readFileSync(exe, "utf-8")).toBe("NEW-GOOD");
+  expect(readdirSync(dir)).toEqual(["jspace"]);
+});
