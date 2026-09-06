@@ -38,6 +38,10 @@ export interface SkillsDeps {
    *  target (tilde already expanded at the cli wiring). Injected for the
    *  skills.global_missing check (issue #37); omitted => check skipped. */
   globalSkills?: () => Array<{ name: string; installPath: string }>;
+  /** User-level skills root (~/.agents/skills, tilde expanded at the cli
+   *  wiring). Injected for the thin-link user-level checks — duplicate_roots
+   *  and broken-link visibility (issue #39); omitted => checks skipped. */
+  userSkillsRoot?: () => string;
 }
 
 export interface GbrainDeps {

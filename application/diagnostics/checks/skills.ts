@@ -1,5 +1,5 @@
 // application/diagnostics/checks/skills.ts — skill materialization + projection health.
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { RegistryDiagnostic } from "../../../core/contracts/diagnostics.ts";
 import { CONFIG_DIR } from "../../../core/contracts/files.ts";
@@ -120,7 +120,72 @@ export function checkSkills(root: string, deps: SkillsDeps): RegistryDiagnostic[
           severity: "warning",
           code: "skills.projection_drift",
           path: `${proj}.${name}`,
-          message: `skill projection drift: ${proj}/${name} differs from .jspace/skills/${name} (${diffs.slice(0, 3).join(", ")}${diffs.length > 3 ? ", …" : ""}); jspace workspace upgrade refreshes unmodified copies, user edits are preserved (check jspace workspace diff)`,
+          message: `skill projection drift: ${proj}/${name} differs from .jspace/skills/${name} (${diffs.slice(0, 3).join(", ")}${diffs.length > 3 ? ", …" : ""}); thin-link upgrade collapses content-identical copies into dir links, divergent ones are kept as copy — see jspace workspace diff`,
+        });
+      }
+    }
+  }
+
+  {
+    // Thin-link visibility (issue #39): a projection recorded as mode "copy" is
+    // a fallback snapshot (symlinks unavailable on that platform), never a
+    // silent look-alike link. info — structure works, only link benefits are lost.
+    const links = readMaterializedJournal(root)?.links ?? {};
+    const copies = Object.entries(links)
+      .filter(([, l]) => l.mode === "copy")
+      .map(([rel]) => rel);
+    if (copies.length > 0) {
+      diags.push({
+        severity: "info",
+        code: "skills.copy_fallback",
+        path: "skills",
+        message: `skill projection(s) materialized as COPY (symlinks unavailable on this platform): ${copies.slice(0, 3).join(", ")}${copies.length > 3 ? ", …" : ""}; they are snapshots, not links — workspace upgrade re-checks them on every run`,
+      });
+    }
+  }
+
+  {
+    // User-level thin-link health (issue #39): duplicate discovery roots and
+    // broken links. Skipped entirely when the user root dep is not wired.
+    const userRoot = deps.userSkillsRoot?.();
+    if (userRoot !== undefined) {
+      const projDirs = skillProjections();
+      const duplicates: string[] = [];
+      const broken: string[] = [];
+      for (const name of deps.officialSkillNames()) {
+        const userEntry = join(userRoot, name);
+        let lst;
+        try {
+          lst = lstatSync(userEntry);
+        } catch {
+          continue; // never installed at user level — global_missing covers the absent case
+        }
+        if (lst.isSymbolicLink()) {
+          try {
+            realpathSync(userEntry);
+          } catch {
+            broken.push(name); // dangling: the workbench SSOT moved or is unmounted
+          }
+          continue;
+        }
+        // Real dir at user level + a workbench projection also visible to
+        // harnesses that scan both roots (e.g. pi) => two name-colliding copies.
+        if (projDirs.some((p) => existsSync(join(root, p, name)))) duplicates.push(name);
+      }
+      if (broken.length > 0) {
+        diags.push({
+          severity: "warning",
+          code: "skills.user_link_broken",
+          path: "skills",
+          message: `user-level skill link(s) broken (dangling): ${broken.join(", ")} at ${userRoot}; run jspace skills install inside the workbench to re-point them`,
+        });
+      }
+      if (duplicates.length > 0) {
+        diags.push({
+          severity: "info",
+          code: "skills.duplicate_roots",
+          path: "skills",
+          message: `official skill(s) visible from two discovery roots with different content: ${duplicates.slice(0, 5).join(", ")}${duplicates.length > 5 ? ", …" : ""} — harnesses that scan both ~/.agents/skills and the workbench projections (e.g. pi) warn on name collision; thin-link state (skills install inside the workbench + workspace upgrade) collapses them to one realpath`,
         });
       }
     }

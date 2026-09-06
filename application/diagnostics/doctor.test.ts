@@ -4,7 +4,7 @@
 // is stubbed (the real one spawns the platform scheduler — never in tests).
 // Run: bun test application/workspace/doctor.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { doctorWorkbench, type CronHealthDeps, type CronLike } from "./doctor.ts";
@@ -287,8 +287,7 @@ test("nested _inbox dir counts as ONE item (top-level semantics; single countInb
   expect(diag!.message).toContain("2 unfiled file(s)");
 });
 
-test("_inbox with only resident README + .skip-inbox-tidy dir -> NO inbox_unfiled (issue #38)", () => {
-  // Structure, not payload: the permanent false warning must be gone.
+test("_inbox with only resident README + .skip-inbox-tidy dir -> NO inbox_unfiled (issue #38)", () => {  // Structure, not payload: the permanent false warning must be gone.
   writeFileSync(
     join(root, ".jspace", "hub.json"),
     JSON.stringify({
@@ -1092,4 +1091,52 @@ test("usage mileage ledger hint never fails doctor", () => {
   expect(quiet.lines.some((l) => l.includes("usage-mileage-ledger"))).toBe(false);
   const verbose = doctorWorkbench(root, stubDeps(), true);
   expect(verbose.lines.some((l) => l.includes("usage-mileage-ledger"))).toBe(true);
+});
+
+test("journal link mode=copy -> skills.copy_fallback info (fallback stays visible, issue #39)", () => {
+  mkdirSync(join(root, ".jspace", "state"), { recursive: true });
+  writeFileSync(
+    join(root, ".jspace", "state", "materialized.json"),
+    JSON.stringify({
+      schema_version: 2,
+      asset_version: "v1",
+      applied_at: "2026-09-05",
+      files: {},
+      links: { ".claude/skills/jspace-use": { target: "../../.jspace/skills/jspace-use", mode: "copy" } },
+    }),
+  );
+  const r = doctorWorkbench(root, stubDeps());
+  const diags = (r.data as { diagnostics: { code: string; severity: string; message: string }[] }).diagnostics;
+  const diag = diags.find((d) => d.code === "skills.copy_fallback");
+  expect(diag).toBeDefined();
+  expect(diag!.severity).toBe("info");
+  expect(diag!.message).toContain(".claude/skills/jspace-use");
+});
+
+test("user-level real copy + projection -> duplicate_roots; dangling link -> user_link_broken (issue #39)", () => {
+  const userSkills = join(root, "fake-home", ".agents", "skills");
+  // asset-ingest: real dir at user level AND a workbench projection visible
+  mkdirSync(join(userSkills, "asset-ingest"), { recursive: true });
+  writeFileSync(join(userSkills, "asset-ingest", "SKILL.md"), "user copy");
+  mkdirSync(join(root, ".claude", "skills", "asset-ingest"), { recursive: true });
+  // memory-recall: dangling link (target moved / workbench unmounted)
+  symlinkSync(join(userSkills, "moved-away-ssot"), join(userSkills, "memory-recall"), "dir");
+  const r = doctorWorkbench(root, stubDeps({ userSkillsRoot: () => userSkills }));
+  const c = codes(r);
+  expect(c).toContain("skills.duplicate_roots");
+  expect(c).toContain("skills.user_link_broken");
+});
+
+test("healthy user-level dir links produce no duplicate/broken diagnostics (issue #39)", () => {
+  const userSkills = join(root, "fake-home", ".agents", "skills");
+  mkdirSync(userSkills, { recursive: true });
+  for (const name of ["jspace-use", "asset-ingest"]) {
+    const ssot = join(root, ".jspace", "skills", name);
+    mkdirSync(ssot, { recursive: true });
+    symlinkSync(ssot, join(userSkills, name), "dir");
+  }
+  const r = doctorWorkbench(root, stubDeps({ userSkillsRoot: () => userSkills }));
+  const c = codes(r);
+  expect(c).not.toContain("skills.duplicate_roots");
+  expect(c).not.toContain("skills.user_link_broken");
 });

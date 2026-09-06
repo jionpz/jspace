@@ -77,6 +77,7 @@ export const cronDeps = {
   linuxCronHealth: () => schedulerAdapter(process.platform)?.health?.(schedulerEnv()) ?? { crontab: "missing", service: "stopped" },
   officialSkillNames: () => SKILLS_MANIFEST.workbench.map((s) => s.name),
   bundleStaleSkills,
+  userSkillsRoot: () => expandTilde("~/.agents/skills"),
   globalSkills: () =>
     SKILLS_MANIFEST.global
       .filter((s) => s.install_path !== undefined)

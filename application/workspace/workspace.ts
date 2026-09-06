@@ -12,8 +12,9 @@ import { readMarker, writeMarkerAtomic, writeBytesAtomic } from "../../adapters/
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { decodeUpgradeJournal, type UpgradeJournalV1 } from "../../core/contracts/upgrade.ts";
 import { extractAgentsBlock, replaceAgentsBlock } from "./agents-block.ts";
-import { diffBundle, materializedRels } from "./manifest.ts";
-import { readMaterializedJournal, writeUpdatedMaterializedJournal } from "./journal.ts";
+import { diffBundle, materializedRels, skillProjections } from "./manifest.ts";
+import { readMaterializedJournal, writeJournalLinks, writeUpdatedMaterializedJournal } from "./journal.ts";
+import { applyProjectionLinks, manifestSkillNames, planProjectionLinks } from "./projections.ts";
 import { safeReadFile } from "./fs-helpers.ts";
 import { migrateHubSchema, type HubTransform, type MigrationOutcome } from "../../core/registry/migrations.ts";
 
@@ -219,6 +220,15 @@ export function workspaceUpgrade(
       (e.action === "conflict" && opts.acceptConflicts && e.ownership === "managed"),
   );
   const hubMigration = planHubMigration(root, deps);
+  // Thin-link projection ops (issue #39): legacy per-file copies collapse into
+  // directory links here. Planned independently of the per-file diff — a fresh
+  // clone with no journal has an empty per-file plan but real projection work.
+  const projectionOpts = {
+    skillNames: manifestSkillNames(deps.manifest),
+    projectionDirs: skillProjections(),
+  };
+  const projOps = planProjectionLinks(root, projectionOpts);
+  const projPending = projOps.filter((o) => o.action !== "no-op");
 
   if (opts.dryRun) {
     const changes = entries.filter(
@@ -229,11 +239,12 @@ export function workspaceUpgrade(
     // refuse) — never shown as an auto-migrate that would silently succeed.
     const mig = hubMigration !== null && hubMigration.outcome.status === "migrated";
     const manual = hubMigration !== null && hubMigration.outcome.status === "no-migration";
-    const lines = changes.length === 0 && !mig && !manual
+    const lines = changes.length === 0 && !mig && !manual && projPending.length === 0
       ? ["jspace: ok: would upgrade: nothing to do"]
       : [
-          `jspace: ok: would upgrade ${changes.length + (mig ? 1 : 0)} file(s):`,
+          `jspace: ok: would upgrade ${changes.length + (mig ? 1 : 0) + projPending.length} item(s):`,
           ...changes.map((e) => `[${e.action}] ${e.rel}`),
+          ...projPending.map((o) => `[${o.action}] ${o.rel} -> ${o.target}`),
           ...(mig
             ? [`[migrate] ${hubMigration.rel} (hub schema ${hubMigration.outcome.from} -> ${hubMigration.outcome.to})`]
             : []),
@@ -253,7 +264,7 @@ export function workspaceUpgrade(
       `workspace upgrade: ${conflicts.length} conflict(s) in: ${conflicts.map((e) => e.rel).join(", ")} (use --accept-conflicts to override)`,
     );
   }
-  if (plan.length === 0 && hubMigration === null) {
+  if (plan.length === 0 && hubMigration === null && projPending.length === 0) {
     return { lines: ["jspace: ok: workspace is up to date"] };
   }
   if (hubMigration !== null && hubMigration.outcome.status === "migrated") {
@@ -330,19 +341,32 @@ export function workspaceUpgrade(
       if (content === undefined) throw new Error(`missing bundle asset for ${e.rel}`);
       deps.writeFile(join(root, e.rel), content);
     }
+    // Thin-link pass (issue #39) AFTER the per-file loop: `remove` steps have
+    // unlinked legacy projection copies, so content-equal dirs now collapse
+    // into directory links. Links land in the journal's links section; fallback
+    // and keep-divergent outcomes surface as info lines.
+    const proj = applyProjectionLinks(root, projectionOpts);
+    writeJournalLinks(root, deps.manifest.bundle_version, proj.links);
+    const linkedCount = Object.values(proj.links).filter((l) => l.mode !== "copy").length;
+    const copyCount = Object.values(proj.links).filter((l) => l.mode === "copy").length;
+    const projSummary =
+      linkedCount + copyCount > 0
+        ? [`jspace: ok: skill projections: ${linkedCount} dir link(s) active${copyCount > 0 ? `, ${copyCount} copy fallback(s)` : ""} (thin-link, issue #39)`]
+        : [];
     writeUpdatedMaterializedJournal(root, deps.manifest, new Set(plan.map((e) => e.rel)));
     setTemplateVersion(root, deps.manifest.bundle_version);
     writeUpgradeJournal(root, id, { ...journal, status: "applied" });
+    return {
+      lines: [
+        `jspace: ok: upgraded workspace to ${deps.manifest.bundle_version} (${plan.length} file(s) changed)`,
+        ...projSummary,
+        ...proj.lines,
+        `Upgrade journal: ${id} (restore with: jspace workspace upgrade --rollback ${id})`,
+        `Validate: jspace doctor --dir ${root}`,
+      ],
+    };
   } catch (e) {
     writeUpgradeJournal(root, id, { ...journal, status: "failed" });
     fail(`workspace upgrade failed (recover with: jspace workspace upgrade --rollback ${id}): ${(e as Error).message}`);
   }
-
-  return {
-    lines: [
-      `jspace: ok: upgraded workspace to ${deps.manifest.bundle_version} (${plan.length} file(s) changed)`,
-      `Upgrade journal: ${id} (restore with: jspace workspace upgrade --rollback ${id})`,
-      `Validate: jspace doctor --dir ${root}`,
-    ],
-  };
 }

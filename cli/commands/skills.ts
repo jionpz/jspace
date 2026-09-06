@@ -2,11 +2,14 @@
 // skills (workbench + machine-global, issue #37) into the user-level
 // `~/.agents/skills/` directory. This is the multi-harness uniform location
 // (Claude/Grok/Pi/OpenCode read user-level paths; `~` expands per machine,
-// machine-agnostic, no harness-specific var).
+// machine-agnostic, no harness-specific var). Inside a workbench the workbench
+// skills become thin directory links to its SSOT (.jspace/skills, issue #39);
+// machine-global skills and no-workbench runs materialize per-file copies.
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CommandSpec, CmdContext, CmdResult } from "../../application/commands/command.ts";
 import { installSkills, type InstallDeps, type InstallResult } from "../../application/skills/install.ts";
+import { classifyUserSkillLink, ensureUserSkillLink } from "../../application/workspace/projections.ts";
 import { ASSETS } from "../assets.generated.ts";
 import { GLOBAL_SKILLS } from "../global-skills.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
@@ -41,13 +44,29 @@ export function embeddedSkillAssets(): Pick<InstallDeps, "assetKeys" | "assetCon
   };
 }
 
-const installDeps = (dryRun: boolean): InstallDeps => ({
+const installDeps = (dryRun: boolean, wbRoot?: string): InstallDeps => ({
   ...embeddedSkillAssets(),
   userSkillsRoot,
   writeFile: writeWithDirs,
   exists: existsSync,
   readFile: readFileOrNull,
   dryRun,
+  workbenchSkillDir: (name) => {
+    if (wbRoot === undefined) return null;
+    const p = join(wbRoot, ".jspace", "skills", name);
+    return existsSync(p) ? p : null;
+  },
+  // dry-run must never mutate: classify only, reporting what WOULD happen.
+  ensureSkillDirLink: dryRun
+    ? (entry, ssot) => {
+        const a = classifyUserSkillLink(entry, ssot);
+        return {
+          mode: a === "keep-divergent" ? "copy" : "link",
+          changed: a !== "no-op",
+          divergent: a === "keep-divergent",
+        };
+      }
+    : ensureUserSkillLink,
 });
 
 /** `skills install` handler — exported for tests with injected deps (write
@@ -55,7 +74,7 @@ const installDeps = (dryRun: boolean): InstallDeps => ({
 export function installHandler(
   ctx: CmdContext,
   args: { refresh?: unknown },
-  deps: InstallDeps = installDeps(ctx.dryRun),
+  deps: InstallDeps = installDeps(ctx.dryRun, ctx.root),
 ): CmdResult {
   try {
     const names = [...SKILLS_MANIFEST.workbench, ...SKILLS_MANIFEST.global].map((s) => s.name);
@@ -83,6 +102,22 @@ function summarizeInstall(r: InstallResult, root: string, dryRun: boolean): stri
   let totalCreated = 0;
   let totalUpdated = 0;
   for (const s of r.skills) {
+    if (s.link !== undefined) {
+      // thin-link materialization (issue #39): one line per skill, fallback and
+      // keeps explicitly visible — never a silent look-alike copy.
+      const suffix =
+        s.link.action === "kept-divergent"
+          ? " (kept as COPY: differs from workbench SSOT; delete it and re-run to converge)"
+          : s.link.action === "created"
+            ? s.link.mode === "copy"
+              ? " (materialized as COPY: symlink unavailable on this platform)"
+              : dryRun
+                ? " (dir link -> workbench SSOT)"
+                : " (dir link -> workbench SSOT)"
+            : " (dir link active)";
+      lines.push(`${verb} ${s.name}@${join(root, s.name)}${suffix}`);
+      continue;
+    }
     totalCreated += s.created.length;
     totalUpdated += s.updated.length;
     const createdDesc = s.created.length > 0 ? ` created=${s.created.length}` : "";
@@ -90,7 +125,8 @@ function summarizeInstall(r: InstallResult, root: string, dryRun: boolean): stri
     const skippedDesc = s.skipped.length > 0 ? ` skipped=${s.skipped.length}` : "";
     lines.push(`${verb} ${s.name}@${join(root, s.name)}${createdDesc}${updatedDesc}${skippedDesc}`);
   }
-  if (totalCreated === 0 && totalUpdated === 0 && !dryRun) lines.push("jspace: ok: all official skills already installed (re-run to refresh missing files)");
+  if (totalCreated === 0 && totalUpdated === 0 && !dryRun && !r.skills.some((s) => s.link !== undefined))
+    lines.push("jspace: ok: all official skills already installed (re-run to refresh missing files)");
   return lines;
 }
 

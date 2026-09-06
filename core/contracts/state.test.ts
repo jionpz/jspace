@@ -6,7 +6,7 @@ import { expect, test } from "bun:test";
 import type { DecodeResult } from "./diagnostics.ts";
 import { decodeRunRecord, type RunRecordV1 } from "./run-record.ts";
 import { decodeIncident, type IncidentV1 } from "./incident.ts";
-import { decodeMaterializedJournal, type MaterializedJournalV1 } from "./materialized.ts";
+import { decodeMaterializedJournal, type MaterializedJournalV2 } from "./materialized.ts";
 import { decodeUpgradeJournal, type UpgradeJournalV1 } from "./upgrade.ts";
 
 function codesOf(result: DecodeResult<unknown>): string[] {
@@ -26,8 +26,14 @@ function validRun(): RunRecordV1 {
 function validIncident(): IncidentV1 {
   return { schema_version: 1,id: INC_ID, cronId: "nightly", failureClass: "failed", status: "open", openedAt: "2026-08-04T120000", evidence: ["run-1"] };
 }
-function validMaterialized(): MaterializedJournalV1 {
-  return { schema_version: 1,asset_version: "v1.0.5", applied_at: "2026-08-04", files: { "AGENTS.md": { sha256: "abc" } } };
+function validMaterialized(): MaterializedJournalV2 {
+  return {
+    schema_version: 2,
+    asset_version: "v1.0.5",
+    applied_at: "2026-08-04",
+    files: { "AGENTS.md": { sha256: "abc" } },
+    links: { ".claude/skills/jspace-use": { target: "../../.jspace/skills/jspace-use", mode: "link" } },
+  };
 }
 function validUpgrade(): UpgradeJournalV1 {
   return { schema_version: 1,id: "up-1", from_version: "v1.0.4", to_version: "v1.0.5", plan: [{ action: "update", rel: "AGENTS.md" }], status: "applied" };
@@ -65,14 +71,23 @@ test("IncidentV1: invalid class/status/evidence / unknown field / version", () =
   expectIssue(v.ok, codesOf(v), "incident.version.unsupported");
 });
 
-test("MaterializedJournalV1: valid round-trip", () => roundTrip(decodeMaterializedJournal, validMaterialized()));
-test("MaterializedJournalV1: bad files entry / unknown field / version", () => {
+test("MaterializedJournalV2: valid round-trip (with links)", () => roundTrip(decodeMaterializedJournal, validMaterialized()));
+test("MaterializedJournalV2: v1 journal decodes with empty links (additive field)", () => {
+  const d = decodeMaterializedJournal({ schema_version: 1, asset_version: "v1.0.5", applied_at: "2026-08-04", files: { "AGENTS.md": { sha256: "abc" } } });
+  expect(d.ok).toBe(true);
+  if (d.ok) expect(d.value.links).toEqual({});
+});
+test("MaterializedJournalV2: bad files/links entry / unknown field / version", () => {
   const f = decodeMaterializedJournal({ ...validMaterialized(), files: { "AGENTS.md": { sha256: "" } } });
   expectIssue(f.ok, codesOf(f), "materialized.files.invalid");
   const n = decodeMaterializedJournal({ ...validMaterialized(), files: "nope" });
   expectIssue(n.ok, codesOf(n), "materialized.files.invalid");
+  const badLink = decodeMaterializedJournal({ ...validMaterialized(), links: { "x": { target: "", mode: "symlink" } } });
+  expectIssue(badLink.ok, codesOf(badLink), "materialized.links.invalid");
+  const badLinks = decodeMaterializedJournal({ ...validMaterialized(), links: "nope" });
+  expectIssue(badLinks.ok, codesOf(badLinks), "materialized.links.invalid");
   expectIssue(decodeMaterializedJournal({ ...validMaterialized(), stray: 1 }).ok, codesOf(decodeMaterializedJournal({ ...validMaterialized(), stray: 1 })), "materialized.unknown-field");
-  const v = decodeMaterializedJournal({ ...validMaterialized(), schema_version: 2 });
+  const v = decodeMaterializedJournal({ ...validMaterialized(), schema_version: 3 });
   expectIssue(v.ok, codesOf(v), "materialized.version.unsupported");
 });
 

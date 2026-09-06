@@ -10,8 +10,16 @@ import { join } from "node:path";
 
 export interface InstallResult {
   ok: boolean;
-  /** Per-skill breakdown: created files, updated (refresh) files, skipped files. */
-  skills: { name: string; created: string[]; updated: string[]; skipped: string[] }[];
+  /** Per-skill breakdown: created files, updated (refresh) files, skipped files.
+   *  `link` is present when the skill was materialized as a thin dir link to the
+   *  workbench SSOT instead of a per-file copy (issue #39). */
+  skills: {
+    name: string;
+    created: string[];
+    updated: string[];
+    skipped: string[];
+    link?: { mode: "link" | "junction" | "copy"; action: "created" | "active" | "kept-divergent" };
+  }[];
 }
 
 export interface InstallDeps {
@@ -29,6 +37,17 @@ export interface InstallDeps {
   readFile: (absPath: string) => string | null;
   /** When true, skip all writes and only compute what would change. */
   dryRun?: boolean;
+  /** Workbench SSOT dir for a skill (`<wbRoot>/.jspace/skills/<name>`), or null
+   *  when running outside a workbench / the skill has no workbench SSOT (e.g.
+   *  machine-global skills). Wired from cli; omitted => copy-only behavior. */
+  workbenchSkillDir?: (name: string) => string | null;
+  /** Thin-link primitive (issue #39): ensure `entryAbs` is a directory link to
+   *  `ssotAbs` (junction/copy fallback inside). Omitted => copy-only behavior
+   *  (legacy semantics; also the test-injection default). */
+  ensureSkillDirLink?: (
+    entryAbs: string,
+    ssotAbs: string,
+  ) => { mode: "link" | "junction" | "copy"; changed: boolean; divergent: boolean };
 }
 
 export interface InstallOpts {
@@ -48,6 +67,22 @@ export function installSkills(deps: InstallDeps, skillNames: string[], opts: Ins
   const out: InstallResult = { ok: true, skills: [] };
 
   for (const name of skillNames) {
+    // Thin-link path (issue #39): inside a workbench with a real SSOT dir, the
+    // user-level entry becomes a directory link to it — one physical copy per
+    // machine-side truth, re-pointed on each install. Skills with no workbench
+    // SSOT (machine-global, or no workbench context) fall back to per-file copy.
+    const ssot = deps.workbenchSkillDir?.(name) ?? null;
+    if (ssot !== null && deps.ensureSkillDirLink) {
+      const r = deps.ensureSkillDirLink(join(root, name), ssot);
+      out.skills.push({
+        name,
+        created: [],
+        updated: [],
+        skipped: [],
+        link: { mode: r.mode, action: r.divergent ? "kept-divergent" : r.changed ? "created" : "active" },
+      });
+      continue;
+    }
     const prefix = `skills/${name}/`;
     // Collect this skill's bundled files, excluding runtime artifacts.
     const keys = deps

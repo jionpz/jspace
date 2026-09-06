@@ -1,9 +1,11 @@
 // cli/commands/workspace.ts — `jspace workspace` + `update` command families.
 import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { CommandSpec } from "../../application/commands/command.ts";
 import { workspaceDiff, workspaceUpgrade } from "../../application/workspace/workspace.ts";
 import { doctorWorkbench, type CronHealthDeps } from "../../application/diagnostics/doctor.ts";
 import { installSkills, type InstallDeps } from "../../application/skills/install.ts";
+import { ensureUserSkillLink } from "../../application/workspace/projections.ts";
 import { cmdUpdate } from "../update.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
@@ -12,11 +14,13 @@ import { SKILLS_MANIFEST } from "../skills.generated.ts";
 import { b, cronDeps, optS, readFileOrNull, s } from "./helpers.ts";
 import { userSkillsRoot, embeddedSkillAssets } from "./skills.ts";
 
-/** After a successful workbench upgrade, refresh the user-level ~/.agents/skills/
- *  copies of the official skills (hash-compare: changed files re-written, identical
- *  skipped). The workbench owns .jspace/skills/; the user-level mirror is where
- *  the multi-harness docs live, and it must not drift stale past the bundle. */
-function refreshExternalSkills(): string[] {
+/** After a successful workbench upgrade, sync the user-level ~/.agents/skills/
+ *  entries: inside the workbench, its official skills are dir links to the SSOT
+ *  (.jspace/skills, issue #39 — re-pointed, never stale); skills without a
+ *  workbench SSOT (machine-global) refresh per-file (hash-compare: changed
+ *  files re-written, identical skipped). The workbench owns .jspace/skills/;
+ *  the user-level mirror is where the multi-harness docs live. */
+function refreshExternalSkills(wbRoot: string): string[] {
   const deps: InstallDeps = {
     ...embeddedSkillAssets(),
     userSkillsRoot,
@@ -29,10 +33,18 @@ function refreshExternalSkills(): string[] {
         return null;
       }
     },
+    workbenchSkillDir: (name) => {
+      const p = join(wbRoot, ".jspace", "skills", name);
+      return existsSync(p) ? p : null;
+    },
+    ensureSkillDirLink: ensureUserSkillLink,
   };
   const names = [...SKILLS_MANIFEST.workbench, ...SKILLS_MANIFEST.global].map((skill) => skill.name);
   const r = installSkills(deps, names, { refresh: true });
   const updated = r.skills.flatMap((skill) => skill.updated.map((rel) => `${skill.name}/${rel}`));
+  const linked = r.skills.filter((skill) => skill.link !== undefined).length;
+  if (updated.length === 0 && linked > 0)
+    return [`jspace: ok: user-level skills follow the workbench SSOT (${linked} dir link(s) active)`];
   if (updated.length === 0) return ["jspace: ok: user-level skills up to date (~/.agents/skills)"];
   const shown = updated.slice(0, 5).join(", ");
   return [`jspace: ok: refreshed ${updated.length} user-level skill file(s) in ~/.agents/skills: ${shown}${updated.length > 5 ? " …" : ""}`];
@@ -62,7 +74,7 @@ const workspaceDiffSpec: CommandSpec = {
 
 export interface WorkspaceUpgradeHandlerDeps {
   workspaceUpgrade: typeof workspaceUpgrade;
-  refreshExternalSkills: () => string[];
+  refreshExternalSkills: (wbRoot: string) => string[];
   doctorWorkbench: typeof doctorWorkbench;
   cronDeps: CronHealthDeps;
   manifest: typeof BUNDLE_MANIFEST;
@@ -101,7 +113,7 @@ export function workspaceUpgradeHandler(
   // should run the follow-up doctor or skill refresh (both can report
   // transient mismatches)
   if (result.exitCode || b(args.dryRun) || s(args.rollback)) return result;
-  const refreshLines = deps.refreshExternalSkills();
+  const refreshLines = deps.refreshExternalSkills(ctx.root);
   const doctor = deps.doctorWorkbench(ctx.root, deps.cronDeps);
   return {
     ...result,

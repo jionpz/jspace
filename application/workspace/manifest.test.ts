@@ -61,17 +61,12 @@ test("recreateOnMissing: hub.json recovers, cron.json deletion respected", () =>
   expect(recreateOnMissing("AGENTS.md")).toBe(true);
 });
 
-test("materializedRels maps workbench + skills to source + harness projections, skips filehub", () => {
+test("materializedRels maps workbench files + skill SSOT only; projections are links (issue #39); filehub skipped", () => {
   expect(materializedRels("templates/workbench/AGENTS.md")).toEqual(["AGENTS.md"]);
-  // projection dirs derive from capabilities.yaml (shared + per-harness); the
-  // set now includes grok/opencode projections declared there (P2/P3 wiring).
-  expect(materializedRels("skills/jspace-use/SKILL.md").sort()).toEqual([
-    ".agents/skills/jspace-use/SKILL.md",
-    ".claude/skills/jspace-use/SKILL.md",
-    ".grok/skills/jspace-use/SKILL.md",
-    `${skillRel("jspace-use")}/SKILL.md`,
-    ".opencode/skills/jspace-use/SKILL.md",
-  ]);
+  // Official skills materialize ONLY their SSOT path: harness projection dirs
+  // are thin directory links managed by the projection engine, not per-file
+  // copies — one physical copy per skill (issue #39).
+  expect(materializedRels("skills/jspace-use/SKILL.md")).toEqual([`${skillRel("jspace-use")}/SKILL.md`]);
   expect(materializedRels("templates/filehub/README.md")).toEqual([]); // on-demand, not in workbench
 });
 
@@ -81,7 +76,7 @@ test("skillRel / skillRoot resolve official skills under .jspace/skills/", () =>
   expect(materializedRels("skills/jspace-use/SKILL.md")[0]).toBe(`${skillRel("jspace-use")}/SKILL.md`);
 });
 
-test("freshness: matching -> no-op; missing -> create; filehub skipped; both projections no-op", () => {
+test("freshness: matching -> no-op; missing -> create; projection copies invisible (links own them)", () => {
   const entries = diffBundle(
     "/wb",
     manifest,
@@ -89,8 +84,6 @@ test("freshness: matching -> no-op; missing -> create; filehub skipped; both pro
       "AGENTS.md": AGENTS_BLOCK,
       "README.md": "new-readme",
       ".jspace/skills/jspace-use/SKILL.md": "new-skill",
-      ".claude/skills/jspace-use/SKILL.md": "new-skill", // projection copy, byte-identical
-      ".agents/skills/jspace-use/SKILL.md": "new-skill", // agents projection, byte-identical
       ".jspace/hub.json": "new-hub",
       ".jspace/cron.json": "new-cron",
     }),
@@ -99,60 +92,35 @@ test("freshness: matching -> no-op; missing -> create; filehub skipped; both pro
   expect(map["AGENTS.md"]).toBe("no-op");
   expect(map["README.md"]).toBe("no-op");
   expect(map[".jspace/skills/jspace-use/SKILL.md"]).toBe("no-op");
-  expect(map[".claude/skills/jspace-use/SKILL.md"]).toBe("no-op");
-  expect(map[".agents/skills/jspace-use/SKILL.md"]).toBe("no-op");
   expect(map[".jspace/hub.json"]).toBe("no-op");
   expect(map[".jspace/cron.json"]).toBe("no-op");
+  // legacy projection COPY paths left the per-file mapping entirely: the thin
+  // link engine owns them structurally, diffBundle never re-reads them
+  expect(entries.some((e) => e.rel.startsWith(".claude/skills/"))).toBe(false);
+  expect(entries.some((e) => e.rel.startsWith(".agents/skills/"))).toBe(false);
   expect(entries.some((e) => e.rel === "templates/filehub/README.md")).toBe(false);
 });
 
-test("recorded base + bundle forward -> seed refreshes (update), both projections", () => {
+test("legacy recorded projection copies -> remove when unmodified (journal collapse), stale when modified", () => {
+  // Old per-file journal records for projection copies leave the mapping under
+  // thin links: pristine ones are removed on upgrade (dir collapses into a
+  // link), user-modified ones are preserved as stale (kept, reported).
   const entries = diffBundle(
     "/wb",
     manifest,
     deps(
       {
-        "AGENTS.md": "old-agents",
-        ".jspace/skills/jspace-use/SKILL.md": "old-skill",
         ".claude/skills/jspace-use/SKILL.md": "old-skill",
-        ".agents/skills/jspace-use/SKILL.md": "old-skill",
+        ".agents/skills/jspace-use/SKILL.md": "user-edit",
       },
       {
-        "AGENTS.md": { sha256: sha256Of("old-agents") },
-        ".jspace/skills/jspace-use/SKILL.md": { sha256: sha256Of("old-skill") },
         ".claude/skills/jspace-use/SKILL.md": { sha256: sha256Of("old-skill") },
         ".agents/skills/jspace-use/SKILL.md": { sha256: sha256Of("old-skill") },
       },
     ),
   );
-  const map = byRel(entries);
-  expect(map["AGENTS.md"]).toBe("block-update"); // legacy file has no block -> embed only, never whole-file refresh
-  expect(map[".jspace/skills/jspace-use/SKILL.md"]).toBe("update");
-  expect(map[".claude/skills/jspace-use/SKILL.md"]).toBe("update");
-  expect(map[".agents/skills/jspace-use/SKILL.md"]).toBe("update");
-});
-
-test("harness projection drift: editing one copy never hides the other", () => {
-  const entries = diffBundle(
-    "/wb",
-    manifest,
-    deps(
-      {
-        ".jspace/skills/jspace-use/SKILL.md": "new-skill",
-        ".claude/skills/jspace-use/SKILL.md": "user-edit",
-        ".agents/skills/jspace-use/SKILL.md": "new-skill",
-      },
-      {
-        ".jspace/skills/jspace-use/SKILL.md": { sha256: sha256Of("new-skill") },
-        ".claude/skills/jspace-use/SKILL.md": { sha256: sha256Of("new-skill") },
-        ".agents/skills/jspace-use/SKILL.md": { sha256: sha256Of("new-skill") },
-      },
-    ),
-  );
-  const map = byRel(entries);
-  expect(map[".jspace/skills/jspace-use/SKILL.md"]).toBe("no-op");
-  expect(map[".claude/skills/jspace-use/SKILL.md"]).toBe("skip"); // edited copy preserved, source unaffected
-  expect(map[".agents/skills/jspace-use/SKILL.md"]).toBe("no-op");
+  expect(entries.find((e) => e.rel === ".claude/skills/jspace-use/SKILL.md")?.action).toBe("remove");
+  expect(entries.find((e) => e.rel === ".agents/skills/jspace-use/SKILL.md")?.action).toBe("stale");
 });
 
 test("unrecorded modification -> seed skip (preserved), managed conflict", () => {
@@ -163,8 +131,6 @@ test("unrecorded modification -> seed skip (preserved), managed conflict", () =>
       {
         "AGENTS.md": "user-edit",
         ".jspace/skills/jspace-use/SKILL.md": "user-edit-skill",
-        ".claude/skills/jspace-use/SKILL.md": "user-edit-skill",
-        ".agents/skills/jspace-use/SKILL.md": "user-edit-skill",
       },
       {},
     ),
@@ -172,8 +138,6 @@ test("unrecorded modification -> seed skip (preserved), managed conflict", () =>
   const map = byRel(entries);
   expect(map["AGENTS.md"]).toBe("block-update"); // no block -> embedded on upgrade, user content preserved
   expect(map[".jspace/skills/jspace-use/SKILL.md"]).toBe("skip");
-  expect(map[".claude/skills/jspace-use/SKILL.md"]).toBe("skip");
-  expect(map[".agents/skills/jspace-use/SKILL.md"]).toBe("skip");
 
   // the reserved managed class still surfaces edits as conflict
   const managedManifest: DistributionManifestV1 = {

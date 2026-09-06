@@ -19,6 +19,12 @@ import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import { writeActualMaterializedJournal } from "./journal.ts";
 import { materializedRels } from "./manifest.ts";
+import {
+  applyProjectionLinks,
+  manifestSkillNames,
+  type ProjectionApplyResult,
+} from "./projections.ts";
+import { skillProjections } from "./manifest.ts";
 
 export interface InitDeps {
   resolvePath: (p: string) => string;
@@ -29,6 +35,9 @@ export interface InitDeps {
   materialize: (target: string) => void;
   /** Bundle manifest, used to seed the materialization journal. */
   manifest: DistributionManifestV1;
+  /** Thin-link projection engine (issue #39). Defaults to the real engine;
+   *  injectable so tests can stub symlink behavior. */
+  materializeProjections?: (target: string) => ProjectionApplyResult;
 }
 
 export function initWorkbench(
@@ -80,8 +89,17 @@ export function initWorkbench(
 
   mkdirSync(target, { recursive: true });
   deps.materialize(target);
-  // .jspace/logs/ is a preallocated slot for execution logs (cron / headless);
-  // materialize only writes files, so an empty dir must be created here.
+  // Thin-link projections (issue #39): the SSOT files exist after materialize;
+  // every harness projection dir becomes a directory link to them. Fallback
+  // modes (junction / visible copy) are reported in the returned lines.
+  const projections =
+    deps.materializeProjections?.(target) ??
+    applyProjectionLinks(target, {
+      skillNames: manifestSkillNames(deps.manifest),
+      projectionDirs: skillProjections(),
+    });
+  // .jspace/logs/ is a preallocated slot for execution logs (cron / asset-ingest
+  // headless); materialize only writes files, so an empty dir must be created here.
   mkdirSync(join(target, CONFIG_DIR, "logs"), { recursive: true });
 
   // Portable marker v1: logical workbench identity + template provenance.
@@ -103,8 +121,9 @@ export function initWorkbench(
   writeLocalAtomic(target, local);
 
   // Materialization journal: records the actual hashes of every materialized
-  // file so workspace diff knows the applied base (gitignored, machine truth).
-  writeActualMaterializedJournal(target, deps.manifest);
+  // file (plus the projection links section) so workspace diff knows the
+  // applied base (gitignored, machine truth).
+  writeActualMaterializedJournal(target, deps.manifest, projections.links);
 
   const validateCmd = deps.isCompiled() ? "jspace" : join(deps.devRoot(), "bin", "jspace");
   return {
@@ -113,6 +132,7 @@ export function initWorkbench(
       ...(backedUp.length > 0
         ? [`  note: backed up ${backedUp.length} pre-existing file(s) to <name>.jspace-bak: ${backedUp.join(", ")}`]
         : []),
+      ...projections.lines,
       `Validate: ${validateCmd} doctor --dir ${target}`,
       `Next: read AGENTS.md, then follow .jspace/skills/jspace-use/SKILL.md`,
       `Install user-level skills (multi-harness ~/.agents/skills/, referenced from SKILL.md): ${validateCmd} skills install`,

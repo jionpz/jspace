@@ -15,16 +15,17 @@ import type {
 } from "../../core/contracts/distribution.ts";
 
 /** Harness-specific skill projection dirs (workbench-relative). Official skills
- *  materialize to `.jspace/skills/` (harness-agnostic source of truth) plus one
- *  byte-identical copy per projection dir here — so harnesses that discover
- *  skills only from their own directory (e.g. Claude Code's `.claude/skills/`)
- *  can still see them. `.agents/skills/` is the project-level multi-harness
- *  location (jspace-use §skill layout), complementary to the user-level
- *  `~/.agents/skills/` materialized by `skills install`.
+ *  materialize to `.jspace/skills/` (harness-agnostic source of truth, the only
+ *  physical copy); each projection dir here holds a thin DIRECTORY symlink to it
+ *  (issue #39) so harnesses that discover skills only from their own directory
+ *  (e.g. Claude Code's `.claude/skills/`) still see them — through the same
+ *  realpath. `.agents/skills/` is the project-level multi-harness location
+ *  (jspace-use §skill layout), complementary to the user-level
+ *  `~/.agents/skills/` (a link of its own, managed by `skills install`).
  *
  * Derived from capabilities.yaml (per-harness workbench_projection + the shared
  *  projection) so a new harness projection flows into materialization and
- *  doctor's drift checks without touching this file (single source of truth).
+ *  doctor's checks without touching this file (single source of truth).
  * Lazy function (not an eager module-level const) so importing this module does
  *  not force the harness registry / capabilities.generated.ts at load
  *  (issue #8 #17 bootstrap-loop defense). */
@@ -34,15 +35,13 @@ export function skillProjections(): readonly string[] {
 
 /** Map a bundle manifest key to every workbench-relative path it materializes
  *  to. Empty array = not materialized into the workbench (filehub is created
- *  on demand by `filehub init`, not by init/upgrade). Projection copies are
- *  byte-identical to the source by construction — they come from the same
- *  ASSETS entry, so their sha256 matches and upgrade keeps them in lockstep. */
+ *  on demand by `filehub init`, not by init/upgrade). Official skills
+ *  materialize ONLY their SSOT path: projection dirs are thin directory links
+ *  created by the projection engine (projections.ts, issue #39), not per-file
+ *  copies, so diff/journal see one physical copy per skill. */
 export function materializedRels(key: string): string[] {
   if (key.startsWith("templates/workbench/")) return [key.slice("templates/workbench/".length)];
-  if (key.startsWith("skills/")) {
-    const name = key.slice("skills/".length);
-    return [skillRel(name), ...skillProjections().map((p) => `${p}/${name}`)];
-  }
+  if (key.startsWith("skills/")) return [skillRel(key.slice("skills/".length))];
   return [];
 }
 
