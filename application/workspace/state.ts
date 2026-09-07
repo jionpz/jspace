@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { fail, rejectErrors } from "../../core/shared/errors.ts";
 import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
 import { HUB_FILE } from "../../core/contracts/files.ts";
+import { formatDecoderIssue } from "../../core/contracts/diagnostics.ts";
 import { decodeHub, type HubV1 } from "../../core/contracts/hub.ts";
 import type { LocalStateV1 } from "../../core/contracts/local.ts";
 
@@ -16,7 +17,7 @@ export function loadHub(root: string): HubV1 {
       fail(`registry not found: ${join(root, HUB_FILE)}`);
       break;
     case "invalid":
-      rejectErrors(reads.hub.issues.map((i) => `${i.message} (${i.code})`));
+      rejectErrors(reads.hub.issues.map(formatDecoderIssue));
       break;
     case "ok":
       return reads.hub.value;
@@ -31,7 +32,7 @@ export function loadLocal(root: string): LocalStateV1 | null {
     case "missing":
       return null;
     case "invalid":
-      rejectErrors(reads.local.issues.map((i) => `${i.message} (${i.code})`));
+      rejectErrors(reads.local.issues.map(formatDecoderIssue));
       break;
     case "ok":
       return reads.local.value;

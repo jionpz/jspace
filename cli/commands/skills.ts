@@ -5,32 +5,27 @@
 // machine-agnostic, no harness-specific var). Inside a workbench the workbench
 // skills become thin directory links to its SSOT (.jspace/skills, issue #39);
 // machine-global skills and no-workbench runs materialize per-file copies.
-import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { CommandSpec, CmdContext, CmdResult } from "../../application/commands/command.ts";
 import { installSkills, type InstallDeps, type InstallResult } from "../../application/skills/install.ts";
 import { classifyUserSkillLink, ensureUserSkillLink } from "../../application/workspace/projections.ts";
+import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { ASSETS } from "../assets.generated.ts";
 import { GLOBAL_SKILLS } from "../global-skills.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
 import { expandTilde } from "../embed.ts";
-import { b } from "./helpers.ts";
+import { b, readFileOrNull } from "./helpers.ts";
 
 export function userSkillsRoot(): string {
   return expandTilde("~/.agents/skills");
 }
 
 function writeWithDirs(abs: string, content: string): void {
-  mkdirSync(join(abs, ".."), { recursive: true });
-  writeFileSync(abs, content, "utf-8");
-}
-
-function readFileOrNull(abs: string): string | null {
-  try {
-    return readFileSync(abs, "utf-8");
-  } catch {
-    return null;
-  }
+  // Atomic rename replaces a symlink at `abs` rather than writing through it
+  // (dangling or live). writeFileSync follows the link and can escape
+  // ~/.agents/skills.
+  writeBytesAtomic(abs, content);
 }
 
 /** Union view over the two embedded skill content maps — workbench skills in

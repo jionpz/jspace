@@ -3,10 +3,13 @@
 // harness name (the spawn will fail with a clear error from the OS).
 import { spawnSync } from "node:child_process";
 
+/** Cap `which`/`where` so a hung PATH lookup cannot stall doctor / cron argv. */
+const RESOLVE_BIN_TIMEOUT_MS = 5_000;
+
 /** Resolve a harness binary on PATH (win32 uses `where`, else `which`). */
 export function resolveHarnessBin(harness: string, platform: string): string {
   const cmd = platform === "win32" ? "where" : "which";
-  const w = spawnSync(cmd, [harness], { encoding: "utf-8" });
+  const w = spawnSync(cmd, [harness], { encoding: "utf-8", timeout: RESOLVE_BIN_TIMEOUT_MS });
   return (w.stdout ?? "").trim().split(/\r?\n/)[0] || harness; // win: first line only
 }
 

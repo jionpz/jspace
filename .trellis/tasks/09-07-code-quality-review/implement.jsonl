@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "fail-closed, SCHEMA_VERSION_REPAIR_HINT, machine-truth read policy"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "path confinement, CommandSpec, spawn timeout, false-green tests"}

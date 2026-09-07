@@ -3,7 +3,7 @@
 // injected second-write failure compensation.
 // Run: bun test adapters/fs/workbench-state.test.ts
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HubV1 } from "../../core/contracts/hub.ts";
@@ -142,5 +142,18 @@ test("writeBytesAtomic writes exact content and replaces existing file", () => {
   writeBytesAtomic(p, "one");
   writeBytesAtomic(p, "two");
   expect(readFileSync(p, "utf-8")).toBe("two");
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("writeBytesAtomic replaces a symlink instead of writing through it", () => {
+  const root = tempWorkbench();
+  const outside = join(root, "outside.txt");
+  writeFileSync(outside, "secret", "utf-8");
+  const p = join(root, "link.txt");
+  symlinkSync(outside, p);
+  writeBytesAtomic(p, "new");
+  expect(readFileSync(p, "utf-8")).toBe("new");
+  expect(lstatSync(p).isSymbolicLink()).toBe(false);
+  expect(readFileSync(outside, "utf-8")).toBe("secret");
   rmSync(root, { recursive: true, force: true });
 });

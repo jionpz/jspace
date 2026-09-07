@@ -8,8 +8,6 @@ import { join } from "node:path";
 import { taskIdFor, workbenchTag, SCHEDULER_SPAWN_TIMEOUT_MS } from "./types.ts";
 import { makeSchedulerSpawn, type SchedulerSpawn, type SchedulerSpawnImpl, type SchedulerSpawnImplOpts } from "./spawn.ts";
 import { isWindowsInstallable } from "../../core/shared/schedule.ts";
-import { buildPlist } from "./darwin.ts";
-import { parseSchedule } from "../../core/shared/schedule.ts";
 import { linuxAdapter, makeLinuxAdapter, crontabBlock, crontabLine, crontabUnavailable, replaceManagedBlock, parseManagedLine, extractTagBlock, pidNamespaceIsolated, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
 import { darwinAdapter, plistPath, parsePlistName, plistBelongsToTag, scheduleFromIntervalDict, argvFromPlistStdout } from "./darwin.ts";
 import { schtasksArgs, parseOpContent, parseSchtasksXml, win32Adapter, csvTaskName, cronIdFromTaskName, queryTasksFromOutput } from "./win32.ts";
@@ -184,7 +182,7 @@ test("schtasksArgs: DAILY and WEEKLY mapping", () => {
   const daily = schtasksArgs(mk("inbox-tidy", "0 21 * * *"), "C:\\jspace.exe", "C:\\wb", "JSpaceCron_wb_inbox");
   expect(daily).toContain("/sc"); expect(daily).toContain("DAILY"); expect(daily).toContain("/st"); expect(daily).toContain("21:00");
   expect(daily).toContain("/tn"); expect(daily).toContain("JSpaceCron_wb_inbox");
-  expect(daily!.join(" ")).toContain('cron run --dir "C:\\wb" --id inbox-tidy');
+  expect(daily!.join(" ")).toContain('cron run --dir "C:\\wb" --id "inbox-tidy"');
 
   const weekly = schtasksArgs(mk("weekly", "0 21 * * 0"), "C:\\jspace.exe", "C:\\wb", "JSpaceCron_wb_weekly");
   expect(weekly).toContain("WEEKLY"); expect(weekly).toContain("/d"); expect(weekly).toContain("SUN");
@@ -196,6 +194,14 @@ test("schtasksArgs: unsupported schedules -> null", () => {
   const mk = (id: string, schedule: string): CronDefinition => ({ id, schedule, harness: "claude", prompt: "test", enabled: true });
   expect(schtasksArgs(mk("monthly", "0 0 1 * *"), "C:\\jspace.exe", "C:\\wb", "x")).toBeNull();
   expect(schtasksArgs(mk("dom", "0 0 1 6 *"), "C:\\jspace.exe", "C:\\wb", "x")).toBeNull();
+});
+
+test("schtasksArgs rejects quote/newline in root/bin/id (cmd injection)", () => {
+  const cron: CronDefinition = { id: "inbox-tidy", schedule: "0 21 * * *", harness: "claude", prompt: "x", enabled: true };
+  expect(() => schtasksArgs(cron, "C:\\bin\\jspace.exe", 'C:\\wb" && calc && "', "JSpaceCron_tag_inbox-tidy")).toThrow(/newline|CR|NUL|quote/);
+  expect(() => schtasksArgs(cron, 'C:\\bin\\"jspace.exe', "C:\\wb", "JSpaceCron_tag_inbox-tidy")).toThrow(/newline|CR|NUL|quote/);
+  expect(() => schtasksArgs({ ...cron, id: 'tidy"&calc' }, "C:\\bin\\jspace.exe", "C:\\wb", "JSpaceCron_tag_x")).toThrow(/newline|CR|NUL|quote/);
+  expect(() => schtasksArgs(cron, "C:\\bin\\jspace.exe", "C:\\wb\nC:\\evil", "JSpaceCron_tag_inbox-tidy")).toThrow(/newline|CR|NUL|quote/);
 });
 
 test("schtasksArgs rejects /tr longer than 260 characters", () => {
@@ -246,6 +252,9 @@ test("parseSchtasksXml: DAILY + WEEKLY + spaces root + unparseable", () => {
   expect(parseSchtasksXml(daily)).toEqual({ schedule: "0 21 * * *", argv: "cron run --id inbox-tidy --dir C:\\Users\\John Doe\\wb" });
   const weekly = `<Task xmlns="x"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T09:30:00</StartBoundary><ScheduleByWeek><WeeksInterval>1</WeeksInterval><DaysOfWeek><Sunday/></DaysOfWeek></ScheduleByWeek></CalendarTrigger></Triggers><Actions><Exec><Arguments>cron run --dir "C:\\wb" --id weekly</Arguments></Exec></Actions></Task>`;
   expect(parseSchtasksXml(weekly)).toEqual({ schedule: "30 9 * * 0", argv: "cron run --id weekly --dir C:\\wb" });
+  // quoted --id (current writer) round-trips to the same unquoted inspect argv
+  const quotedId = `<Task xmlns="x"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger></Triggers><Actions><Exec><Arguments>cron run --dir "C:\\wb" --id "inbox-tidy"</Arguments></Exec></Actions></Task>`;
+  expect(parseSchtasksXml(quotedId)).toEqual({ schedule: "0 21 * * *", argv: "cron run --id inbox-tidy --dir C:\\wb" });
   expect(parseSchtasksXml("<Task/>")).toBeNull();
   expect(parseSchtasksXml(`<Task><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary><ScheduleByDay/></CalendarTrigger></Triggers><Actions><Exec><Arguments>no --dir here</Arguments></Exec></Actions></Task>`)).toBeNull();
 });
@@ -364,7 +373,7 @@ test("P0: darwin reconciliation converges — plist identity == inspect parse", 
   const cron = mkCron("inbox", "0 21 * * *");
   const id = darwinAdapter.identity(tag, cron.id); // posix dotted
   const root = "/wb";
-  const content = buildPlist(cron.id, tag, parseSchedule(cron.schedule), root, "/bin/jspace", "/Users/u", "/bin");
+  const content = darwinAdapter.buildContent(cron, tag, root, { jspaceBinary: "/bin/jspace", home: "/Users/u", path: "/bin" });
   const desired = [{ taskId: id.taskId, cronId: cron.id, schedule: cron.schedule, argv: "cron run --id inbox --dir /wb", content }];
   // Round-trip through the REAL inspect parse functions with canned `plutil`
   // output (macOS `plutil -p` / `-extract json` format), so a build/parse drift

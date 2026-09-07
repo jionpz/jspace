@@ -157,3 +157,10 @@ export function readVersion(
 export const SCHEMA_VERSION_REPAIR_HINT =
   "state file was written by a pre-1.0.11 jspace; regenerate with `jspace init <dir> --force` " +
   "(destructive — review first) or edit `version: ...` → `schema_version: 1` by hand";
+
+/** Format a decoder issue for a user-facing fail() message. Appends the shared
+ *  repair hint on `*.version.unsupported` so loadHub / loadCrons / inspect never
+ *  drift on the fix path. */
+export function formatDecoderIssue(i: ContractIssue): string {
+  return `${i.message} (${i.code})${i.code.endsWith(".version.unsupported") ? `; ${SCHEMA_VERSION_REPAIR_HINT}` : ""}`;
+}
