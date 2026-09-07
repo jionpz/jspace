@@ -32,7 +32,8 @@
 #                           field name (default "env"; opencode uses "environment").
 #                           `path` may start with `~` (expanded per home dir).
 #   workbench_projection  — workbench-relative skill projection dirs materialized by
-#                           init/upgrade (byte-identical copies of .jspace/skills/).
+#                           init/upgrade as directory symlinks to `.jspace/skills/`
+#                           (copy only as a visible fallback when symlink is unavailable).
 #   user_install          — user-level paths (doctor reports existence only; wired by
 #                           `jspace skills install`, never by init/upgrade).
 #   hook_format           — hook/plugin channel type, or `none` when the harness has

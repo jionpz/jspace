@@ -9,7 +9,7 @@
 // claude/grok reuse the existing application/gbrain/{wiring,grok-wiring}.ts;
 // cursor/opencode/pi merge/`create` their MCP-list config (their target files
 // ARE MCP lists). All writes are merge + backup, never whole-file rewrites.
-import { readFileSync, writeFileSync, copyFileSync, mkdirSync, existsSync, symlinkSync, readlinkSync, cpSync, readdirSync, unlinkSync } from "node:fs";
+import { writeFileSync, copyFileSync, mkdirSync, existsSync, symlinkSync, readlinkSync, cpSync, readdirSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import type { CommandSpec, OptionSpec, CmdContext, CmdResult } from "../../application/commands/command.ts";
@@ -17,21 +17,14 @@ import { wireGrokSkillsDir, grokConfigPath, type GrokWireDeps, type GrokWireResu
 import { wireHarness, describeCapability, defaultGbrainBin, type HarnessWireDeps } from "../../application/harness/wire.ts";
 import { loadCapabilities } from "../../adapters/harness/registry.ts";
 import { resolveHarnessBin } from "../../adapters/harness/bin.ts";
+import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
-import { s } from "./helpers.ts";
+import { s, readFileOrNull } from "./helpers.ts";
 
 /** Session harnesses with a real `harness wire` backend (codex is a
  *  cron-compat entry and is explicitly rejected). */
 const WIRE_HARNESSES = ["claude", "grok", "opencode", "cursor", "pi"] as const;
 type WireHarness = (typeof WIRE_HARNESSES)[number];
-
-function readFileOrNull(p: string): string | null {
-  try {
-    return readFileSync(p, "utf-8");
-  } catch {
-    return null;
-  }
-}
 
 const CONFIG_BACKUP_KEEP = 3;
 
@@ -81,9 +74,9 @@ function harnessWireDeps(dryRun: boolean): HarnessWireDeps {
     readFile: readFileOrNull,
     writeFile: (p, content) => {
       // MCP-list targets may live in a not-yet-created dir (e.g. ~/.cursor/ on a
-      // fresh install); create parents before writing.
-      mkdirSync(join(p, ".."), { recursive: true });
-      writeFileSync(p, content, "utf-8");
+      // fresh install); writeBytesAtomic mkdir -p's parents and rename-replaces
+      // a symlink instead of writing through it.
+      writeBytesAtomic(p, content);
     },
     backup: backupConfig,
     homedir,
@@ -132,7 +125,13 @@ function wireHandler(ctx: CmdContext, args: Record<string, unknown>): CmdResult 
       }
     }
   }
-  if (harness === "cursor") lines.push(...cursorSkillsWire(ctx.dryRun));
+  if (harness === "cursor") {
+    const skills = cursorSkillsWire(ctx.dryRun);
+    lines.push(...skills.lines);
+    if (skills.errors.length > 0) {
+      return { lines, errors: skills.errors, exitCode: 1 };
+    }
+  }
   lines.push(...describeCapability(harness));
   return { lines };
 }
@@ -141,15 +140,31 @@ function wireHandler(ctx: CmdContext, args: Record<string, unknown>): CmdResult 
  *  `~/.cursor/skills/<name>` → `~/.agents/skills/<name>` (the multi-harness
  *  user-level location materialized by `skills install`). Missing source -> hint;
  *  existing-but-elsewhere -> kept (never overwrite); win32 has no symlink without
- *  dev-mode, so it degrades to a copy. Read-only in dry-run. */
-function cursorSkillsWire(dryRun: boolean): string[] {
+ *  dev-mode, so it degrades to a copy. Read-only in dry-run.
+ *  Link failures are errors (exit 1), never a silent exit 0 (issue #8 #9). */
+function cursorSkillsWire(dryRun: boolean): { lines: string[]; errors: string[] } {
+  return wireCursorSkillLinks({
+    userRoot: join(homedir(), ".agents", "skills"),
+    cursorRoot: join(homedir(), ".cursor", "skills"),
+    skillNames: SKILLS_MANIFEST.workbench.map((x) => x.name),
+    dryRun,
+    isWin: process.platform === "win32",
+  });
+}
+
+/** Testable Cursor skills-link primitive (homedir injected). */
+export function wireCursorSkillLinks(opts: {
+  userRoot: string;
+  cursorRoot: string;
+  skillNames: string[];
+  dryRun: boolean;
+  isWin: boolean;
+}): { lines: string[]; errors: string[] } {
   const lines: string[] = [];
-  const userRoot = join(homedir(), ".agents", "skills");
-  const cursorRoot = join(homedir(), ".cursor", "skills");
-  const isWin = process.platform === "win32";
-  for (const name of SKILLS_MANIFEST.workbench.map((x) => x.name)) {
-    const userPath = join(userRoot, name);
-    const linkPath = join(cursorRoot, name);
+  const errors: string[] = [];
+  for (const name of opts.skillNames) {
+    const userPath = join(opts.userRoot, name);
+    const linkPath = join(opts.cursorRoot, name);
     if (!existsSync(userPath)) {
       lines.push(`  skills: ${name} — run 'jspace skills install' first (${userPath} missing)`);
       continue;
@@ -164,13 +179,13 @@ function cursorSkillsWire(dryRun: boolean): string[] {
       lines.push(linked ? `  skills: ${name} linked ✓` : `  skills: ${name} exists (points elsewhere; kept)`);
       continue;
     }
-    if (dryRun) {
+    if (opts.dryRun) {
       lines.push(`  skills: (dry-run) would link ${linkPath} → ${userPath}`);
       continue;
     }
     try {
-      mkdirSync(cursorRoot, { recursive: true });
-      if (isWin) {
+      mkdirSync(opts.cursorRoot, { recursive: true });
+      if (opts.isWin) {
         cpSync(userPath, linkPath, { recursive: true });
         lines.push(`  skills: copied ${linkPath} ← ${userPath} (win32: no symlink)`);
       } else {
@@ -178,10 +193,10 @@ function cursorSkillsWire(dryRun: boolean): string[] {
         lines.push(`  skills: linked ${linkPath} → ${userPath}`);
       }
     } catch (e) {
-      lines.push(`  skills: ${name} — failed to link: ${e instanceof Error ? e.message : String(e)}`);
+      errors.push(`  skills: ${name} — failed to link: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
-  return lines;
+  return { lines, errors };
 }
 
 // ---- `harness init` (ensure workbench seed/projection for one harness) ------
@@ -222,7 +237,7 @@ function initHandler(ctx: CmdContext, args: Record<string, unknown>): CmdResult 
 function grokWireDeps(dryRun: boolean): GrokWireDeps {
   return {
     readFile: readFileOrNull,
-    writeFile: (p, content) => writeFileSync(p, content, "utf-8"),
+    writeFile: (p, content) => writeBytesAtomic(p, content),
     backup: backupConfig,
     homedir,
     resolveWorkbenchSkillsDir: (r) => join(r, ".jspace", "skills"),

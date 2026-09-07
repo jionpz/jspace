@@ -3,7 +3,7 @@
 // temp fixture only — never a real filehub).
 // Run: bun test application/ingest/use-cases.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { readJournals } from "./journal.ts";
@@ -67,6 +67,18 @@ test("begin rejects a source outside the filehub inbox (issue #8 #4)", () => {
   writeFileSync(outside, "secret\n", "utf-8");
   const target = join(projDir, "x.txt");
   expect(() => ingestBegin(wb, { file: outside, target, slug: "assets/foo/x", project: "foo" })).toThrow(/filehub inbox/);
+});
+
+test("begin refuses a target that escapes the filehub via directory symlink", () => {
+  const outside = join(wb, "outside-dir");
+  mkdirSync(outside);
+  const evil = join(fh, "projects", "evil");
+  symlinkSync(outside, evil);
+  const src = sourceFile("sym.txt");
+  expect(() =>
+    ingestBegin(wb, { file: src, target: join(evil, "leaked.txt"), slug: "assets/foo/x", project: "foo" }),
+  ).toThrow(/filehub root/);
+  expect(existsSync(join(outside, "leaked.txt"))).toBe(false);
 });
 
 test("begin stores an absolute source in the journal (issue #8 #4)", () => {

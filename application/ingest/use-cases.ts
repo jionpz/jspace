@@ -25,24 +25,23 @@ import {
 } from "./journal.ts";
 import { resolveProjectId } from "./project.ts";
 
-const REAL_OPS: IngestFileOps = { copyFile: copyFileSync, unlink: unlinkSync };
-
-/** IngestFileOps whose unlink is confined to the filehub root — a tampered or
- *  hand-edited journal whose source/target points outside must never make the
- *  CLI delete an arbitrary file (issue #8 #4). begin already requires the
- *  source to live under <filehub>/_inbox; this is defense in depth at every
- *  unlink (complete source removal + fail staged-target compensation). */
+/** IngestFileOps confined to the filehub root — a tampered journal or a
+ *  directory symlink under the filehub must never make the CLI copy/delete
+ *  an arbitrary file (issue #8 #4). begin already requires the source to live
+ *  under <filehub>/_inbox; this is defense in depth at every copy and unlink
+ *  (stage copy + complete source removal + fail staged-target compensation). */
 function filehubOps(root: string): IngestFileOps {
   const fh = resolveFilehubRoot(root);
   if (!fh) fail(`no filehub registered for workbench ${root}; run "jspace filehub init" first`);
+  const confined = (p: string, verb: string): string => {
+    const abs = isAbsolute(p) ? p : resolve(p);
+    const real = confinedWithin(abs, fh);
+    if (!real) fail(`refusing to ${verb} a file outside the filehub: ${p}`);
+    return real;
+  };
   return {
-    copyFile: copyFileSync,
-    unlink: (p) => {
-      const abs = isAbsolute(p) ? p : resolve(p);
-      const real = confinedWithin(abs, fh);
-      if (!real) fail(`refusing to remove a file outside the filehub: ${p}`);
-      unlinkSync(real);
-    },
+    copyFile: (src, dst) => copyFileSync(confined(src, "copy"), confined(dst, "copy")),
+    unlink: (p) => unlinkSync(confined(p, "remove")),
   };
 }
 
@@ -68,18 +67,20 @@ export function ingestBegin(root: string, args: IngestBeginArgs): CmdResult {
   if (!confinedWithin(sourceAbs, inboxDir)) {
     fail(`source must be inside the filehub inbox (${inboxDir}): ${args.file}`);
   }
-  const target = isAbsolute(args.target) ? args.target : join(fh, args.target);
-  const relPath = relative(fh, target);
-  if (relPath.startsWith("..") || isAbsolute(relPath)) {
-    fail(`target must be under the filehub root (${fh})`);
-  }
+  const targetAbs = isAbsolute(args.target) ? args.target : join(fh, args.target);
+  // Symlink-aware: a directory symlink under the filehub (e.g. projects/evil →
+  // /tmp/outside) must not pass a lexical relative() check and then copyFileSync
+  // out of the vault. confinedWithin resolves the deepest existing prefix.
+  const target = confinedWithin(targetAbs, fh);
+  if (!target) fail(`target must be under the filehub root (${fh})`);
+  const relPath = relative(fh, targetAbs);
   const reads = readWorkbenchState(root);
   const hub = reads.hub.status === "ok" ? reads.hub.value : null;
   const proj = resolveProjectId(hub, args.project);
   const res = beginIngest(
     root,
     { source: sourceAbs, target, relPath, slug: args.slug, projectId: proj.id, indexEntry: args.indexLine },
-    REAL_OPS,
+    filehubOps(root),
   );
   const lines: string[] = [];
   if (res.kind === "duplicate") {

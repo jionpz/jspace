@@ -15,6 +15,8 @@ const MAX_OUTPUT_BYTES = 1_048_576;
  *  CLI hangs on child exit, the lock is never released, and ~1h later a second
  *  `cron run` sees the lock as stale and double-runs (issue #8 #5). */
 const SIGKILL_GRACE_MS = 3000;
+/** win32 timeout path: taskkill itself must not hang and cancel the outer timeout. */
+const TASKKILL_TIMEOUT_MS = 5_000;
 
 export interface SpawnResult {
   exit: number;
@@ -165,7 +167,7 @@ export async function spawnProcess(argv: string[], opts: SpawnOpts): Promise<Spa
     killed = true;
     if (opts.platform === "win32") {
       try {
-        spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"]);
+        spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { timeout: TASKKILL_TIMEOUT_MS });
       } catch { /* ignore */ }
     } else {
       try {

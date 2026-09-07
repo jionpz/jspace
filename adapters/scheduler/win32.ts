@@ -88,10 +88,21 @@ export function parseSchtasksXml(xml: string): { schedule: string; argv: string 
   if (!argsEl) return null;
   const args = argsEl[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
   const root = args.match(/--dir\s+"([^"]+)"/);
-  const id = args.match(/--id\s+(\S+)/);
+  // quoted (current writer) or unquoted (tasks installed before the quote guard)
+  const id = args.match(/--id\s+"([^"]+)"/) ?? args.match(/--id\s+(\S+)/);
   if (!root || !id) return null;
   const schedule = dow === null ? `${minute} ${hour} * * *` : `${minute} ${hour} * * ${dow}`;
   return { schedule, argv: `cron run --id ${id[1]} --dir ${root[1]}` };
+}
+
+/** Refuse characters that would break schtasks `/tr` quoting or inject a new
+ *  command (quote-break + newline). Symmetric with linux/darwin rejectControlChars. */
+function rejectUnsafeSchtasksValues(...vals: string[]): void {
+  for (const v of vals) {
+    if (/[\n\r\u0000"]/.test(v)) {
+      fail(`schtasks values must not contain newline/CR/NUL/quote: ${JSON.stringify(v)}`);
+    }
+  }
 }
 
 /** Build schtasks args for a cron (DAILY/WEEKLY subset). Null when not expressible. */
@@ -100,8 +111,12 @@ export const SCHTASKS_TR_MAX_LEN = 260;
 export function schtasksArgs(cron: CronDefinition, jspaceBin: string, root: string, taskName: string): string[] | null {
   const d = parseSchedule(cron.schedule);
   if (!isWindowsInstallable(cron.schedule)) return null;
+  // Quote-break + control chars: /tr is a double-quoted cmd line. A `"` in
+  // root/jspaceBin/id splits the quoted string and lets the rest run as cmd
+  // (linux crontab / darwin plist already reject newline/CR/NUL).
+  rejectUnsafeSchtasksValues(jspaceBin, root, cron.id, taskName);
   const st = `${String(d.Hour).padStart(2, "0")}:${String(d.Minute).padStart(2, "0")}`;
-  const tr = `"${jspaceBin}" cron run --dir "${root}" --id ${cron.id}`;
+  const tr = `"${jspaceBin}" cron run --dir "${root}" --id "${cron.id}"`;
   if (tr.length > SCHTASKS_TR_MAX_LEN) {
     fail(`cron ${cron.id}: schtasks /tr exceeds ${SCHTASKS_TR_MAX_LEN} characters (${tr.length}); shorten the workbench or jspace binary path`);
   }

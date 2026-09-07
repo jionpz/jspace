@@ -172,8 +172,15 @@ const inboxDeps = (over: Partial<ExecuteDeps> = {}): ExecuteDeps => deps({
 test("inbox-tidy with no filehub -> batch-stale incident, not ok (issue #8 #6)", async () => {
   const res = await run({ cronId: "inbox-tidy" }, inboxDeps()); // filehubRoot: () => null → batchLog === null
   expect(lastRun(root, "inbox-tidy")!.batchChanged).toBe(false);
+  expect(lastRun(root, "inbox-tidy")!.status).toBe("failed");
   expect(hasBatchStaleIncident("inbox-tidy")).toBe(true);
+  expect(res.exitCode).toBe(1);
+  expect(res.lines[0]).toContain("batch-stale");
   expect(res.lines[0]).not.toContain("already succeeded today");
+  // fake-ok would skip the rest of the day; fail-closed must re-run
+  const again = await run({ cronId: "inbox-tidy" }, inboxDeps());
+  expect(again.lines[0]).not.toContain("already succeeded today");
+  expect(again.exitCode).toBe(1);
 });
 
 test("inbox-tidy with filehub but batch log never appeared -> batch-stale (issue #8 #6)", async () => {
@@ -181,7 +188,9 @@ test("inbox-tidy with filehub but batch log never appeared -> batch-stale (issue
   try {
     const res = await run({ cronId: "inbox-tidy" }, inboxDeps({ filehubRoot: () => fh }));
     expect(lastRun(root, "inbox-tidy")!.batchChanged).toBe(false);
+    expect(lastRun(root, "inbox-tidy")!.status).toBe("failed");
     expect(hasBatchStaleIncident("inbox-tidy")).toBe(true);
+    expect(res.exitCode).toBe(1);
     expect(res.lines[0]).not.toContain("already succeeded today");
   } finally {
     rmSync(fh, { recursive: true, force: true });
@@ -196,7 +205,9 @@ test("inbox-tidy with unchanged batch log -> batch-stale (issue #8 #6)", async (
     writeFileSync(batchLog, "before\n", "utf-8");
     const res = await run({ cronId: "inbox-tidy" }, inboxDeps({ filehubRoot: () => fh })); // fakeHarness doesn't touch it
     expect(lastRun(root, "inbox-tidy")!.batchChanged).toBe(false);
+    expect(lastRun(root, "inbox-tidy")!.status).toBe("failed");
     expect(hasBatchStaleIncident("inbox-tidy")).toBe(true);
+    expect(res.exitCode).toBe(1);
     expect(res.lines[0]).not.toContain("already succeeded today");
   } finally {
     rmSync(fh, { recursive: true, force: true });

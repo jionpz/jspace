@@ -23,16 +23,24 @@ export function pendingStage(root: string, slug: string, contentFile: string, pr
 export function pendingList(root: string, json: boolean): CmdResult {
   const fh = resolveFilehubRoot(root);
   if (!fh) return json ? { lines: [], data: { envelopes: [] } } : { lines: ["jspace: ok: no filehub registered (no pending envelopes)"] };
-  const envs = readEnvelopes(fh).records;
-  if (json) return { lines: [], data: { envelopes: envs } };
-  if (envs.length === 0) return { lines: ["jspace: ok: no pending envelopes"] };
-  return { lines: envs.map((e) => `${e.id}  ${e.status}  retry=${e.retryCount}  ${e.slug}  (${e.producer})`) };
+  const { records: envs, issues } = readEnvelopes(fh);
+  const warnings = issues.map((i) => `pending envelope damaged (${i.path}): ${i.message}`);
+  if (json) {
+    return { lines: [], data: { envelopes: envs, issues }, warnings: warnings.length > 0 ? warnings : undefined };
+  }
+  if (envs.length === 0 && issues.length === 0) return { lines: ["jspace: ok: no pending envelopes"] };
+  const lines =
+    envs.length === 0
+      ? ["jspace: warn: no valid pending envelopes"]
+      : envs.map((e) => `${e.id}  ${e.status}  retry=${e.retryCount}  ${e.slug}  (${e.producer})`);
+  return { lines, warnings: warnings.length > 0 ? warnings : undefined };
 }
 
 /** Applier: apply staged envelopes (dedupe / put / retry / terminal-failure). */
 export async function pendingApply(root: string, id: string | undefined, gbrain: GbrainDeps = realGbrain()): Promise<CmdResult> {
   const fh = resolveFilehubRoot(root);
   if (!fh) fail(`no filehub registered for workbench ${root}`);
+  const damaged = readEnvelopes(fh).issues;
   const res = await applyPending(fh, gbrain, id);
   const lines = [
     `jspace: ok: pending apply: applied ${res.applied.length}, deduped ${res.deduped.length}, ` +
@@ -42,7 +50,8 @@ export async function pendingApply(root: string, id: string | undefined, gbrain:
     const env = readEnvelope(fh, t);
     lines.push(`  [terminal] ${t} ${env.slug}: ${env.error ?? ""} (ack with: jspace pending ack ${t})`);
   }
-  return { lines };
+  const warnings = damaged.map((i) => `pending envelope damaged (${i.path}): ${i.message}`);
+  return { lines, warnings: warnings.length > 0 ? warnings : undefined };
 }
 
 /** Acknowledge a terminal-failed envelope (evidence retained, stops alerting). */

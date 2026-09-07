@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "verify fail-closed and no swallowed IO failures"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "verify confinement, tests, no layer violations"}

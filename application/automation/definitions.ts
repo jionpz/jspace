@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fail } from "../../core/shared/errors.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
-import { SCHEMA_VERSION_REPAIR_HINT } from "../../core/contracts/diagnostics.ts";
+import { formatDecoderIssue } from "../../core/contracts/diagnostics.ts";
 import { decodeCrons, type CronDefinition, type CronSkillTarget, type CronsFile } from "../../core/contracts/cron.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
@@ -34,9 +34,7 @@ export function loadCrons(root: string): CronsFile {
   if (!decoded.ok) {
     // version.unsupported (pre-1.0.11 cron.json) carries the repair path; other
     // decoder issues pass through unchanged.
-    const msg = decoded.issues
-      .map((i) => `${i.message} (${i.code})${i.code.endsWith(".version.unsupported") ? `; ${SCHEMA_VERSION_REPAIR_HINT}` : ""}`)
-      .join("; ");
+    const msg = decoded.issues.map(formatDecoderIssue).join("; ");
     fail(msg);
   }
   return decoded.value;
