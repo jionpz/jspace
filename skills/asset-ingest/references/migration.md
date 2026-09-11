@@ -1,63 +1,100 @@
-# asset-ingest — 存量收编 runbook(migration)
+# asset-ingest — 存量收编与旧结构迁移 runbook(migration)
 
-把**存量旧资料**（Documents / Downloads / 旧目录 / 网盘 / 聊天记录导出等散落素材）收编进文件中心。**增量、按需**，不做一次性大搬。
+把**存量旧资料**(Documents / Downloads / 旧目录 / 网盘 / 聊天记录导出等散落素材)收编进文件中心。**增量、按需**,不做一次性大搬。
 
-## 原则（与资产协议一致）
+## 原则(与资产协议一致)
 
-- **新东西一律走 inbox**：`_inbox/` → 批量整理（`~/.agents/skills/asset-ingest/references/batch.md`）。
-- **存量按需收编**：旧资料按项目/领域，用户点名时收，不默认全量搬。
-- **收编 = 复用 asset-ingest 纪律**（归位/命名/查重/入脑/登记/自检），本 runbook 只补「存量从哪里来、怎么分」的边界，不另造第二套流程。
-- 重资产不进工作台 git；文件本体永远留在资产层；gbrain 只存事实与指针。
+- **新东西一律走 inbox**:`_inbox/` → 批量整理(`~/.agents/skills/asset-ingest/references/batch.md`)。
+- **存量按需收编**:旧资料按项目/领域,用户点名时收,不默认全量搬。
+- **收编 = 复用 asset-ingest 纪律**(归位/命名/查重/入脑/登记/自检),本 runbook 只补「存量从哪里来、怎么分」的边界,不另造第二套流程。
+- **类型不是目录**:物理位置只按归属 + 项目 `layout`(flat/workstream/period)决定;禁止把 `docs`、`decks`、`data`、`notes` 等文件形态当作归档目录。
+- 重资产不进工作台 git;文件本体永远留在资产层;gbrain 只存事实与指针。
 
 ## 何时用
 
 - 用户说「把某项目旧资料收进来」「这些旧文件整理进文件中心」。
-- 项目开启/结项时，把散落旧文件归位到 `projects/<项目>/` 或 `archive/<年>/`。
+- 项目开启/结项时,把散落旧文件归位到 `projects/<项目>/` 或 `archive/<年>/`。
+- `jspace doctor` 报告 `filehub.legacy_taxonomy`,用户要求处理旧 `docs`、`decks`、`data`、`notes` 格式目录结构。
 
-## 步骤
+## A. 外部存量收编
 
-### 0. 定位来源 + 列清单（先看再动）
-- 明确源目录（Documents / Downloads / 桌面 / 旧盘 / 网盘 / 聊天记录导出…），列出候选文件清单。
-- 估量：份数、类型、体积。大体积（如 GB 级）先跟用户确认是否本轮收、收多少。
+### 0. 定位来源 + 列清单(先看再动)
+- 明确源目录(Documents / Downloads / 桌面 / 旧盘 / 网盘 / 聊天记录导出…),列出候选文件清单。
+- 估量:份数、类型、体积。大体积(如 GB 级)先跟用户确认是否本轮收、收多少。
 
-### 1. 分类（增量、按需）
-- 属某进行中项目 → `projects/<项目>/<子目录>/`（docs/ decks/ data/ notes/）。
-- 长期领域资料（书籍/资料，无明确终点）→ `areas/<领域>/`。
+### 1. 归属与 layout(增量、按需)
+- 属某进行中项目 → 读 `projects/<项目>/index.md`,按已声明的 `layout` 选择项目根或稳定子目录。
+- 长期领域资料(书籍/资料,无明确终点) → `areas/<领域>/` 下的稳定主题,不按格式建目录。
 - 结项/冷资料 → `archive/<年>/`。
-- **归属不明 → 列疑问问用户，不猜**。
+- **归属或 layout 不明 → 列疑问问用户,不猜**。
 
-### 2. 命名 + 查重（复用 filing.md）
-- 命名：`YYYY-MM-DD-语义名-vN.ext`（入库日期 + 语义名 + 版本）。
-- 查重：目标目录同名/同语义文件 + `gbrain get assets/<项目|领域>/<语义名>` 是否已建页。
-- 冲突 → 询问用户：跳过 / 修复（同名同内容重入，允许覆盖错页）/ 升版本（`-vN`，写新页）。
+### 2. 命名 + 查重(复用 filing.md)
+- 命名:`YYYY-MM-DD-语义名-vN.ext`(入库日期 + 语义名 + 版本)。
+- 查重:目标目录同名/同语义文件 + `gbrain get assets/<项目|领域>/<语义名>` 是否已建页。
+- 冲突 → 询问用户:跳过 / 修复(同名同内容重入,允许覆盖错页)/ 升版本(`-vN`,写新页)。
 
 ### 3. 归位
-- 把文件从源目录**移动**到目标目录（不动原件副本，源目录保持干净）。
+- 把文件从源目录**移动**到目标目录(不动原件副本,源目录保持干净)。
 
-### 4. 入脑（复用 gbrain-write.md）
-- 写 gbrain asset 指针页（slug `assets/<项目|领域>/<语义名>`）：frontmatter（type/source/project/tags: [asset]/**rel_path**）+ Summary + Key Facts + Pointer。
-- excel/ppt 关键数字需要时可走深度抽取（`~/.agents/skills/asset-ingest/references/deep-extract.md`）。
+### 4. 入脑(复用 gbrain-write.md)
+- 写 gbrain asset 指针页(slug `assets/<项目|领域>/<语义名>`):frontmatter(type/source/project/tags: [asset]/**rel_path**)+ Summary + Key Facts + Pointer。
+- excel/ppt 关键数字需要时可走深度抽取(`~/.agents/skills/asset-ingest/references/deep-extract.md`)。
 
 ### 5. 登记
-- 项目 `index.md` 挂一行（文件名 + 日期 + gbrain slug）；areas 是否建 index 按使用涌现。
+- 项目 `index.md` 挂一行(文件 + 类型 + 日期 + gbrain slug);areas 是否建 index 按使用涌现。
 
-### 6. 召回自检（必做）
-- `gbrain query <关键词>` 确认命中；未命中 → 查 slug / tags / embedding。
+### 6. 召回自检(必做)
+- `gbrain query <关键词>` 确认命中;未命中 → 查 slug / tags / embedding。
 
-### 7. 记录（可选）
-- 本次收编清单 + 结果写 `.jspace-logs/`（时间/来源/份数/归位位置/结果），供复查与下次会话对齐。
+### 7. 记录(可选)
+- 本次收编清单 + 结果写 `.jspace-logs/`(时间/来源/份数/归位位置/结果),供复查与下次会话对齐。
+
+## B. 旧格式分类结构迁移(非破坏)
+
+适用:项目内已有 `docs`、`decks`、`data`、`notes` 等格式目录。**不自动批处理**,每次只处理明确点名或 doctor 报告的范围。
+
+### 1. 只读盘点
+- 记录旧 `rel_path`、文件大小/哈希、项目 index 登记、gbrain asset 页候选。
+- 运行 `jspace doctor`;不要把 warning 当成可以自动修复的许可。
+
+### 2. 生成映射
+- 为每个文件给出 `old_rel_path -> new_rel_path`。
+- 新位置必须落在项目已声明的 `layout` 轴内,或落在 `areas/<领域>/<稳定主题>/`。
+- 映射理由必须是稳定归属/阶段,不能只是把一个格式目录名换成另一个格式目录名。
+- 用户逐项确认;拒绝的文件保持原状。
+
+### 3. 单文件迁移
+对每个已确认文件依次执行:
+
+1. 验证新旧路径都在 filehub 根内,目标不冲突。
+2. 优先同 filehub 内 rename;不复制两份。
+3. 更新项目 `index.md` 的路径与 wikilink。
+4. 找到所有指向旧 `rel_path` / Pointer 的 gbrain asset 页,更新 `Pointer` 与 `rel_path`;内容未变时这是唯一允许的指针修正。
+5. 读回:新路径存在、旧路径不存在、`gbrain get <slug>` 的 `rel_path` 正确、查询仍命中。
+6. 任一验证失败 → 停止,按相反顺序恢复 index 和指针,再把文件移回旧路径。
+
+### 4. 完成判定
+- 只有 doctor 不再报告该旧目录,且 index、gbrain、文件系统三者一致,才可称该范围"迁移完成"。
+- 只需新增文件不再进入旧格式目录时,只能称"新写入已收敛",不能称旧结构已经迁移。
+
+### 5. 禁止项
+- 禁止无确认批量移动/删除。
+- 禁止只移动文件而不更新 index / gbrain 指针。
+- 禁止把 `docs` 这类旧目录原地改名为另一个格式目录来规避检测。
+- 禁止用复制制造第二份本体;跨项目引用用链接。
 
 ## 增量 vs 一次性
 
 | 方式 | 何时 | 做法 |
 |---|---|---|
-| 增量（默认） | 新资料 | 一律先落 `_inbox/`，再批量整理（batch.md） |
-| 按需收编 | 用户点名某项目/领域旧资料 | 本 runbook 步骤 0-7，逐份处理 |
-| 一次性搬 | 仅用户明确要求且有清晰范围（如某项目全量归档） | 仍逐份走纪律，不做无差别拷入；大体积先确认 |
+| 增量(默认) | 新资料 | 一律先落 `_inbox/`,再批量整理(batch.md) |
+| 按需收编 | 用户点名某项目/领域旧资料 | 本 runbook A 章逐份处理 |
+| 旧结构迁移 | doctor 报告或用户点名 | 本 runbook B 章,逐文件确认 + 指针更新 + 回滚 |
+| 一次性搬 | 仅用户明确要求且有清晰范围(如某项目全量归档) | 仍逐份走纪律,不做无差别拷入;大体积先确认 |
 
-## 决策记录（2026-08-03 定，GOAL.md 开放问题 #2 闭合）
+## 决策记录(2026-08-03 定,GOAL.md 开放问题 #2 闭合)
 
-- **根位置**：本机 filehub 根目录（如 `~/filehub`；每机一个根，注册进 hub.json 的 `type: filehub` resource primary path）。不迁到网盘/iCloud。
-- **同步策略**：内容同步走网盘/Obsidian Sync（重资产不进工作台 git）；根目录本身可由网盘同步该目录，或暂不同步；换机按「目标机根 + rel_path」重解析（M5 已验证）。
-- **收编边界**：新文件一律 inbox；存量按项目/领域按需收编。
-- **真实迁移**：本轮未做（机器上无零散存量素材）；真实使用时按本 runbook 执行并回填验证。
+- **根位置**:本机 filehub 根目录(如 `~/filehub`;每机一个根,注册进 hub.json 的 `type: filehub` resource primary path)。不迁到网盘/iCloud。
+- **同步策略**:内容同步走网盘/Obsidian Sync(重资产不进工作台 git);根目录本身可由网盘同步该目录,或暂不同步;换机按「目标机根 + rel_path」重解析(M5 已验证)。
+- **收编边界**:新文件一律 inbox;存量按项目/领域按需收编。
+- **真实迁移**:本轮未做(机器上无零散存量素材);真实使用时按本 runbook 执行并回填验证。

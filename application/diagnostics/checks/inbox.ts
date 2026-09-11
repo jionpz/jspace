@@ -1,5 +1,5 @@
 // application/diagnostics/checks/inbox.ts — filehub, pending, ingest, domains.
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { RegistryDiagnostic } from "../../../core/contracts/diagnostics.ts";
 import type { readWorkbenchState } from "../../../adapters/fs/workbench-state.ts";
@@ -9,6 +9,11 @@ import { readEnvelopes } from "../../pending/envelope.ts";
 import { readJournals } from "../../ingest/journal.ts";
 import type { HubV1 } from "../../../core/contracts/hub.ts";
 import { DOMAIN_DORMANT_DAYS, lastActivityMs, PROJECT_STALE_DAYS } from "./shared.ts";
+import {
+  FILEHUB_CONTRACT_VERSION,
+  inspectFilehubContractBlock,
+  parseFilehubContractVersion,
+} from "../../registry/filehub-block.ts";
 
 export type WorkbenchReads = ReturnType<typeof readWorkbenchState>;
 
@@ -74,6 +79,129 @@ export function checkInbox(reads: WorkbenchReads): RegistryDiagnostic[] {
         });
       }
     }
+  }
+  return diags;
+}
+
+/** Legacy format vocabulary: directory names that describe file shape, not
+ *  ownership/stage. Never recommended; detected read-only so a real migration
+ *  can be planned (see asset-ingest/references/migration.md). */
+export const LEGACY_TAXONOMY_DIRS: readonly string[] = ["docs", "decks", "data", "notes"];
+
+const UPGRADE_HINT = "jspace filehub upgrade";
+
+function isDir(p: string): boolean {
+  try {
+    return statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** One-level scan of `dir` for legacy format child directories. Permission /
+ *  race errors degrade to "nothing found" — doctor must never throw. */
+function legacyChildren(dir: string): string[] {
+  try {
+    if (!statSync(dir).isDirectory()) return [];
+    const hits: string[] = [];
+    for (const name of readdirSync(dir)) {
+      if (name.startsWith(".")) continue;
+      if (!LEGACY_TAXONOMY_DIRS.includes(name)) continue;
+      if (isDir(join(dir, name))) hits.push(name);
+    }
+    return hits.sort();
+  } catch {
+    return [];
+  }
+}
+
+/** Read-only filehub content contract checks:
+ *  - `filehub.contract_stale`: README missing / no managed block / damaged
+ *    markers / missing or outdated contract version.
+ *  - `filehub.legacy_taxonomy`: exact `docs|decks|data|notes` child dirs under a
+ *    registered project asset root or an `areas/*` directory.
+ *  Warning-level only (never blocks) and bounded: no recursive walk of the
+ *  asset tree, so a large filehub stays cheap. */
+export function checkFilehubContract(reads: WorkbenchReads): RegistryDiagnostic[] {
+  const diags: RegistryDiagnostic[] = [];
+  const fhRoot = resolveFhRoot(reads);
+  if (!fhRoot) return diags; // unregistered already reported by checkInbox
+
+  const readme = join(fhRoot, "README.md");
+  if (!existsSync(readme)) {
+    diags.push({
+      severity: "warning",
+      code: "filehub.contract_stale",
+      path: `filehub.${fhRoot}`,
+      message: `filehub README missing: ${readme}; run "${UPGRADE_HINT} ${fhRoot} --dry-run" to preview the contract file, then apply`,
+    });
+  } else {
+    let state: ReturnType<typeof inspectFilehubContractBlock>;
+    try {
+      state = inspectFilehubContractBlock(readFileSync(readme, "utf-8"));
+    } catch {
+      state = { kind: "malformed", reason: "README unreadable" };
+    }
+    if (state.kind === "malformed") {
+      diags.push({
+        severity: "warning",
+        code: "filehub.contract_stale",
+        path: `filehub.${fhRoot}`,
+        message: `filehub README contract block damaged (${state.reason}): ${readme}; fix the JSPACE:FILEHUB markers by hand, then run "${UPGRADE_HINT} ${fhRoot} --dry-run"`,
+      });
+    } else if (state.kind === "none") {
+      diags.push({
+        severity: "warning",
+        code: "filehub.contract_stale",
+        path: `filehub.${fhRoot}`,
+        message: `filehub README has no JSPACE:FILEHUB contract block: ${readme}; run "${UPGRADE_HINT} ${fhRoot} --dry-run" to preview the insert`,
+      });
+    } else {
+      const version = parseFilehubContractVersion(state.block);
+      if (version === null) {
+        diags.push({
+          severity: "warning",
+          code: "filehub.contract_stale",
+          path: `filehub.${fhRoot}`,
+          message: `filehub README contract block has no filehub-contract-version: ${readme}; run "${UPGRADE_HINT} ${fhRoot} --dry-run"`,
+        });
+      } else if (version < FILEHUB_CONTRACT_VERSION) {
+        diags.push({
+          severity: "warning",
+          code: "filehub.contract_stale",
+          path: `filehub.${fhRoot}`,
+          message: `filehub README contract v${version} < v${FILEHUB_CONTRACT_VERSION}: ${readme}; run "${UPGRADE_HINT} ${fhRoot} --dry-run" then apply (README block only — assets are never moved)`,
+        });
+      }
+    }
+  }
+
+  const hub = reads.hub.status === "ok" ? reads.hub.value : null;
+  const scanRoots: { abs: string; rel: string }[] = [];
+  for (const project of hub?.projects ?? []) {
+    scanRoots.push({ abs: join(fhRoot, project.asset_rel_path), rel: project.asset_rel_path });
+  }
+  const areasDir = join(fhRoot, "areas");
+  try {
+    if (statSync(areasDir).isDirectory()) {
+      for (const name of readdirSync(areasDir)) {
+        if (name.startsWith(".")) continue;
+        if (isDir(join(areasDir, name))) scanRoots.push({ abs: join(areasDir, name), rel: `areas/${name}` });
+      }
+    }
+  } catch {
+    // missing/unreadable areas/ is not a contract problem
+  }
+
+  for (const { abs, rel } of scanRoots) {
+    const hits = legacyChildren(abs);
+    if (hits.length === 0) continue;
+    diags.push({
+      severity: "warning",
+      code: "filehub.legacy_taxonomy",
+      path: `filehub.${rel}`,
+      message: `legacy format director${hits.length === 1 ? "y" : "ies"} under ${rel}: ${hits.join(", ")}; format names must not be archive directories — migrate per asset-ingest/references/migration.md (explicit, per-file, rollback-able)`,
+    });
   }
   return diags;
 }

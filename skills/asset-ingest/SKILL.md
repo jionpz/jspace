@@ -32,8 +32,8 @@ CLI `ingest begin` 强制 `--project <id>`;`areas/`/`projects/` 是 **target 路
 
 | 资料类型 | `--project`(CLI 强制) | `--target` | `--slug` |
 |---|---|---|---|
-| 项目产出 | `<项目id>`(registered 首选) | `projects/<项目>/<文件名>` | `assets/<项目>/<语义名>` |
-| 领域资料 | `<领域名>`(如 `books`;CLI 派生 id + warning,可忽略) | `areas/<领域>/<文件名>` | `assets/<领域>/<语义名>` |
+| 项目产出 | `<项目id>`(registered 首选) | `projects/<项目>/<文件名>` 或按 `layout` 的稳定子目录 | `assets/<项目>/<语义名>` |
+| 领域资料 | `<领域名>`(如 `books`;CLI 派生 id + warning,可忽略) | `areas/<领域>/<文件名>` 或稳定主题子目录 | `assets/<领域>/<语义名>` |
 
 - 领域资料用 `--project <领域名>` 时,CLI 报 `warn: project ... is not registered` 但**不阻塞**,派生 id 稳定、功能正常。
 - 消除 warning(可选):`jspace project add <id>` 注册 project 后 warning 消失、slug 更稳定;常用领域(如 `books`/`papers`)建议注册。
@@ -58,7 +58,7 @@ gbrain query <关键词>
 
 ## 步骤(主流程骨架)
 
-1. **识别**:定类型/归属;**先读 `gbrain get profile/filing-prefs`**（如存在）应用用户归位偏好;**`ls` 目标项目目录**观察已有组织方式并延续;查重(`gbrain get assets/<id>/<语义名>`)→ 冲突按决策表。
+1. **识别**:定类型/归属;**先读项目 `index.md` 的 `layout`** 与 `gbrain get profile/filing-prefs`（如存在）;只延续合规的已有组织方式;类型只做元数据;查重(`gbrain get assets/<id>/<语义名>`)→ 冲突按决策表。
 2. **暂存**:`jspace ingest begin ...`(jspace 复制到目标、source 留 inbox、写 journal,返回 id)。
 3. **入脑**:写 gbrain asset 指针页(slug `assets/<projectId>/<语义名>`,模板见 `~/.agents/skills/asset-ingest/references/gbrain-write.md`)→ 成功 `advance --gbrain`;锁冲突 `jspace pending stage`。
 4. **登记+提交**:`advance --index` → `advance --complete`(jspace 移除 source)。

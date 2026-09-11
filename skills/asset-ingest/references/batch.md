@@ -10,13 +10,13 @@
 
 ## 第一遍(确定性,零提问)
 
-**归位前先读上下文**：① `gbrain get profile/filing-prefs`（如存在）——用户历次纠正积累的归位规则；② `ls` 目标项目目录——观察已有组织方式并延续。两者在确定性判断中使用。
+**归位前先读上下文**：① 项目 `index.md` 的 `layout`（flat/workstream/period）；② `gbrain get profile/filing-prefs`（如存在）——用户历次纠正积累的归位规则；③ `ls` 目标项目目录——只延续与契约一致的已有组织方式。三者都参与确定性判断；格式目录不是可选答案。
 
 遍历 `_inbox/` 剩余文件(排除:点文件、常驻契约文件 `README.md` / `AGENTS.md`、`.processing` 已完成项、skip 清单)。命中 `.skip-inbox-tidy` 豁免标记的目录**整目录跳过并计入「跳过」**(原因:豁免标记),不搬动其内容——与 unfiled 计数(`inbox status` / doctor / context hook)同一口径,见 filing.md「投放口常驻文件与豁免标记」。
 
 **确定性**判定(全部满足):
 1. 类型明确:`pdf / ppt / txt / md / excel` 之一(由扩展名 + 内容判断);
-2. 归属可判:能从文件名/内容确定归 `projects/<项目>/` 或 `areas/<领域>/`;
+2. 归属与位置可判:能从文件名/内容确定归 `projects/<项目>/` 或 `areas/<领域>/`,并依据 `layout` 确定根目录或稳定子目录;
 3. 无查重冲突:`gbrain get assets/<项目|领域>/<语义名>` 未存在,且目标目录无同名/同语义文件;
 4. 命名可提取:`YYYY-MM-DD-语义名` 能从文件名/内容直接得出。
 

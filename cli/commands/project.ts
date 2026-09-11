@@ -1,7 +1,7 @@
 // cli/commands/project.ts — `jspace project` / `filehub` / `inbox` command
 // families (registry-adjacent asset-layer commands, small enough to share one file).
 import type { CommandSpec } from "../../application/commands/command.ts";
-import { filehubInit } from "../../application/registry/filehub.ts";
+import { filehubInit, filehubUpgrade } from "../../application/registry/filehub.ts";
 import { inboxStatus } from "../../application/registry/inbox.ts";
 import { projectAdd, projectList, projectListStatus } from "../../application/registry/project.ts";
 import { expandTilde, filehubReadme, devRoot } from "../embed.ts";
@@ -76,11 +76,31 @@ const filehubInitSpec: CommandSpec = {
     }, b(args.dryRun)),
 };
 
+const filehubUpgradeSpec: CommandSpec = {
+  name: "upgrade",
+  summary: "upgrade the README contract block (never moves assets)",
+  description:
+    "Explicit, non-destructive contract upgrade: replaces/inserts ONLY the " +
+    "JSPACE:FILEHUB managed block in the filehub README. Assets, index.md and " +
+    "gbrain pointers are untouched.",
+  positionals: [
+    { name: "path", help: "filehub root (default: the registered filehub primary path)" },
+  ],
+  features: { dir: true, dryRun: true },
+  handler: (ctx, args) =>
+    filehubUpgrade(args.path === undefined ? undefined : s(args.path), {
+      resolvePath,
+      expandTilde,
+      filehubReadme,
+      wbRoot: ctx.root,
+    }, b(args.dryRun)),
+};
+
 export const filehubSpec: CommandSpec = {
   name: "filehub",
   summary: "manage the file management center (asset layer)",
   commandArgName: "filehub_command",
-  children: [filehubInitSpec],
+  children: [filehubInitSpec, filehubUpgradeSpec],
 };
 
 const inboxStatusSpec: CommandSpec = {

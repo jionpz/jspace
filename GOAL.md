@@ -11,7 +11,7 @@
 ## 使用画面（终局的一天）
 
 1. **上午进入工作**：在工作台目录启动 `claude`（或 pi / codex）。会话读 AGENTS.md → 识别我在跟进「X 项目」→ 从 gbrain 注入 X 项目的最新事实（上次进展、待办、关键决策）→ 直接接着干，不需要我复述背景。
-2. **收到一份客户 PPT**：丢进文件管理中心的 `_inbox/`。说一句"整理一下 inbox"，AI 把它改名为 `2026-08-01-acme-kickoff.pptx`、归档到 `projects/acme/decks/`、在项目 `index.md` 登记一行、往 gbrain 写一条事实（这份 deck 是什么 + 文件指针）。
+2. **收到一份客户 PPT**：丢进文件管理中心的 `_inbox/`。说一句"整理一下 inbox"，AI 把它改名为 `2026-08-01-acme-kickoff-v1.pptx`，按项目 `layout` 归档到项目根或稳定工作流目录（如 `projects/acme/kickoff/`），在项目 `index.md` 的“类型”列登记为 deck，并往 gbrain 写一条事实（这份 deck 是什么 + 文件指针）。
 3. **随口一问**："上季度 Acme 报价单里的单价是多少？" → gbrain 召回事实与文件指针 → 会话打开那份 excel 核对 → 给出答案并引用出处。
 4. **收工**：会话结束时被提醒一次，说一句"收工"，本次的持久事实（带项目/域归属）写回 gbrain，产出文件归位到文件中心。**提醒自动，写入显式**——这是设计红线，不是待补的自动化（见「记忆协议」）。
 5. **夜里**：cron 触发无头 harness（`claude -p` / `codex exec` / `pi -p`）：清理 inbox 残留、生成本周项目周报 md 存进文件中心、把摘要写进 gbrain。
@@ -42,11 +42,12 @@
   ```text
   filehub/
     _inbox/             # 一切新文件先落这里，等待整理
-    projects/<项目>/    # 进行中项目：index.md + docs/ decks/ data/ notes/
+    projects/<项目>/    # 进行中项目：index.md + flat 文件，或单一稳定组织轴下的子目录
     areas/<领域>/       # 长期职责域（无明确终点的工作）
     archive/<年>/       # 结项与冷资料
   ```
 
+- **归档轴**：物理目录只表达归属与稳定工作流/阶段/周期；文件类型（document/deck/sheet/data/note）只进 `index.md` 与 gbrain，不进入目录名。每个项目在 `index.md` 声明 `layout: flat | workstream | period`，同一层级只使用一种组织轴。**禁止** `docs/ decks/ data/ notes/` 等格式目录。
 - **命名**：`YYYY-MM-DD-语义名-vN.ext`——机器可排序、人可扫读。
 - **项目索引**：每个项目一份 `index.md`（现状、关键文件表、下一步），是人与 AI 共用的 dashboard；Obsidian 里它就是项目首页。
 - **inbox 流程**：新文件进 `_inbox/` → AI（会话内一句话触发，或 cron 定时）分类、改名、归位、登记索引、写记忆。这是"自动整理"的具体机制——整齐不靠自觉，靠这条流水线。

@@ -4,12 +4,13 @@
 // is stubbed (the real one spawns the platform scheduler — never in tests).
 // Run: bun test application/workspace/doctor.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { doctorWorkbench, type CronHealthDeps, type CronLike } from "./doctor.ts";
 import { loadCrons, parseSchedule } from "../automation/definitions.ts";
 import { sha256Of } from "../workspace/manifest.ts";
+import { filehubReadme as embeddedFilehubReadme } from "../../cli/embed.ts";
 import type { CmdResult } from "../commands/command.ts";
 
 let root: string;
@@ -642,6 +643,112 @@ function withFilehub(projects: unknown[]): string {
   writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ schema_version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
   return fh;
 }
+
+// ---- filehub.contract_stale / filehub.legacy_taxonomy (read-only doctor) ----
+
+
+test("filehub without a README -> filehub.contract_stale warning (non-blocking)", () => {
+  withFilehub([]);
+  const r = doctorWorkbench(root, stubDeps());
+  const diags = (r.data as { diagnostics: { code: string; severity: string; message: string }[] }).diagnostics;
+  const d = diags.find((x) => x.code === "filehub.contract_stale");
+  expect(d?.severity).toBe("warning");
+  expect(d!.message).toContain("jspace filehub upgrade");
+  expect(r.exitCode ?? 0).toBe(0);
+});
+
+test("filehub README with no managed block -> filehub.contract_stale", () => {
+  const fh = withFilehub([]);
+  writeFileSync(join(fh, "README.md"), "# 用户自己的 README\n");
+  const diags = (doctorWorkbench(root, stubDeps()).data as { diagnostics: { code: string; message: string }[] }).diagnostics;
+  const d = diags.find((x) => x.code === "filehub.contract_stale");
+  expect(d).toBeDefined();
+  expect(d!.message).toContain("no JSPACE:FILEHUB contract block");
+  expect(d!.message).toContain("jspace filehub upgrade");
+});
+
+test("filehub README with damaged markers -> filehub.contract_stale (never throws)", () => {
+  const fh = withFilehub([]);
+  writeFileSync(join(fh, "README.md"), "# t\n<!-- JSPACE:FILEHUB:START -->\nno end\n");
+  const diags = (doctorWorkbench(root, stubDeps()).data as { diagnostics: { code: string; severity: string; message: string }[] }).diagnostics;
+  const d = diags.find((x) => x.code === "filehub.contract_stale");
+  expect(d?.severity).toBe("warning");
+  expect(d!.message).toContain("damaged");
+});
+
+test("filehub README with an outdated contract version -> filehub.contract_stale", () => {
+  const fh = withFilehub([]);
+  writeFileSync(join(fh, "README.md"), `<!-- JSPACE:FILEHUB:START -->\n> filehub-contract-version: 1\nold\n<!-- JSPACE:FILEHUB:END -->\n`);
+  const diags = (doctorWorkbench(root, stubDeps()).data as { diagnostics: { code: string; message: string }[] }).diagnostics;
+  const d = diags.find((x) => x.code === "filehub.contract_stale");
+  expect(d).toBeDefined();
+  expect(d!.message).toContain("v1 < v2");
+});
+
+test("compliant filehub (current block + flat project) -> no contract diagnostics", () => {
+  const fh = withFilehub([{ id: "acme", domain: "files", asset_rel_path: "projects/acme", status: "active" }]);
+  writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
+  mkdirSync(join(fh, "projects", "acme"), { recursive: true });
+  writeFileSync(join(fh, "projects", "acme", "index.md"), "---\nlayout: flat\n---\n");
+  mkdirSync(join(fh, "areas", "books"), { recursive: true });
+  const c = codes(doctorWorkbench(root, stubDeps()));
+  expect(c).not.toContain("filehub.contract_stale");
+  expect(c).not.toContain("filehub.legacy_taxonomy");
+});
+
+test("legacy format dirs under a registered project -> filehub.legacy_taxonomy", () => {
+  const fh = withFilehub([{ id: "acme", domain: "files", asset_rel_path: "projects/acme", status: "active" }]);
+  writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
+  mkdirSync(join(fh, "projects", "acme", "docs"), { recursive: true });
+  mkdirSync(join(fh, "projects", "acme", "delivery"), { recursive: true });
+  const r = doctorWorkbench(root, stubDeps());
+  const d = (r.data as { diagnostics: { code: string; severity: string; message: string }[] }).diagnostics.find(
+    (x) => x.code === "filehub.legacy_taxonomy",
+  );
+  expect(d?.severity).toBe("warning");
+  expect(d!.message).toContain("docs");
+  expect(d!.message).not.toContain("delivery");
+  expect(d!.message).toContain("migration.md");
+  expect(r.exitCode ?? 0).toBe(0);
+});
+
+test("legacy format dir under areas/<domain> -> filehub.legacy_taxonomy", () => {
+  const fh = withFilehub([]);
+  writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
+  mkdirSync(join(fh, "areas", "books", "data"), { recursive: true });
+  const diags = (doctorWorkbench(root, stubDeps()).data as { diagnostics: { code: string; message: string }[] }).diagnostics;
+  const d = diags.find((x) => x.code === "filehub.legacy_taxonomy");
+  expect(d).toBeDefined();
+  expect(d!.message).toContain("areas/books");
+  expect(d!.message).toContain("data");
+});
+
+test("legacy taxonomy scan is one level only (semantic dir may contain a docs/ folder)", () => {
+  const fh = withFilehub([{ id: "acme", domain: "files", asset_rel_path: "projects/acme", status: "active" }]);
+  writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
+  mkdirSync(join(fh, "projects", "acme", "delivery", "docs"), { recursive: true });
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("filehub.legacy_taxonomy");
+});
+
+test("unregistered filehub -> no contract_stale / legacy_taxonomy noise", () => {
+  const c = codes(doctorWorkbench(root, stubDeps()));
+  expect(c).not.toContain("filehub.contract_stale");
+  expect(c).not.toContain("filehub.legacy_taxonomy");
+});
+
+test("unreadable project dir degrades to skip instead of crashing doctor", () => {
+  const fh = withFilehub([{ id: "acme", domain: "files", asset_rel_path: "projects/acme", status: "active" }]);
+  writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
+  const p = join(fh, "projects", "acme");
+  mkdirSync(p, { recursive: true });
+  chmodSync(p, 0o000);
+  try {
+    const r = doctorWorkbench(root, stubDeps());
+    expect(r.exitCode ?? 0).toBe(0);
+  } finally {
+    chmodSync(p, 0o755);
+  }
+});
 
 test("filehub project with no hub record -> registry.project_unlinked (info)", () => {
   const fh = withFilehub([]);

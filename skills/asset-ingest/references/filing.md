@@ -16,11 +16,13 @@
 
 ## 类型策略
 
-| 类型 | 归位目标 | 说明 |
+**类型只做元数据,不决定目录。** 先定归属与 `layout`,再定文件名。
+
+| 类型 | 归属 | 说明 |
 |---|---|---|
 | pdf/txt/md 书籍、资料 | `areas/<领域>/` | 先摘要+指针,按需加深 |
 | excel / ppt | `projects/<项目>/` 或 `areas/<领域>/` | 常规:摘要+指针;用户要求时深度抽取(逐表/逐页 → 伴生 `.extract.md` + 页内 Key Facts 含关键数字),见 `~/.agents/skills/asset-ingest/references/deep-extract.md` |
-| 项目产出(报告/文档/资料) | `projects/<项目>/` 或其子目录 | AI 根据上下文自主决定放置位置(见下),`-vN` 管理版本 |
+| 项目产出(报告/文档/资料) | `projects/<项目>/` | 按项目 `layout` 决定放项目根还是稳定工作流/周期子目录 |
 | 视频/音频/截图 | — | 路由到 gbrain `media-ingest` 深入路径;MVP 范围外 |
 
 ## 目录结构(GOAL.md 资产协议)
@@ -28,8 +30,8 @@
 ```
 filehub/
   _inbox/           # 新资料先落这里(M2 后)
-  projects/<项目>/  # index.md + AI 自主组织的目录结构
-  areas/<领域>/     # 长期领域资料
+  projects/<项目>/  # index.md + flat 文件,或单一稳定组织轴下的子目录
+  areas/<领域>/     # 长期领域资料,按稳定主题组织
   archive/<年>/     # 结项/冷资料
 ```
 
@@ -42,64 +44,63 @@ filehub/
 
 豁免目录里的文件不会被自动归位;要整理它,先删掉标记再走正常流程。
 
-### 项目目录:AI 自主组织,不预设分类
+### 项目目录:归属/阶段唯一轴,不按文件格式
 
-**不预设固定子目录**(如 docs/decks/data/notes)——实际长期使用中资料常跨类别,预设分类会"放哪都不对"。也**不强制全部扁平**——文件多了一样找不到东西。
+项目 `index.md` 的 frontmatter 必须声明一种 `layout`:
 
-AI 在归位时**自主决定**目录结构,依据(按优先级)：
+- `flat`:文件较少,直接放项目根。
+- `workstream`:按稳定工作流/阶段分组,如 `kickoff/`、`delivery/`、`合同/`。
+- `period`:按稳定周期分组,如 `2026-Q3/`。
 
-1. **归位偏好**(`profile/filing-prefs`,见下节)——用户积累的显式规则,最高优先
-2. **已有目录结构**——`ls` 项目目录,观察现有的组织方式,延续而非打破
-3. **文件内容与上下文**——读文件内容,结合项目 state(gbrain)和会话上下文判断这份资料在项目中的角色
-4. **项目 index.md**——看已登记的文件是怎么组织的
+规则:
 
-**硬约束(只有这些)**:
-- 命名必须 `YYYY-MM-DD-语义名-vN.ext`(机器可排序、人可扫读)
-- 每份归位文件必须在 `index.md` 登记一行
-- 项目根下只有 `index.md`,其余文件应在子目录中(哪怕只有一个子目录)
-- 子目录命名应能让人一眼理解内容(中文或英文均可,如 `周报/`、`合同/`、`客户沟通/`)
+1. **先读项目 `index.md` 的 `layout`**,不得每轮另发明分类轴。
+2. 同一层级只能使用一种组织轴,不得混用工作流、周期或文件格式。
+3. 不为单个文件机械建目录;只有稳定同类集合形成、或直接子项过多影响浏览时才建目录。
+4. **禁止** `docs`、`decks`、`data`、`notes` 等文件形态目录。类型写入 index,不写进路径。
+5. 一个文件只有一个规范位置;跨项目引用用链接,不复制。
+6. 已有旧式格式目录不自然获得合法性:只按原位置增量接收会持续制造漂移;先按 migration.md 的显式迁移流程处理,或明确保留为待迁移区,不再新增格式目录。
 
-**示例:同一项目,不同组织方式都是合理的**
+**示例(同一项目只能选用一种组织方式)**
 
 ```
-# 方式 A:按资料用途(每周汇报多的项目自然涌现)
+# 方式 A:workstream(稳定工作流/阶段)
 projects/acme/
-  index.md
-  周报/
-    2026-08-07-周报-v1.pptx
-    2026-08-14-周报-v1.pptx
+  index.md              # layout: workstream
+  kickoff/
+    2026-08-01-kickoff-v1.pptx
   合同/
     2026-08-01-服务合同-v1.pdf
-  交付物/
+  delivery/
     2026-08-10-需求文档-v2.pdf
 
-# 方式 B:按时间段(长跑项目自然涌现)
+# 方式 B:period(长跑项目按周期)
 projects/acme/
-  index.md
+  index.md              # layout: period
   2026-Q3/
     2026-08-01-kickoff-v1.pptx
     2026-08-03-报价单-v1.xlsx
   2026-Q4/
     2026-10-01-中期汇报-v1.pptx
 
-# 方式 C:文件少,保持扁平
+# 方式 C:flat(文件少)
 projects/acme/
-  index.md
+  index.md              # layout: flat
   2026-08-01-kickoff-v1.pptx
   2026-08-03-报价单-v1.xlsx
 ```
 
-关键是:**AI 看到已有结构后延续它,而不是每次发明新分类**。`profile/filing-prefs` 让用户可以固化"这个项目我想这样组织"。
+`profile/filing-prefs` 只能帮助选择 `flat` / `workstream` / `period` 或具体稳定主题,不能恢复格式目录。
 
 ### 归位偏好学习(消除反复猜错)
 
-AI 归位文件被用户纠正时，**必须**把纠正写成 gbrain `profile/filing-prefs` 页（覆盖），下次归位前先读这一页：
+AI 归位文件被用户纠正时,**必须**把纠正写成 gbrain `profile/filing-prefs` 页(覆盖),下次归位前先读这一页:
 
 ```bash
 gbrain get profile/filing-prefs   # 归位前先读(如存在)
 ```
 
-写页内容示例：
+写页内容示例:
 ```markdown
 ---
 type: note
@@ -113,11 +114,11 @@ tags: [profile]
 - 多个项目共用的行业报告放 areas/<行业>/
 
 ## 项目专属规则
-- acme 项目:周报放 周报/ 子目录;合同放 合同/;其余放项目根
-- wms 项目:按季度分目录(2026-Q3/ 等)
+- acme 项目:layout: workstream;周报放 周报/,合同放 合同/,交付物放 delivery/
+- wms 项目:layout: period;按季度分目录(2026-Q3/ 等)
 ```
 
-这样 AI 的归位准确度随使用提升，而不是每次从零猜。每个项目可以有自己的组织方式，用户纠正一次，以后同类文件都会遵循。
+偏好只覆盖单一组织轴内的选择;若与"禁止格式目录"冲突,以 filehub 根 README 的归档契约为准。
 
 ## 降级暂存区(文件中心未注册时)
 
@@ -137,5 +138,6 @@ tags: [profile]
 
 ## 项目 index.md
 
-- `projects/<项目>/index.md` 登记一行:文件名 + 日期 + gbrain slug(人机共用的 dashboard)。
-- `areas/` 是否维护 index 由真实使用涌现,不预先设计。
+- `projects/<项目>/index.md` 必须在 frontmatter 声明 `layout: flat | workstream | period`。
+- 每份归位文件必须登记一行:文件 + 类型 + 日期 + gbrain slug(人机共用的 dashboard)。
+- `areas/` 是否维护 index 由真实使用涌现,但同样禁止按文件格式分目录。

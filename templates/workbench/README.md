@@ -54,7 +54,7 @@ jspace doctor --dir .
 
 ## 资产管理(跟踪新项目)
 
-重资产(pdf/ppt/excel/md)归位在**文件中心(filehub)**——独立目录,由 `jspace filehub init` 生成并注册(`type: filehub` resource),可作 Obsidian vault 打开;内容走网盘/Obsidian Sync,不进本工作台 git。协议见 filehub 根 `README.md` 与 `.jspace/skills/asset-ingest/`。
+重资产(pdf/ppt/excel/md)归位在**文件中心(filehub)**——独立目录,由 `jspace filehub init` 生成并注册(`type: filehub` resource),可作 Obsidian vault 打开;内容走网盘/Obsidian Sync,不进本工作台 git。协议见 filehub 根 `README.md` 与 `.jspace/skills/asset-ingest/`;已有 filehub 用 `jspace filehub upgrade [path] --dry-run` 显式升级 README 契约块,它不移动资产。
 
 **跟踪一个新项目 = 三步**:
 
