@@ -1140,3 +1140,127 @@ test("healthy user-level dir links produce no duplicate/broken diagnostics (issu
   expect(c).not.toContain("skills.duplicate_roots");
   expect(c).not.toContain("skills.user_link_broken");
 });
+
+// ---- machine-global governance detection (injected temp home only) ---------
+
+const GOVERNANCE_BODY = [
+  "# Global governance",
+  "## 1. 安全与隐私红线(最高优先级)",
+  "## 2. 决策原则",
+  "## 3. 维护约定",
+].join("\n");
+
+function writeGovernanceSource(home: string, body = GOVERNANCE_BODY): string {
+  const source = join(home, ".agents", "agents.md");
+  mkdirSync(join(home, ".agents"), { recursive: true });
+  writeFileSync(source, body);
+  return source;
+}
+
+function governanceCodes(result: CmdResult): string[] {
+  return codes(result).filter((code) => code.startsWith("governance."));
+}
+
+test("governance check is inert when globalGovernanceHome is not injected", () => {
+  expect(governanceCodes(doctorWorkbench(root, stubDeps()))).toEqual([]);
+});
+
+test("missing global governance source -> one source_missing warning, no wiring noise", () => {
+  const home = join(root, "home");
+  mkdirSync(home, { recursive: true });
+  const r = doctorWorkbench(
+    root,
+    stubDeps({ globalGovernanceHome: () => home, harnessBinOnPath: () => true }),
+  );
+  expect(governanceCodes(r)).toEqual(["governance.source_missing"]);
+  const diag = (r.data as { diagnostics: { code: string; severity: string }[] }).diagnostics.find(
+    (d) => d.code === "governance.source_missing",
+  );
+  expect(diag?.severity).toBe("warning");
+});
+
+test("missing required governance topics -> one core_missing warning listing every topic", () => {
+  const home = join(root, "home");
+  writeGovernanceSource(home, "# Global governance\n## 安全与隐私红线\n");
+  const r = doctorWorkbench(
+    root,
+    stubDeps({ globalGovernanceHome: () => home, harnessBinOnPath: () => false }),
+  );
+  const diags = (r.data as { diagnostics: { code: string; severity: string; message: string }[] }).diagnostics;
+  const governance = diags.filter((d) => d.code === "governance.core_missing");
+  expect(governance).toHaveLength(1);
+  expect(governance[0]!.severity).toBe("warning");
+  expect(governance[0]!.message).toContain("决策原则");
+  expect(governance[0]!.message).toContain("维护约定");
+});
+
+test("healthy governance source + Claude import + Codex/Pi symlinks -> no governance diagnostics", () => {
+  const home = join(root, "home");
+  const source = writeGovernanceSource(home);
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  writeFileSync(join(home, ".claude", "CLAUDE.md"), "@~/.agents/agents.md\n");
+  mkdirSync(join(home, ".codex"), { recursive: true });
+  symlinkSync(source, join(home, ".codex", "AGENTS.md"));
+  mkdirSync(join(home, ".pi", "agent"), { recursive: true });
+  symlinkSync(source, join(home, ".pi", "agent", "AGENTS.md"));
+
+  const r = doctorWorkbench(root, stubDeps({ globalGovernanceHome: () => home, harnessBinOnPath: () => true }));
+  expect(governanceCodes(r)).toEqual([]);
+});
+
+test("installed Claude with a missing governance entry -> harness_unwired warning", () => {
+  const home = join(root, "home");
+  writeGovernanceSource(home);
+  const r = doctorWorkbench(
+    root,
+    stubDeps({ globalGovernanceHome: () => home, harnessBinOnPath: (name) => name === "claude" }),
+  );
+  expect(governanceCodes(r)).toEqual(["governance.harness_unwired"]);
+  const diag = (r.data as { diagnostics: { code: string; message: string }[] }).diagnostics.find(
+    (d) => d.code === "governance.harness_unwired",
+  );
+  expect(diag?.message).toContain("run harness-config");
+});
+
+test("uninstalled harnesses produce no governance wiring diagnostics", () => {
+  const home = join(root, "home");
+  writeGovernanceSource(home);
+  const r = doctorWorkbench(
+    root,
+    stubDeps({ globalGovernanceHome: () => home, harnessBinOnPath: () => false }),
+  );
+  expect(governanceCodes(r)).toEqual([]);
+});
+
+test("manual and unverified global contexts are skipped without diagnostics", () => {
+  const home = join(root, "home");
+  writeGovernanceSource(home);
+  const r = doctorWorkbench(
+    root,
+    stubDeps({
+      globalGovernanceHome: () => home,
+      harnessBinOnPath: (name) => name === "cursor" || name === "grok" || name === "opencode",
+    }),
+  );
+  expect(governanceCodes(r)).toEqual([]);
+});
+
+test("non-empty Codex AGENTS.override.md shadows a wired AGENTS.md and is validated", () => {
+  const home = join(root, "home");
+  const source = writeGovernanceSource(home);
+  mkdirSync(join(home, ".codex"), { recursive: true });
+  symlinkSync(source, join(home, ".codex", "AGENTS.md"));
+  const override = join(home, ".codex", "AGENTS.override.md");
+  writeFileSync(override, "# local override without the governance import\n");
+
+  const deps = stubDeps({ globalGovernanceHome: () => home, harnessBinOnPath: (name) => name === "codex" });
+  const shadowed = doctorWorkbench(root, deps);
+  expect(governanceCodes(shadowed)).toEqual(["governance.harness_unwired"]);
+  const diag = (shadowed.data as { diagnostics: { code: string; message: string }[] }).diagnostics.find(
+    (d) => d.code === "governance.harness_unwired",
+  );
+  expect(diag?.message).toContain("AGENTS.override.md shadows AGENTS.md");
+
+  writeFileSync(override, "");
+  expect(governanceCodes(doctorWorkbench(root, deps))).toEqual([]);
+});

@@ -26,6 +26,10 @@
 #                           `format` is json/toml/file, `key` is the json/toml write
 #                           point when applicable. file format means "file presence is
 #                           the wiring signal" (e.g. Pi extension).
+#   global_context        — how this harness loads the machine-global governance
+#                           document. File-based kinds (`symlink`, `symlink-or-import`)
+#                           require `path`; `manual`/`unverified` are explicit non-checks.
+#                           `override_path` is Codex's higher-precedence override file.
 #   mcp                   — `native: true` (harness-native MCP) or `via: <adapter>`
 #                           (third-party extension channel, e.g. pi-mcp-adapter).
 #   mcp_config            — where a harness keeps its gbrain MCP server config
@@ -62,6 +66,16 @@
 
 schema_version: 1
 
+# Machine-global governance source + the minimum heading topics doctor verifies.
+# The prose contract lives in skills/harness-config/references/governance.md;
+# repair remains the harness-config skill's responsibility.
+global_governance:
+  source: "~/.agents/agents.md"
+  required_headings:
+    - "安全与隐私红线"
+    - "决策原则"
+    - "维护约定"
+
 # Workbench-relative multi-harness projection shared by every harness. Complementary
 # to per-harness dirs (workbench_projection) and the user-level ~/.agents/skills.
 shared_workbench_projection:
@@ -86,6 +100,7 @@ harnesses:
       - { name: UserPromptSubmit, source: hook }
       - { name: SessionEnd, source: hook }
     session_start: { path: ".claude/settings.json", format: json, key: "hooks.SessionStart" }
+    global_context: { kind: symlink-or-import, path: "~/.claude/CLAUDE.md" }
     mcp: { native: true }
     mcp_config: { path: "~/.claude.json", format: json, server_key: "mcpServers.gbrain", writer: existing-server-env-json }
     workbench_projection: [".claude/skills"]
@@ -121,6 +136,7 @@ harnesses:
       - { name: PreCompact, source: hook }
       - { name: SessionEnd, source: hook }
     session_start: { path: ".grok/hooks/jspace.json", format: json, key: "hooks.SessionStart" }
+    global_context: { kind: unverified }
     mcp: { native: true }
     mcp_config: { path: "~/.grok/config.toml", format: toml, server_key: "mcp_servers.gbrain", writer: existing-server-env-toml }
     workbench_projection: [".grok/skills"]
@@ -150,6 +166,7 @@ harnesses:
       - { name: session.idle, source: plugin }
       - { name: experimental.session.compacting, source: plugin }
     session_start: { path: ".opencode/plugins/jspace.ts", format: file }
+    global_context: { kind: unverified }
     mcp: { native: true }
     # opencode MCP servers live under `mcp.<name>` with a local-server shape:
     # { type: "local", command: [bin, ...], enabled, environment } — `command` is an
@@ -179,6 +196,7 @@ harnesses:
       - { name: sessionStart, source: hook }
       - { name: sessionEnd, source: hook }
     session_start: { path: ".cursor/hooks.json", format: json, key: "hooks.sessionStart" }
+    global_context: { kind: manual }
     mcp: { native: true }
     mcp_config: { path: "~/.cursor/mcp.json", format: json, server_key: "mcpServers.gbrain", writer: merge-json-server }
     workbench_projection: []
@@ -207,6 +225,7 @@ harnesses:
       - { name: session_start, source: extension }
       - { name: before_agent_start, source: extension }
     session_start: { path: "~/.pi/agent/extensions/jspace/index.ts", format: file }
+    global_context: { kind: symlink, path: "~/.pi/agent/AGENTS.md" }
     mcp: { via: pi_mcp_adapter }
     mcp_config: { path: "~/.pi/agent/mcp.json", format: json, server_key: "mcpServers.gbrain", writer: merge-json-server }
     workbench_projection: []
@@ -229,6 +248,7 @@ harnesses:
       allow_prefixes: ["OPENAI_", "CODEX_"]
       allow_keys: []
     sessions: []
+    global_context: { kind: symlink, path: "~/.codex/AGENTS.md", override_path: "~/.codex/AGENTS.override.md" }
     mcp: { native: true }
     mcp_config: null
     workbench_projection: []

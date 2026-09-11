@@ -10,6 +10,7 @@ import {
   getCapability,
   harnessNames,
   loadCapabilities,
+  resolveCapabilities,
   wireHarnessNamesFrom,
   workbenchProjectionDirs,
 } from "./registry.ts";
@@ -21,6 +22,18 @@ test("capabilities file has the full support set (5 session + codex compat)", ()
   expect(harnessNames().sort()).toEqual(["claude", "codex", "cursor", "grok", "opencode", "pi"]);
   expect(caps.schema_version).toBe(1);
   expect(caps.shared_workbench_projection).toContain(".agents/skills");
+  expect(caps.global_governance.source).toBe("~/.agents/agents.md");
+  expect(caps.global_governance.required_headings).toEqual(["安全与隐私红线", "决策原则", "维护约定"]);
+});
+
+test("registry rejects invalid global_context kinds and missing file paths", () => {
+  const invalidKind = structuredClone(loadCapabilities());
+  (invalidKind.harnesses.claude as { global_context?: unknown }).global_context = { kind: "mystery", path: "~/.claude/CLAUDE.md" };
+  expect(() => resolveCapabilities(invalidKind)).toThrow(/unknown global_context.kind/);
+
+  const missingPath = structuredClone(loadCapabilities());
+  (missingPath.harnesses.claude as { global_context?: unknown }).global_context = { kind: "symlink" };
+  expect(() => resolveCapabilities(missingPath)).toThrow(/requires a non-empty path/);
 });
 
 test("every capability is structurally valid", () => {

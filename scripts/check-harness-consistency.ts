@@ -31,6 +31,7 @@ import { cronHarnessNames, documentedHarnessNames } from "../adapters/harness/re
 const ROOT = join(import.meta.dir, "..");
 const REF_DIR = join(ROOT, "skills/jspace-use/references");
 const caps = Bun.YAML.parse(readFileSync(join(ROOT, "adapters/harness/capabilities.yaml"), "utf-8")) as {
+  global_governance?: { source?: unknown; required_headings?: unknown };
   harnesses: Record<
     string,
     {
@@ -44,6 +45,7 @@ const caps = Bun.YAML.parse(readFileSync(join(ROOT, "adapters/harness/capabiliti
       supports_tool_restriction?: boolean;
       argv_flags?: { permission?: string };
       cron_env?: { allow_prefixes?: string[]; allow_keys?: string[] };
+      global_context?: { kind?: unknown; path?: unknown; override_path?: unknown };
     }
   >;
 };
@@ -304,6 +306,84 @@ for (const [h, cap] of Object.entries(caps.harnesses)) {
     `${h} supports_tool_restriction=${supports} vs permission flag ${hasPermission}`,
   );
   check(`11.${h}-cron-env`, cap.cron_env?.allow_prefixes !== undefined, `${h} declares cron_env.allow_prefixes`);
+}
+
+// ---- 12. global governance source/headings + global_context structure -------
+const REQUIRED_GOVERNANCE_HEADINGS = ["安全与隐私红线", "决策原则", "维护约定"] as const;
+const governance = caps.global_governance;
+const governanceSource = typeof governance?.source === "string" && governance.source.trim() !== "";
+check("12.global-governance-source", governanceSource, `global_governance.source=${String(governance?.source ?? "")}`);
+
+const requiredHeadings = Array.isArray(governance?.required_headings)
+  ? governance.required_headings.filter((h): h is string => typeof h === "string" && h.trim() !== "")
+  : [];
+check(
+  "12.global-governance-headings",
+  requiredHeadings.length > 0,
+  `global_governance.required_headings has ${requiredHeadings.length} topic(s)`,
+);
+for (const topic of REQUIRED_GOVERNANCE_HEADINGS) {
+  check(
+    `12.global-governance-heading-${topic}`,
+    requiredHeadings.includes(topic),
+    `global_governance.required_headings contains mandatory topic ${topic}`,
+  );
+}
+
+const governanceTemplate = readFileSync(join(ROOT, "skills/harness-config/references/governance.md"), "utf-8");
+const templateHeadings = governanceTemplate
+  .split(/\r?\n/)
+  .map((line) => /^#{1,3}\s+(.+?)\s*#*\s*$/.exec(line)?.[1])
+  .filter((heading): heading is string => heading !== undefined)
+  .map((heading) => heading.replace(/\s+/g, " ").trim());
+for (const topic of REQUIRED_GOVERNANCE_HEADINGS) {
+  check(
+    `12.governance-heading-${topic}`,
+    templateHeadings.some((heading) => heading.includes(topic)),
+    `governance template contains required heading topic ${topic}`,
+  );
+}
+
+const EXPECTED_GLOBAL_CONTEXT: Record<string, { kind: string; path?: string; override_path?: string }> = {
+  claude: { kind: "symlink-or-import", path: "~/.claude/CLAUDE.md" },
+  codex: { kind: "symlink", path: "~/.codex/AGENTS.md", override_path: "~/.codex/AGENTS.override.md" },
+  pi: { kind: "symlink", path: "~/.pi/agent/AGENTS.md" },
+  cursor: { kind: "manual" },
+  grok: { kind: "unverified" },
+  opencode: { kind: "unverified" },
+};
+for (const [h, expected] of Object.entries(EXPECTED_GLOBAL_CONTEXT)) {
+  const actual = caps.harnesses[h]?.global_context;
+  check(
+    `12.${h}-global-context-contract`,
+    actual?.kind === expected.kind && actual?.path === expected.path && actual?.override_path === expected.override_path,
+    `${h} global_context matches verified ${expected.kind}${expected.path ? ` path ${expected.path}` : " state"}`,
+  );
+}
+
+const GLOBAL_CONTEXT_KINDS = ["symlink", "symlink-or-import", "manual", "unverified"];
+for (const [h, cap] of Object.entries(caps.harnesses)) {
+  const context = cap.global_context;
+  if (context === undefined) continue;
+  const kind = context.kind;
+  const validKind = typeof kind === "string" && GLOBAL_CONTEXT_KINDS.includes(kind);
+  check(`12.${h}-global-context-kind`, validKind, `${h} global_context.kind=${String(kind)}`);
+  if (!validKind) continue;
+
+  const fileBased = kind === "symlink" || kind === "symlink-or-import";
+  const pathValid = typeof context.path === "string" && context.path.trim() !== "";
+  check(
+    `12.${h}-global-context-path`,
+    fileBased ? pathValid : context.path === undefined,
+    fileBased ? `${h} ${kind} declares a path` : `${h} ${kind} does not invent a path`,
+  );
+  if (context.override_path !== undefined) {
+    check(
+      `12.${h}-global-context-override`,
+      h === "codex" && typeof context.override_path === "string" && context.override_path.trim() !== "",
+      `${h} override_path is a non-empty Codex-only path`,
+    );
+  }
 }
 
 if (failures.length > 0) {

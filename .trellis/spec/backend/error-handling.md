@@ -8,7 +8,7 @@
 - **Schema/contract errors** go through the shared diagnostics decoder (typed issue codes), never partial-parse.
 - **Health checks** (`doctor`, `cron check`) return structured diagnostics + exit code 1 when unhealthy; they do not throw for "expected" findings.
 - **Diagnostic severity contract** (`core/contracts/diagnostics.ts` `Severity`): three levels, each with a distinct meaning — pick the level, not "the loudest one":
-  - `error` — blocking; `doctor` exits 1 (missing/invalid machine truth).
+  - `error` — blocking; `doctor` exits 1 (missing/invalid workbench/registry truth). User-owned global governance (`governance.*`) is warning-only by design: missing/unwired machine-level context is actionable but must never block a workbench.
   - `warning` — a real health problem worth acting on, but non-blocking (e.g. `cron.not_installed` when the user explicitly enabled a cron that never got installed; damaged incident record).
   - `info` — optional capability unconfigured with a designed degraded path, NOT a health problem; never counts as a warning, never sets exit code, surfaced only in `--json` diagnostics (`filehub.unregistered`: asset-ingest falls back to the staging area).
   - Default state is not a warning: a fresh workbench with the template's `enabled: false` crons and no filehub reports `0 error(s), 0 warning(s)` (the `info` count shows optional capabilities).

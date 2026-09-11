@@ -85,6 +85,7 @@ export const cronDeps = {
   readUserClaudeJson,
   readHarnessConfig: readFileOrNull,
   harnessBinOnPath: (name: string) => binaryOnPath(name, process.platform),
+  globalGovernanceHome: () => homedir(),
   platform: process.platform,
 };
 

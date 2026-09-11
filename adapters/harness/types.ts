@@ -24,6 +24,23 @@ export interface HarnessSessionStart {
   key?: string;
 }
 
+export type GlobalContextKind = "symlink" | "symlink-or-import" | "manual" | "unverified";
+
+/** How a harness loads the machine-global governance source. File-based kinds
+ *  carry their verified path; manual/unverified are explicit non-checks and must
+ *  not invent a path. `override_path` is Codex-specific: a non-empty override
+ *  shadows its lower-precedence AGENTS.md. */
+export type HarnessGlobalContext =
+  | { kind: "symlink"; path: string; override_path?: string }
+  | { kind: "symlink-or-import"; path: string }
+  | { kind: "manual" | "unverified"; path?: never; override_path?: never };
+
+/** Machine-global governance source + the minimum heading topics doctor checks. */
+export interface GlobalGovernance {
+  source: string;
+  required_headings: string[];
+}
+
 /** `{ native: true }` (harness-native MCP) or `{ via: "<adapter>" }` (third-party
  *  extension channel, e.g. pi_mcp_adapter). */
 export type McpBinding = { native: true } | { via: string };
@@ -71,6 +88,8 @@ export interface HarnessCapabilityData {
   /** Where the session-start briefing hook is materialized (optional for
    *  compatibility-only entries such as codex). */
   session_start?: HarnessSessionStart;
+  /** How this harness loads the machine-global governance source. */
+  global_context?: HarnessGlobalContext;
   mcp: McpBinding;
   mcp_config: McpConfig;
   /** Workbench-relative skill projection dirs materialized by init/upgrade. */
@@ -96,6 +115,7 @@ export type HarnessCapability = HarnessCapabilityData & { name: string };
 
 export interface HarnessCapabilitiesFile {
   schema_version: 1;
+  global_governance: GlobalGovernance;
   shared_workbench_projection: string[];
   harnesses: Record<string, HarnessCapabilityData>;
 }

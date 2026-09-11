@@ -3,6 +3,14 @@
 import type { HarnessCapabilitiesFile } from "./types.ts";
 export const CAPABILITIES: HarnessCapabilitiesFile = {
   "schema_version": 1,
+  "global_governance": {
+    "source": "~/.agents/agents.md",
+    "required_headings": [
+      "安全与隐私红线",
+      "决策原则",
+      "维护约定"
+    ]
+  },
   "shared_workbench_projection": [
     ".agents/skills"
   ],
@@ -44,6 +52,10 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "path": ".claude/settings.json",
         "format": "json",
         "key": "hooks.SessionStart"
+      },
+      "global_context": {
+        "kind": "symlink-or-import",
+        "path": "~/.claude/CLAUDE.md"
       },
       "mcp": {
         "native": true
@@ -111,6 +123,9 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "format": "json",
         "key": "hooks.SessionStart"
       },
+      "global_context": {
+        "kind": "unverified"
+      },
       "mcp": {
         "native": true
       },
@@ -166,6 +181,9 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "path": ".opencode/plugins/jspace.ts",
         "format": "file"
       },
+      "global_context": {
+        "kind": "unverified"
+      },
       "mcp": {
         "native": true
       },
@@ -213,6 +231,9 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "path": ".cursor/hooks.json",
         "format": "json",
         "key": "hooks.sessionStart"
+      },
+      "global_context": {
+        "kind": "manual"
       },
       "mcp": {
         "native": true
@@ -263,6 +284,10 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "path": "~/.pi/agent/extensions/jspace/index.ts",
         "format": "file"
       },
+      "global_context": {
+        "kind": "symlink",
+        "path": "~/.pi/agent/AGENTS.md"
+      },
       "mcp": {
         "via": "pi_mcp_adapter"
       },
@@ -302,6 +327,11 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "allow_keys": []
       },
       "sessions": [],
+      "global_context": {
+        "kind": "symlink",
+        "path": "~/.codex/AGENTS.md",
+        "override_path": "~/.codex/AGENTS.override.md"
+      },
       "mcp": {
         "native": true
       },

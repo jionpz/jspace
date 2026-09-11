@@ -72,8 +72,14 @@ export interface SessionHooksDeps {
   readHarnessConfig?: (path: string) => string | null;
 }
 
+export interface GovernanceDeps {
+  /** Expanded user home used to resolve global_governance/global_context paths.
+   *  Omitted => the machine-global governance check is skipped silently. */
+  globalGovernanceHome?: () => string;
+}
+
 /** Combined cron-health injection surface for doctorWorkbench. */
-export interface CronHealthDeps extends CronsDeps, SkillsDeps, GbrainDeps, CursorSkillsDeps, HarnessCheckDeps, SessionHooksDeps {
+export interface CronHealthDeps extends CronsDeps, SkillsDeps, GbrainDeps, CursorSkillsDeps, HarnessCheckDeps, SessionHooksDeps, GovernanceDeps {
   /** Parsed ~/.claude.json (user machine config), or null when missing/invalid.
    *  Injected so doctor can check the gbrain MCP skills-dir wiring without
    *  touching the machine-level file itself. */

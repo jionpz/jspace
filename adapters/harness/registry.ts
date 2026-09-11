@@ -8,11 +8,15 @@ import { fail } from "../../core/shared/errors.ts";
 import { CAPABILITIES } from "./capabilities.generated.ts";
 import type { HarnessCapabilitiesFile, HarnessCapability } from "./types.ts";
 
+const GLOBAL_CONTEXT_KINDS = ["symlink", "symlink-or-import", "manual", "unverified"] as const;
+const FILE_GLOBAL_CONTEXT_KINDS = new Set<string>(["symlink", "symlink-or-import"]);
+
 /** Resolve + validate the embedded capabilities file. `name` is derived from the
  *  harness key (single source, not duplicated in the yaml); a violation is a
  *  build-time bug (the file is generated from capabilities.yaml) and fails the
  *  process at module load rather than surfacing partial data. */
-function resolveCaps(raw: HarnessCapabilitiesFile): Record<string, HarnessCapability> {
+export function resolveCapabilities(raw: HarnessCapabilitiesFile): Record<string, HarnessCapability> {
+  validateGlobalGovernance(raw);
   const harnesses: Record<string, HarnessCapability> = {};
   for (const [name, data] of Object.entries(raw.harnesses)) {
     if (data.headless === null && data.cron_harness_enum_value !== null) {
@@ -44,6 +48,7 @@ function resolveCaps(raw: HarnessCapabilitiesFile): Record<string, HarnessCapabi
     if (data.cron_env === undefined) {
       fail(`capabilities: ${name} is missing cron_env declaration`);
     }
+    validateGlobalContext(name, data.global_context);
     const mcpConfig = data.mcp_config;
     if (mcpConfig !== null) {
       if (!(MCP_WRITERS as readonly string[]).includes(mcpConfig.writer)) {
@@ -59,6 +64,47 @@ function resolveCaps(raw: HarnessCapabilitiesFile): Record<string, HarnessCapabi
   return harnesses;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validateGlobalGovernance(raw: HarnessCapabilitiesFile): void {
+  const governance: unknown = raw.global_governance;
+  if (!isRecord(governance)) {
+    fail("capabilities: missing global_governance declaration");
+  }
+  if (typeof governance.source !== "string" || governance.source.trim() === "") {
+    fail("capabilities: global_governance.source must be a non-empty string");
+  }
+  if (
+    !Array.isArray(governance.required_headings) ||
+    governance.required_headings.length === 0 ||
+    governance.required_headings.some((heading) => typeof heading !== "string" || heading.trim() === "")
+  ) {
+    fail("capabilities: global_governance.required_headings must be a non-empty string array");
+  }
+}
+
+function validateGlobalContext(name: string, value: unknown): void {
+  if (value === undefined) return;
+  if (!isRecord(value)) {
+    fail(`capabilities: ${name} global_context must be an object`);
+  }
+  if (typeof value.kind !== "string" || !(GLOBAL_CONTEXT_KINDS as readonly string[]).includes(value.kind)) {
+    fail(`capabilities: ${name} has unknown global_context.kind: ${String(value.kind)}`);
+  }
+  const fileBased = FILE_GLOBAL_CONTEXT_KINDS.has(value.kind);
+  if (fileBased && (typeof value.path !== "string" || value.path.trim() === "")) {
+    fail(`capabilities: ${name} global_context kind ${value.kind} requires a non-empty path`);
+  }
+  if (!fileBased && value.path !== undefined) {
+    fail(`capabilities: ${name} global_context kind ${value.kind} must not declare a path`);
+  }
+  if (value.override_path !== undefined && (typeof value.override_path !== "string" || value.override_path.trim() === "")) {
+    fail(`capabilities: ${name} global_context.override_path must be a non-empty string when declared`);
+  }
+}
+
 const MCP_WRITERS = [
   "existing-server-env-json",
   "existing-server-env-toml",
@@ -66,7 +112,7 @@ const MCP_WRITERS = [
   "merge-opencode-local",
 ] as const;
 
-const HARNESSES = resolveCaps(CAPABILITIES);
+const HARNESSES = resolveCapabilities(CAPABILITIES);
 
 export function loadCapabilities(): HarnessCapabilitiesFile {
   return CAPABILITIES;

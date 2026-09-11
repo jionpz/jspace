@@ -14,6 +14,7 @@ import { checkSkills } from "./checks/skills.ts";
 import { checkCrons } from "./checks/crons.ts";
 import { checkGBrain, checkCursorSkills } from "./checks/gbrain.ts";
 import { checkHarness } from "./checks/harness.ts";
+import { checkGovernance } from "./checks/governance.ts";
 import { checkSessionStartHooks } from "./checks/session-hooks.ts";
 import { checkWritebackHabit } from "./checks/writeback.ts";
 import { checkUsageMileageLedger } from "./checks/usage-mileage.ts";
@@ -51,6 +52,7 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps, verbose = fa
     ...checkCursorSkills(cron),
     ...checkCrons(root, cron),
     ...checkHarness(root, cron),
+    ...checkGovernance(cron),
     ...checkSessionStartHooks(root, cron),
     ...checkWritebackHabit(root),
     ...checkUsageMileageLedger(root),
