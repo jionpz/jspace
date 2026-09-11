@@ -6,24 +6,22 @@
 // wiring). `gbrain wire` is kept as the claude alias (backward compat).
 //
 // Wire targets come from capabilities.yaml `mcp_config` (single source of truth).
-// claude/grok reuse the existing application/gbrain/{wiring,grok-wiring}.ts;
-// cursor/opencode/pi merge/`create` their MCP-list config (their target files
-// ARE MCP lists). All writes are merge + backup, never whole-file rewrites.
+// The declared `mcp_config.writer` selects a strategy (existing-server-env-json,
+// existing-server-env-toml, merge-json-server, merge-opencode-local) — never a
+// harness-name branch. All writes are merge + backup, never whole-file rewrites.
 import { readFileSync, writeFileSync, copyFileSync, mkdirSync, existsSync, symlinkSync, readlinkSync, cpSync, readdirSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import type { CommandSpec, OptionSpec, CmdContext, CmdResult } from "../../application/commands/command.ts";
-import { wireGrokSkillsDir, grokConfigPath, type GrokWireDeps, type GrokWireResult } from "../../application/gbrain/grok-wiring.ts";
-import { wireHarness, describeCapability, defaultGbrainBin, type HarnessWireDeps } from "../../application/harness/wire.ts";
-import { loadCapabilities } from "../../adapters/harness/registry.ts";
+import { wireHarness, describeCapability, defaultGbrainBin, type BackupResult, type HarnessWireDeps } from "../../application/harness/wire.ts";
+import { loadCapabilities, wireHarnessNames } from "../../adapters/harness/registry.ts";
 import { resolveHarnessBin } from "../../adapters/harness/bin.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
 import { s } from "./helpers.ts";
 
-/** Session harnesses with a real `harness wire` backend (codex is a
- *  cron-compat entry and is explicitly rejected). */
-const WIRE_HARNESSES = ["claude", "grok", "opencode", "cursor", "pi"] as const;
-type WireHarness = (typeof WIRE_HARNESSES)[number];
+/** Session harnesses with a declared machine MCP config. Codex is a cron-only
+ *  compatibility entry and is intentionally absent. */
+const WIRE_HARNESSES = wireHarnessNames();
 
 function readFileOrNull(p: string): string | null {
   try {
@@ -51,14 +49,14 @@ function pruneConfigBackups(configPath: string): void {
 }
 
 /** Timestamped backup beside a machine config before merge/write. Exported for tests. */
-export function backupConfig(p: string): string | null {
+export function backupConfig(p: string): BackupResult {
   const backup = `${p}.jspace-bak-${Date.now()}`;
   try {
     copyFileSync(p, backup);
     pruneConfigBackups(p);
-    return backup;
-  } catch {
-    return null;
+    return { ok: true, path: backup };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -96,16 +94,28 @@ function harnessWireDeps(dryRun: boolean): HarnessWireDeps {
 
 // ---- `harness wire` (unified dispatch) --------------------------------------
 
-function wireHandler(ctx: CmdContext, args: Record<string, unknown>): CmdResult {
-  const harness = s(args.harness) as WireHarness;
-  let r;
+export interface RunHarnessWireOptions {
+  /** Injected deps (tests). Defaults to the real fs/homedir factory. */
+  deps?: HarnessWireDeps;
+  /** Error-line prefix; defaults to `harness wire <harness>`. The `gbrain wire`
+   *  alias passes its own so its historical error text is preserved. */
+  label?: string;
+}
+
+/** The single wire entry point. Both `harness wire --harness <h>` and the
+ *  `gbrain wire` alias (claude) funnel through here — one code path, one set of
+ *  write/backup/idempotency semantics. */
+export function runHarnessWire(ctx: CmdContext, harness: string, opts: RunHarnessWireOptions = {}): CmdResult {
+  const label = opts.label ?? `harness wire ${harness}`;
+  const deps = opts.deps ?? harnessWireDeps(ctx.dryRun);
+  let r: ReturnType<typeof wireHarness>;
   try {
-    r = wireHarness(harness, harnessWireDeps(ctx.dryRun), ctx.root);
+    r = wireHarness(harness, deps, ctx.root);
   } catch (e) {
-    return { lines: [], errors: [`harness wire ${harness}: ${e instanceof Error ? e.message : String(e)}`], exitCode: 1 };
+    return { lines: [], errors: [`${label}: ${e instanceof Error ? e.message : String(e)}`], exitCode: 1 };
   }
   if (!r.ok) {
-    return { lines: [], errors: [`harness wire ${harness}: ${r.reason}`], exitCode: 1 };
+    return { lines: [], errors: [`${label}: ${r.reason}`], exitCode: 1 };
   }
 
   const lines: string[] = [];
@@ -217,57 +227,13 @@ function initHandler(ctx: CmdContext, args: Record<string, unknown>): CmdResult 
   return { lines };
 }
 
-// ---- legacy `harness wire grok` handler (kept for error-semantics tests) -----
-
-function grokWireDeps(dryRun: boolean): GrokWireDeps {
-  return {
-    readFile: readFileOrNull,
-    writeFile: (p, content) => writeFileSync(p, content, "utf-8"),
-    backup: backupConfig,
-    homedir,
-    resolveWorkbenchSkillsDir: (r) => join(r, ".jspace", "skills"),
-    ensureResolverFile,
-    dryRun,
-  };
-}
-
-/** `harness wire grok` handler — exported for tests with injected deps (write
- *  failures must surface as errors + exit 1, never a silent exit 0 — issue #8 #9). */
-export function grokWireHandler(ctx: CmdContext, deps: GrokWireDeps = grokWireDeps(ctx.dryRun)): CmdResult {
-  const path = grokConfigPath(homedir());
-  let result: GrokWireResult;
-  try {
-    result = wireGrokSkillsDir(deps, ctx.root);
-  } catch (e) {
-    return { lines: [], errors: [`harness wire grok: ${e instanceof Error ? e.message : String(e)}`], exitCode: 1 };
-  }
-
-  if (!result.ok) {
-    return { lines: [], errors: [result.reason], exitCode: 1 };
-  }
-  switch (result.status) {
-    case "already-wired":
-      return { lines: [`jspace: ok: grok gbrain skillsDir already wired → ${result.skillsDir}`] };
-    case "wired":
-      if (ctx.dryRun) {
-        return { lines: [`jspace: (dry-run) would wire GBRAIN_SKILLS_DIR=${result.skillsDir} in ${path}`] };
-      }
-      return {
-        lines: [
-          `jspace: ok: wired GBRAIN_SKILLS_DIR=${result.skillsDir} in ${path}`,
-          "restart the grok session (MCP reconnect) so gbrain serve starts with the new env",
-        ],
-      };
-  }
-}
-
-function harnessChoice(h: WireHarness): string {
+function harnessChoice(h: string): string {
   return `unsupported harness for harness wire: ${h} (supported: ${WIRE_HARNESSES.join(", ")}; codex is a cron-compat entry, not a session harness)`;
 }
 
 function validateHarness(v: string): string | null {
-  if ((WIRE_HARNESSES as readonly string[]).includes(v)) return null;
-  if (v === "codex") return harnessChoice(v as WireHarness);
+  if (WIRE_HARNESSES.includes(v)) return null;
+  if (v === "codex") return harnessChoice(v);
   return `unsupported harness for harness wire: ${v} (supported: ${WIRE_HARNESSES.join(", ")})`;
 }
 
@@ -303,7 +269,7 @@ export const harnessSpec: CommandSpec = {
       summary: "inject GBRAIN_SKILLS_DIR into a harness's gbrain MCP server env (idempotent, merge + backup)",
       features: { dir: true, dryRun: true },
       options: [harnessOption()],
-      handler: (ctx, args) => wireHandler(ctx, args as Record<string, unknown>),
+      handler: (ctx, args) => runHarnessWire(ctx, s((args as Record<string, unknown>).harness)),
     },
   ],
 };

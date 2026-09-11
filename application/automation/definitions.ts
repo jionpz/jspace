@@ -12,6 +12,7 @@ import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
 import { skillRel, skillRoot } from "../fs.ts";
 import { isFile } from "../fs.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
+import { cronHarnessNames } from "../../adapters/harness/registry.ts";
 import { parseSchedule, type ScheduleDict } from "../../core/shared/schedule.ts";
 
 // Re-export schedule parsing (shared kernel — core/shared/schedule.ts).
@@ -30,7 +31,7 @@ export function loadCrons(root: string): CronsFile {
   } catch (e) {
     fail(`${CRON_FILE} is not valid JSON: ${(e as Error).message}`);
   }
-  const decoded = decodeCrons(data);
+  const decoded = decodeCrons(data, cronHarnessNames());
   if (!decoded.ok) {
     // version.unsupported (pre-1.0.11 cron.json) carries the repair path; other
     // decoder issues pass through unchanged.

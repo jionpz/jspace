@@ -7,11 +7,10 @@ import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { ArgError, parse, type CmdContext, type CommandSpec } from "../../application/commands/command.ts";
 import type { InstallDeps } from "../../application/skills/install.ts";
-import type { GrokWireDeps } from "../../application/gbrain/grok-wiring.ts";
-import type { WireDeps } from "../../application/gbrain/wiring.ts";
+import type { HarnessWireDeps } from "../../application/harness/wire.ts";
 import { COMMANDS } from "./registry.ts";
 import { installHandler } from "./skills.ts";
-import { grokWireHandler } from "./harness.ts";
+import { runHarnessWire } from "./harness.ts";
 import { wireHandler } from "./gbrain.ts";
 
 const ROOT: CommandSpec = { name: "", summary: "", children: COMMANDS };
@@ -60,14 +59,16 @@ test("skills install: dry-run success path has no errors/warnings", () => {
 
 test("skills install: covers machine-global skills (manifest.global, issue #37)", () => {
   // The handler must request workbench AND global names; with a union key set
-  // (ASSETS ∪ GLOBAL_SKILLS, as wired by embeddedSkillAssets), harness-config
-  // files land under ~/.agents/skills/ like any official skill.
+  // (ASSETS ∪ GLOBAL_SKILLS, as wired by embeddedSkillAssets), every
+  // manifest.global file lands under ~/.agents/skills/ like any official skill.
   const written = new Map<string, string>();
   const deps: InstallDeps = {
     assetKeys: () => [
       "skills/jspace-use/SKILL.md",
       "skills/harness-config/SKILL.md",
       "skills/harness-config/scripts/detect.sh",
+      "skills/jspace-adopt/SKILL.md",
+      "skills/jspace-adopt/references/inventory.md",
     ],
     assetContent: () => "# test",
     userSkillsRoot: () => join(tmp, ".agents", "skills"),
@@ -80,20 +81,23 @@ test("skills install: covers machine-global skills (manifest.global, issue #37)"
   expect(r.exitCode).toBeUndefined();
   expect(r.errors ?? []).toHaveLength(0);
   expect([...written.keys()].some((k) => k.endsWith("harness-config/SKILL.md"))).toBe(true);
-  expect([...written.keys()].some((k) => k.endsWith("harness-config/scripts/detect.sh"))).toBe(true);
+  expect([...written.keys()].some((k) => k.endsWith("jspace-adopt/SKILL.md"))).toBe(true);
+  expect([...written.keys()].some((k) => k.endsWith("jspace-adopt/references/inventory.md"))).toBe(true);
   expect(r.lines.join("\n")).toContain("harness-config@");
+  expect(r.lines.join("\n")).toContain("jspace-adopt@");
 });
 
 test("gbrain wire: write failure -> errors + exit 1, not a silent warning", () => {
-  const deps: WireDeps = {
-    readJson: () => ({ mcpServers: { gbrain: { command: "gbrain", env: {} } } }),
-    writeJson: () => {
+  const deps: HarnessWireDeps = {
+    readFile: () => JSON.stringify({ mcpServers: { gbrain: { command: "gbrain", env: {} } } }),
+    writeFile: () => {
       throw new Error("EACCES: permission denied");
     },
-    backup: () => null,
+    backup: () => ({ ok: true, path: null }),
     homedir: () => tmp,
     resolveWorkbenchSkillsDir: (root) => join(root, ".jspace", "skills"),
     ensureResolverFile: () => true,
+    resolveGbrainBin: () => "/usr/local/bin/gbrain",
     dryRun: false,
   };
   const r = wireHandler(ctx(), deps);
@@ -104,15 +108,16 @@ test("gbrain wire: write failure -> errors + exit 1, not a silent warning", () =
 });
 
 test("gbrain wire: no-claude-json status -> errors (not stdout lines) + exit 1", () => {
-  const deps: WireDeps = {
-    readJson: () => null,
-    writeJson: () => {
+  const deps: HarnessWireDeps = {
+    readFile: () => null,
+    writeFile: () => {
       throw new Error("unreachable");
     },
-    backup: () => null,
+    backup: () => ({ ok: true, path: null }),
     homedir: () => tmp,
     resolveWorkbenchSkillsDir: (root) => join(root, ".jspace", "skills"),
     ensureResolverFile: () => true,
+    resolveGbrainBin: () => "/usr/local/bin/gbrain",
     dryRun: false,
   };
   const r = wireHandler(ctx(), deps);
@@ -122,18 +127,19 @@ test("gbrain wire: no-claude-json status -> errors (not stdout lines) + exit 1",
 });
 
 test("harness wire grok: write failure -> errors + exit 1, not a silent warning", () => {
-  const deps: GrokWireDeps = {
+  const deps: HarnessWireDeps = {
     readFile: () => "[mcp_servers.gbrain]\ncommand = 'gbrain'\n",
     writeFile: () => {
       throw new Error("EACCES: permission denied");
     },
-    backup: () => null,
+    backup: () => ({ ok: true, path: null }),
     homedir: () => tmp,
     resolveWorkbenchSkillsDir: (root) => join(root, ".jspace", "skills"),
     ensureResolverFile: () => true,
+    resolveGbrainBin: () => "/usr/local/bin/gbrain",
     dryRun: false,
   };
-  const r = grokWireHandler(ctx(), deps);
+  const r = runHarnessWire(ctx(), "grok", { deps });
   expect(r.exitCode).toBe(1);
   expect(r.errors?.[0]).toContain("harness wire grok: EACCES");
   expect(r.warnings ?? []).toHaveLength(0);
@@ -141,20 +147,41 @@ test("harness wire grok: write failure -> errors + exit 1, not a silent warning"
 });
 
 test("harness wire grok: missing config status -> errors (not stdout lines) + exit 1", () => {
-  const deps: GrokWireDeps = {
+  const deps: HarnessWireDeps = {
     readFile: () => null,
     writeFile: () => {
       throw new Error("unreachable");
     },
-    backup: () => null,
+    backup: () => ({ ok: true, path: null }),
     homedir: () => tmp,
     resolveWorkbenchSkillsDir: (root) => join(root, ".jspace", "skills"),
     ensureResolverFile: () => true,
+    resolveGbrainBin: () => "/usr/local/bin/gbrain",
     dryRun: false,
   };
-  const r = grokWireHandler(ctx(), deps);
+  const r = runHarnessWire(ctx(), "grok", { deps });
   expect(r.exitCode).toBe(1);
   expect(r.errors?.length).toBeGreaterThan(0);
+  expect(r.lines).toHaveLength(0);
+});
+
+test("harness wire claude: backup failure -> errors + exit 1, no write (fail-closed, AC6)", () => {
+  const written: string[] = [];
+  const deps: HarnessWireDeps = {
+    readFile: () => JSON.stringify({ mcpServers: { gbrain: { command: "gbrain", args: ["serve"] } } }),
+    writeFile: (p) => void written.push(p),
+    backup: () => ({ ok: false, reason: "EACCES: backup denied" }),
+    homedir: () => tmp,
+    resolveWorkbenchSkillsDir: (root) => join(root, ".jspace", "skills"),
+    ensureResolverFile: () => true,
+    resolveGbrainBin: () => "/usr/local/bin/gbrain",
+    dryRun: false,
+  };
+  const r = runHarnessWire(ctx(), "claude", { deps });
+  expect(r.exitCode).toBe(1);
+  expect(r.errors?.[0]).toContain("backup failed");
+  expect(r.errors?.[0]).toContain("EACCES");
+  expect(written).toHaveLength(0);
   expect(r.lines).toHaveLength(0);
 });
 

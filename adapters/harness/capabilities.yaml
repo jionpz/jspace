@@ -4,19 +4,21 @@
 #   - scripts/gen-assets.ts renders this into adapters/harness/capabilities.generated.ts
 #     (embedded in the compiled binary via the import graph; no yaml at runtime).
 #   - adapters/harness/registry.ts loads the generated module + validates it.
-#   - adapters/harness/{claude,grok,opencode,pi,cursor,codex}.ts build headless argv /
-#     hook files / skill projections from the declared capability.
+#   - adapters/harness/generic.ts builds headless argv + workbench hook paths
+#     from the declared capability; only genuinely inexpressible behavior should
+#     need a harness-specific adapter.
 #   - application/workspace/manifest.ts derives SKILL_PROJECTIONS from
 #     workbench_projection (+ shared_workbench_projection).
 #   - P5 scripts/check-harness-consistency.ts asserts code/docs/CI match this file.
 #
-# Adding a 5th/6th harness = adding an entry here; no code change outside this file.
+# Adding a 5th/6th harness = adding an entry here; no production code change
+# outside this file for the supported declarative behavior.
 #
 # Field semantics:
 #   headless              — headless invocation prefix, or `null` when the harness is
 #                           IDE-only (no CLI; never a cron harness).
-#   argv_flags            — extra flags for the headless argv (order is owned by the
-#                           adapter code, not this file).
+#   argv_flags            — extra flags for the headless argv. The generic
+#                           assembler emits output flags before permission flags.
 #   sessions              — session events jspace wires (or plans to wire); `source`
 #                           distinguishes hook / plugin / extension channels.
 #   session_start         — where the session-start briefing hook is materialized:
@@ -30,7 +32,9 @@
 #                           (path/format/server_key); consumed by `harness wire` +
 #                           doctor's wiring check. `env_key` overrides the env
 #                           field name (default "env"; opencode uses "environment").
-#                           `path` may start with `~` (expanded per home dir).
+#                           `writer` selects the constrained merge strategy used
+#                           by `harness wire`; `path` may start with `~`
+#                           (expanded per home dir).
 #   workbench_projection  — workbench-relative skill projection dirs materialized by
 #                           init/upgrade (byte-identical copies of .jspace/skills/).
 #   user_install          — user-level paths (doctor reports existence only; wired by
@@ -83,7 +87,7 @@ harnesses:
       - { name: SessionEnd, source: hook }
     session_start: { path: ".claude/settings.json", format: json, key: "hooks.SessionStart" }
     mcp: { native: true }
-    mcp_config: { path: "~/.claude.json", format: json, server_key: "mcpServers.gbrain" }
+    mcp_config: { path: "~/.claude.json", format: json, server_key: "mcpServers.gbrain", writer: existing-server-env-json }
     workbench_projection: [".claude/skills"]
     user_install: []
     hook_format: claude_settings_json
@@ -118,7 +122,7 @@ harnesses:
       - { name: SessionEnd, source: hook }
     session_start: { path: ".grok/hooks/jspace.json", format: json, key: "hooks.SessionStart" }
     mcp: { native: true }
-    mcp_config: { path: "~/.grok/config.toml", format: toml, server_key: "mcp_servers.gbrain" }
+    mcp_config: { path: "~/.grok/config.toml", format: toml, server_key: "mcp_servers.gbrain", writer: existing-server-env-toml }
     workbench_projection: [".grok/skills"]
     user_install: []
     hook_format: grok_hooks_json
@@ -151,7 +155,7 @@ harnesses:
     # { type: "local", command: [bin, ...], enabled, environment } — `command` is an
     # array and env is named `environment` (vs claude/cursor/pi `command`+`args`/`env`),
     # so env_key must be "environment" for doctor's wiring check to find GBRAIN_SKILLS_DIR.
-    mcp_config: { path: "~/.config/opencode/opencode.json", format: json, server_key: "mcp.gbrain", env_key: "environment" }
+    mcp_config: { path: "~/.config/opencode/opencode.json", format: json, server_key: "mcp.gbrain", env_key: "environment", writer: merge-opencode-local }
     workbench_projection: [".opencode/skills"]
     user_install: []
     hook_format: opencode_plugin_ts
@@ -162,31 +166,6 @@ harnesses:
       fallback: manual
       crash_recovery: best_effort
     cron_harness_enum_value: opencode
-    documented: true
-
-  pi:
-    headless: ["pi", "-p"]
-    argv_flags: {}
-    supports_tool_restriction: false
-    cron_env:
-      allow_prefixes: ["PI_"]
-      allow_keys: []
-    sessions:
-      - { name: session_start, source: extension }
-      - { name: before_agent_start, source: extension }
-    session_start: { path: "~/.pi/agent/extensions/jspace/index.ts", format: file }
-    mcp: { via: pi_mcp_adapter }
-    mcp_config: { path: "~/.pi/agent/mcp.json", format: json, server_key: "mcpServers.gbrain" }
-    workbench_projection: []
-    user_install: ["~/.agents/skills"]
-    hook_format: none
-    native_memory: none
-    lifecycle:
-      session_start: best_effort
-      session_end: manual
-      fallback: manual
-      crash_recovery: best_effort
-    cron_harness_enum_value: pi
     documented: true
 
   cursor:
@@ -201,7 +180,7 @@ harnesses:
       - { name: sessionEnd, source: hook }
     session_start: { path: ".cursor/hooks.json", format: json, key: "hooks.sessionStart" }
     mcp: { native: true }
-    mcp_config: { path: "~/.cursor/mcp.json", format: json, server_key: "mcpServers.gbrain" }
+    mcp_config: { path: "~/.cursor/mcp.json", format: json, server_key: "mcpServers.gbrain", writer: merge-json-server }
     workbench_projection: []
     user_install: []
     hook_format: cursor_hooks_json
@@ -215,6 +194,31 @@ harnesses:
       fallback: manual
       crash_recovery: manual
     cron_harness_enum_value: null
+    documented: true
+
+  pi:
+    headless: ["pi", "-p"]
+    argv_flags: {}
+    supports_tool_restriction: false
+    cron_env:
+      allow_prefixes: ["PI_"]
+      allow_keys: []
+    sessions:
+      - { name: session_start, source: extension }
+      - { name: before_agent_start, source: extension }
+    session_start: { path: "~/.pi/agent/extensions/jspace/index.ts", format: file }
+    mcp: { via: pi_mcp_adapter }
+    mcp_config: { path: "~/.pi/agent/mcp.json", format: json, server_key: "mcpServers.gbrain", writer: merge-json-server }
+    workbench_projection: []
+    user_install: ["~/.agents/skills"]
+    hook_format: none
+    native_memory: none
+    lifecycle:
+      session_start: best_effort
+      session_end: manual
+      fallback: manual
+      crash_recovery: best_effort
+    cron_harness_enum_value: pi
     documented: true
 
   codex:

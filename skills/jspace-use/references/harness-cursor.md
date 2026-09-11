@@ -7,7 +7,7 @@
 
 | 维度 | 值 | 说明 |
 |---|---|---|
-| cron 无头 | ❌ **无 headless CLI**（IDE） | `cursorAdapter.headlessArgv` → `fail("cursor has no headless CLI")`；`cron.harness` 不接受 cursor |
+| cron 无头 | ❌ **无 headless CLI**（IDE） | 通用 adapter 对 `headless: null` → `fail("cursor has no headless CLI")`；`cron.harness` 不接受 cursor |
 | 会话 hook | ✅ `sessionStart`（项目级 `.cursor/hooks.json` seed，`additional_context` 注入会话初始上下文） | best_effort |
 | 会话结束 hook | ✅ `sessionEnd`（同一 seed，`jspace context session-end --plain`） | best_effort；**fire-and-forget**（见下方能力边界） |
 | MCP | ✅ 原生（`~/.cursor/mcp.json` 用户级 / `.cursor/mcp.json` 项目级，project overrides user） | |

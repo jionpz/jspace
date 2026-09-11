@@ -20,8 +20,8 @@
 // backup before write, and honor dryRun (return planned writes without touching
 // disk). Pure: fs access goes through injected deps.
 import { join } from "node:path";
-import { getCapability, loadCapabilities } from "../../adapters/harness/registry.ts";
-import type { HarnessCapability } from "../../adapters/harness/types.ts";
+import { getCapability, loadCapabilities, wireHarnessNames } from "../../adapters/harness/registry.ts";
+import type { HarnessCapability, McpWriter } from "../../adapters/harness/types.ts";
 import { wireSkillsDir, type WireDeps } from "../gbrain/wiring.ts";
 import { wireGrokSkillsDir, type GrokWireDeps } from "../gbrain/grok-wiring.ts";
 
@@ -32,20 +32,25 @@ export interface WirePlan {
 }
 
 export interface WireSessionStartOutcome {
-  status: "wired" | "already-wired" | "missing" | "unsupported";
+  status: "wired" | "already-wired" | "missing" | "unsupported" | "failed";
   plans: WirePlan[];
   notes: string[];
+  reason?: string;
 }
 
 export type WireOutcome =
   | { ok: true; status: "wired" | "already-wired"; skillsDir: string; plans: WirePlan[]; sessionStart?: WireSessionStartOutcome }
-  | { ok: false; status: "missing-config" | "invalid-config" | "no-gbrain-bin" | "unsupported"; reason: string };
+  | { ok: false; status: "missing-config" | "invalid-config" | "no-gbrain-bin" | "backup-failed" | "unsupported"; reason: string };
+
+export type BackupResult =
+  | { ok: true; path: string | null } // null = no prior file, no backup needed
+  | { ok: false; reason: string };
 
 export interface HarnessWireDeps {
   readFile: (p: string) => string | null; // missing/malformed -> null
   writeFile: (p: string, content: string) => void;
-  /** Copy backup of a machine config before rewriting; returns backup path (null when skipped). */
-  backup: (p: string) => string | null;
+  /** Copy backup of an existing machine config before rewriting. */
+  backup: (p: string) => BackupResult;
   homedir: () => string;
   /** `<workbench>/.jspace/skills` — the env value injected into each harness's gbrain server. */
   resolveWorkbenchSkillsDir: (root: string) => string;
@@ -106,6 +111,31 @@ function jsonContent(doc: unknown): string {
   return JSON.stringify(doc, null, 2) + "\n";
 }
 
+/** Shared write gate: existing target requires a successful backup first;
+ *  missing target may be created directly. Throws only for writeFile failures so
+ *  the CLI keeps its existing I/O error semantics. */
+function writeConfigWithBackup(deps: HarnessWireDeps, path: string, content: string, existed: boolean): { ok: true } | { ok: false; reason: string } {
+  if (existed) {
+    const backup = deps.backup(path);
+    if (!backup.ok) return { ok: false, reason: `backup failed for ${path}: ${backup.reason}` };
+  }
+  deps.writeFile(path, content);
+  return { ok: true };
+}
+
+/** Raised by the legacy-writer backup shim so `wireClaudeBackend` /
+ *  `wireGrokBackend` can convert a backup failure into the same
+ *  `backup-failed` outcome every other writer returns (never a stray throw). */
+class BackupFailedError extends Error {}
+
+/** Adapt the fail-closed backup result to the legacy writer interface. A failed
+ *  backup throws before the legacy writer reaches its write call. */
+function legacyBackup(deps: HarnessWireDeps, path: string): string | null {
+  const backup = deps.backup(path);
+  if (!backup.ok) throw new BackupFailedError(`backup failed for ${path}: ${backup.reason}`);
+  return backup.path;
+}
+
 /** True when the server's env already points GBRAIN_SKILLS_DIR at the workbench. */
 function skillsDirWired(server: Record<string, unknown>, envKey: string, skillsDir: string): boolean {
   const env = server[envKey];
@@ -115,10 +145,9 @@ function skillsDirWired(server: Record<string, unknown>, envKey: string, skillsD
 
 /** Shared create/merge MCP-list backend for cursor/pi (claude-shaped server:
  *  `{ command, args, env }`; the declared `mcp_config` supplies path + server_key). */
-function wireMcpListBackend(harness: string, deps: HarnessWireDeps, root: string): WireOutcome {
-  const cap = getCapability(harness);
+function wireMcpListBackend(cap: HarnessCapability, deps: HarnessWireDeps, root: string): WireOutcome {
   const cfg = cap.mcp_config;
-  if (cfg === null) return { ok: false, status: "missing-config", reason: `${harness} has no mcp_config declared` };
+  if (cfg === null) return { ok: false, status: "missing-config", reason: `${cap.name} has no mcp_config declared` };
   const bin = deps.resolveGbrainBin();
   if (bin === null) {
     return {
@@ -129,7 +158,8 @@ function wireMcpListBackend(harness: string, deps: HarnessWireDeps, root: string
   }
   const path = expandHome(cfg.path, deps.homedir());
   const skillsDir = deps.resolveWorkbenchSkillsDir(root);
-  const parsed = parseJsonFile(deps.readFile(path), path);
+  const raw = deps.readFile(path);
+  const parsed = parseJsonFile(raw, path);
   if (!parsed.ok) return { ok: false, status: "invalid-config", reason: parsed.reason };
   const doc = parsed.doc as Record<string, unknown>;
 
@@ -160,24 +190,24 @@ function wireMcpListBackend(harness: string, deps: HarnessWireDeps, root: string
   const content = jsonContent(doc);
   if (deps.dryRun) return { ok: true, status: "wired", skillsDir, plans: [{ path, content }] };
   deps.ensureResolverFile(skillsDir);
-  deps.backup(path);
-  deps.writeFile(path, content);
+  const written = writeConfigWithBackup(deps, path, content, raw !== null);
+  if (!written.ok) return { ok: false, status: "backup-failed", reason: written.reason };
   return { ok: true, status: "wired", skillsDir, plans: [{ path, content }] };
 }
 
 /** opencode backend — `mcp.<name>` local-server shape differs from cursor/pi:
  *  `{ type: "local", command: [bin, ...], enabled: true, environment }`. */
-function wireOpencodeBackend(deps: HarnessWireDeps, root: string): WireOutcome {
-  const cap = getCapability("opencode");
+function wireOpencodeBackend(cap: HarnessCapability, deps: HarnessWireDeps, root: string): WireOutcome {
   const cfg = cap.mcp_config;
-  if (cfg === null) return { ok: false, status: "missing-config", reason: "opencode has no mcp_config declared" };
+  if (cfg === null) return { ok: false, status: "missing-config", reason: `${cap.name} has no mcp_config declared` };
   const bin = deps.resolveGbrainBin();
   if (bin === null) {
     return { ok: false, status: "no-gbrain-bin", reason: "could not resolve the gbrain binary (set $GBRAIN_BIN, or install gbrain on PATH); cannot wire the MCP server command" };
   }
   const path = expandHome(cfg.path, deps.homedir());
   const skillsDir = deps.resolveWorkbenchSkillsDir(root);
-  const parsed = parseJsonFile(deps.readFile(path), path);
+  const raw = deps.readFile(path);
+  const parsed = parseJsonFile(raw, path);
   if (!parsed.ok) return { ok: false, status: "invalid-config", reason: parsed.reason };
   const doc = parsed.doc as Record<string, unknown>;
 
@@ -206,14 +236,14 @@ function wireOpencodeBackend(deps: HarnessWireDeps, root: string): WireOutcome {
   const content = jsonContent(doc);
   if (deps.dryRun) return { ok: true, status: "wired", skillsDir, plans: [{ path, content }] };
   deps.ensureResolverFile(skillsDir);
-  deps.backup(path);
-  deps.writeFile(path, content);
+  const written = writeConfigWithBackup(deps, path, content, raw !== null);
+  if (!written.ok) return { ok: false, status: "backup-failed", reason: written.reason };
   return { ok: true, status: "wired", skillsDir, plans: [{ path, content }] };
 }
 
 // ---- existing claude/grok backends (thin adapters, logic reused unchanged) ----
 
-function wireClaudeBackend(deps: HarnessWireDeps, root: string): WireOutcome {
+function wireClaudeBackend(cap: HarnessCapability, deps: HarnessWireDeps, root: string): WireOutcome {
   const wireDeps: WireDeps = {
     readJson: (p) => {
       const raw = deps.readFile(p);
@@ -225,16 +255,22 @@ function wireClaudeBackend(deps: HarnessWireDeps, root: string): WireOutcome {
       }
     },
     writeJson: (p, doc) => deps.writeFile(p, jsonContent(doc)),
-    backup: deps.backup,
+    backup: (p) => legacyBackup(deps, p),
     homedir: deps.homedir,
     resolveWorkbenchSkillsDir: deps.resolveWorkbenchSkillsDir,
     ensureResolverFile: deps.ensureResolverFile,
     dryRun: deps.dryRun,
   };
-  const r = wireSkillsDir(wireDeps, root);
+  let r: ReturnType<typeof wireSkillsDir>;
+  try {
+    r = wireSkillsDir(wireDeps, root);
+  } catch (e) {
+    if (e instanceof BackupFailedError) return { ok: false, status: "backup-failed", reason: e.message };
+    throw e;
+  }
   if (!r.ok) {
     const status: "missing-config" | "invalid-config" = r.status === "invalid-claude-json" ? "invalid-config" : "missing-config";
-    return { ok: false, status, reason: r.reason ?? `claude wire failed (${r.status})` };
+    return { ok: false, status, reason: r.reason ?? `${cap.name} wire failed (${r.status})` };
   }
   // WireResult.ok is a plain boolean (not a discriminated union), so narrow the
   // status explicitly: any ok=true result is wired or already-wired.
@@ -242,17 +278,23 @@ function wireClaudeBackend(deps: HarnessWireDeps, root: string): WireOutcome {
   return { ok: true, status, skillsDir: r.skillsDir ?? "", plans: [] };
 }
 
-function wireGrokBackend(deps: HarnessWireDeps, root: string): WireOutcome {
+function wireGrokBackend(_cap: HarnessCapability, deps: HarnessWireDeps, root: string): WireOutcome {
   const grokDeps: GrokWireDeps = {
     readFile: deps.readFile,
     writeFile: deps.writeFile,
-    backup: deps.backup,
+    backup: (p) => legacyBackup(deps, p),
     homedir: deps.homedir,
     resolveWorkbenchSkillsDir: deps.resolveWorkbenchSkillsDir,
     ensureResolverFile: deps.ensureResolverFile,
     dryRun: deps.dryRun,
   };
-  const r = wireGrokSkillsDir(grokDeps, root);
+  let r: ReturnType<typeof wireGrokSkillsDir>;
+  try {
+    r = wireGrokSkillsDir(grokDeps, root);
+  } catch (e) {
+    if (e instanceof BackupFailedError) return { ok: false, status: "backup-failed", reason: e.message };
+    throw e;
+  }
   if (!r.ok) {
     return { ok: false, status: "missing-config", reason: r.reason };
   }
@@ -355,8 +397,8 @@ export function wireSessionStart(harness: string, deps: HarnessWireDeps, root: s
       }
       const plan: WirePlan = { path, content: PI_EXTENSION_SOURCE };
       if (deps.dryRun) return { status: "wired", plans: [plan], notes: [`pi: (dry-run) would write session-start extension → ${path}`] };
-      if (raw !== null) deps.backup(path);
-      deps.writeFile(path, plan.content);
+      const written = writeConfigWithBackup(deps, path, plan.content, raw !== null);
+      if (!written.ok) return { status: "failed", plans: [], notes: [`pi: session-start write blocked → ${path}`], reason: written.reason };
       return { status: "wired", plans: [plan], notes: [`pi: wrote session-start extension → ${path}`] };
     }
     // opencode plugin is a workbench seed — never write from wire.
@@ -375,26 +417,57 @@ export function wireSessionStart(harness: string, deps: HarnessWireDeps, root: s
 
 // ---- dispatch ---------------------------------------------------------------
 
+type WireWriter = (cap: HarnessCapability, deps: HarnessWireDeps, root: string) => WireOutcome;
+
+/** Constrained MCP writer strategies. Dispatch is by declared strategy, never by
+ *  harness name; the capability remains the single source of selection. */
+const WIRE_WRITERS: Record<McpWriter, WireWriter> = {
+  "existing-server-env-json": wireClaudeBackend,
+  "existing-server-env-toml": wireGrokBackend,
+  "merge-json-server": wireMcpListBackend,
+  "merge-opencode-local": wireOpencodeBackend,
+};
+
+/** Wire one already-resolved capability. Exported for fixture-level strategy tests. */
+export function wireCapability(cap: HarnessCapability, deps: HarnessWireDeps, root: string): WireOutcome {
+  const cfg = cap.mcp_config;
+  if (cfg === null) {
+    return {
+      ok: false,
+      status: "unsupported",
+      reason: `${cap.name} has no declared session MCP config (cron-only or IDE compatibility entry)`,
+    };
+  }
+  const writer = WIRE_WRITERS[cfg.writer as McpWriter];
+  if (!writer) {
+    return {
+      ok: false,
+      status: "unsupported",
+      reason: `unsupported mcp_config.writer "${cfg.writer}" for harness ${cap.name}`,
+    };
+  }
+  const backend = writer(cap, deps, root);
+  if (!backend.ok) return backend;
+  const sessionStart = wireSessionStart(cap.name, deps, root);
+  if (sessionStart.status === "failed") {
+    return { ok: false, status: "backup-failed", reason: sessionStart.reason ?? `${cap.name} session-start write failed` };
+  }
+  return { ...backend, sessionStart };
+}
+
 /** Uniform `harness wire` dispatch. Unknown harness → unsupported (loud fail). */
 export function wireHarness(harness: string, deps: HarnessWireDeps, root: string): WireOutcome {
-  const backend = (() => {
-    switch (harness) {
-      case "claude":
-        return wireClaudeBackend(deps, root);
-      case "grok":
-        return wireGrokBackend(deps, root);
-      case "opencode":
-        return wireOpencodeBackend(deps, root);
-      case "cursor":
-        return wireMcpListBackend("cursor", deps, root);
-      case "pi":
-        return wireMcpListBackend("pi", deps, root);
-      default:
-        return { ok: false as const, status: "unsupported" as const, reason: `unsupported harness: ${harness} (supported: claude, grok, opencode, cursor, pi; codex is a cron-compat entry, not a session harness)` };
-    }
-  })();
-  if (!backend.ok) return backend;
-  return { ...backend, sessionStart: wireSessionStart(harness, deps, root) };
+  let cap: HarnessCapability;
+  try {
+    cap = getCapability(harness);
+  } catch {
+    return {
+      ok: false,
+      status: "unsupported",
+      reason: `unsupported harness: ${harness} (supported: ${wireHarnessNames().join(", ")}; codex is a cron-compat entry, not a session harness)`,
+    };
+  }
+  return wireCapability(cap, deps, root);
 }
 
 /** Capability-boundary lines printed after a successful wire (honest — never

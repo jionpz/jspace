@@ -7,9 +7,11 @@
 //
 // Assertions:
 //   1. harness-*.md files in skills/jspace-use/references = documented:true keys
-//   2. core/contracts/cron.ts HARNESSES == capabilities cron_harness_enum_value
-//      set (bidirectional); templates/workbench/.jspace/cron.json values ⊆ keys
-//   3. adapters/harness/*.ts adapter filenames ⊆ capabilities keys
+//   2. registry.cronHarnessNames() == capabilities cron_harness_enum_value set
+//      (bidirectional); production cron consumers use that derived helper;
+//      templates/workbench/.jspace/cron.json values ⊆ keys
+//   3. every capability key resolves through adapters/harness/index.ts
+//      (generic adapter) AND no harness-specific adapters/harness/<name>.ts lingers
 //   4. field-value: via_pi_mcp_adapter literal in capabilities.pi AND
 //      harness-pi.md; each grok/opencode session event has a template hook/plugin
 //   5. skills/jspace-use/SKILL.md reference area covers every harness-*.md
@@ -24,6 +26,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAdapter } from "../adapters/harness/index.ts";
 import { harnessArgv } from "../adapters/harness/argv.ts";
+import { cronHarnessNames, documentedHarnessNames } from "../adapters/harness/registry.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const REF_DIR = join(ROOT, "skills/jspace-use/references");
@@ -56,7 +59,7 @@ function check(name: string, ok: boolean, detail: string): void {
 
 // ---- 1. harness-*.md files = documented:true keys --------------------------
 const docFiles = readdirSync(REF_DIR).filter((f) => f.startsWith("harness-") && f.endsWith(".md"));
-const documentedKeys = Object.entries(caps.harnesses).filter(([, c]) => c.documented !== false).map(([k]) => k);
+const documentedKeys = documentedHarnessNames();
 const docKeys = docFiles.map((f) => f.replace(/^harness-/, "").replace(/\.md$/, ""));
 const missingDocs = documentedKeys.filter((k) => !docKeys.includes(k));
 const extraDocs = docKeys.filter((k) => !caps.harnesses[k]);
@@ -68,23 +71,29 @@ check(
     : `${docFiles.length} harness-*.md for ${documentedKeys.join(",")}`,
 );
 
-// ---- 2. cron.ts HARNESSES == capabilities cron enum (bidirectional) --------
-const cronTs = readFileSync(join(ROOT, "core/contracts/cron.ts"), "utf-8");
-const enumMatch = cronTs.match(/HARNESSES\s*=\s*\[([^\]]+)\]/);
-if (!enumMatch) {
-  check("2.cron-enum", false, "HARNESSES array not found in core/contracts/cron.ts");
-} else {
-  const enumKeys = enumMatch[1].match(/"([^"]+)"/g)?.map((s) => s.slice(1, -1)) ?? [];
-  const capEnum = Object.values(caps.harnesses)
-    .map((c) => c.cron_harness_enum_value)
-    .filter((v): v is string => v !== null && v !== undefined)
-    .sort();
-  const sortedEnum = [...enumKeys].sort();
-  check(
-    "2.cron-enum",
-    JSON.stringify(sortedEnum) === JSON.stringify(capEnum),
-    `cron.ts HARNESSES ${sortedEnum.join(",")} vs capabilities enum ${capEnum.join(",")}`,
-  );
+// ---- 2. cron enum is capability-derived at every production call site ------
+const capEnum = Object.values(caps.harnesses)
+  .map((c) => c.cron_harness_enum_value)
+  .filter((v): v is string => v !== null && v !== undefined)
+  .sort();
+const derivedEnum = cronHarnessNames();
+check(
+  "2.cron-enum",
+  JSON.stringify(derivedEnum) === JSON.stringify(capEnum),
+  `registry ${derivedEnum.join(",")} vs capabilities enum ${capEnum.join(",")}`,
+);
+const cronCallSites = [
+  "application/automation/definitions.ts",
+  "application/automation/use-cases.ts",
+  "cli/commands/cron.ts",
+];
+const missingDerivedConsumer = cronCallSites.filter((p) => !readFileSync(join(ROOT, p), "utf-8").includes("cronHarnessNames"));
+check(
+  "2.cron-derived",
+  missingDerivedConsumer.length === 0 && !readFileSync(join(ROOT, "core/contracts/cron.ts"), "utf-8").includes("export const HARNESSES"),
+  `cron consumers use cronHarnessNames(); missing ${missingDerivedConsumer.join(",") || "-"}`,
+);
+{
   const cronJson = JSON.parse(readFileSync(join(ROOT, "templates/workbench/.jspace/cron.json"), "utf-8")) as {
     crons: { id?: string; harness?: string; target?: { kind?: string; skill?: string; entrypoint?: string } }[];
   };
@@ -119,17 +128,22 @@ if (!enumMatch) {
   }
 }
 
-// ---- 3. adapter filenames ⊆ capabilities keys -------------------------------
-const adapterFiles = readdirSync(join(ROOT, "adapters/harness")).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !f.endsWith(".generated.ts"));
-const adapterKeys = adapterFiles.map((f) => f.replace(/\.ts$/, "")).filter((k) => !["argv", "bin", "registry", "types", "harness", "index", "capabilities"].includes(k));
-const unknownAdapters = adapterKeys.filter((k) => !caps.harnesses[k]);
-const missingAdapters = Object.keys(caps.harnesses).filter((k) => !adapterKeys.includes(k));
+// ---- 3. every capability resolves through the generic adapter ---------------
+const missingAdapters = Object.keys(caps.harnesses).filter((name) => {
+  try {
+    getAdapter(name);
+    return false;
+  } catch {
+    return true;
+  }
+});
+const legacyAdapterFiles = Object.keys(caps.harnesses).filter((name) => existsSync(join(ROOT, "adapters/harness", `${name}.ts`)));
 check(
   "3.adapters",
-  unknownAdapters.length === 0 && missingAdapters.length === 0,
-  unknownAdapters.length || missingAdapters.length
-    ? `unknown ${unknownAdapters.join(",") || "-"}, missing ${missingAdapters.join(",") || "-"}`
-    : `${adapterKeys.length} adapters match capabilities keys`,
+  missingAdapters.length === 0 && legacyAdapterFiles.length === 0,
+  missingAdapters.length || legacyAdapterFiles.length
+    ? `missing generic adapters ${missingAdapters.join(",") || "-"}; harness-specific files ${legacyAdapterFiles.join(",") || "-"}`
+    : `${Object.keys(caps.harnesses).length} capabilities resolve through the generic adapter`,
 );
 
 // ---- 4. field-value drift ------------------------------------------------

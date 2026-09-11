@@ -33,7 +33,15 @@ export type McpBinding = { native: true } | { via: string };
  *  session harnesses have a real wire today). `env_key` overrides the env field
  *  name inside the server object (default "env"; opencode's local-server shape
  *  uses "environment"). `path` may start with `~` (expanded per home dir). */
-export type McpConfig = { path: string; format: "json" | "toml"; server_key: string; env_key?: string } | null;
+export type McpWriter =
+  | "existing-server-env-json"
+  | "existing-server-env-toml"
+  | "merge-json-server"
+  | "merge-opencode-local";
+
+export type McpConfig =
+  | { path: string; format: "json" | "toml"; server_key: string; env_key?: string; writer: McpWriter }
+  | null;
 
 export type NativeMemory = "none" | "full";
 
@@ -56,7 +64,7 @@ export interface HarnessCronEnv {
 export interface HarnessCapabilityData {
   /** Headless invocation prefix; `null` for IDE-only harnesses (no CLI). */
   headless: string[] | null;
-  /** Extra flags appended by the adapter (order owned by adapter code). */
+  /** Extra flags appended by the generic adapter (output before permission). */
   argv_flags: { permission?: string; tools_value?: string; output?: string; output_value?: string };
   /** Session events jspace wires (or plans to wire); source = channel kind. */
   sessions: HarnessSession[];

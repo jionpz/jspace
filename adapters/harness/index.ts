@@ -1,24 +1,14 @@
 // adapters/harness/index.ts — adapter registry (capability key -> adapter).
-// One adapter per capabilities.yaml entry; the adapter owns behavior (headless
-// argv assembly, hook file paths, skill projections) on top of the declared
-// capability.
+// The production set is derived from capabilities.yaml: adding a pure declarative
+// harness entry requires no harness-specific adapter file or index branch.
 import { fail } from "../../core/shared/errors.ts";
 import type { HarnessAdapter } from "./types.ts";
-import { claudeAdapter } from "./claude.ts";
-import { grokAdapter } from "./grok.ts";
-import { opencodeAdapter } from "./opencode.ts";
-import { piAdapter } from "./pi.ts";
-import { cursorAdapter } from "./cursor.ts";
-import { codexAdapter } from "./codex.ts";
+import { createAdapter } from "./generic.ts";
+import { getCapability, harnessNames } from "./registry.ts";
 
-const ADAPTERS: Record<string, HarnessAdapter> = {
-  claude: claudeAdapter,
-  grok: grokAdapter,
-  opencode: opencodeAdapter,
-  pi: piAdapter,
-  cursor: cursorAdapter,
-  codex: codexAdapter,
-};
+const ADAPTERS: Record<string, HarnessAdapter> = Object.fromEntries(
+  harnessNames().map((name) => [name, createAdapter(getCapability(name))]),
+);
 
 /** Look up an adapter by capability key; fails loudly on an unknown harness. */
 export function getAdapter(name: string): HarnessAdapter {
@@ -26,5 +16,3 @@ export function getAdapter(name: string): HarnessAdapter {
   if (!a) fail(`unsupported harness: ${name}`);
   return a;
 }
-
-export { claudeAdapter, grokAdapter, opencodeAdapter, piAdapter, cursorAdapter, codexAdapter };

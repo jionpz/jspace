@@ -4,7 +4,8 @@
 // can carry provider apiKeys), backup-on-write, no-gbrain-bin, unsupported.
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { wireHarness, describeCapability, type HarnessWireDeps, type WirePlan } from "./wire.ts";
+import { wireCapability, wireHarness, describeCapability, type HarnessWireDeps, type WirePlan } from "./wire.ts";
+import { getCapability } from "../../adapters/harness/registry.ts";
 
 const HOME = "/Users/t";
 const ROOT = "/Users/t/wb";
@@ -27,7 +28,7 @@ function makeCtx(overrides: { files?: Record<string, string>; dryRun?: boolean; 
       writeFile: (p, content) => ctx.writes.push({ path: p, content }),
       backup: (p) => {
         ctx.backups.push(p);
-        return `${p}.jspace-bak`;
+        return { ok: true, path: `${p}.jspace-bak` };
       },
       homedir: () => HOME,
       resolveWorkbenchSkillsDir: () => WB_SKILLS,
@@ -58,6 +59,25 @@ describe("harness wire — dispatch", () => {
     const grok = describeCapability("grok");
     expect(grok[0]).toContain("cron harness=grok");
   });
+
+  test("declared mcp writer selects a strategy; unknown writer fails loud", () => {
+    expect(getCapability("claude").mcp_config?.writer).toBe("existing-server-env-json");
+    expect(getCapability("grok").mcp_config?.writer).toBe("existing-server-env-toml");
+    expect(getCapability("cursor").mcp_config?.writer).toBe("merge-json-server");
+    expect(getCapability("opencode").mcp_config?.writer).toBe("merge-opencode-local");
+
+    const cursor = getCapability("cursor");
+    const bad = {
+      ...cursor,
+      mcp_config: { ...cursor.mcp_config!, writer: "not-a-writer" as never },
+    };
+    const r = wireCapability(bad, makeCtx().deps, ROOT);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe("unsupported");
+      expect(r.reason).toContain("unsupported mcp_config.writer");
+    }
+  });
 });
 
 describe("harness wire — cursor (MCP-list create/merge)", () => {
@@ -79,12 +99,40 @@ describe("harness wire — cursor (MCP-list create/merge)", () => {
   });
 
   test("real wire writes + backs up the file", () => {
-    const { deps, writes, backups } = makeCtx();
+    const { deps, writes, backups } = makeCtx({ files: { [CURSOR_MCP]: "{}" } });
     const r = wireHarness("cursor", deps, ROOT);
     expect(r.ok).toBe(true);
     expect(writes.length).toBe(1);
     expect(writes[0].path).toBe(CURSOR_MCP);
     expect(backups).toEqual([CURSOR_MCP]);
+  });
+
+  test("existing target + backup failure blocks the write and preserves bytes", () => {
+    const existing = JSON.stringify({ keep: true, mcpServers: {} });
+    const ctx = makeCtx({ files: { [CURSOR_MCP]: existing } });
+    ctx.deps.backup = () => ({ ok: false, reason: "EACCES: backup denied" });
+    const r = wireHarness("cursor", ctx.deps, ROOT);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe("backup-failed");
+      expect(r.reason).toContain(CURSOR_MCP);
+      expect(r.reason).toContain("EACCES");
+    }
+    expect(ctx.writes).toHaveLength(0);
+    expect(ctx.files.get(CURSOR_MCP)).toBe(existing);
+  });
+
+  test("missing target skips backup and writes directly", () => {
+    let backupCalled = false;
+    const ctx = makeCtx();
+    ctx.deps.backup = () => {
+      backupCalled = true;
+      return { ok: false, reason: "must not be called" };
+    };
+    const r = wireHarness("cursor", ctx.deps, ROOT);
+    expect(r.ok).toBe(true);
+    expect(backupCalled).toBe(false);
+    expect(ctx.writes).toHaveLength(1);
   });
 
   test("idempotent: already-correct server → already-wired, no write", () => {
@@ -242,7 +290,7 @@ describe("harness wire — pi (MCP-list, ~/.pi/agent/mcp.json)", () => {
   });
 
   test("real wire writes MCP + Pi session-start extension", () => {
-    const { deps, writes, backups } = makeCtx();
+    const { deps, writes, backups } = makeCtx({ files: { [PI_MCP]: "{}" } });
     const r = wireHarness("pi", deps, ROOT);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -263,6 +311,33 @@ describe("harness wire — pi (MCP-list, ~/.pi/agent/mcp.json)", () => {
     expect(r.sessionStart?.status).toBe("already-wired");
     expect(r.sessionStart?.plans).toEqual([]);
     expect(writes.length).toBe(0);
+  });
+
+  test("pi session-start: existing extension + backup failure ⇒ extension untouched, outcome backup-failed", () => {
+    const existingExt = "// prior user extension\nconst y = 2;\n";
+    const ctx = makeCtx({ files: { [PI_MCP]: "{}", [PI_EXT]: existingExt } });
+    ctx.deps.backup = (p) =>
+      p === PI_EXT ? { ok: false, reason: "EACCES: backup denied" } : { ok: true, path: `${p}.jspace-bak` };
+    const r = wireHarness("pi", ctx.deps, ROOT);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe("backup-failed");
+      expect(r.reason).toContain("EACCES");
+    }
+    // The extension must never be clobbered when its backup fails.
+    expect(ctx.files.get(PI_EXT)).toBe(existingExt);
+    expect(ctx.writes.some((w) => w.path === PI_EXT)).toBe(false);
+  });
+
+  test("pi session-start dry-run: plans the extension, no backup, no write", () => {
+    const { deps, writes, backups } = makeCtx({ files: { [PI_MCP]: "{}" }, dryRun: true });
+    const r = wireHarness("pi", deps, ROOT);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.sessionStart?.status).toBe("wired");
+    expect(r.sessionStart?.plans[0].path).toBe(PI_EXT);
+    expect(writes.length).toBe(0);
+    expect(backups.length).toBe(0);
   });
 
   test("idempotent pi re-run → already-wired", () => {
@@ -311,6 +386,21 @@ describe("harness wire — claude (reuses application/gbrain/wiring.ts)", () => 
     if (!r.ok) expect(r.status).toBe("missing-config");
   });
 
+  test("backup failure → backup-failed outcome, no write, bytes unchanged (legacy writer path)", () => {
+    const existing = JSON.stringify({ mcpServers: { gbrain: { command: "gbrain", args: ["serve"] } } });
+    const ctx = makeCtx({ files: { [CLAUDE_JSON]: existing } });
+    ctx.deps.backup = () => ({ ok: false, reason: "EACCES: backup denied" });
+    const r = wireHarness("claude", ctx.deps, ROOT);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe("backup-failed");
+      expect(r.reason).toContain(CLAUDE_JSON);
+      expect(r.reason).toContain("EACCES");
+    }
+    expect(ctx.writes).toHaveLength(0);
+    expect(ctx.files.get(CLAUDE_JSON)).toBe(existing);
+  });
+
   test("missing ~/.claude.json → missing-config", () => {
     const { deps } = makeCtx();
     const r = wireHarness("claude", deps, ROOT);
@@ -340,6 +430,21 @@ describe("harness wire — grok (reuses application/gbrain/grok-wiring.ts)", () 
     if (!r.ok) return;
     expect(r.status).toBe("already-wired");
     expect(writes.length).toBe(0);
+  });
+
+  test("backup failure → backup-failed outcome, no write, bytes unchanged (legacy writer path)", () => {
+    const toml = "[mcp_servers.gbrain]\ncommand = \"gbrain\"\nargs = [\"serve\"]\n";
+    const ctx = makeCtx({ files: { [GROK_TOML]: toml } });
+    ctx.deps.backup = () => ({ ok: false, reason: "EACCES: backup denied" });
+    const r = wireHarness("grok", ctx.deps, ROOT);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe("backup-failed");
+      expect(r.reason).toContain(GROK_TOML);
+      expect(r.reason).toContain("EACCES");
+    }
+    expect(ctx.writes).toHaveLength(0);
+    expect(ctx.files.get(GROK_TOML)).toBe(toml);
   });
 
   test("missing grok config → missing-config", () => {

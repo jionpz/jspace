@@ -8,7 +8,7 @@
 
 | 维度 | 值 | 说明 |
 |---|---|---|
-| cron 无头 | ✅ `harness: pi`（argv `pi -p`） | `adapters/harness/pi.ts` headlessArgv，有单测 |
+| cron 无头 | ✅ `harness: pi`（argv `pi -p`） | 通用 adapter 从 `headless` 声明生成 argv，有单测 |
 | 原生 MCP | ❌ 无（Pi core「No MCP」） | 走 CLI 或 `pi-mcp-adapter` 扩展 |
 | MCP 扩展 | ⚠️ `via: pi_mcp_adapter` | 第三方通道，见下方安装提示 |
 | 会话事件 | ⚠️ `session_start` / `before_agent_start`（扩展事件；jspace 提供专用 extension） | `jspace harness wire --harness pi` 写入 `~/.pi/agent/extensions/jspace/index.ts` |

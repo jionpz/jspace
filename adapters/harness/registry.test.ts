@@ -4,13 +4,17 @@
 // Run: bun test adapters/harness/registry.test.ts
 import { expect, test } from "bun:test";
 import {
+  cronHarnessNamesFrom,
   cronHarnessNames,
+  documentedHarnessNamesFrom,
   getCapability,
   harnessNames,
   loadCapabilities,
+  wireHarnessNamesFrom,
   workbenchProjectionDirs,
 } from "./registry.ts";
 import { getAdapter } from "./index.ts";
+import { createAdapter } from "./generic.ts";
 
 test("capabilities file has the full support set (5 session + codex compat)", () => {
   const caps = loadCapabilities();
@@ -40,6 +44,29 @@ test("every capability is structurally valid", () => {
 test("cron harness set excludes cursor (no headless) and matches the contract enum", () => {
   expect(cronHarnessNames().sort()).toEqual(["claude", "codex", "grok", "opencode", "pi"]);
   expect(cronHarnessNames()).not.toContain("cursor");
+});
+
+test("fixture capabilities drive wire/cron/documented sets without code edits", () => {
+  const caps = structuredClone(loadCapabilities());
+  caps.harnesses["fixture-wire"] = {
+    ...caps.harnesses.claude,
+    mcp_config: { path: "~/.fixture-wire.json", format: "json", server_key: "mcpServers.gbrain", writer: "merge-json-server" },
+    cron_harness_enum_value: null,
+    documented: false,
+  };
+  caps.harnesses["fixture-cron"] = {
+    ...caps.harnesses.claude,
+    mcp_config: null,
+    cron_harness_enum_value: "fixture-cron",
+    documented: true,
+  };
+
+  expect(wireHarnessNamesFrom(caps)).toContain("fixture-wire");
+  expect(wireHarnessNamesFrom(caps)).not.toContain("fixture-cron");
+  expect(cronHarnessNamesFrom(caps)).toContain("fixture-cron");
+  expect(cronHarnessNamesFrom(caps)).not.toContain("fixture-wire");
+  expect(documentedHarnessNamesFrom(caps)).toContain("fixture-cron");
+  expect(documentedHarnessNamesFrom(caps)).not.toContain("fixture-wire");
 });
 
 test("workbench projection dirs union per-harness + shared, no duplicates", () => {
@@ -75,6 +102,27 @@ test("headless-capable harnesses assemble argv through their adapter", () => {
     "--allow",
     "Bash(*)",
   ]);
+});
+
+test("a fixture capability generates an adapter without a harness-specific file", () => {
+  const cap = {
+    ...getCapability("claude"),
+    name: "fixture-headless",
+    headless: ["fixture", "--headless"],
+    argv_flags: { permission: "--tools", tools_value: "Read", output: "--format", output_value: "json" },
+    session_start: { path: ".fixture/hooks.json", format: "json" as const, key: "hooks.start" },
+  };
+  const adapter = createAdapter(cap);
+  expect(adapter.headlessArgv("do it", "darwin", "/bin/fixture", "Write")).toEqual([
+    "/bin/fixture",
+    "--headless",
+    "do it",
+    "--format",
+    "json",
+    "--tools",
+    "Write",
+  ]);
+  expect(adapter.hookFilePath?.("/wb")).toBe("/wb/.fixture/hooks.json");
 });
 
 test("cursor adapter fails on headless argv (IDE-only) but exposes a hook path", () => {

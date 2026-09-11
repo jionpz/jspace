@@ -51,7 +51,8 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "mcp_config": {
         "path": "~/.claude.json",
         "format": "json",
-        "server_key": "mcpServers.gbrain"
+        "server_key": "mcpServers.gbrain",
+        "writer": "existing-server-env-json"
       },
       "workbench_projection": [
         ".claude/skills"
@@ -116,7 +117,8 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "mcp_config": {
         "path": "~/.grok/config.toml",
         "format": "toml",
-        "server_key": "mcp_servers.gbrain"
+        "server_key": "mcp_servers.gbrain",
+        "writer": "existing-server-env-toml"
       },
       "workbench_projection": [
         ".grok/skills"
@@ -171,7 +173,8 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "path": "~/.config/opencode/opencode.json",
         "format": "json",
         "server_key": "mcp.gbrain",
-        "env_key": "environment"
+        "env_key": "environment",
+        "writer": "merge-opencode-local"
       },
       "workbench_projection": [
         ".opencode/skills"
@@ -186,6 +189,51 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "crash_recovery": "best_effort"
       },
       "cron_harness_enum_value": "opencode",
+      "documented": true
+    },
+    "cursor": {
+      "headless": null,
+      "argv_flags": {},
+      "supports_tool_restriction": false,
+      "cron_env": {
+        "allow_prefixes": [],
+        "allow_keys": []
+      },
+      "sessions": [
+        {
+          "name": "sessionStart",
+          "source": "hook"
+        },
+        {
+          "name": "sessionEnd",
+          "source": "hook"
+        }
+      ],
+      "session_start": {
+        "path": ".cursor/hooks.json",
+        "format": "json",
+        "key": "hooks.sessionStart"
+      },
+      "mcp": {
+        "native": true
+      },
+      "mcp_config": {
+        "path": "~/.cursor/mcp.json",
+        "format": "json",
+        "server_key": "mcpServers.gbrain",
+        "writer": "merge-json-server"
+      },
+      "workbench_projection": [],
+      "user_install": [],
+      "hook_format": "cursor_hooks_json",
+      "native_memory": "none",
+      "lifecycle": {
+        "session_start": "best_effort",
+        "session_end": "best_effort",
+        "fallback": "manual",
+        "crash_recovery": "manual"
+      },
+      "cron_harness_enum_value": null,
       "documented": true
     },
     "pi": {
@@ -221,7 +269,8 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
       "mcp_config": {
         "path": "~/.pi/agent/mcp.json",
         "format": "json",
-        "server_key": "mcpServers.gbrain"
+        "server_key": "mcpServers.gbrain",
+        "writer": "merge-json-server"
       },
       "workbench_projection": [],
       "user_install": [
@@ -236,50 +285,6 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "crash_recovery": "best_effort"
       },
       "cron_harness_enum_value": "pi",
-      "documented": true
-    },
-    "cursor": {
-      "headless": null,
-      "argv_flags": {},
-      "supports_tool_restriction": false,
-      "cron_env": {
-        "allow_prefixes": [],
-        "allow_keys": []
-      },
-      "sessions": [
-        {
-          "name": "sessionStart",
-          "source": "hook"
-        },
-        {
-          "name": "sessionEnd",
-          "source": "hook"
-        }
-      ],
-      "session_start": {
-        "path": ".cursor/hooks.json",
-        "format": "json",
-        "key": "hooks.sessionStart"
-      },
-      "mcp": {
-        "native": true
-      },
-      "mcp_config": {
-        "path": "~/.cursor/mcp.json",
-        "format": "json",
-        "server_key": "mcpServers.gbrain"
-      },
-      "workbench_projection": [],
-      "user_install": [],
-      "hook_format": "cursor_hooks_json",
-      "native_memory": "none",
-      "lifecycle": {
-        "session_start": "best_effort",
-        "session_end": "best_effort",
-        "fallback": "manual",
-        "crash_recovery": "manual"
-      },
-      "cron_harness_enum_value": null,
       "documented": true
     },
     "codex": {

@@ -24,11 +24,11 @@ import {
 import { ID_PATTERN, isId } from "./ids.ts";
 import { parseSchedule } from "../../core/shared/schedule.ts";
 
-// The cron enum is the headless-cron-capable subset of capabilities.yaml
-// (adapters/harness/capabilities.yaml). cursor is a session harness with no
-// headless CLI and is intentionally absent here — it can never run a cron.
-export const HARNESSES = ["claude", "codex", "grok", "opencode", "pi"] as const;
-export type Harness = (typeof HARNESSES)[number];
+// The cron enum is supplied by the caller at decode time. The production caller
+// derives it from adapters/harness/capabilities.yaml (cronHarnessNames()), while
+// this core contract stays free of an adapter import and remains testable with
+// fixture enums. Do not reintroduce a parallel harness whitelist here.
+export type Harness = string;
 
 export interface CronSkillTarget {
   kind: "skill"; // fixed: a skill target references a manifest-declared workbench skill
@@ -63,7 +63,7 @@ export interface CronRunInvocation {
   force?: boolean; // skip today-success
 }
 
-export function decodeCrons(input: unknown): DecodeResult<CronsFile> {
+export function decodeCrons(input: unknown, harnessEnum: readonly string[]): DecodeResult<CronsFile> {
   const issues = new IssueCollector();
   if (!isRecord(input)) {
     issues.add("cron.root.type", "cron", "cron.json root must be an object");
@@ -85,7 +85,7 @@ export function decodeCrons(input: unknown): DecodeResult<CronsFile> {
       checkNoUnknownFields(item, ["id", "schedule", "harness", "prompt", "target", "tools", "enabled"], prefix, "cron.entry.unknown-field", issues);
       const id = readRequiredString(item, "id", prefix, "cron.id.invalid", issues);
       const schedule = readRequiredString(item, "schedule", prefix, "cron.schedule.invalid", issues);
-      readEnum(issues, "cron.harness.invalid", `${prefix}.harness`, item.harness, HARNESSES);
+      readEnum(issues, "cron.harness.invalid", `${prefix}.harness`, item.harness, harnessEnum);
       // schedule is validated here, not deferred to cronAdd/doctor: a hand-edited
       // cron.json with a bad schedule must fail decode (visible, not silent).
       if (schedule !== undefined) {

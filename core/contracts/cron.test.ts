@@ -6,6 +6,9 @@ import { expect, test } from "bun:test";
 import type { DecodeResult } from "./diagnostics.ts";
 import { decodeCrons, type CronsFile } from "./cron.ts";
 
+const TEST_HARNESSES = ["claude", "codex", "grok", "opencode", "pi"] as const;
+const decode = (input: unknown) => decodeCrons(input, TEST_HARNESSES);
+
 function promptCron(): CronsFile {
   return {
     schema_version: 1,
@@ -33,13 +36,13 @@ function codesOf(result: DecodeResult<unknown>): string[] {
 }
 
 function expectIssue(input: unknown, code: string): void {
-  const result = decodeCrons(input);
+  const result = decode(input);
   expect(result.ok).toBe(false);
   if (!result.ok) expect(codesOf(result)).toContain(code);
 }
 
 test("existing v1 prompt crons decode unchanged (backward compatible)", () => {
-  const result = decodeCrons(JSON.parse(JSON.stringify(promptCron())));
+  const result = decode(JSON.parse(JSON.stringify(promptCron())));
   expect(result.ok).toBe(true);
   if (result.ok) {
     expect(result.value.crons[0].prompt).toBe("生成本周周报…");
@@ -48,7 +51,7 @@ test("existing v1 prompt crons decode unchanged (backward compatible)", () => {
 });
 
 test("skill target crons decode with target and no prompt", () => {
-  const result = decodeCrons(JSON.parse(JSON.stringify(targetCron())));
+  const result = decode(JSON.parse(JSON.stringify(targetCron())));
   expect(result.ok).toBe(true);
   if (result.ok) {
     const c = result.value.crons[0];
@@ -64,7 +67,7 @@ test("optional per-cron tools override decodes (write-only crons drop Bash)", ()
       { id: "weekly-report", schedule: "0 21 * * 0", harness: "claude", tools: "Read,Write,Edit,mcp__gbrain__*", target: { kind: "skill", skill: "weekly-report", entrypoint: "weekly", input: "周报" }, enabled: true },
     ],
   };
-  const result = decodeCrons(input);
+  const result = decode(input);
   expect(result.ok).toBe(true);
   if (result.ok) {
     const c = result.value.crons[0];
@@ -120,7 +123,7 @@ test("unknown cron entry fields are rejected (including target-aware)", () => {
 
 test("mixed prompt and target crons decode together", () => {
   const mixed: CronsFile = { schema_version: 1, crons: [...promptCron().crons, ...targetCron().crons] };
-  const result = decodeCrons(JSON.parse(JSON.stringify(mixed)));
+  const result = decode(JSON.parse(JSON.stringify(mixed)));
   expect(result.ok).toBe(true);
   if (result.ok) {
     expect(result.value.crons.map((c) => c.id)).toEqual(["weekly-report", "inbox-tidy"]);
@@ -133,14 +136,14 @@ test("invalid schedule is rejected at decode time (P2-5; no longer deferred to c
 });
 
 test("valid schedule still decodes (no false cron.schedule.invalid)", () => {
-  const result = decodeCrons(JSON.parse(JSON.stringify(promptCron())));
+  const result = decode(JSON.parse(JSON.stringify(promptCron())));
   expect(result.ok).toBe(true);
 });
 
 test("headless-capable harness enum accepts grok/opencode/pi, rejects cursor", () => {
   for (const harness of ["grok", "opencode", "pi"]) {
     const input = { schema_version: 1, crons: [{ id: "x", schedule: "0 9 * * *", harness, prompt: "p", enabled: true }] };
-    expect(decodeCrons(input).ok).toBe(true);
+    expect(decode(input).ok).toBe(true);
   }
   // cursor is an IDE-only session harness (no headless CLI) -> never a cron harness
   expectIssue(

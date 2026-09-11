@@ -4,8 +4,10 @@
 // regression); this test pins the adapter's declared shape.
 // Run: bun test adapters/harness/grok.test.ts
 import { expect, test } from "bun:test";
-import { grokAdapter } from "./grok.ts";
+import { getAdapter } from "./index.ts";
 import { getCapability } from "./registry.ts";
+
+const grokAdapter = getAdapter("grok");
 
 test("grok capability declares the four wired session events", () => {
   const cap = getCapability("grok");

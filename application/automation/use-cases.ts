@@ -3,13 +3,12 @@
 // injected (launchd plist inspection lands with the scheduler adapters).
 import { fail } from "../../core/shared/errors.ts";
 import type { CmdResult } from "../commands/command.ts";
-import { HARNESSES, type Harness } from "../../core/contracts/cron.ts";
 import { isId } from "../../core/contracts/ids.ts";
 import { findIndex } from "../registry/helpers.ts";
 import { ackIncidents } from "./incidents.ts";
 import { loadCrons, parseSchedule, saveCrons } from "./definitions.ts";
 import { isWindowsInstallable } from "../../core/shared/schedule.ts";
-import { assertHarnessSupportsTools } from "../../adapters/harness/registry.ts";
+import { assertHarnessSupportsTools, cronHarnessNames } from "../../adapters/harness/registry.ts";
 
 export interface CronInstalledCheck {
   isInstalled: (cronId: string) => boolean;
@@ -29,8 +28,9 @@ export function cronAdd(
   const data = loadCrons(root);
   if (!isId(id)) fail(`invalid cron id: ${id} (lowercase letters, digits, hyphens)`);
   if (findIndex(data.crons, id) !== null) fail(`duplicate cron id: ${id}`);
-  if (!(HARNESSES as readonly string[]).includes(harness)) {
-    fail(`invalid harness: ${harness} (choose from ${HARNESSES.join(", ")})`);
+  const harnesses = cronHarnessNames();
+  if (!harnesses.includes(harness)) {
+    fail(`invalid harness: ${harness} (choose from ${harnesses.join(", ")})`);
   }
   if (!prompt.trim()) fail("prompt must be non-empty");
   assertHarnessSupportsTools(harness, tools);
@@ -44,7 +44,7 @@ export function cronAdd(
   data.crons.push({
     id,
     schedule,
-    harness: harness as Harness,
+    harness,
     prompt,
     enabled: !disabled,
     ...(tools !== undefined ? { tools } : {}),

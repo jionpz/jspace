@@ -18,7 +18,7 @@ test("backupConfig keeps at most 3 .jspace-bak-* siblings after repeated writes"
   writeFileSync(configPath, "{}", "utf-8");
   for (let i = 0; i < 10; i++) {
     writeFileSync(configPath, `{"v":${i}}`, "utf-8");
-    backupConfig(configPath);
+    expect(backupConfig(configPath).ok).toBe(true);
   }
   const backups = readdirSync(dir).filter((n) => n.startsWith("mcp.json.jspace-bak-"));
   expect(backups.length).toBeLessThanOrEqual(3);

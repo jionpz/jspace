@@ -35,18 +35,66 @@ function resolveCaps(raw: HarnessCapabilitiesFile): Record<string, HarnessCapabi
     if (data.supports_tool_restriction !== hasPermission) {
       fail(`capabilities: ${name} supports_tool_restriction must match argv_flags.permission presence`);
     }
+    if (hasPermission && data.argv_flags?.tools_value === undefined) {
+      fail(`capabilities: ${name} declares argv_flags.permission without argv_flags.tools_value`);
+    }
+    if (data.argv_flags?.output !== undefined && data.argv_flags.output_value === undefined) {
+      fail(`capabilities: ${name} declares argv_flags.output without argv_flags.output_value`);
+    }
     if (data.cron_env === undefined) {
       fail(`capabilities: ${name} is missing cron_env declaration`);
+    }
+    const mcpConfig = data.mcp_config;
+    if (mcpConfig !== null) {
+      if (!(MCP_WRITERS as readonly string[]).includes(mcpConfig.writer)) {
+        fail(`capabilities: ${name} has unknown mcp_config.writer: ${mcpConfig.writer}`);
+      }
+      const expectsToml = mcpConfig.writer === "existing-server-env-toml";
+      if (expectsToml !== (mcpConfig.format === "toml")) {
+        fail(`capabilities: ${name} mcp_config.writer ${mcpConfig.writer} is incompatible with format ${mcpConfig.format}`);
+      }
     }
     harnesses[name] = { ...data, name };
   }
   return harnesses;
 }
 
+const MCP_WRITERS = [
+  "existing-server-env-json",
+  "existing-server-env-toml",
+  "merge-json-server",
+  "merge-opencode-local",
+] as const;
+
 const HARNESSES = resolveCaps(CAPABILITIES);
 
 export function loadCapabilities(): HarnessCapabilitiesFile {
   return CAPABILITIES;
+}
+
+/** Wire-capable harness keys, derived from the declared machine MCP config.
+ *  Codex is cron-only because it has no `mcp_config`; cursor remains wire-capable
+ *  even though it is not headless-capable. Order follows capabilities.yaml. */
+export function wireHarnessNamesFrom(caps: HarnessCapabilitiesFile): string[] {
+  return Object.entries(caps.harnesses)
+    .filter(([, cap]) => cap.mcp_config !== null)
+    .map(([name]) => name);
+}
+
+/** Cron-capable harness enum values, sorted for stable CLI help. The value is
+ *  declared explicitly because cron.json names may differ from capability keys. */
+export function cronHarnessNamesFrom(caps: HarnessCapabilitiesFile): string[] {
+  return Object.values(caps.harnesses)
+    .map((cap) => cap.cron_harness_enum_value)
+    .filter((name): name is string => name !== null)
+    .sort();
+}
+
+/** Harness keys with human-facing harness docs. */
+export function documentedHarnessNamesFrom(caps: HarnessCapabilitiesFile): string[] {
+  return Object.entries(caps.harnesses)
+    .filter(([, cap]) => cap.documented)
+    .map(([name]) => name);
 }
 
 export function getCapability(name: string): HarnessCapability {
@@ -60,11 +108,19 @@ export function harnessNames(): string[] {
   return Object.keys(HARNESSES);
 }
 
+/** Session harness keys accepted by `harness wire` (declared MCP config only). */
+export function wireHarnessNames(): string[] {
+  return wireHarnessNamesFrom(CAPABILITIES);
+}
+
 /** Cron harness keys valid in cron.json `harness` (headless-capable only). */
 export function cronHarnessNames(): string[] {
-  return Object.values(HARNESSES)
-    .filter((c) => c.cron_harness_enum_value !== null)
-    .map((c) => c.cron_harness_enum_value as string);
+  return cronHarnessNamesFrom(CAPABILITIES);
+}
+
+/** Harness keys that have a human-facing harness-<name>.md reference. */
+export function documentedHarnessNames(): string[] {
+  return documentedHarnessNamesFrom(CAPABILITIES);
 }
 
 /** Whether a harness supports per-cron tool restriction (`--tools` / cron.json `tools`). */

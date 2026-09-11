@@ -3,7 +3,6 @@
 // scheduling identity/content stays in the adapters + scheduler-service.
 import type { CommandSpec } from "../../application/commands/command.ts";
 import { fail } from "../../core/shared/errors.ts";
-import { HARNESSES } from "../../core/contracts/cron.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 import { cronAck, cronAdd, cronList, cronRemove, cronSetEnabled } from "../../application/automation/use-cases.ts";
 import { cronInstall } from "../../application/automation/scheduler-service.ts";
@@ -14,10 +13,13 @@ import { diffBundle } from "../../application/workspace/manifest.ts";
 import { cronFailures, cronLogDir, cronStatus } from "../../application/automation/status.ts";
 import { resolveFilehubRoot } from "../../application/registry/filehub-lookup.ts";
 import { schedulerAdapter } from "../../adapters/scheduler/index.ts";
+import { cronHarnessNames } from "../../adapters/harness/registry.ts";
 import { cronIsInstalledForRoot, schedulerEnv, workbenchTagFor } from "../scheduler.ts";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
 import { b, optS, quiet, readFileOrNull, s } from "./helpers.ts";
+
+const CRON_HARNESSES = cronHarnessNames();
 
 const cronAddSpec: CommandSpec = {
   name: "add",
@@ -26,7 +28,7 @@ const cronAddSpec: CommandSpec = {
   features: { dir: true },
   options: [
     { name: "--schedule", takesValue: true, required: true, help: 'restricted 5-field cron expression (e.g. "0 21 * * *"; single values or *; no lists/ranges/steps)' },
-    { name: "--harness", takesValue: true, required: true, help: `harness to run: ${HARNESSES.join(" | ")}` },
+    { name: "--harness", takesValue: true, required: true, help: `harness to run: ${CRON_HARNESSES.join(" | ")}` },
     { name: "--prompt", takesValue: true, required: true, help: "instruction for the headless harness" },
     { name: "--tools", takesValue: true, help: "override harness default tools (claude/grok only)" },
     { name: "--disabled", takesValue: false, help: "add the cron disabled" },
@@ -130,7 +132,7 @@ const cronRunSpec: CommandSpec = {
       name: "--harness",
       takesValue: true,
       metavar: "HARNESS",
-      help: `override the cron's harness (headless-capable: ${HARNESSES.join(" | ")})`,
+      help: `override the cron's harness (headless-capable: ${CRON_HARNESSES.join(" | ")})`,
     },
   ],
   handler: async (ctx, args) => {
