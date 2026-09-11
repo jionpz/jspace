@@ -141,6 +141,7 @@ function pass(label: string): void {
     "cli/manifest.generated.ts",
     "cli/manifest.json",
     "cli/skills.generated.ts",
+    "cli/global-skills.generated.ts",
     "adapters/harness/capabilities.generated.ts",
     "templates/workbench/AGENTS.md",
   ];

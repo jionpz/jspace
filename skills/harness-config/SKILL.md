@@ -26,7 +26,7 @@ triggers:
 | 判断 | 取值 | 动作 |
 |---|---|---|
 | harness state(`detect.sh`) | installed / config_only / not_found | 接线 / 向用户确认后决定 / 跳过 |
-| 治理文档 `~/.agents/agents.md` | 不存在 / 已存在 | 用 `~/.agents/skills/harness-config/references/governance.md` 骨架创建 / review 分层 + 确认红线最高优先级 |
+| 治理文档 `~/.agents/agents.md` | 不存在 / 已存在 | 用 `~/.agents/skills/harness-config/references/governance.md` 骨架创建 / review 分层 + 三个必需主题 + 决策原则顺序 |
 | 既有全局文件非空 | 是 / 否(空 stub/不存在) | **不覆盖**:并入治理文档或保留+附加接线,二选一说明 / 直接 symlink |
 | Phase 4 会话级配置 | wired / missing / n/a | **只核对报告,不改既有配置** |
 
@@ -39,13 +39,14 @@ rsync -a --ignore-existing "$SKILL_DIR"/. "$HOME/.agents/skills/harness-config/"
 # Phase 5 验证
 ls -la "$HOME/.agents/agents.md"
 ls -la "$HOME/.pi/agent/AGENTS.md" "$HOME/.codex/AGENTS.md" "$HOME/.claude/CLAUDE.md"
+rg -n '^#{1,3} .*(安全与隐私红线|决策原则|维护约定)' "$HOME/.agents/agents.md"
 ```
 
 ## Phase 骨架(顺序执行)
 
 0. **Detect**:跑 `detect.sh`;installed 接线 / config_only 确认 / not_found 跳过。前提:至少一个 installed。
 1. **Install self**:幂等装到 `~/.agents/skills/harness-config`(补缺不覆盖本地改动)。
-2. **治理文档**:`~/.agents/agents.md` 不存在则用 `~/.agents/skills/harness-config/references/governance.md` 骨架建;已存在则 review 内容分层(harness 无关规则进、MCP/hooks/注入不进)+ 确认安全红线最高优先级。
+2. **治理文档**:`~/.agents/agents.md` 不存在则用 `~/.agents/skills/harness-config/references/governance.md` 骨架建;已存在则 review 内容分层(harness 无关规则进、MCP/hooks/注入不进),并确认三个必需主题都在:`安全与隐私红线`、`决策原则`、`维护约定`。`决策原则` 必须维持"第一性原理 → 奥卡姆最小机制 → 验证"的顺序,且安全 / 隐私 / 数据完整性 / 不可逆性是更高优先级 invariant。
 3. **Wire installed**:对 installed 的每个 harness 按 `~/.agents/skills/harness-config/references/harnesses.md` 接线(全局文件 → `~/.agents/agents.md`);幂等带守卫,不覆盖非空既有文件。逐 harness 报 wired/skipped/already-OK。
 4. **Config check(只读)**:核对 gbrain MCP/CLI、session-start 注入、hooks,三态 wired/missing/n/a。**不改既有配置**;密钥卫生(只报名称状态,不回显令牌)。
 5. **Verify + report**:文件层验证(+ Claude Code 内容层 `/context`);两维词汇分清(接线状态 vs 配置核对状态)。
