@@ -64,7 +64,7 @@ GEN_ASSETS_ALLOW_MISSING=1 bun run scripts/gen-assets.ts
 本仓库 vendored Trellis（`.trellis/workflow.md`、`.trellis/spec/` 等）用于开发侧任务规划。
 
 - **版本化**：`.trellis/spec/`、`.trellis/workflow.md`、`.trellis/scripts/`
-- **本地-only（gitignored）**：`.trellis/tasks/`、`.trellis/workspace/` — 含个人路径与会话记录，新克隆默认不存在，由 trellis 命令按需生成
+- **本地-only（gitignored）**：`.trellis/tasks/`、`.trellis/workspace/` — 含个人路径、会话记录与执行过程，新克隆默认不存在，由 trellis 命令按需生成；长期有效决策应进入 `GOAL.md` 或 `.trellis/spec/`
 
 请勿把个人任务笔记或机器路径提交进仓库。
 

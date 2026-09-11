@@ -1,3 +1,0 @@
-{"file": ".trellis/spec/backend/index.md", "reason": "Layer map + dependency rules for the cli/application split touched by this task"}
-{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Version string contract (git describe / JSPACE_BUILD_VERSION / compareVersions semantics), gates, testing requirements"}
-{"file": ".trellis/spec/backend/error-handling.md", "reason": "fail() vs log vs CmdResult conventions for user-facing CLI output"}

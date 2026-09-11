@@ -54,10 +54,11 @@ Thumbs.db
 !templates/workbench/.cursor/
 !templates/workbench/.cursor/**
 
-# Trellis — spec/ and tasks/ (incl. archives) are versioned; only workspace/
-# (developer journals) stays local-only. Local-only runtime state (backups,
-# .runtime, .plan-log, caches, .current-task) is excluded via the nested
-# .trellis/.gitignore.
+# Trellis — spec/, workflow.md and scripts/ are versioned development
+# infrastructure; tasks/ (including archives) and workspace/ are local-only.
+# Historical task artifacts contain process logs and machine paths and must not
+# be added to fresh clones. Runtime state remains excluded by nested .trellis/.gitignore.
+.trellis/tasks/
 .trellis/workspace/
 
 # Temporary files
