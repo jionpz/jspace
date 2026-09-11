@@ -82,6 +82,13 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
       "scope": "global",
       "dependencies": [],
       "install_path": "~/.agents/skills/harness-config"
+    },
+    {
+      "name": "jspace-adopt",
+      "version": "1",
+      "scope": "global",
+      "dependencies": [],
+      "install_path": "~/.agents/skills/jspace-adopt"
     }
   ]
 };

@@ -1,5 +1,5 @@
 // cli/assets-reachability.test.ts — materialized workbench reference reachability
-// (skill-target reachability) + manifest/bundle consistency (harness-config global scope).
+// (skill-target reachability) + manifest/bundle consistency (machine-global skill scope).
 // Scans every bundled .md that materializes into the workbench
 // (templates/workbench/* + skills/**), resolves bundle-internal references
 // (skills/…, references/…, scripts/…) and rejects dead repo-docs references.
@@ -87,19 +87,17 @@ test("every manifest workbench skill is bundled", () => {
   }
 });
 
-test("harness-config stays machine-global (separate GLOBAL_SKILLS map, install_path declared)", () => {
-  const names = new Set(SKILLS_MANIFEST.workbench.map((s) => s.name));
-  expect(names.has("harness-config"), "harness-config must not be a workbench skill").toBe(false);
-  expect(
-    Object.keys(ASSETS).some((k) => k.startsWith("skills/harness-config/")),
-    "harness-config must not be embedded in the workbench bundle (it must never materialize into a workbench)",
-  ).toBe(false);
-  const global = SKILLS_MANIFEST.global.find((s) => s.name === "harness-config");
-  expect(global, "harness-config must be declared in manifest.global").toBeDefined();
-  expect(global?.install_path).toBeTruthy();
-  // issue #37: a declared global skill must have an acquisition path — every
-  // global skill's files ship in GLOBAL_SKILLS so `skills install` can land it.
+test("manifest global skills stay machine-global (separate GLOBAL_SKILLS map, install_path declared)", () => {
+  const workbenchNames = new Set(SKILLS_MANIFEST.workbench.map((s) => s.name));
   for (const g of SKILLS_MANIFEST.global) {
+    expect(workbenchNames.has(g.name), `${g.name} must not be a workbench skill`).toBe(false);
+    expect(g.install_path, `${g.name} must declare an install_path`).toBeTruthy();
+    expect(
+      Object.keys(ASSETS).some((k) => k.startsWith(`skills/${g.name}/`)),
+      `${g.name} must not be embedded in the workbench bundle (it must never materialize into a workbench)`,
+    ).toBe(false);
+    // issue #37: a declared global skill must have an acquisition path — every
+    // global skill's files ship in GLOBAL_SKILLS so `skills install` can land it.
     const files = Object.keys(GLOBAL_SKILLS).filter((k) => k.startsWith(`skills/${g.name}/`));
     expect(files.length > 0, `global skill has no embedded files: ${g.name}`).toBe(true);
     expect(files.some((k) => k.endsWith("/SKILL.md")), `global skill missing SKILL.md: ${g.name}`).toBe(true);

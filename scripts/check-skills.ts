@@ -6,7 +6,7 @@
 //   C2 render:     AGENTS.md "Brain operations" rows == SKILL.md frontmatter `triggers`
 //                  (render output must equal what gen-assets would produce).
 //   C3 routing:    "Brain operations" / "Skill Governance" skill sets == skills-manifest
-//                  workbench list (excludes harness-config, a machine-global skill).
+//                  workbench list (excludes machine-global skills).
 //   C4 freshness:  re-running gen-assets leaves git diff clean (generated assets synced).
 //   C5 doc drift:  root README.md + AGENTS.md skill listings == skills-manifest
 //                  workbench + global names; "manifest 合计 N" matches manifest.
