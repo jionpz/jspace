@@ -2,6 +2,7 @@
 // (moved from cli/cron.ts cmdCronAdd/List/Remove). Installed-task checks are
 // injected (launchd plist inspection lands with the scheduler adapters).
 import { fail } from "../../core/shared/errors.ts";
+import { withWorkbenchMutationLock } from "../lock.ts";
 import type { CmdResult } from "../commands/command.ts";
 import { isId } from "../../core/contracts/ids.ts";
 import { findIndex } from "../registry/helpers.ts";
@@ -15,6 +16,22 @@ export interface CronInstalledCheck {
 }
 
 export function cronAdd(
+  root: string,
+  id: string,
+  schedule: string,
+  harness: string,
+  prompt: string,
+  disabled: boolean,
+  deps: CronInstalledCheck,
+  platform: NodeJS.Platform = process.platform,
+  tools?: string,
+): CmdResult {
+  return withWorkbenchMutationLock(root, () =>
+    cronAddImpl(root, id, schedule, harness, prompt, disabled, deps, platform, tools),
+  );
+}
+
+function cronAddImpl(
   root: string,
   id: string,
   schedule: string,
@@ -69,6 +86,10 @@ export function cronList(root: string, json: boolean): CmdResult {
 }
 
 export function cronRemove(root: string, id: string, deps: CronInstalledCheck): CmdResult {
+  return withWorkbenchMutationLock(root, () => cronRemoveImpl(root, id, deps));
+}
+
+function cronRemoveImpl(root: string, id: string, deps: CronInstalledCheck): CmdResult {
   const data = loadCrons(root);
   const index = findIndex(data.crons, id);
   if (index === null) fail(`no such cron: ${id}`);
@@ -82,6 +103,10 @@ export function cronRemove(root: string, id: string, deps: CronInstalledCheck): 
 }
 
 export function cronSetEnabled(root: string, id: string, enabled: boolean): CmdResult {
+  return withWorkbenchMutationLock(root, () => cronSetEnabledImpl(root, id, enabled));
+}
+
+function cronSetEnabledImpl(root: string, id: string, enabled: boolean): CmdResult {
   const data = loadCrons(root);
   const index = findIndex(data.crons, id);
   if (index === null) fail(`no such cron: ${id}`);

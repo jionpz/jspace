@@ -8,6 +8,7 @@ import { isId } from "../../core/contracts/ids.ts";
 import { normalizePortablePath } from "../../core/contracts/paths.ts";
 import { decodeHub, type Project } from "../../core/contracts/hub.ts";
 import { writeHubAtomic } from "../../adapters/fs/workbench-state.ts";
+import { withWorkbenchMutationLock } from "../lock.ts";
 import { loadHub } from "../workspace/state.ts";
 import { listProjectStates, type ProjectOverview } from "../context/project-states.ts";
 import type { GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
@@ -58,6 +59,18 @@ export async function projectListStatus(root: string, json: boolean, gbrain: Gbr
 }
 
 export function projectAdd(
+  root: string,
+  id: string,
+  domainOpt: string | undefined,
+  assetRelPathOpt: string | undefined,
+  dryRun: boolean,
+): CmdResult {
+  return dryRun
+    ? projectAddImpl(root, id, domainOpt, assetRelPathOpt, true)
+    : withWorkbenchMutationLock(root, () => projectAddImpl(root, id, domainOpt, assetRelPathOpt, false));
+}
+
+function projectAddImpl(
   root: string,
   id: string,
   domainOpt: string | undefined,
