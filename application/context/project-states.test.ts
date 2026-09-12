@@ -326,3 +326,75 @@ tags: [profile]
   expect(summarizeProfilePage(withNow)).toBe("偏好正文。");
   expect(summarizeStateCard(withNow)).toBe("项目进度不该当偏好摘要。");
 });
+
+// ---- contract: readers must not filter by `type` (2026-09-12 retro) ----
+// Writers legitimately produce typed pages (decision/project/lesson/…); an
+// earlier read-side `--type note` filter silently dropped every non-note state
+// card. These tests pin the port calls so the filter cannot creep back.
+test("collectActiveProjects / collectActiveProfiles / collectRecentKnowledge ask gbrain by tag only", async () => {
+  const seen: Array<Record<string, unknown>> = [];
+  const g = fakeGbrain({
+    list: async (opts) => {
+      seen.push(opts as Record<string, unknown>);
+      return { ok: true, rows: [] };
+    },
+  });
+  await collectActiveProjects(g);
+  await collectActiveProfiles(g);
+  await collectRecentKnowledge(g);
+  expect(seen).toEqual([
+    { tag: "project", limit: 100 },
+    { tag: "profile", limit: 100 },
+    { tag: "knowledge", limit: 50 },
+  ]);
+  for (const opts of seen) expect("type" in opts).toBe(false);
+});
+
+test("collectActiveProjects: a type: project state card is NOT dropped (agent-infra regression)", async () => {
+  const typedCard = CARD.replace("type: note", "type: project").replace("project: jspace", "project: agent-infra");
+  const g = fakeGbrain({
+    // gbrain applies the tag filter server-side; the reader must not add --type.
+    list: async () => ({ ok: true, rows: [{ slug: "project/agent-infra/state", updatedAt: "2026-09-05" }] }),
+    get: async () => ({ ok: true, content: typedCard }),
+  });
+  const r = await collectActiveProjects(g);
+  expect(r).toHaveLength(1);
+  expect(r[0].id).toBe("agent-infra");
+});
+
+// ---- parseNoteTags: both YAML styles the store actually contains ----
+test("parseNoteTags handles block-sequence tags and quoted values", () => {
+  const block = `---
+type: note
+project: jspace
+tags:
+  - retro
+  - 'source:session'
+  - weekly
+---
+# x
+`;
+  expect(parseNoteTags(block)).toEqual(["retro", "source:session", "weekly"]);
+  expect(isArchivedGbrainNote(block)).toBe(false);
+
+  // A block-style status:archived must gate injection exactly like the inline form.
+  const archivedBlock = `---
+tags:
+  - project
+  - status:archived
+---
+# old
+`;
+  expect(isArchivedGbrainNote(archivedBlock)).toBe(true);
+
+  // Inline form keeps working; `status:superseded` is readable either way.
+  expect(parseNoteTags(CARD)).toEqual(["project"]);
+  const supersededBlock = `---
+tags:
+  - knowledge
+  - status:superseded
+---
+# x
+`;
+  expect(parseNoteTags(supersededBlock)).toContain("status:superseded");
+});

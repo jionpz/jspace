@@ -41,15 +41,29 @@ export interface ProfileState {
   updatedAt: string;
 }
 
-/** Parse `tags: [...]` from a gbrain note frontmatter (minimal YAML subset). */
+/** Parse the `tags:` entry from a gbrain note frontmatter (minimal YAML subset).
+ *  Accepts both styles the store actually contains:
+ *    tags: [project, source:session]      (inline flow)
+ *    tags:\n  - project\n  - 'source:session'  (block sequence)
+ *  Only the inline form was parsed before, so every block-style page silently
+ *  lost its tags — `status:archived` / `weekly` / `status:superseded` gates
+ *  never fired for them. Quotes are stripped, not preserved.
+ */
 export function parseNoteTags(body: string): string[] {
   if (!body.startsWith("---")) return [];
   const end = body.indexOf("\n---", 3);
   if (end < 0) return [];
   const fm = body.slice(3, end);
-  const m = fm.match(/^tags:\s*\[([^\]]*)\]/m);
-  if (!m) return [];
-  return m[1].split(",").map((t) => t.trim()).filter(Boolean);
+  const inline = fm.match(/^tags:[ \t]*\[([^\]]*)\]/m);
+  if (inline) return inline[1].split(",").map((t) => t.trim()).filter(Boolean);
+  const block = fm.match(/^tags:[ \t]*\n((?:[ \t]+-[^\n]*\n?)*)/m);
+  if (!block) return [];
+  return block[1]
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("-"))
+    .map((l) => l.slice(1).trim().replace(/^[\'"]|[\'"]$/g, ""))
+    .filter(Boolean);
 }
 
 /** True when the note carries `status:archived` (retrieval-side lifecycle tag). */
@@ -69,7 +83,7 @@ export async function collectActiveProjects(
   gbrain: GbrainDeps,
   opts: CollectActiveProjectsOptions = {},
 ): Promise<ProjectState[]> {
-  const listed = await gbrain.list({ type: "note", tag: "project", limit: 100 });
+  const listed = await gbrain.list({ tag: "project", limit: 100 });
   if (!listed.ok || !listed.rows) return [];
 
   // Filter to the state-card namespace and sort by recency (list is already
@@ -98,7 +112,7 @@ export async function collectActiveProjects(
  */
 export async function collectActiveProfiles(gbrain: GbrainDeps): Promise<ProfileState[]> {
   try {
-    const listed = await gbrain.list({ type: "note", tag: "profile", limit: 100 });
+    const listed = await gbrain.list({ tag: "profile", limit: 100 });
     if (!listed.ok || !listed.rows) return [];
 
     const profileRows = listed.rows.filter((r) => /^profile\/[^/]+$/.test(r.slug));
@@ -173,7 +187,7 @@ export interface RecentKnowledgeEntry {
  *  Never throws; any failure resolves to an empty list. */
 export async function collectRecentKnowledge(gbrain: GbrainDeps): Promise<RecentKnowledgeEntry[]> {
   try {
-    const listed = await gbrain.list({ type: "note", tag: "knowledge", limit: 50 });
+    const listed = await gbrain.list({ tag: "knowledge", limit: 50 });
     if (!listed.ok || !listed.rows) return [];
 
     const eligible = listed.rows.filter(
@@ -237,7 +251,7 @@ export function parseStateCard(body: string): { what: string; now: string; next:
  *  (top-N active, one-line summary), this returns the full skeleton for all
  *  cards. Never throws — a gbrain failure resolves to an empty list. */
 export async function listProjectStates(gbrain: GbrainDeps): Promise<ProjectOverview[]> {
-  const listed = await gbrain.list({ type: "note", tag: "project", limit: 100 });
+  const listed = await gbrain.list({ tag: "project", limit: 100 });
   if (!listed.ok || !listed.rows) return [];
   const stateRows = listed.rows.filter((r) => /^project\/[^/]+\/state$/.test(r.slug));
   const out: ProjectOverview[] = [];
