@@ -22,16 +22,51 @@ export type FilehubBlockState =
   | { kind: "ok"; block: string }
   | { kind: "malformed"; reason: string };
 
+/** A fenced code block delimiter (CommonMark-flavored, deliberately small):
+ *  0-3 leading spaces, then a run of 3+ backticks or tildes. A backtick fence's
+ *  info string may not contain a backtick; a tilde fence's may contain anything. */
+const FENCE_RE = /^( {0,3})(`{3,}|~{3,})(.*)$/;
+
+function fenceOpens(line: string): { char: string; len: number } | null {
+  const m = FENCE_RE.exec(line);
+  if (!m) return null;
+  const [, , run, info] = m;
+  const char = run[0];
+  if (char === "`" && info.includes("`")) return null;
+  return { char, len: run.length };
+}
+
+/** A closing fence is the same character, at least as long as the opening run,
+ *  followed only by whitespace (a closing fence carries no info string). */
+function fenceCloses(line: string, open: { char: string; len: number }): boolean {
+  const m = FENCE_RE.exec(line);
+  if (!m) return false;
+  const [, , run, rest] = m;
+  return run[0] === open.char && run.length >= open.len && rest.trim() === "";
+}
+
 /** Line-anchored marker offsets: a line whose trimmed content is exactly the
  *  marker counts; an inline mention (`see <!-- JSPACE:FILEHUB:START --> xx`)
  *  does not. Returns the offset of the marker token itself, so callers can
- *  slice without assuming the marker sits at column 0. */
+ *  slice without assuming the marker sits at column 0.
+ *
+ *  Fenced code blocks are skipped: a marker shown inside a ```/~~~ example is
+ *  documentation, not a managed block. Counting it would make doctor report a
+ *  "duplicate markers" that the user cannot find, and `filehub upgrade` would
+ *  refuse to write a README that is actually fine. */
 function markerLineStarts(content: string, needle: string): number[] {
   const out: number[] = [];
   let at = 0;
+  let fence: { char: string; len: number } | null = null;
   for (const raw of content.split("\n")) {
     const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
-    if (line.trim() === needle) out.push(at + line.indexOf(needle));
+    if (fence === null) {
+      const open = fenceOpens(line);
+      if (open) fence = open;
+      else if (line.trim() === needle) out.push(at + line.indexOf(needle));
+    } else if (fenceCloses(line, fence)) {
+      fence = null;
+    }
     at += raw.length + 1;
   }
   return out;

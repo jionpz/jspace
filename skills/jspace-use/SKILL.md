@@ -198,6 +198,8 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 
 **`jspace doctor` 的体检诊断**:`domain.dormant` / `filehub.project_stale` 按上表阈值报 `info` 级(非 error——它只是提示"看一眼",mtime 会被 git clone / 网盘同步重写,阈值取保守值防误报)。
 
+大 filehub(项目/文件很多)时 doctor 会**限流保可读**:每类问题只列前 5 个具体项,再多就折成一行带总数的汇总(小工作台形态不变);mtime 新鲜度扫描有总预算,预算用尽时不再猜"是否过期",而是报一条 `filehub.scan_truncated` 说明"实际覆盖了 N/M 个项目"。看到它就把 `filehub.project_stale` 的计数读作**下界**,按上一节批量归档,下次再跑。
+
 ### 8.7 项目生命周期(立项 / 结项)
 
 项目横跨三层(资产层本体 / 控制平面挂接 / 记忆层实体),漏一层就会漂移——**最常见的坏味是「filehub 里有项目,域 README 和 registry 都不知道」**,后果是 `weekly-report` 的项目发现源失效。按下面两张清单走,别凭记忆。

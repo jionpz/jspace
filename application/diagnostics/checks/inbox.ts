@@ -8,7 +8,14 @@ import { countInbox } from "../../registry/inbox.ts";
 import { readEnvelopes } from "../../pending/envelope.ts";
 import { readJournals } from "../../ingest/journal.ts";
 import type { HubV1 } from "../../../core/contracts/hub.ts";
-import { DOMAIN_DORMANT_DAYS, lastActivityMs, PROJECT_STALE_DAYS } from "./shared.ts";
+import {
+  DOMAIN_DORMANT_DAYS,
+  lastActivityMs,
+  ACTIVITY_SCAN_BUDGET,
+  newActivityScanBudget,
+  PROJECT_STALE_DAYS,
+  pushCapped,
+} from "./shared.ts";
 import {
   FILEHUB_CONTRACT_VERSION,
   inspectFilehubContractBlock,
@@ -115,29 +122,76 @@ export function checkInbox(reads: WorkbenchReads): RegistryDiagnostic[] {
     });
   }
   if (projectNames !== null) {
-    for (const name of projectNames) {
-      if (name.startsWith(".")) continue;
-      const p = join(projectsDir, name);
-      if (probeDir(p) !== "dir") continue; // vanished / unreadable / not a dir
-      if (!registeredAssetPaths.has(`projects/${name}`)) {
-        diags.push({
-          severity: "info",
-          code: "registry.project_unlinked",
-          path: `filehub.projects.${name}`,
-          message: `filehub project ${name} is not registered in hub.json; weekly-report discovers projects from the registry and the domain README, so an unlinked project stays invisible — see jspace-use 8.7 (jspace project add <ascii-id> --asset-rel-path projects/${name})`,
-        });
-      }
-      const last = lastActivityMs(p);
-      if (last === 0) continue;
+    const dirs = projectNames
+      .filter((name) => !name.startsWith("."))
+      .map((name) => ({ name, abs: join(projectsDir, name) }))
+      .filter(({ abs }) => probeDir(abs) === "dir"); // vanished / unreadable / not a dir
+
+    // Registration drift is a cheap set lookup over the project list, so it is
+    // reported for every project; only the mtime walk below is budgeted.
+    pushCapped(
+      diags,
+      dirs.filter(({ name }) => !registeredAssetPaths.has(`projects/${name}`)).map(({ name }) => name),
+      (name) => ({
+        severity: "info",
+        code: "registry.project_unlinked",
+        path: `filehub.projects.${name}`,
+        message: `filehub project ${name} is not registered in hub.json; weekly-report discovers projects from the registry and the domain README, so an unlinked project stays invisible — see jspace-use 8.7 (jspace project add <ascii-id> --asset-rel-path projects/${name})`,
+      }),
+      (shown, total) => ({
+        severity: "info",
+        code: "registry.project_unlinked",
+        path: "filehub.projects",
+        message: `filehub: ${total} project(s) under projects/ are not registered in hub.json (the first ${shown} are listed above); register them in bulk — see jspace-use 8.7`,
+      }),
+    );
+
+    // One budget for the whole staleness pass: doctor's cost must not scale with
+    // the size of the asset tree, which is exactly where the command has to stay
+    // usable. Exhaustion is reported, never silently turned into a wrong verdict.
+    const budget = newActivityScanBudget();
+    const stale: { name: string; days: number }[] = [];
+    let scanned = 0;
+    for (const { name, abs } of dirs) {
+      if (budget.truncated) break;
+      // Short-circuit on the stale cutoff: "was anything touched in the last
+      // PROJECT_STALE_DAYS?" only needs the first recent entry it finds, so an
+      // active project costs O(1) instead of O(its whole tree).
+      const last = lastActivityMs(abs, {
+        stopWhenNewerThan: now - PROJECT_STALE_DAYS * 86_400_000,
+        budget,
+      });
+      scanned += 1;
+      if (budget.truncated || last === 0) continue; // lower bound: never call it stale
       const days = (now - last) / 86_400_000;
-      if (days >= PROJECT_STALE_DAYS) {
-        diags.push({
-          severity: "info",
-          code: "filehub.project_stale",
-          path: `filehub.projects.${name}`,
-          message: `filehub project ${name} untouched for ${Math.round(days)}d (≥${PROJECT_STALE_DAYS}d); archive to archive/<年>/ if closed — see jspace-use 8.7 (project lifecycle) / 8.6`,
-        });
-      }
+      if (days >= PROJECT_STALE_DAYS) stale.push({ name, days });
+    }
+    // The count is a fact only about the projects actually walked; say so on the
+    // line that makes the claim rather than leaving it to a line further down.
+    const coverage = budget.truncated ? `, of the ${scanned}/${dirs.length} project(s) checked` : "";
+    pushCapped(
+      diags,
+      stale,
+      ({ name, days }) => ({
+        severity: "info",
+        code: "filehub.project_stale",
+        path: `filehub.projects.${name}`,
+        message: `filehub project ${name} untouched for ${Math.round(days)}d (≥${PROJECT_STALE_DAYS}d); archive to archive/<年>/ if closed — see jspace-use 8.7 (project lifecycle) / 8.6`,
+      }),
+      (shown, total) => ({
+        severity: "info",
+        code: "filehub.project_stale",
+        path: "filehub.projects",
+        message: `filehub: ${total} project(s) untouched for ≥${PROJECT_STALE_DAYS}d${coverage} (the first ${shown} are listed above); archive the closed ones to archive/<年>/ — see jspace-use 8.7 / 8.6`,
+      }),
+    );
+    if (budget.truncated) {
+      diags.push({
+        severity: "info",
+        code: "filehub.scan_truncated",
+        path: `filehub.${fhRoot}`,
+        message: `filehub: freshness scan hit its ${ACTIVITY_SCAN_BUDGET}-entry budget and covered ${scanned} of ${dirs.length} project(s); the remaining ones were not checked — rerun doctor later or archive in bulk (see jspace-use 8.6)`,
+      });
     }
   }
   return diags;
@@ -300,16 +354,25 @@ export function checkFilehubContract(reads: WorkbenchReads): RegistryDiagnostic[
     }
   }
 
-  for (const { abs, rel } of scanRoots) {
-    const hits = legacyChildren(abs);
-    if (hits.length === 0) continue;
-    diags.push({
+  const offenders = scanRoots
+    .map(({ abs, rel }) => ({ rel, hits: legacyChildren(abs) }))
+    .filter(({ hits }) => hits.length > 0);
+  pushCapped(
+    diags,
+    offenders,
+    ({ rel, hits }) => ({
       severity: "warning",
       code: "filehub.legacy_taxonomy",
       path: `filehub.${rel}`,
       message: `legacy format director${hits.length === 1 ? "y" : "ies"} under ${rel}: ${hits.join(", ")}; format names must not be archive directories — migrate per asset-ingest/references/migration.md (explicit, per-file, rollback-able)`,
-    });
-  }
+    }),
+    (shown, total) => ({
+      severity: "warning",
+      code: "filehub.legacy_taxonomy",
+      path: "filehub",
+      message: `filehub: ${total} location(s) still use legacy format directories docs/ decks/ data/ notes/ (the first ${shown} are listed above); migrate per asset-ingest/references/migration.md (explicit, per-file, rollback-able)`,
+    }),
+  );
   return diags;
 }
 
@@ -366,7 +429,10 @@ export function checkDomains(root: string, hub: HubV1 | null): RegistryDiagnosti
   for (const d of hub?.domains ?? []) {
     const p = join(root, d.path);
     if (!existsSync(p) || !statSync(p).isDirectory()) continue;
-    const last = lastActivityMs(p);
+    // Short-circuit on the dormancy cutoff (same reasoning as the filehub
+    // projects pass). No entry budget here: domains live inside the workbench
+    // (git-managed, bounded by construction), unlike the asset layer.
+    const last = lastActivityMs(p, { stopWhenNewerThan: now - DOMAIN_DORMANT_DAYS * 86_400_000 });
     if (last === 0) continue;
     const days = (now - last) / 86_400_000;
     if (days >= DOMAIN_DORMANT_DAYS) {

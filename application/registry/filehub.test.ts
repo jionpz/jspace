@@ -280,6 +280,68 @@ test("an inline marker mention is not mistaken for a managed block", () => {
   expect(out).toContain("写法见 <!-- JSPACE:FILEHUB:START --> 一节");
 });
 
+test("a marker inside a fenced code block is documentation, not a block", () => {
+  const fenced = [
+    "# 用户说明",
+    "",
+    "```markdown",
+    "<!-- JSPACE:FILEHUB:START -->",
+    "示例正文",
+    "<!-- JSPACE:FILEHUB:END -->",
+    "```",
+    "",
+  ].join("\n");
+  expect(inspectFilehubContractBlock(fenced).kind).toBe("none");
+  const out = replaceFilehubContractBlock(fenced, "<!-- JSPACE:FILEHUB:START -->\nNEW\n<!-- JSPACE:FILEHUB:END -->");
+  expect(out).toContain("```markdown\n<!-- JSPACE:FILEHUB:START -->\n示例正文\n<!-- JSPACE:FILEHUB:END -->\n```");
+});
+
+test("a real block next to a fenced example is still the managed one", () => {
+  const content = [
+    "```",
+    "<!-- JSPACE:FILEHUB:START -->",
+    "<!-- JSPACE:FILEHUB:END -->",
+    "```",
+    "",
+    "<!-- JSPACE:FILEHUB:START -->",
+    "> filehub-contract-version: 3",
+    "<!-- JSPACE:FILEHUB:END -->",
+    "",
+  ].join("\n");
+  const state = inspectFilehubContractBlock(content);
+  expect(state.kind).toBe("ok");
+  expect(parseFilehubContractVersion((state as { block: string }).block)).toBe(3);
+});
+
+test("fence variants all suppress the markers inside them", () => {
+  const bodies = [
+    ["~~~", "~~~"], // tilde fence
+    ["````", "````"], // longer run
+    ["```markdown title=x", "```"], // info string, shorter-but-valid close
+    ["~~~ text", "~~~~"], // longer close
+    ["   ```", "   ```"], // up to 3 spaces of indent
+  ];
+  for (const [open, close] of bodies) {
+    const content = `# 用户说明\n\n${open}\n<!-- JSPACE:FILEHUB:START -->\nx\n<!-- JSPACE:FILEHUB:END -->\n${close}\n`;
+    expect(inspectFilehubContractBlock(content).kind).toBe("none");
+  }
+});
+
+test("a fence that never closes still suppresses the markers (fail-safe)", () => {
+  const content = "# 说明\n\n```\n<!-- JSPACE:FILEHUB:START -->\nx\n<!-- JSPACE:FILEHUB:END -->\n";
+  expect(inspectFilehubContractBlock(content).kind).toBe("none");
+});
+
+test("an indented (4-space) fence is not a fence — its markers still count", () => {
+  const content = "# 说明\n\n    ```\n<!-- JSPACE:FILEHUB:START -->\nx\n<!-- JSPACE:FILEHUB:END -->\n";
+  expect(inspectFilehubContractBlock(content).kind).toBe("ok");
+});
+
+test("a marker after a closed fence is counted again", () => {
+  const content = "```\ncode\n```\n\n<!-- JSPACE:FILEHUB:START -->\nx\n<!-- JSPACE:FILEHUB:END -->\n";
+  expect(inspectFilehubContractBlock(content).kind).toBe("ok");
+});
+
 test("upgrade resolves the registered filehub when no path is given", () => {
   const fh = join(wb, "filehub");
   filehubInit(fh, true, "files", fhDeps(wb), false);

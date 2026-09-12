@@ -822,6 +822,63 @@ test("registered project (ascii id bound to a free-form asset dir) -> no registr
   expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("registry.project_unlinked");
 });
 
+test("a large filehub collapses per-project fan-out into capped lines + a total", () => {
+  // 40 unlinked + stale projects used to mean 80 diagnostics (and 80 verbose
+  // lines) for ONE actionable fact; the first FANOUT_LIMIT stay concrete and
+  // the rest collapse into a counted line.
+  const fh = withFilehub([]);
+  const t = new Date(Date.now() - 200 * 86_400_000);
+  for (let i = 0; i < 40; i++) {
+    const p = join(fh, "projects", `p${i}`);
+    mkdirSync(p, { recursive: true });
+    writeFileSync(join(p, "index.md"), "x");
+    utimesSync(join(p, "index.md"), t, t);
+  }
+  const r = doctorWorkbench(root, stubDeps());
+  const c = codes(r);
+  expect(c.filter((x) => x === "registry.project_unlinked")).toHaveLength(6); // 5 + aggregate
+  expect(c.filter((x) => x === "filehub.project_stale")).toHaveLength(6);
+  const diags = (r.data as { diagnostics: { code: string; path: string; message: string }[] }).diagnostics;
+  const agg = diags.find((d) => d.code === "registry.project_unlinked" && d.path === "filehub.projects");
+  expect(agg?.message).toContain("40 project(s)");
+  // the aggregate is info-level: a messy asset tree never fails doctor
+  expect(r.exitCode ?? 0).toBe(0);
+});
+
+test("legacy format dirs in many locations collapse into one counted warning", () => {
+  const fh = withFilehub([]);
+  for (let i = 0; i < 12; i++) {
+    mkdirSync(join(fh, "areas", `a${i}`, "docs"), { recursive: true });
+  }
+  const diags = (doctorWorkbench(root, stubDeps()).data as { diagnostics: { code: string; path: string; message: string }[] }).diagnostics;
+  const legacy = diags.filter((d) => d.code === "filehub.legacy_taxonomy");
+  expect(legacy).toHaveLength(6); // 5 concrete roots + 1 aggregate
+  expect(legacy[5].path).toBe("filehub");
+  expect(legacy[5].message).toContain("12 location(s)");
+});
+
+test("an exhausted scan budget is reported instead of guessing at staleness", () => {
+  const fh = withFilehub([]);
+  const t = new Date(Date.now() - 200 * 86_400_000);
+  // each project is genuinely stale, so every walk runs to the end and drains
+  // the shared budget — the run must stop and say so, not fabricate verdicts.
+  for (let i = 0; i < 6; i++) {
+    const p = join(fh, "projects", `big${i}`);
+    for (let j = 0; j < 6000; j++) {
+      const d = join(p, `s${j % 3}`);
+      mkdirSync(d, { recursive: true });
+      const f = join(d, `f${j}.md`);
+      writeFileSync(f, "x");
+      utimesSync(f, t, t);
+    }
+  }
+  const diags = (doctorWorkbench(root, stubDeps()).data as { diagnostics: { code: string; message: string }[] }).diagnostics;
+  const trunc = diags.find((d) => d.code === "filehub.scan_truncated");
+  expect(trunc).toBeDefined();
+  expect(trunc!.message).toContain("budget");
+  expect(trunc!.message).toContain("not checked");
+}, 120_000);
+
 // ---- agentsmd.stale_outside_block: pre-block-era template residue ----------
 // Everything after JSPACE:END is user-owned, so upgrade never rewrites it and a
 // stale template dump there survives forever, injecting a second contradictory
