@@ -69,6 +69,18 @@ export interface SkillTargetContext {
 
 export type SkillTargetResult = { ok: true; prompt: string } | { ok: false; fix: string };
 
+/** Stamped at the head of every compiled skill-target prompt. A headless cron
+ *  child cannot tell how it was launched — cronSpawnEnv() only copies an
+ *  allowlist of EXISTING env vars, so it injects no marker — and that is exactly
+ *  how the write-side skills pick their provenance tag (`source:session` in a
+ *  session, `source:cron` under cron). The prompt is the one channel every cron
+ *  receives regardless of which tools it was granted, so the fact belongs here.
+ *  Getting it wrong silently zeroes the `source:cron` metric: on 2026-09-12 the
+ *  M7 R1 rehearsal wrote records/retro/2026-09-12 as `source:session` because the
+ *  agent read "cron run" as "in-session trigger". */
+export const CRON_RUN_MODE_NOTICE =
+  "【运行模式:无头 cron 触发(非人工会话)——本次写 gbrain 页的来源 tag 用 source:cron】";
+
 /** Validate a cron skill target against the workbench and compile its headless
  *  prompt. Pure (manifest/journal/fs injected). Fails before execution when the
  *  skill is unknown, its SKILL.md is missing, the entrypoint is not declared,
@@ -93,7 +105,7 @@ export function compileSkillTarget(target: CronSkillTarget, wbRoot: string, ctx:
   }
   return {
     ok: true,
-    prompt: `在工作台 ${wbRoot} 按 AGENTS.md 路由。阅读并执行 ${join(skillRootPath, "SKILL.md")} 的 ${target.entrypoint} 流程：${target.input}`,
+    prompt: `${CRON_RUN_MODE_NOTICE}\n在工作台 ${wbRoot} 按 AGENTS.md 路由。阅读并执行 ${join(skillRootPath, "SKILL.md")} 的 ${target.entrypoint} 流程：${target.input}`,
   };
 }
 

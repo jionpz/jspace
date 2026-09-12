@@ -157,6 +157,49 @@ for (const p of trash) rmSync(p, { recursive: true, force: true }); // outside t
 ```
 
 
+## Scenario: Headless cron provenance (source tag)
+
+### 1. Scope / Trigger
+
+- Trigger: any write whose gbrain page carries a provenance tag (`source:session` vs `source:cron`).
+- The tag is chosen by **run mode, not by skill**: the same skill writes `source:session` in a
+  session and `source:cron` under cron. Each write-side skill carries a 会话 / 无头(cron) row;
+  the discipline source is `skills/jspace-use/references/gbrain.md` 「Provenance tag」.
+- Goal: `source:cron` must be **countable**. The metric feeds `workbench-retro` check 1 and the
+  M7 memory-leg closing condition; a wrong tag is not a cosmetic defect, it silently zeroes a leg.
+
+### 2. Contracts
+
+- **The child cannot infer its own run mode.** `adapters/process/spawn.ts` `cronSpawnEnv()` copies
+  an allowlist of EXISTING env vars and injects no marker. A headless child therefore has no
+  machine-readable signal for "was I launched by the cron runner?" — do not assume it can deduce this.
+- **The prompt is the only channel every cron receives.** Cron definitions may carry a `tools`
+  allowlist and write-only crons are deliberately granted no Bash, so "read an env var" is not a
+  workable instruction for them. Run-mode facts belong in the compiled prompt.
+- `compileSkillTarget()` stamps `CRON_RUN_MODE_NOTICE` at the head of every skill-target prompt
+  (fact first, then the consequence: the tag is `source:cron`). The prose-prompt escape hatch
+  (`cron.prompt`) is passed through unchanged — it is user-owned free text, not part of this contract.
+- `compileSkillTarget()` is also called by `cron install` validation (result discarded), so stamping
+  must stay side-effect free.
+
+### 3. Validation & Error Matrix
+
+| Case | Required behavior |
+|---|---|
+| Skill-target cron reaches the harness | Prompt opens with the run-mode notice; the skill's own decision table picks the tag |
+| Prose-prompt cron | Prompt passes through byte-identical; no notice injected |
+| `cron install --dry-run` (skill validation) | Validation unaffected; no side effect from the stamp |
+| A page written by a headless run | `gbrain tags <slug>` contains `source:cron` — assert per page, not via `list` |
+
+### 4. Evidence (why this contract exists)
+
+Real-usage finding, 2026-09-12 M7 R1 rehearsal: `jspace cron run workbench-retro` produced
+`records/retro/2026-09-12` tagged `source:session`, because the page's own prose read
+"无头模式(会话内触发)" — the agent read `cron run` as an in-session trigger. Every rule document
+was already correct; only the *fact* was missing. Guarded by
+`application/automation/definitions.test.ts` (notice leads the compiled prompt) and
+`application/automation/execute.test.ts` (skill-target argv carries it; prose argv does not).
+
 ## Security & Red Lines (parent R8)
 
 - Secrets/tokens/provider credentials never appear in logs, state, or diagnostics output.
@@ -168,7 +211,7 @@ for (const p of trash) rmSync(p, { recursive: true, force: true }); // outside t
 
 ## Testing Requirements
 
-- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 861 tests across 72 files).
+- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 863 tests across 72 files).
 - New function → unit test; bug fix → regression test; changed behavior → update existing tests.
 - Fault-injection via injected deps (ingest journal fs ops, pending envelope gbrain stub).
 - Contract round-trip + decode-issue tests for every decoder.

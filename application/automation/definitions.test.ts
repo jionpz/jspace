@@ -9,7 +9,7 @@ import type { CronDefinition } from "../../core/contracts/cron.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
 import { sha256Of, diffBundle } from "../workspace/manifest.ts";
-import { compileSkillTarget, loadCrons, resolveCronPrompt, type SkillTargetContext } from "./definitions.ts";
+import { compileSkillTarget, CRON_RUN_MODE_NOTICE, loadCrons, resolveCronPrompt, type SkillTargetContext } from "./definitions.ts";
 
 const NEW_SKILL = "asset-ingest NEW content";
 const OLD_SKILL = "asset-ingest OLD content";
@@ -57,6 +57,21 @@ test("valid up-to-date skill target compiles a prompt with the skill path", () =
     expect(r.prompt).toContain(join("/wb", ".jspace/skills/asset-ingest/SKILL.md"));
     expect(r.prompt).toContain("batch");
     expect(r.prompt).toContain("整理 inbox");
+  }
+});
+
+// The headless child has no machine-readable signal for how it was launched
+// (cronSpawnEnv only copies an allowlist of existing vars), so the run mode must
+// be stated in the prompt — that is the only channel every cron receives. The
+// write-side skills pick their provenance tag off it; 2026-09-12's M7 R1
+// rehearsal wrote source:session because the fact was never delivered.
+test("compiled skill prompt opens with the cron run-mode notice (provenance tag)", () => {
+  const r = compileSkillTarget(targetCron().target!, "/wb", ctx());
+  expect(r.ok).toBe(true);
+  if (r.ok) {
+    expect(r.prompt.startsWith(CRON_RUN_MODE_NOTICE)).toBe(true);
+    expect(r.prompt).toContain("无头");
+    expect(r.prompt).toContain("source:cron");
   }
 });
 
