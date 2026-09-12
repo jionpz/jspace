@@ -3,7 +3,7 @@
 import type { DistributionManifestV1 } from "../core/contracts/distribution.ts";
 export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   schema_version: 1,
-  bundle_version: "1.0.19",
+  bundle_version: "1.0.19-2-gc57ad22",
   files: [
   { path: "templates/workbench/.claude/settings.json", sha256: "e58f63934ddef681f113eb50e6457447e4f1d000f1f78dbfd1fa571ac86f59fd", ownership: "seed" },
   { path: "templates/workbench/.cursor/hooks.json", sha256: "a8dbae5353c3380c0c640ae4881f6175a5578fc863516eb671ef4e13f9f2cf70", ownership: "seed" },
@@ -16,7 +16,7 @@ export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   { path: "templates/workbench/CLAUDE.md", sha256: "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49", ownership: "seed" },
   { path: "templates/workbench/README.md", sha256: "c89a6b18b9ab3fa8c76863c6b40a9996319d32142e290f51ad068ae0665b71e3", ownership: "seed" },
   { path: "templates/filehub/README.md", sha256: "f5b5becd3ca8691cf28182778720dbfd4c3899720627fa71bbcc9b2ec3ff1fbe", ownership: "managed" },
-  { path: "skills/jspace-use/SKILL.md", sha256: "37120acc41d6d5d50edfc57db94c120835e5acc6fe45956847b1f3e86f8f645c", ownership: "seed" },
+  { path: "skills/jspace-use/SKILL.md", sha256: "e6180c6f8b9e850b86c36e7ae56d5b25cd55d10aedfac6184dd2858a1b8342f9", ownership: "seed" },
   { path: "skills/jspace-use/agents/openai.yaml", sha256: "bcfce9990e7f8e1507e729c6c6afe2d93a61f20c34e2d78bb8caad6e3aa0a05c", ownership: "seed" },
   { path: "skills/jspace-use/references/example-first-use.md", sha256: "39fa9fccf21a6aca292102dc8131e5db7a6effc8ca5ca2ad2ac01e6c73b3b9b4", ownership: "seed" },
   { path: "skills/jspace-use/references/gbrain.md", sha256: "9fc4d6a2de7f9e377a00e15146bdb3063c192b9eb10a36eb18e5f3fdbcde6e51", ownership: "seed" },

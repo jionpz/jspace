@@ -9,6 +9,17 @@ import { isFile } from "../../fs.ts";
 import type { SkillsDeps } from "../deps.ts";
 import { BLOCK_END, diffDirs, RETIRED_SKILL_NAMES } from "./shared.ts";
 
+/** Existence probe that also sees dangling symlinks (existsSync does not), so a
+ *  retired name left as a broken link still counts as residue. */
+function present(p: string): boolean {
+  try {
+    lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Skill materialization health: orphan dirs, harness projection drift, legacy
  *  root copies, and the claude harness pointer (CLAUDE.md + context hooks). */
 export function checkSkills(root: string, deps: SkillsDeps): RegistryDiagnostic[] {
@@ -186,6 +197,28 @@ export function checkSkills(root: string, deps: SkillsDeps): RegistryDiagnostic[
           code: "skills.duplicate_roots",
           path: "skills",
           message: `official skill(s) visible from two discovery roots with different content: ${duplicates.slice(0, 5).join(", ")}${duplicates.length > 5 ? ", …" : ""} — harnesses that scan both ~/.agents/skills and the workbench projections (e.g. pi) warn on name collision; thin-link state (skills install inside the workbench + workspace upgrade) collapses them to one realpath`,
+        });
+      }
+
+      // Retired official names must not survive on a deployed machine: harnesses
+      // keep discovering them and injecting a contract JSpace no longer ships, so
+      // "the official skill set is ours" is only true once the name is gone.
+      // Present because a machine ran `jspace update` (binary only) and never the
+      // follow-up that materializes the skill layer.
+      const retiredLeft: string[] = [];
+      for (const name of RETIRED_SKILL_NAMES) {
+        for (const rel of ["skills", ...projDirs]) {
+          const entry = rel === "skills" ? join(root, CONFIG_DIR, "skills", name) : join(root, rel, name);
+          if (present(entry)) retiredLeft.push(`${rel === "skills" ? `${CONFIG_DIR}/skills` : rel}/${name}`);
+        }
+        if (present(join(userRoot, name))) retiredLeft.push(`~/.agents/skills/${name}`);
+      }
+      if (retiredLeft.length > 0) {
+        diags.push({
+          severity: "warning",
+          code: "skills.retired_present",
+          path: "skills",
+          message: `retired official skill(s) still materialized: ${retiredLeft.join(", ")} — a harness will keep injecting a contract JSpace no longer ships. Run jspace workspace upgrade (or jspace skills install --refresh) inside the workbench; it deletes retired names outright`,
         });
       }
     }

@@ -434,5 +434,7 @@ export async function cmdUpdate(check: boolean, targetVersion?: string, deps: Up
   // A matching checksum only proves the bytes are the ones we published — not
   // that they run here (AVX-less CPU, wrong arch asset). Prove it first.
   installBinary(execPath, bin, platform === "win32", { probe, target, asset, platform });
-  log(`已更新到 jspace ${target}。新终端生效，jspace --version 确认。`);
+  // The binary swap alone leaves the old skill layer in place; the follow-up
+  // `workspace upgrade` is also what deletes retired official skill names.
+  log(`已更新到 jspace ${target}。新终端生效（jspace --version 确认）；再到各工作台跑一次 jspace workspace upgrade，同步 skill 层并清掉退役的官方 skill。`);
 }

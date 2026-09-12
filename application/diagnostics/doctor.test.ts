@@ -1358,6 +1358,33 @@ test("healthy user-level dir links produce no duplicate/broken diagnostics (issu
   expect(c).not.toContain("skills.user_link_broken");
 });
 
+test("a retired official skill still materialized -> skills.retired_present (warning)", () => {
+  // The machine ran `jspace update` (binary only) and never the follow-up that
+  // materializes the skill layer, so a name we deleted keeps being injected.
+  const userSkills = join(root, "fake-home", ".agents", "skills");
+  mkdirSync(join(userSkills, "jspace-bootstrap"), { recursive: true });
+  writeFileSync(join(userSkills, "jspace-bootstrap", "SKILL.md"), "# old");
+  // also as a dangling link in a workbench projection: still residue
+  mkdirSync(join(root, ".claude", "skills"), { recursive: true });
+  symlinkSync(join(root, "gone"), join(root, ".claude", "skills", "jspace-bootstrap"), "dir");
+
+  const r = doctorWorkbench(root, stubDeps({ userSkillsRoot: () => userSkills }));
+  const diags = (r.data as { diagnostics: { code: string; severity: string; message: string }[] }).diagnostics;
+  const d = diags.find((x) => x.code === "skills.retired_present");
+  expect(d).toBeDefined();
+  expect(d!.severity).toBe("warning");
+  expect(d!.message).toContain("~/.agents/skills/jspace-bootstrap");
+  expect(d!.message).toContain(".claude/skills/jspace-bootstrap");
+  expect(d!.message).toContain("jspace workspace upgrade");
+});
+
+test("no retired residue -> no skills.retired_present", () => {
+  const userSkills = join(root, "fake-home", ".agents", "skills");
+  mkdirSync(join(userSkills, "harness-config"), { recursive: true }); // user/global skill, not retired
+  const r = doctorWorkbench(root, stubDeps({ userSkillsRoot: () => userSkills }));
+  expect(codes(r)).not.toContain("skills.retired_present");
+});
+
 // ---- machine-global governance detection (injected temp home only) ---------
 
 const GOVERNANCE_BODY = [

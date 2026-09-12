@@ -170,6 +170,8 @@ jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pend
 - **提议信号**(满足 ≥2 条):代理反复需要同一非显然流程;流程跨多文件/工具/域;需要清晰自动触发规则;没有可复用检查清单代价高;太过程式化不适合根 `AGENTS.md`、又太横切不适合单一域 README;用户显式要可复用 AI 能力。
 - **禁区**:一次性笔记、简单域元数据、应进 `AGENTS.md` 的编码约定、大段内容 dump、能清楚放进 `AGENTS.md` 或域 README 的规则。
 - **用户确认前置**:根 `skills/` 只放用户自建 skill,创建前必须用户确认。
+- **官方 skill 完全受 JSpace 托管**:`.jspace/skills/<name>/` 是唯一物理副本,`~/.agents/skills/<name>` 与各工作台投影目录都是链接。同名真实目录不算"本地改动要保留",而是**过期机器状态** —— `jspace workspace upgrade` / `jspace skills install --refresh` 会把它收敛成链接并如实报告(本地改动不被保留)。官方 skill 被改名或删除时,旧名字由 `application/skills/retired.ts` 的退役名单接管,在 SSOT、投影目录、`~/.agents/skills/` 三处**直接删除**(含非空目录与悬挂链接):被删的 skill 不能靠"用户可能改过"活下来,那正是旧契约升级后继续被注入的路径。
+- **`jspace update` 只换二进制,不动 skill 层**。所以升级后每个工作台还要跑一次 `jspace workspace upgrade`(它才会刷新/收敛/清理 skill)。doctor 的 `skills.retired_present`(warning)就是"只 update 过、还没 upgrade"的信号 —— 处置:`jspace workspace upgrade --dir <workbench>`。
 
 ### 8.4 cron
 
