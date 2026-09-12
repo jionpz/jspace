@@ -8,22 +8,25 @@
 // privilege fall back to a junction (Windows) or a VISIBLY reported copy —
 // never a silent look-alike copy.
 //
-// Only manifest-declared skill names are managed here; user-created dirs in a
-// projection root are never touched (empty leftovers of RETIRED skills are the
-// one exception — they are machine residue, not user content).
-import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync } from "node:fs";
+// The official skill set is FULLY managed: a real dir under a manifest name is
+// stale machine state and is converged to the link (never kept divergent), and
+// RETIRED names are DELETED outright — a renamed/removed official skill must not
+// survive on a deployed machine. User-created dirs under other names are still
+// never touched (empty leftovers are the only other thing swept).
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import type { MaterializedLinkEntry } from "../../core/contracts/materialized.ts";
 import { skillRoot } from "../fs.ts";
 import { diffDirs } from "../diagnostics/checks/shared.ts";
+import { retiredSet } from "../skills/retired.ts";
 
 export type ProjectionLinkMode = "link" | "junction" | "copy";
 
 export interface LinkOp {
   /** Projection entry path relative to the workbench root. */
   rel: string;
-  action: "create" | "relink" | "collapse" | "replace-remnant" | "keep-divergent" | "no-op";
+  action: "create" | "relink" | "collapse" | "replace-remnant" | "converge" | "no-op";
   /** Link target text as written (relative for in-workbench projections,
    *  absolute for user-level). */
   target: string;
@@ -90,13 +93,14 @@ function classifyEntry(entryAbs: string, ssotDir: string): LinkOp["action"] {
     }
   }
   if (lst.isFile()) return "replace-remnant"; // Windows git checkout w/ core.symlinks=false
-  // real dir: residue-only (e.g. emptied by the per-file `remove` path) or
-  // content-equal dirs collapse into the link; anything with unmanaged user
-  // content is kept as a divergent copy (never destroyed).
+  // Real dir under a MANAGED name: either residue-only (e.g. emptied by the
+  // per-file `remove` path) or genuinely divergent — both end as a link, because
+  // official skills are entirely ours. `collapse` = byte-equivalent, so it can be
+  // done quietly; `converge` = content differs and the replacement is reported.
   if (isResidueOnly(entryAbs) || (diffDirs(ssotDir, entryAbs).length === 0 && !hasUnmanagedEntries(entryAbs, ssotDir))) {
     return "collapse";
   }
-  return "keep-divergent";
+  return "converge";
 }
 
 /** Create a directory symlink at `entryAbs` whose stored target text is
@@ -150,8 +154,8 @@ export function planProjectionLinks(root: string, opts: ProjectionPlanOptions): 
         rel,
         action,
         target: relativeTarget(projectionRootAbs, ssotDir),
-        ...(action === "keep-divergent"
-          ? { mode: "copy" as const, detail: "content differs from SSOT; kept as copy (delete it and re-run jspace workspace upgrade to converge)" }
+        ...(action === "converge"
+          ? { detail: "content differs from SSOT; replaced by a dir link (official skills are managed — local edits there are not preserved)" }
           : {}),
       });
     }
@@ -174,58 +178,94 @@ export function applyProjectionLinks(root: string, opts: ProjectionPlanOptions):
         links[op.rel] = { target: op.target, mode: "link" };
         continue;
       }
-      if (op.action === "keep-divergent") {
-        links[op.rel] = { target: op.target, mode: "copy" };
-        lines.push(`jspace: info: ${op.rel} kept as copy: ${op.detail}`);
-        continue;
-      }
+      const converging = op.action === "converge";
       rmSync(entryAbs, { recursive: true, force: true });
       const mode = createSymlink(entryAbs, op.target, resolve(projectionRootAbs, op.target));
       links[op.rel] = { target: op.target, mode };
-      if (mode === "copy") {
+      if (converging) {
+        lines.push(`jspace: info: ${op.rel} replaced a divergent copy with a ${mode === "copy" ? "COPY" : "dir link"} to the bundle SSOT (official skills are managed; local edits there are not preserved)`);
+      } else if (mode === "copy") {
         lines.push(`jspace: info: ${op.rel} materialized as COPY (symlink unavailable on this platform); content is a snapshot, not a link`);
       }
     }
-    sweepResidue(projectionRootAbs, opts.skillNames);
+    for (const name of sweepResidue(projectionRootAbs, opts.skillNames)) {
+      lines.push(`jspace: info: removed retired official skill ${proj}/${name} (no longer shipped by jspace)`);
+    }
   }
   return { links, lines };
 }
 
-/** Remove machine residue in a projection root: empty dirs left behind by
- *  retired-skill cleanup (their files go through the journal `remove` path).
- *  Managed (manifest) skill entries belong to the link flow above and are
- *  never swept here; non-empty user dirs are never touched. */
-function sweepResidue(projectionRootAbs: string, managed: string[]): void {
-  if (!existsSync(projectionRootAbs)) return;
+/** Remove machine residue in a projection root:
+ *  - a RETIRED official name: any entry (dir, file, dangling link), empty or
+ *    not — we own the name, so a deleted/renamed skill must not survive;
+ *  - any other non-managed EMPTY dir: residue of the retired-skill file cleanup.
+ *  Managed (manifest) names belong to the link flow above; anything else with
+ *  content is a user skill and is never touched. Returns removed retired names. */
+function sweepResidue(projectionRootAbs: string, managed: string[]): string[] {
+  const removed: string[] = [];
+  if (!existsSync(projectionRootAbs)) return removed;
   const managedNames = new Set(managed);
+  const retired = retiredSet(managed);
   for (const name of readdirSync(projectionRootAbs)) {
     if (managedNames.has(name)) continue;
     const p = join(projectionRootAbs, name);
-    let st;
+    let lst;
     try {
-      st = statSync(p);
+      lst = lstatSync(p); // lstat: a dangling retired link must still be removable
     } catch {
       continue;
     }
-    if (!st.isDirectory()) continue;
+    if (retired.has(name)) {
+      rmSync(p, { recursive: true, force: true });
+      removed.push(name);
+      continue;
+    }
+    if (lst.isSymbolicLink() || !lst.isDirectory()) continue;
     if (readdirSync(p).length === 0) rmSync(p, { recursive: true });
   }
+  return removed;
 }
 
 /** Ensure the USER-level skill entry (`~/.agents/skills/<name>`) is a directory
  *  link to the workbench SSOT. Same classification rules as workbench
- *  projections; `divergent: true` means a locally-different real dir was KEPT
- *  (never destroyed) — caller surfaces it. */
+ *  projections. `divergent: true` means a real dir with different content stood
+ *  where the link belongs; it is REPLACED (official skills are fully managed, so
+ *  we never leave a stale copy behind) and the caller surfaces the replacement. */
 export function ensureUserSkillLink(
   entryAbs: string,
   ssotDirAbs: string,
 ): { mode: ProjectionLinkMode; changed: boolean; divergent: boolean } {
   const action = classifyEntry(entryAbs, ssotDirAbs);
   if (action === "no-op") return { mode: "link", changed: false, divergent: false };
-  if (action === "keep-divergent") return { mode: "copy", changed: false, divergent: true };
+  const convergent = action === "converge";
   rmSync(entryAbs, { recursive: true, force: true });
   const mode = createSymlink(entryAbs, ssotDirAbs, ssotDirAbs);
-  return { mode, changed: true, divergent: false };
+  return { mode, changed: true, divergent: convergent };
+}
+
+/** Remove RETIRED official skills from a USER-level skill root. Machine residue
+ *  by definition — we own these names, so a dangling link or a non-empty stale
+ *  copy goes too, not just empty dirs. Returns the removed names. */
+export function removeRetiredUserSkills(
+  userRoot: string,
+  officialNow: readonly string[],
+  dryRun = false,
+): string[] {
+  const retired = retiredSet(officialNow);
+  if (retired.size === 0) return [];
+  let names: string[];
+  try {
+    names = readdirSync(userRoot);
+  } catch {
+    return []; // not installed / unreadable — nothing to clean
+  }
+  const removed: string[] = [];
+  for (const name of names) {
+    if (!retired.has(name)) continue;
+    if (!dryRun) rmSync(join(userRoot, name), { recursive: true, force: true });
+    removed.push(name);
+  }
+  return removed.sort();
 }
 
 /** Read-only classification for a user-level entry — dry-run surface of

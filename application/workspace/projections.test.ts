@@ -5,10 +5,10 @@
 // user-level ensureUserSkillLink primitive.
 // Run: bun test application/workspace/projections.test.ts
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyProjectionLinks, ensureUserSkillLink, manifestSkillNames, planProjectionLinks } from "./projections.ts";
+import { applyProjectionLinks, ensureUserSkillLink, manifestSkillNames, planProjectionLinks, removeRetiredUserSkills } from "./projections.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import { sha256Of } from "./manifest.ts";
 
@@ -54,7 +54,7 @@ test("fresh workbench: plan is all create; apply creates dir links resolving to 
   rmSync(root, { recursive: true, force: true });
 });
 
-test("legacy identical copy collapses into a link; divergent copy is kept and reported", () => {
+test("legacy identical copy collapses; divergent copy is CONVERGED and reported", () => {
   const root = makeTree("v1");
   // identical legacy copy (the pre-thin-link world)
   mkdirSync(join(root, ".claude/skills/jspace-use"), { recursive: true });
@@ -65,24 +65,26 @@ test("legacy identical copy collapses into a link; divergent copy is kept and re
 
   const plan = planProjectionLinks(root, OPTS(manifestWithSkill("v1")));
   expect(plan.find((o) => o.rel === ".claude/skills/jspace-use")?.action).toBe("collapse");
-  expect(plan.find((o) => o.rel === ".agents/skills/jspace-use")?.action).toBe("keep-divergent");
+  expect(plan.find((o) => o.rel === ".agents/skills/jspace-use")?.action).toBe("converge");
 
   const r = applyProjectionLinks(root, OPTS(manifestWithSkill("v1")));
   expect(realpathSync(join(root, ".claude/skills/jspace-use"))).toBe(realpathSync(join(root, ".jspace/skills/jspace-use")));
-  expect(r.links[".agents/skills/jspace-use"]?.mode).toBe("copy");
-  expect(r.lines.some((l) => l.includes(".agents/skills/jspace-use") && l.includes("kept as copy"))).toBe(true);
-  // the divergent copy's content is untouched on disk
-  expect(readFileSync(join(root, ".agents/skills/jspace-use/SKILL.md"), "utf-8")).toBe("user-edit");
+  // official skills are fully managed: the stale copy is replaced by a link, so
+  // every discovery root resolves to one realpath (issue #39's whole point).
+  expect(r.links[".agents/skills/jspace-use"]?.mode).toBe("link");
+  expect(realpathSync(join(root, ".agents/skills/jspace-use"))).toBe(realpathSync(join(root, ".jspace/skills/jspace-use")));
+  expect(r.lines.some((l) => l.includes(".agents/skills/jspace-use") && l.includes("replaced a divergent copy"))).toBe(true);
+  expect(readFileSync(join(root, ".agents/skills/jspace-use/SKILL.md"), "utf-8")).toBe("v1");
   rmSync(root, { recursive: true, force: true });
 });
 
-test("copy with an unmanaged extra file is kept (never collapses user files away)", () => {
+test("copy with an unmanaged extra file under a MANAGED name is still converged", () => {
   const root = makeTree("v1");
   mkdirSync(join(root, ".claude/skills/jspace-use"), { recursive: true });
   writeFileSync(join(root, ".claude/skills/jspace-use/SKILL.md"), "v1");
   writeFileSync(join(root, ".claude/skills/jspace-use/my-notes.md"), "user content");
   const plan = planProjectionLinks(root, OPTS(manifestWithSkill("v1")));
-  expect(plan.find((o) => o.rel === ".claude/skills/jspace-use")?.action).toBe("keep-divergent");
+  expect(plan.find((o) => o.rel === ".claude/skills/jspace-use")?.action).toBe("converge");
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -120,6 +122,22 @@ test("user-created entries in a projection root are untouched; empty retired dir
   rmSync(root, { recursive: true, force: true });
 });
 
+test("a NON-empty retired official skill dir in a projection root is deleted, user skills untouched", () => {
+  const root = makeTree("v1");
+  // a stale full copy of the skill we renamed away (NOT empty — the old sweep
+  // only removed empty dirs, so this is what survived on deployed machines)
+  mkdirSync(join(root, ".claude/skills/jspace-bootstrap"), { recursive: true });
+  writeFileSync(join(root, ".claude/skills/jspace-bootstrap/SKILL.md"), "OLD SKILL");
+  mkdirSync(join(root, ".claude/skills/my-own"), { recursive: true });
+  writeFileSync(join(root, ".claude/skills/my-own/SKILL.md"), "user skill");
+
+  const r = applyProjectionLinks(root, OPTS(manifestWithSkill("v1")));
+  expect(existsSync(join(root, ".claude/skills/jspace-bootstrap"))).toBe(false);
+  expect(r.lines.some((l) => l.includes("removed retired official skill") && l.includes("jspace-bootstrap"))).toBe(true);
+  expect(readFileSync(join(root, ".claude/skills/my-own/SKILL.md"), "utf-8")).toBe("user skill");
+  rmSync(root, { recursive: true, force: true });
+});
+
 test("an emptied legacy copy dir (post remove-machinery) is adopted as a link, not kept as divergent", () => {
   const root = makeTree("v1");
   mkdirSync(join(root, ".claude/skills/jspace-use"), { recursive: true }); // empty residue
@@ -131,7 +149,7 @@ test("an emptied legacy copy dir (post remove-machinery) is adopted as a link, n
   rmSync(root, { recursive: true, force: true });
 });
 
-test("ensureUserSkillLink: create, no-op, and divergent keep (never destroyed)", () => {
+test("ensureUserSkillLink: create, no-op, and divergent copy REPLACED by the link", () => {
   const ssot = join(mkdtempSync(join(tmpdir(), "jspace-ul-")), "wb", ".jspace/skills/jspace-use");
   mkdirSync(ssot, { recursive: true });
   writeFileSync(join(ssot, "SKILL.md"), "v1");
@@ -146,12 +164,38 @@ test("ensureUserSkillLink: create, no-op, and divergent keep (never destroyed)",
   const r2 = ensureUserSkillLink(entry, ssot);
   expect(r2).toEqual({ mode: "link", changed: false, divergent: false });
 
-  // divergent real dir where the link belongs: kept, reported, never deleted
+  // divergent real dir where the link belongs: REPLACED (official skills are
+  // fully managed — leaving it would let a harness read a stale contract)
   rmSync(entry);
   mkdirSync(entry, { recursive: true });
   writeFileSync(join(entry, "SKILL.md"), "user-edit");
   const r3 = ensureUserSkillLink(entry, ssot);
   expect(r3.divergent).toBe(true);
-  expect(readFileSync(join(entry, "SKILL.md"), "utf-8")).toBe("user-edit");
+  expect(r3.changed).toBe(true);
+  expect(realpathSync(entry)).toBe(realpathSync(ssot));
+  expect(readFileSync(join(entry, "SKILL.md"), "utf-8")).toBe("v1");
+  rmSync(home, { recursive: true, force: true });
+});
+
+test("removeRetiredUserSkills deletes a NON-empty retired official skill dir", () => {
+  const home = mkdtempSync(join(tmpdir(), "jspace-ul-retired-"));
+  const userRoot = join(home, ".agents/skills");
+  // a stale full copy of a skill we renamed away, plus a live one and a user skill
+  mkdirSync(join(userRoot, "jspace-bootstrap"), { recursive: true });
+  writeFileSync(join(userRoot, "jspace-bootstrap/SKILL.md"), "OLD SKILL");
+  mkdirSync(join(userRoot, "jspace-use"), { recursive: true });
+  writeFileSync(join(userRoot, "jspace-use/SKILL.md"), "current");
+  mkdirSync(join(userRoot, "my-own-skill"), { recursive: true });
+
+  const removed = removeRetiredUserSkills(userRoot, ["jspace-use", "asset-ingest"]);
+  expect(removed).toEqual(["jspace-bootstrap"]);
+  expect(existsSync(join(userRoot, "jspace-bootstrap"))).toBe(false);
+  expect(existsSync(join(userRoot, "jspace-use"))).toBe(true);
+  expect(existsSync(join(userRoot, "my-own-skill"))).toBe(true); // never touched
+
+  // dry-run reports without deleting
+  mkdirSync(join(userRoot, "jspace-bootstrap"), { recursive: true });
+  expect(removeRetiredUserSkills(userRoot, ["jspace-use"], true)).toEqual(["jspace-bootstrap"]);
+  expect(existsSync(join(userRoot, "jspace-bootstrap"))).toBe(true);
   rmSync(home, { recursive: true, force: true });
 });

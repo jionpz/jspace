@@ -9,7 +9,7 @@ import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CommandSpec, CmdContext, CmdResult } from "../../application/commands/command.ts";
 import { installSkills, type InstallDeps, type InstallResult } from "../../application/skills/install.ts";
-import { classifyUserSkillLink, ensureUserSkillLink } from "../../application/workspace/projections.ts";
+import { classifyUserSkillLink, ensureUserSkillLink, removeRetiredUserSkills } from "../../application/workspace/projections.ts";
 import { ASSETS } from "../assets.generated.ts";
 import { GLOBAL_SKILLS } from "../global-skills.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
@@ -60,11 +60,7 @@ const installDeps = (dryRun: boolean, wbRoot?: string): InstallDeps => ({
   ensureSkillDirLink: dryRun
     ? (entry, ssot) => {
         const a = classifyUserSkillLink(entry, ssot);
-        return {
-          mode: a === "keep-divergent" ? "copy" : "link",
-          changed: a !== "no-op",
-          divergent: a === "keep-divergent",
-        };
+        return { mode: "link", changed: a !== "no-op", divergent: a === "converge" };
       }
     : ensureUserSkillLink,
 });
@@ -80,7 +76,17 @@ export function installHandler(
     const names = [...SKILLS_MANIFEST.workbench, ...SKILLS_MANIFEST.global].map((s) => s.name);
     const r = installSkills(deps, names, { refresh: b(args?.refresh) });
     const root = userSkillsRoot();
-    return { lines: summarizeInstall(r, root, ctx.dryRun) };
+    const lines = summarizeInstall(r, root, ctx.dryRun);
+    // Official skills are fully managed: a renamed/deleted skill must not linger
+    // in ~/.agents/skills and keep being discovered by harnesses.
+    for (const name of removeRetiredUserSkills(root, names, ctx.dryRun)) {
+      lines.push(
+        ctx.dryRun
+          ? `jspace: info: (dry-run) would remove retired official skill ${join(root, name)}`
+          : `jspace: info: removed retired official skill ${join(root, name)} (no longer shipped by jspace)`,
+      );
+    }
+    return { lines };
   } catch (e) {
     return { lines: [], errors: [`skills install: ${e instanceof Error ? e.message : String(e)}`], exitCode: 1 };
   }
@@ -106,8 +112,8 @@ function summarizeInstall(r: InstallResult, root: string, dryRun: boolean): stri
       // thin-link materialization (issue #39): one line per skill, fallback and
       // keeps explicitly visible — never a silent look-alike copy.
       const suffix =
-        s.link.action === "kept-divergent"
-          ? " (kept as COPY: differs from workbench SSOT; delete it and re-run to converge)"
+        s.link.action === "replaced-divergent"
+          ? " (divergent copy REPLACED by dir link -> workbench SSOT; official skills are managed, local edits there are not preserved)"
           : s.link.action === "created"
             ? s.link.mode === "copy"
               ? " (materialized as COPY: symlink unavailable on this platform)"

@@ -10,12 +10,16 @@
 //   C4 freshness:  re-running gen-assets leaves git diff clean (generated assets synced).
 //   C5 doc drift:  root README.md + AGENTS.md skill listings == skills-manifest
 //                  workbench + global names; "manifest 合计 N" matches manifest.
+//   C6 retired:    RETIRED_SKILL_NAMES never overlaps the live manifest (a name
+//                  that ships AND is on the delete list would be installed and
+//                  removed in the same run).
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { decodeSkillsManifest } from "../core/contracts/skills.ts";
 import { checkDocSkillListing, loadManifestSkillSets } from "./skill-doc-drift.ts";
 import { readWorkbenchSkills } from "./skill-frontmatter.ts";
+import { RETIRED_SKILL_NAMES } from "../application/skills/retired.ts";
 
 const repoRoot = resolve(import.meta.dir, "..");
 const failures: string[] = [];
@@ -159,6 +163,24 @@ function pass(label: string): void {
     }
   } catch (e) {
     fail(`C4 gen-assets failed: ${(e as Error).message}`);
+  }
+}
+
+// ---- C6: retired names must not still ship -----------------------------------
+{
+  // Reuse the C5 loader: an undecodable manifest is already reported there, so a
+  // bad manifest just means "no live names to compare" here — never double-report.
+  const live = new Set<string>();
+  const sets = loadManifestSkillSets(repoRoot);
+  if (!("error" in sets)) {
+    for (const name of [...sets.workbench, ...sets.global]) live.add(name);
+  }
+  const overlap = RETIRED_SKILL_NAMES.filter((n) => live.has(n));
+  for (const name of overlap) {
+    fail(`C6 retired skill "${name}" is still in skills-manifest.json — it would be installed and deleted in the same run; remove it from application/skills/retired.ts when a name ships again`);
+  }
+  if (overlap.length === 0) {
+    pass(`C6 retired skill list (${RETIRED_SKILL_NAMES.length}) does not overlap the live manifest`);
   }
 }
 

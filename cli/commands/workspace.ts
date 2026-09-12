@@ -5,7 +5,7 @@ import type { CommandSpec } from "../../application/commands/command.ts";
 import { workspaceDiff, workspaceUpgrade } from "../../application/workspace/workspace.ts";
 import { doctorWorkbench, type CronHealthDeps } from "../../application/diagnostics/doctor.ts";
 import { installSkills, type InstallDeps } from "../../application/skills/install.ts";
-import { ensureUserSkillLink } from "../../application/workspace/projections.ts";
+import { ensureUserSkillLink, removeRetiredUserSkills } from "../../application/workspace/projections.ts";
 import { cmdUpdate } from "../update.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
@@ -41,13 +41,31 @@ function refreshExternalSkills(wbRoot: string): string[] {
   };
   const names = [...SKILLS_MANIFEST.workbench, ...SKILLS_MANIFEST.global].map((skill) => skill.name);
   const r = installSkills(deps, names, { refresh: true });
+  const lines: string[] = [];
   const updated = r.skills.flatMap((skill) => skill.updated.map((rel) => `${skill.name}/${rel}`));
-  const linked = r.skills.filter((skill) => skill.link !== undefined).length;
-  if (updated.length === 0 && linked > 0)
-    return [`jspace: ok: user-level skills follow the workbench SSOT (${linked} dir link(s) active)`];
-  if (updated.length === 0) return ["jspace: ok: user-level skills up to date (~/.agents/skills)"];
-  const shown = updated.slice(0, 5).join(", ");
-  return [`jspace: ok: refreshed ${updated.length} user-level skill file(s) in ~/.agents/skills: ${shown}${updated.length > 5 ? " …" : ""}`];
+  // Count real links only: a copy fallback is not "following the SSOT", and
+  // over-claiming it was exactly the misleading "dir link(s) active" line.
+  const linked = r.skills.filter((s) => s.link !== undefined && s.link.mode !== "copy").length;
+  const copies = r.skills.filter((s) => s.link?.mode === "copy").length;
+  for (const s of r.skills) {
+    if (s.link?.action === "replaced-divergent") {
+      lines.push(`jspace: info: ~/.agents/skills/${s.name} held a divergent copy; replaced by a dir link to the workbench SSOT (official skills are managed)`);
+    }
+  }
+  if (updated.length === 0 && linked > 0) {
+    lines.push(`jspace: ok: user-level skills follow the workbench SSOT (${linked} dir link(s) active${copies > 0 ? `, ${copies} copy fallback(s)` : ""})`);
+  } else if (updated.length === 0) {
+    lines.push("jspace: ok: user-level skills up to date (~/.agents/skills)");
+  } else {
+    const shown = updated.slice(0, 5).join(", ");
+    lines.push(`jspace: ok: refreshed ${updated.length} user-level skill file(s) in ~/.agents/skills: ${shown}${updated.length > 5 ? " …" : ""}`);
+  }
+  // A renamed/deleted official skill must not linger in ~/.agents/skills where
+  // harnesses still discover it (that is how a stale contract survives an upgrade).
+  for (const name of removeRetiredUserSkills(userSkillsRoot(), names)) {
+    lines.push(`jspace: info: removed retired official skill ~/.agents/skills/${name} (no longer shipped by jspace)`);
+  }
+  return lines;
 }
 
 export const updateSpec: CommandSpec = {

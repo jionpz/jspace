@@ -18,7 +18,7 @@ export interface InstallResult {
     created: string[];
     updated: string[];
     skipped: string[];
-    link?: { mode: "link" | "junction" | "copy"; action: "created" | "active" | "kept-divergent" };
+    link?: { mode: "link" | "junction" | "copy"; action: "created" | "active" | "replaced-divergent" };
   }[];
 }
 
@@ -79,7 +79,7 @@ export function installSkills(deps: InstallDeps, skillNames: string[], opts: Ins
         created: [],
         updated: [],
         skipped: [],
-        link: { mode: r.mode, action: r.divergent ? "kept-divergent" : r.changed ? "created" : "active" },
+        link: { mode: r.mode, action: r.divergent ? "replaced-divergent" : r.changed ? "created" : "active" },
       });
       continue;
     }

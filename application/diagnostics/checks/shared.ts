@@ -13,11 +13,10 @@ export const PROJECT_STALE_DAYS = 120;
  *  surface a pre-block-era template dump left behind there. */
 export const BLOCK_END = "<!-- JSPACE:END -->";
 
-/** Official skill names that no longer ship. A mention outside the managed
- *  block is proof of stale template residue (jspace-bootstrap was renamed to
- *  jspace-use in v1.0.9). Kept next to the same list used by the legacy
- *  root-copy check. */
-export const RETIRED_SKILL_NAMES = ["jspace-bootstrap"] as const;
+/** Official skill names that no longer ship (single source of truth lives in
+ *  application/skills/retired.ts so the installer/projection cleanup and these
+ *  read-only diagnostics can never disagree about what counts as retired). */
+export { RETIRED_SKILL_NAMES } from "../../skills/retired.ts";
 
 /** Newest mtime (epoch ms) under a directory tree, or 0 when unreadable/empty.
  *  Missing dir degrades to 0 (never throws — diagnostics are read-only). */
