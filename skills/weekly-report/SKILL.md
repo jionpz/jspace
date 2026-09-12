@@ -33,13 +33,13 @@ triggers:
 
 按顺序取并集,取不到就少写,不编:
 1. `workspace/<domain>/README.md` 的「本域进行中的项目」表;
-2. gbrain `project/<id>/state` 页(`gbrain list --type note`,看本周有更新的);
+2. gbrain `project/<id>/state` 页(`gbrain list --tag project`,看本周有更新的);
 3. `<filehub>/projects/` 下本周有文件变动的目录。
 
 ## 命令速查
 
 ```bash
-gbrain list --type note -n 50                    # state 页 → 活跃项目
+gbrain list --tag project -n 50      # state 页 → 活跃项目
 gbrain get records/consolidate/<最近一期>          # 事实来源(不重新归纳)
 find <filehub>/projects -type f -mtime -7        # 本周资产变动
 gbrain put assets/周报/<YYYY-MM-DD> < <正文文件>   # 指针页(同周覆盖)
@@ -67,5 +67,6 @@ gbrain get assets/周报/<YYYY-MM-DD>               # 验证读回
 ```bash
 ls <filehub>/areas/周报/<YYYY-MM-DD>-周报.md    # 本体在,日期=本周一
 gbrain get assets/周报/<YYYY-MM-DD>             # 指针页在;Pointer 指向该 md
+gbrain tags assets/周报/<YYYY-MM-DD>            # 必含 source:session(会话)或 source:cron(无头)——漏打即补
 ```
 (同周重跑后文件数与页数**不增加** = 幂等成立)

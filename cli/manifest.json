@@ -39,7 +39,7 @@
     },
     {
       "path": "templates/workbench/AGENTS.md",
-      "sha256": "42455f669d9aeb4176882b15d298b491df33a24d4b9e9d034d1a373a88e3d018",
+      "sha256": "ffe3c8512127d70eeba2858ec06df665d84b00c33f779fb24b10d83c8cb833e4",
       "ownership": "seed"
     },
     {
@@ -59,7 +59,7 @@
     },
     {
       "path": "skills/jspace-use/SKILL.md",
-      "sha256": "e6180c6f8b9e850b86c36e7ae56d5b25cd55d10aedfac6184dd2858a1b8342f9",
+      "sha256": "81f7de7582843780b2a0393773c9a54d6f3e3a904b1285196eaf6e9fc5a637ff",
       "ownership": "seed"
     },
     {
@@ -74,7 +74,7 @@
     },
     {
       "path": "skills/jspace-use/references/gbrain.md",
-      "sha256": "9fc4d6a2de7f9e377a00e15146bdb3063c192b9eb10a36eb18e5f3fdbcde6e51",
+      "sha256": "e726eae74765dbaed7e1f94c9821ea1e73c1c0e84597e1a2989b75edef8bdd29",
       "ownership": "seed"
     },
     {
@@ -119,17 +119,17 @@
     },
     {
       "path": "skills/jspace-use/references/usage-mileage-ledger-template.md",
-      "sha256": "4bdfed0cdfcc1490b64fd7c13eca811ea509890edc9960775147e21bf2176183",
+      "sha256": "40dc27c4d271859f6c2c01747cbbfd9db02b2c4ddbe0e8830321fdaf9ed64783",
       "ownership": "seed"
     },
     {
       "path": "skills/jspace-use/references/usage-mileage.md",
-      "sha256": "690596d0982556ae711e3cbc320d689616919793916907ff893c58fe01a5f7bb",
+      "sha256": "d39a1ae14c52cab3f263ffa08f73ed82a061c78146bb734b5dec6a318ed013aa",
       "ownership": "seed"
     },
     {
       "path": "skills/asset-ingest/SKILL.md",
-      "sha256": "4cbb34de4c1875b74fa099777deb78d0844654431aa2abe5114e58dae7e8bbb8",
+      "sha256": "2720691ba04a63c3d37c8092af13f4ee808885bfaf534ccf0540f0f40a5e1bb7",
       "ownership": "seed"
     },
     {
@@ -199,42 +199,42 @@
     },
     {
       "path": "skills/memory-writeback/SKILL.md",
-      "sha256": "07c6efa0e46e5006262329061d38bdd4a45fd4cb68b6c5489af768ec7365fd47",
+      "sha256": "3856b3b22b867475359c9c50555810a452e93555134c6b60cacc6bcb51549917",
       "ownership": "seed"
     },
     {
       "path": "skills/memory-writeback/references/example-writeback.md",
-      "sha256": "84dc20b5b5326e81f6ddd2fb3696f82eb34bd22c7e683cbd055b3bae1f7d7e22",
+      "sha256": "85e91fbe75280ce205ddcea75ea705424196c59d4046976caae0d6dabd495949",
       "ownership": "seed"
     },
     {
       "path": "skills/memory-writeback/references/writeback.md",
-      "sha256": "ae9c6c26347b7b6e4afb6e5abfceb357a5a9651582033cc82aeb44df56758593",
+      "sha256": "73a74bfba62064e21347ecc772bee0b9e79b9fa7d5f6d8fa1e57057b75ccec54",
       "ownership": "seed"
     },
     {
       "path": "skills/workbench-retro/SKILL.md",
-      "sha256": "acb2f88f1402651eccf6dd3d06cf9352644f6c34057e64b34b1ecd9a63d9faac",
+      "sha256": "276cda570a1bd5cf687e288c8c958f298f1e8d73baaafd5b1f8a1532443a86fe",
       "ownership": "seed"
     },
     {
       "path": "skills/workbench-retro/references/checks.md",
-      "sha256": "3234e713b43ea04fd2a50a17ab4325b627dc4cf64ed12611e19986587357f5f5",
+      "sha256": "242246d6d06679bdc2918738d20d8b270d339fed48e308732d495159ac392760",
       "ownership": "seed"
     },
     {
       "path": "skills/workbench-retro/references/example-retro.md",
-      "sha256": "bc9e938d55e1867653a743b4eccb6bc7e98bd231fef3a99eb0c9a88a64a74c0f",
+      "sha256": "500d5bd3cf2bc1280a81cc0a69576148f8d185271d9998f2bde257499d5b25ca",
       "ownership": "seed"
     },
     {
       "path": "skills/weekly-report/SKILL.md",
-      "sha256": "d55e367a3e8cfb705a13c73d05b485c3f7bd04928151dde7dd4b1466f8503db9",
+      "sha256": "5512fa49f79b049f82551d1d677fedaa1d77ab7b9bafe89cad3a595e4d164713",
       "ownership": "seed"
     },
     {
       "path": "skills/memory-consolidate/SKILL.md",
-      "sha256": "7b1aec454ec38e7951dc87c82a8dd43a4952fd9ac5bee00b21a4227aa6b0c822",
+      "sha256": "aefd0a41617af8d95993dde445ba75f837e7f77725d523b3a268d3d90b47db31",
       "ownership": "seed"
     }
   ]

@@ -78,7 +78,7 @@ Before finishing a work session, quietly check whether anything should be preser
 
 **归位纠正即偏好沉淀**：用户纠正了文件归位后，把纠正写成 `profile/filing-prefs` 页（`memory-writeback` 的 profile 分类），下次 `asset-ingest` 归位时自动读取。
 
-**提醒 ≠ 写入**：session-end hook 与每会话一次的收工轻提示（`jspace context turn`）都只提醒、从不写 gbrain；不跑 `memory-writeback` 就等于本次没沉淀。写回率自查 → `gbrain list --type note --tag source:session -n 20`。
+**提醒 ≠ 写入**：session-end hook 与每会话一次的收工轻提示（`jspace context turn`）都只提醒、从不写 gbrain；不跑 `memory-writeback` 就等于本次没沉淀。写回率自查 → `gbrain list --tag source:session -n 20`。
 
 ## Scheduled Tasks (cron)
 

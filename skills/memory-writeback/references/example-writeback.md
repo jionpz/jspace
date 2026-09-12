@@ -94,7 +94,7 @@ jspace pending apply     # 锁空闲后统一落 live(幂等)
 gbrain get project/acme/state                     # 覆盖:仍一页,现状最新
 gbrain get project/acme/lessons/migration-idempotency # 新页:经验独立成页
 gbrain get project/acme/decisions/storage-choice   # 决策:project/tags/source 齐
-gbrain list --type note --tag source:session -n 5  # 来源 tag:三页都在(写回率取证的基础)
+gbrain list --tag source:session -n 5  # 来源 tag:三页都在(写回率取证的基础)
 ```
 预期(示意):
 ```

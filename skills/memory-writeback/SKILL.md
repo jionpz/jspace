@@ -63,7 +63,7 @@ jspace pending apply                             # 锁空闲落 live(幂等)
 2. **分类**:按决策表(状态/知识/决策/周快照)。
 3. **归属**:定 domain/project id(活跃项目发现:`hub.json`+域 README+既有 state 页);slug 从项目+主题派生,**不发明**。
 4. **写回**:按分类写语义;晋升 → 新知识页;每页带 `project`+`tags`(路由 tag + **`source:session`**)+`source`;锁冲突 `jspace pending stage`。
-5. **验证**:`gbrain get <slug>` 读回;state 覆盖不新增、知识不重复;`gbrain list --type note --tag source:session -n 5` 应能列到刚写的页。
+5. **验证(逐页断言来源 tag,不只是「能列到」)**:`gbrain get <slug>` 读回;`gbrain tags <slug>` 输出**必须含 `source:session`**——漏打就是写回率取证失真,当场补;state 覆盖不新增、知识不重复。
 6. **文件归位**(有产出文件)→ 转 `asset-ingest` 步骤 2-4,本 skill 不重复。
 
 ## 按需深入(条件读指针)
@@ -79,9 +79,13 @@ jspace pending apply                             # 锁空闲落 live(幂等)
 ## 自检(做完跑这条)
 
 ```bash
-gbrain get <slug>          # project/tags/source 齐;state 覆盖未新增、知识未重复
-gbrain list --type note --tag source:session -n 5   # 来源 tag 生效(写回率取证的基础)
+gbrain get <slug>                       # project/tags/source 齐;state 覆盖未新增、知识未重复
+gbrain tags <slug>                      # 必含 source:session —— 逐页断言,漏打即补
+gbrain list --tag source:session -n 5   # 再确认列表能列到(写回率取证的基础)
 ```
+
+> `gbrain list --tag source:session` 能列到**不等于**每页都打了 tag——它只证明「至少有一页打了」。
+> 逐页断言的判据是 `gbrain tags <slug>`;2026-09-12 retro 发现 21/30 页漏打,正是只做了前者。
 (无持久事实时本 skill 应静默结束,不写页、不提示)
 
 > **提醒 ≠ 写入**:`jspace context session-end` 与 `jspace context turn` 的每会话一次轻提示都只提醒、从不写 gbrain,也不打 `source:session`。所以「本周 `source:session` 计数」量的是**真的写回了几次**,不是被提醒了几次。各 harness 的 session-end 能力边界见 `~/.agents/skills/jspace-use/references/harnesses.md`。

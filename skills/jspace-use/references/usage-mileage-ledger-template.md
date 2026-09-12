@@ -84,8 +84,8 @@
 **计数口径**（与 retro 检查 1 同源）:
 
 ```bash
-gbrain list --type note --tag source:session -n 50
-gbrain list --type note --tag source:cron -n 50
+gbrain list --tag source:session -n 50
+gbrain list --tag source:cron -n 50
 ```
 
 只数 `updated_at` 落在**该周窗口**内的页。无来源 tag 的历史页 → 单独记「无 tag 桶」,**不**折算进 session。

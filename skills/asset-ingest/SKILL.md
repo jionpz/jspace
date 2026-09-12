@@ -82,6 +82,7 @@ gbrain query <关键词>
 
 ```bash
 gbrain get assets/<projectId>/<语义名>   # 页存在;project/tags/rel_path 齐
+gbrain tags assets/<projectId>/<语义名>  # 必含 source:session(会话)或 source:cron(无头)——漏打即补
 gbrain query <关键词>                      # top-1 命中本页
 jspace ingest list                          # 无 in-progress(已 committed 或已 fail)
 ```

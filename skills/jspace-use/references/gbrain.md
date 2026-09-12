@@ -55,7 +55,7 @@ Minimal contract shared by all harnesses:
 
 ```yaml
 ---
-type: note                                  # all pages are note; classification lives in the slug
+type: note                                  # safe default; type is descriptive metadata, never a routing key
 source: codex | claude | hermes | pi | manual
 project: <id>                               # owning project id (ascii); governance pages use a knowledge domain
 tags: [t1, t2]                              # retrieval routing tags (see memory model below)
@@ -63,11 +63,13 @@ embed_skip: true                            # required when no embedding is reac
 ---
 ```
 
-**`type` is always `note`** — it carries no classification. Page role is encoded by the slug namespace (see memory model below) and routed by `tags`.
+**`type` is descriptive metadata, not a routing key.** This store contains several types (`note`, `decision`, `project`, `lesson`, `concept`, `reference`, `knowledge`, `profile` — the gbrain pack declares 17) and the engine treats that as healthy (`doctor` → `type_proliferation: ok`). Our own write-side templates default to `type: note`; **no reader may filter on `type`.** Page role is encoded by the slug namespace (see memory model below) and routed by `tags`.
+
+> Learned 2026-09-12: an earlier version of this contract said "`type` is always `note`" while writers kept producing typed pages. The readers that trusted the contract (`gbrain list --type note --tag project`) silently dropped every non-`note` state card. Route by tag + slug shape instead — see `records/retro/2026-09-12`.
 
 ## Memory model (authoritative)
 
-**Principle: 归属定根, 语义定叶, 写语义唯一.** Classification comes from the slug namespace — one page has exactly one home and one write semantics. `type` is uniform `note`; retrieval is routed by `tags`.
+**Principle: 归属定根, 语义定叶, 写语义唯一.** Classification comes from the slug namespace — one page has exactly one home and one write semantics. Retrieval is routed by `tags` (+ slug shape); `type` is free-form descriptive metadata and is never a filter.
 
 ### Taxonomy freeze (M7)
 
@@ -218,9 +220,9 @@ session fact → state (candidate) → project decisions/lessons/events → know
 ```
 Promotion = copy-and-distill with wikilink evidence chain — never move/delete the source page.
 
-### Retrieval routing (type-normalized)
+### Retrieval routing (tag-routed)
 
-`gbrain list` filters by `--type` / `--tag` only (no slug-prefix filter). With `type` uniform, route by `tags`:
+`gbrain list` filters by `--type` / `--tag` only (no slug-prefix filter). **Route by `tags` plus slug shape — never by `type`** (writers are free to set richer types, so a `--type` filter silently loses rows):
 
 | tags | Pages | Retrieval use |
 |---|---|---|
@@ -231,7 +233,7 @@ Promotion = copy-and-distill with wikilink evidence chain — never move/delete 
 | `tags: [weekly]` | `records/consolidate\|retro/<date>` snapshots | weekly/retro; excluded from recent injection |
 
 - Snapshot pages keep the existing `tags: [weekly]` mitigation (dated pages must not mix into recent injection); consolidate additionally keeps `consolidate`.
-- Recent injection: `gbrain list --type note --tag project -n 50` (state cards) **and** `--tag profile` (preference cards), excluding `weekly` and `status:archived`. Q&A: `--tag knowledge` / `--tag asset`.
+- Recent injection: `gbrain list --tag project -n 50` (state cards) **and** `--tag profile` (preference cards), excluding `weekly` and `status:archived`. Q&A: `--tag knowledge` / `--tag asset`.
 - **CLI enforcement (session-start)**: `jspace context session-start` → `collectActiveProjects()` skips state cards tagged `status:archived` and projects with `hub.json` `status: archived`; skipped rows do not consume the max-8 budget. Independently, `collectActiveProfiles()` lists `--tag profile`, keeps slugs matching `profile/<主题>` (single segment), skips `status:archived` and `weekly`, and caps at `MAX_ACTIVE_PROFILES=4` (skipped rows do not consume the cap). The two collectors run in parallel; either list failure degrades to an empty list without blocking the hook.
 - On Q&A hit for `decisions/` / `knowledge/`: if top-1 has `status:superseded`, follow `Supersedes:` wikilink to the current page before answering.
 - `kind:principle` pages are the only semantic-memory exception for injection — only when count stays tiny (governance red lines); if principles exceed one screen, retro should flag inflation.
@@ -248,7 +250,7 @@ Every write ALSO carries exactly one **provenance tag**, orthogonal to the routi
 - The tag is chosen by **run mode, not by skill**: the same skill writes `source:session` in a session and `source:cron` under cron. Each skill's decision table already carries a 会话 / 无头(cron) row — reuse it.
 - Why a tag and not a frontmatter field: `gbrain list` filters by `--type` / `--tag` only, so a tag is the *only* thing `workbench-retro` can count. Frontmatter `source:` keeps its existing meaning (**harness** provenance: `claude` / `codex` / …) and answers a different question — do not overload it.
 - Both live on the same page: `tags: [project, source:session]`, `source: claude`.
-- Counting (retro 检查 1): `gbrain list --type note --tag source:session -n 50` vs `--tag source:cron -n 50`.
+- Counting (retro 检查 1): `gbrain list --tag source:session -n 50` vs `gbrain list --tag source:cron -n 50` — no `--type` (a type filter would undercount: only 30 of 83 pages were `note` on 2026-09-12).
 - **Pages written before this convention carry neither tag.** They are not "cron writes" — they are unknown-provenance, and retro must report them as a separate bucket instead of folding them into either leg.
 
 ## Write-back discipline

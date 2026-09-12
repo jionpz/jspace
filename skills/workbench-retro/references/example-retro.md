@@ -12,10 +12,10 @@
 ## 第 2 步 · 取证(留实际输出)
 
 ```bash
-$ gbrain list --type note --tag source:session -n 50
+$ gbrain list --tag source:session -n 50
 No pages found.
 
-$ gbrain list --type note --tag source:cron -n 50
+$ gbrain list --tag source:cron -n 50
 records/consolidate/2026-08-09    updated 2026-08-09
 project/jspace/state              updated 2026-08-09
 project/tiyanying-52/state        updated 2026-08-09
@@ -25,15 +25,15 @@ $ jq '.session_count, .writeback_nudge_for_session' .jspace/state/briefing.json
 9
 9
 
-$ gbrain list --type note --tag project -n 50
+$ gbrain list --tag project -n 50
 project/jspace/state          updated 2026-08-09
 project/tiyanying-52/state    updated 2026-08-09
 project/baobiao-module/state  updated 2026-08-09
 
-$ gbrain list --type note --tag knowledge -n 20
+$ gbrain list --tag knowledge -n 20
 (空)
 
-$ gbrain list --type note --tag asset -n 20
+$ gbrain list --tag asset -n 20
 assets/tiyanying-52/回访登记   updated 2026-08-08
 assets/baobiao-module/验收记录  updated 2026-08-09
 assets/jspace/roadmap          updated 2026-08-09
@@ -75,7 +75,7 @@ $ ls .jspace/logs/cron/inbox-tidy/
 **检查 5(inbox 停滞)**:`_inbox/` 为空,三次 inbox-tidy 均「无事可做」。
 → 结论:无停滞;但**连续 3 次空跑**——不是流程问题,是没往里放东西。归 `观察中`(下周若仍空,说明资产腿缺输入)。
 
-**检查 6(规则进化候选)**:本周新增 knowledge 页 0 条(`gbrain list --type note --tag knowledge`);cron 日志里出现过 `skill asset-ingest is out of date` 的过时告警。
+**检查 6(规则进化候选)**:本周新增 knowledge 页 0 条(`gbrain list --tag knowledge`);cron 日志里出现过 `skill asset-ingest is out of date` 的过时告警。
 → 结论:skill 过时在 cron 路径能被发现、在 `jspace doctor` 路径发现不了——**规则/工具缺口**,提议给 doctor 补同类检查。归 `需你决策`。
 
 ## 第 4 步 · 复现升级

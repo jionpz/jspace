@@ -15,12 +15,12 @@
 **证据**
 ```bash
 # 1a 来源量化(B4:写侧按运行模式打来源 tag)
-gbrain list --type note --tag source:session -n 50   # 会话写入(memory-writeback 等,含 updated_at)
-gbrain list --type note --tag source:cron -n 50      # 定时写入(cron 无头跑的 consolidate/report/retro/ingest)
+gbrain list --tag source:session -n 50   # 会话写入(memory-writeback 等,含 updated_at)
+gbrain list --tag source:cron -n 50      # 定时写入(cron 无头跑的 consolidate/report/retro/ingest)
 
 # 1b 写回面(与来源正交:数哪些页动了)
-gbrain list --type note --tag project -n 50   # 看 project/<id>/state 页与 updated_at
-gbrain list --type note --tag knowledge -n 20 # 本周有无新知识页(再按 updated_at 滤窗口)
+gbrain list --tag project -n 50   # 看 project/<id>/state 页与 updated_at
+gbrain list --tag knowledge -n 20 # 本周有无新知识页(再按 updated_at 滤窗口)
 
 # 1c 活动信号(佐证「这周确实在用」)
 ls -la <filehub>/projects/*/ | head -40  # 资产层本周有无文件变动
@@ -43,14 +43,14 @@ ls .jspace/logs/cron/*/                  # cron 活动痕迹
 - `session_writes > 0` → 记实际条数与比例,**不评价好坏**(基线数据,供跨周对比;单周数字没意义,走向才有)。跨周的达标口径(连续两周 > 0)与回写纪律见 `~/.agents/skills/jspace-use/references/usage-mileage.md` R2——本检查只负责**本周**这一行数字,不下「习惯已养成」的结论。
 - `untagged_writes > 0` → **不要**把它算进任何一条腿。分两种情况写:
   - 页的 `updated_at` 早于本约定上线 → 记「历史页,无来源 tag」,只在基线里标注数量,不进判读;
-  - 页是本周新写的却没 tag → **写侧纪律缺口**(某个 skill 没按 `~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」打标),归 `需你决策`,指明是哪个 slug/哪个 skill。
+  - 页是本周新写的却没 tag → **写侧纪律缺口**（逐页复核用 `gbrain tags <slug>`；列表查询只能证明「至少有一页打了」，不能证明每页都打了）(某个 skill 没按 `~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」打标),归 `需你决策`,指明是哪个 slug/哪个 skill。
 - `gbrain list --tag source:session` 在本机 gbrain 版本上取不到结果(tag 解析差异等)→ 本段记「**无法判定** + 缺来源 tag 查询能力」,改用下面的降级 proxy,并把「来源 tag 不可查」本身作为一条 `需你决策` 报出来——**不要**默默用 proxy 冒充精确计数。
 
 **降级 proxy(仅当来源 tag 不可用时)**:cron 写入 ≈ `records/consolidate/*` `records/retro/*` `assets/周报/*` 这些 slug 命名空间里落窗口的页,再叠加 `.jspace/logs/cron/*/` 里成功运行的时间戳;会话写入 ≈ 落窗口的其余页。**这是估算,报告里必须标明「proxy 估算,非精确计数」**。
 
 **判读 · 写回面(来源比之外的缺口定位)**
 - 活动信号 = 本周内 filehub 有文件新增/修改,或 cron 成功运行,或域/hub 有变更。
-- 本周新知识 = `gbrain list --type note --tag knowledge -n 20` 结果中 `updated_at` 落在本周窗口内的页;没有 → 记「本周无新知识」。
+- 本周新知识 = `gbrain list --tag knowledge -n 20` 结果中 `updated_at` 落在本周窗口内的页;没有 → 记「本周无新知识」。
 - 某项目有活动信号,但其 `project/<id>/state` 页 `updated_at` ≥7 天未动 → **写回缺口**。
 - 全工作台本周 0 个 state 页更新且有活动信号 → **写回腿停摆**(与来源比的结论互为佐证;两者不一致时**两个数都报**,不挑一个顺眼的)。
 
@@ -95,7 +95,7 @@ gbrain asset 指针页的 `Pointer` 指向资产本体;文件被移动/改名/�
 
 **证据**
 ```bash
-gbrain list --type note --tag asset -n 20          # 指针抽样源(v2: asset 指针页)
+gbrain list --tag asset -n 20          # 指针抽样源(v2: asset 指针页)
 gbrain list --type reference -n 20                 # 迁移缺口抽样(仅 info,非唯一抽样源)
 gbrain get <slug>                                   # 读 Pointer / rel_path 字段
 test -f "<Pointer>" && echo OK || echo BROKEN
@@ -161,7 +161,7 @@ tail -40 <filehub>/.jspace-logs/inbox-batch.md      # 看是否反复被列为�
 
 **证据**
 ```bash
-gbrain list --type note --tag knowledge -n 20       # 本周新增知识页主题(再按 updated_at 滤窗口)
+gbrain list --tag knowledge -n 20       # 本周新增知识页主题(再按 updated_at 滤窗口)
 gbrain query "本周重复出现的问题"                     # 语义面佐证
 ls .jspace/logs/cron/*/ && tail -30 .jspace/logs/cron/<id>/<最近>.md   # 无头运行里反复出现的同类处置
 rg -n '无法判定|跳过|模糊' <filehub>/.jspace-logs/inbox-batch.md | tail -10
@@ -183,7 +183,7 @@ rg -n '无法判定|跳过|模糊' <filehub>/.jspace-logs/inbox-batch.md | tail 
 
 **证据**
 ```bash
-gbrain list --type note --tag knowledge -n 30    # 抽样 decisions/lessons/knowledge 页
+gbrain list --tag knowledge -n 30    # 抽样 decisions/lessons/knowledge 页
 gbrain get project/<id>/decisions/<主题>          # 对本周更新的决策页:正文是否含 Supersedes:
 # 目视:同一项目是否存在「主题相近」的两页 decisions 都无 status:superseded
 ```

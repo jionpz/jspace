@@ -56,8 +56,8 @@
 ### 计数口径(与 `~/.agents/skills/workbench-retro/references/checks.md` 检查 1 同源)
 
 ```bash
-gbrain list --type note --tag source:session -n 50   # 会话写入(分子)
-gbrain list --type note --tag source:cron -n 50      # 定时写入(对照)
+gbrain list --tag source:session -n 50   # 会话写入(分子)
+gbrain list --tag source:cron -n 50      # 定时写入(对照)
 ```
 
 - 只数 `updated_at` **落在该周窗口**内的页 → `session_writes`(窗口默认自然周或近 7 天,**与当周 retro 报告窗口一致**,不另起一套日历)。
@@ -90,7 +90,7 @@ gbrain list --type note --tag source:cron -n 50      # 定时写入(对照)
 
 ### 记忆飞轮
 
-- [ ] 本周至少一次显式收工写回(`memory-writeback`),且 `gbrain list --type note --tag source:session` 能列到新页
+- [ ] 本周至少一次显式收工写回(`memory-writeback`),且 `gbrain list --tag source:session` 能列到新页
 - [ ] 周日 `memory-consolidate` 有成功痕迹(cron log 或 `records/consolidate/<date>`),或用户显式 deferred 且 doctor 可见
 - [ ] (跨周)连续两周 `session_writes > 0`(接 R2)——**记忆腿关闭条件**
 
@@ -166,7 +166,7 @@ gbrain list --type note --tag source:cron -n 50      # 定时写入(对照)
 
 - 工作台根 `<wb>`、filehub 根、主 harness、无头 cron harness
 - M7 起点日、R2 的 W0 周起止
-- 升级前 gbrain 页数快照(可选):`gbrain list --type note -n 1` 或 stats
+- 升级前 gbrain 页数快照(可选):`gbrain list -n 1` 或 stats
 
 ### B. R1 · 自省腿
 
@@ -187,8 +187,8 @@ gbrain list --type note --tag source:cron -n 50      # 定时写入(对照)
 取证命令(每周同口径):
 
 ```bash
-gbrain list --type note --tag source:session -n 50
-gbrain list --type note --tag source:cron -n 50
+gbrain list --tag source:session -n 50
+gbrain list --tag source:cron -n 50
 ```
 
 **记忆腿关闭** = W1 与 W2 连续 `session_writes > 0`。
