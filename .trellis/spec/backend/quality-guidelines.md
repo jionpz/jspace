@@ -47,12 +47,20 @@
 
 ## Testing Requirements
 
-- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 360 tests across 46 files).
+- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 834 tests across 72 files).
 - New function → unit test; bug fix → regression test; changed behavior → update existing tests.
 - Fault-injection via injected deps (ingest journal fs ops, pending envelope gbrain stub).
 - Contract round-trip + decode-issue tests for every decoder.
 - Scheduler behavior: pure `planReconciliation` tests + argv round-trip through the real parser; no real scheduler apply in tests.
 - Regression tests call the real production path under test (public adapter methods, parse the actual output) — never hand-craft the internal payload with the expected values baked in. A test that assembles `schtasksArgs(...)`/`JSON.stringify` by hand stays green while the shipped method (`buildContent`) emits a mismatched task handle → false-green masked a Windows cron bug (issue #8 #1).
+- **Cross-platform test portability (CI runs `bun test` on ubuntu + macos-14 + windows-latest)**:
+  - Path assertions never hardcode `/`: build the expected value with `join()` from `node:path` (or normalize separators on both sides). A literal `expect(x).toBe("/wb/.grok/config.toml")` passes on POSIX and reds on Windows purely because `join()` returns `\wb\.grok\config.toml`.
+  - Injected fs stubs must be separator-normalized (`p.replace(/\\/g, "/")`) before using a path as a Map/object key — the production code calls them with `join()` output.
+  - Strings embedded into a serialized format must be escaped the same way the writer escapes them: the grok TOML fixture must use `JSON.stringify(path)` (TOML basic strings follow JSON escaping), otherwise a Windows path becomes an invalid TOML escape.
+  - Platform-conditional skips are **only** `test.skipIf(process.platform === "win32")` (or `describe.skipIf`) with an inline reason. A silent `if (platform === "win32") return;` reports as **pass** and is forbidden — it hides coverage loss instead of surfacing it.
+  - Removing a directory link/symlink must use `rmSync(p, { recursive: true, force: true })`; a bare `rmSync(link)` fails with `EFAULT` on Windows.
+  - Do not leave Windows tests that pass for the wrong reason: if a POSIX-only fixture makes a spawn fail and the assertion (`"failed"` appears / lock is released) still holds, `skipIf` it and record the reason rather than banking a false green.
+  - Classify every new-platform failure before touching it: **real product defect** (fix product, escalate if out of scope) vs **POSIX-only semantics** (`skipIf` + reason) vs **environment limit** (record in the task's skip list). Never widen a skip to make a pipeline green.
 
 ## Code Review Checklist
 
@@ -62,3 +70,4 @@
 - [ ] Command surface added only via CommandSpec (no duplicate help/parse).
 - [ ] No secrets/logs-in-state regression (R8).
 - [ ] No real-environment mutation in tests.
+- [ ] No hardcoded path separators / unnormalized stub keys; platform skips use `skipIf` + reason (never silent `return`).

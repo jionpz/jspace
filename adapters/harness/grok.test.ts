@@ -4,6 +4,7 @@
 // regression); this test pins the adapter's declared shape.
 // Run: bun test adapters/harness/grok.test.ts
 import { expect, test } from "bun:test";
+import { join } from "node:path";
 import { getAdapter } from "./index.ts";
 import { getCapability } from "./registry.ts";
 
@@ -31,5 +32,5 @@ test("grok headless argv shape", () => {
 });
 
 test("grok hook file path is .grok/hooks/jspace.json", () => {
-  expect(grokAdapter.hookFilePath?.("/wb")).toBe("/wb/.grok/hooks/jspace.json");
+  expect(grokAdapter.hookFilePath?.("/wb")).toBe(join("/wb", ".grok/hooks/jspace.json"));
 });

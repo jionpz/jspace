@@ -110,8 +110,8 @@ test(".exe/.com and plain binaries pass through verbatim=false (Node quotes args
 // window), and timedOut must be the timer's own flag, not a wall-clock race.
 // POSIX process-group signals only — win32 uses taskkill /F (already forced).
 
-test("ignore-SIGTERM harness is SIGKILLed after the grace window (timedOut=true, no hang)", async () => {
-  if (process.platform === "win32") return; // process-group SIGTERM/SIGKILL is POSIX-only
+test.skipIf(process.platform === "win32")("ignore-SIGTERM harness is SIGKILLed after the grace window (timedOut=true, no hang)", async () => {
+  // win32 skip: process-group SIGTERM/SIGKILL is POSIX-only (win32 uses taskkill /F).
   const dir = mkdtempSync(join(tmpdir(), "jspace-spawn-"));
   const script = join(dir, "ignore-term.sh");
   writeFileSync(script, "#!/bin/sh\ntrap '' TERM\nwhile true; do sleep 1; done\n");
@@ -128,8 +128,8 @@ test("ignore-SIGTERM harness is SIGKILLed after the grace window (timedOut=true,
   }
 });
 
-test("normal quick exit before timeout -> timedOut=false, exit 0", async () => {
-  if (process.platform === "win32") return;
+test.skipIf(process.platform === "win32")("normal quick exit before timeout -> timedOut=false, exit 0", async () => {
+  // win32 skip: fixture is a /bin/sh script made executable (POSIX-only).
   const dir = mkdtempSync(join(tmpdir(), "jspace-spawn-"));
   const script = join(dir, "quick.sh");
   writeFileSync(script, "#!/bin/sh\nexit 0\n");
@@ -146,8 +146,8 @@ test("normal quick exit before timeout -> timedOut=false, exit 0", async () => {
 // ---- issue #8 #8: spawnProcess stdin input + stdout/stderr separation (gbrain
 // put needs stdin; get needs stdout without stderr noise for dedup hashing). ----
 
-test("spawnProcess feeds stdin input (gbrain put path)", async () => {
-  if (process.platform === "win32") return;
+test.skipIf(process.platform === "win32")("spawnProcess feeds stdin input (gbrain put path)", async () => {
+  // win32 skip: fixture drives /bin/sh -c cat (POSIX-only).
   const dir = mkdtempSync(join(tmpdir(), "jspace-spawn-"));
   try {
     const res = await spawnProcess(["/bin/sh", "-c", "cat"], { cwd: dir, platform: "linux", timeoutMs: 5000, input: "hello stdin\n" });
@@ -158,8 +158,8 @@ test("spawnProcess feeds stdin input (gbrain put path)", async () => {
   }
 });
 
-test("spawnProcess separates stdout from stderr", async () => {
-  if (process.platform === "win32") return;
+test.skipIf(process.platform === "win32")("spawnProcess separates stdout from stderr", async () => {
+  // win32 skip: fixture drives /bin/sh -c (POSIX-only).
   const dir = mkdtempSync(join(tmpdir(), "jspace-spawn-"));
   try {
     const res = await spawnProcess(["/bin/sh", "-c", "echo out; echo err >&2"], { cwd: dir, platform: "linux", timeoutMs: 5000 });
@@ -172,8 +172,8 @@ test("spawnProcess separates stdout from stderr", async () => {
   }
 });
 
-test("missing executable -> exit 1 with the error in RESULT stderr, nothing on process stderr", async () => {
-  if (process.platform === "win32") return;
+test.skipIf(process.platform === "win32")("missing executable -> exit 1 with the error in RESULT stderr, nothing on process stderr", async () => {
+  // win32 skip: asserts the POSIX ENOENT spawn-error path explicitly (platform: "linux").
   const dir = mkdtempSync(join(tmpdir(), "jspace-spawn-"));
   const errWrite = process.stderr.write.bind(process.stderr);
   let leaked = "";

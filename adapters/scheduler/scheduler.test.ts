@@ -264,7 +264,7 @@ test("darwin inspect requires launchd-loaded state, not just a plist file", () =
 });
 
 test("darwin plistPath + parsePlistName use injected home + tagged identity", () => {
-  expect(plistPath("abc123", "inbox-tidy", "/Users/u")).toBe("/Users/u/Library/LaunchAgents/com.jspace.cron.abc123.inbox-tidy.plist");
+  expect(plistPath("abc123", "inbox-tidy", "/Users/u")).toBe(join("/Users/u", "Library/LaunchAgents/com.jspace.cron.abc123.inbox-tidy.plist"));
   expect(parsePlistName("com.jspace.cron.abc123.inbox-tidy.plist")).toEqual({ taskId: "com.jspace.cron.abc123.inbox-tidy", tag: "abc123", cronId: "inbox-tidy" });
   expect(parsePlistName("com.jspace.cron.inbox-tidy.plist")).toBeNull(); // legacy untagged — not ours
   expect(parsePlistName("random.txt")).toBeNull();

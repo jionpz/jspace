@@ -33,7 +33,11 @@ beforeEach(() => {
 });
 afterEach(() => {
   rmSync(root, { recursive: true, force: true });
-});
+  // Explicit cap: the budget test below creates ~36k files, and the default 5s
+  // hook timeout is too tight to delete that tree on a loaded/shared runner
+  // (observed one flake on Linux; Windows FS is slower still). Still fails if
+  // cleanup genuinely hangs — this only raises the ceiling.
+}, 60_000);
 
 function setCrons(crons: { id: string; schedule: string; enabled: boolean }[]): void {
   writeFileSync(
@@ -743,7 +747,8 @@ test("registered filehub root absent on this machine -> no content-check cascade
   expect(c).not.toContain("filehub.inbox_missing");
 });
 
-test("unreadable _inbox root degrades to a diagnostic instead of throwing", () => {
+test.skipIf(process.platform === "win32")("unreadable _inbox root degrades to a diagnostic instead of throwing", () => {
+  // win32 skip: chmod 0o000 does not deny reads on Windows (no POSIX mode bits).
   const fh = withFilehub([]);
   writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
   const inbox = join(fh, "_inbox");
@@ -758,7 +763,8 @@ test("unreadable _inbox root degrades to a diagnostic instead of throwing", () =
   }
 });
 
-test("unreadable projects/ root degrades to a diagnostic instead of throwing", () => {
+test.skipIf(process.platform === "win32")("unreadable projects/ root degrades to a diagnostic instead of throwing", () => {
+  // win32 skip: chmod 0o000 does not deny reads on Windows (no POSIX mode bits).
   const fh = withFilehub([{ id: "acme", domain: "files", asset_rel_path: "projects/acme", status: "active" }]);
   writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
   mkdirSync(join(fh, "projects", "acme"), { recursive: true });
@@ -790,7 +796,8 @@ test("unregistered filehub -> no contract_stale / legacy_taxonomy noise", () => 
   expect(c).not.toContain("filehub.legacy_taxonomy");
 });
 
-test("unreadable project dir degrades to skip instead of crashing doctor", () => {
+test.skipIf(process.platform === "win32")("unreadable project dir degrades to skip instead of crashing doctor", () => {
+  // win32 skip: chmod 0o000 does not deny reads on Windows (no POSIX mode bits).
   const fh = withFilehub([{ id: "acme", domain: "files", asset_rel_path: "projects/acme", status: "active" }]);
   writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
   const p = join(fh, "projects", "acme");

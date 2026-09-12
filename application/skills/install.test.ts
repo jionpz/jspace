@@ -16,13 +16,17 @@ const FILES: Record<string, string> = {
 function mkDeps(over: Partial<InstallDeps> = {}): { deps: InstallDeps; written: Map<string, string>; existing: Map<string, string> } {
   const written = new Map<string, string>();
   const existing = new Map<string, string>();
+  // installSkills builds absolute paths with join(), so on Windows they arrive
+  // with backslashes; normalize to POSIX keys to keep the fixture readable and
+  // the assertions platform-independent.
+  const key = (p: string) => p.replace(/\\/g, "/");
   const deps: InstallDeps = {
     assetKeys: () => Object.keys(FILES),
     assetContent: (k) => FILES[k],
     userSkillsRoot: () => "/home/u/.agents/skills",
-    writeFile: (p, c) => written.set(p, c),
-    exists: (p) => existing.has(p),
-    readFile: (p) => existing.get(p) ?? null,
+    writeFile: (p, c) => written.set(key(p), c),
+    exists: (p) => existing.has(key(p)),
+    readFile: (p) => existing.get(key(p)) ?? null,
     ...over,
   };
   return { deps, written, existing };
