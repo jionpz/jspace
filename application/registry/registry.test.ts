@@ -94,8 +94,8 @@ test("domain remove --dry-run reports plan without mutating", () => {
   expect(JSON.stringify(loadHub(root))).toBe(before);
 });
 
-test("domain add rolls back the skeleton when the hub write fails (issue #8 #13)", () => {
-  if (process.platform === "win32") return; // chmod-based write failure differs on Windows
+test.skipIf(process.platform === "win32")("domain add rolls back the skeleton when the hub write fails (issue #8 #13)", () => {
+  // win32 skip: chmod-based write failure differs on Windows (ACL semantics).
   // Pre-create the lock directory, then make .jspace unwritable: the lock lives
   // in a writable child dir, while writeHubAtomic still fails creating its temp
   // sibling directly under .jspace. This keeps testing the hub-write rollback

@@ -263,7 +263,8 @@ test("upgrade refuses a read-only README instead of silently replacing it", () =
   }
 });
 
-test("upgrade preserves a restrictive mode (0600 README stays private)", () => {
+test.skipIf(process.platform === "win32")("upgrade preserves a restrictive mode (0600 README stays private)", () => {
+  // win32 skip: chmod 0600 does not round-trip through stat mode on Windows.
   const fh = join(wb, "filehub");
   mkdirSync(fh, { recursive: true });
   const p = join(fh, "README.md");

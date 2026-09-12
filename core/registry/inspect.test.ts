@@ -66,15 +66,19 @@ function makeEnv(overrides: EnvOverrides = {}): InspectEnv {
     },
     ...overrides.fs,
   };
+  // inspectWorkbench joins root-relative segments with the platform separator,
+  // so on Windows its probes arrive backslash-y; normalize both sides so the
+  // fixture (written with "/") matches on every platform.
+  const n = (p: string) => p.replace(/\\/g, "/");
   return {
     root: ROOT,
     hub: overrides.hub ?? { status: "ok", value: validHub() },
     marker: overrides.marker ?? { status: "ok", value: validMarker() },
     local: overrides.local ?? { status: "ok", value: validLocal() },
-    pathExists: (p) => fs.dirs.includes(p) || fs.files.includes(p),
-    isFile: (p) => fs.files.includes(p),
+    pathExists: (p) => fs.dirs.includes(n(p)) || fs.files.includes(n(p)),
+    isFile: (p) => fs.files.includes(n(p)),
     readJson: (p) => {
-      const v = fs.json[p];
+      const v = fs.json[n(p)];
       if (v === undefined) throw new Error(`no fake json for ${p}`);
       return v;
     },

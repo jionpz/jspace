@@ -11,7 +11,7 @@ import {
 } from "./wiring.ts";
 
 const WB = "/tmp/wb";
-const SKILLS = `${WB}/.jspace/skills`;
+const SKILLS = join(WB, ".jspace", "skills");
 
 function mkDeps(
   doc: unknown | null,
@@ -45,7 +45,7 @@ function serverWith(env?: Record<string, unknown>): Record<string, unknown> {
 }
 
 test("claudeJsonPath joins homedir", () => {
-  expect(claudeJsonPath("/home/u")).toBe("/home/u/.claude.json");
+  expect(claudeJsonPath("/home/u")).toBe(join("/home/u", ".claude.json"));
 });
 
 test("gbrainServer: top-level mcpServers.gbrain; null when absent", () => {

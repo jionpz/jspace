@@ -3,6 +3,7 @@
 // targeted line edit that preserves every byte outside the env inline table.
 // Run: bun test application/gbrain/grok-wiring.test.ts
 import { expect, test } from "bun:test";
+import { join } from "node:path";
 import { mergeGrokEnv, wireGrokSkillsDir, grokConfigPath, type GrokWireDeps } from "./grok-wiring.ts";
 
 test("mergeGrokEnv adds GBRAIN_SKILLS_DIR to an existing env inline table", () => {
@@ -62,7 +63,7 @@ test("wireGrokSkillsDir wires and is idempotent", () => {
   expect(writes.length).toBe(1);
   expect(writes[0]).toContain('GBRAIN_SKILLS_DIR = "/home/u/jspace/.jspace/skills"');
   expect(backups.length).toBe(1);
-  expect(grokConfigPath("/home/u")).toBe("/home/u/.grok/config.toml");
+  expect(grokConfigPath("/home/u")).toBe(join("/home/u", ".grok/config.toml"));
 
   // second call with the already-wired content -> already-wired, no write
   deps.readFile = () => writes[0];

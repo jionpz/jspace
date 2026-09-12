@@ -146,3 +146,50 @@ jobs:
       # real-host non-downgrade is asserted above; final sandbox verification
       # must happen on a real host (e.g. WSL2 + Codex sandbox).
 
+
+  # Cross-platform test leg (issue #23 follow-up): the ubuntu `verify` job
+  # exercises the real test suite on Linux only, so platform-specific branches
+  # (win32 cmd.exe/taskkill escaping, darwin loadu/BSDtools paths) could regress
+  # unnoticed until a user hit them. This job runs the Bun-layer suite on macOS
+  # and Windows as an *increment* — the ubuntu job above keeps the full step set
+  # (Python skill tests + POSIX-shell full-chain integration stay Linux-only).
+  cross-platform:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+    timeout-minutes: 20
+    concurrency:
+      # Two levels of isolation: from the ubuntu `verify` job (a shared group
+      # would cancel one against the other inside the same run) AND between the
+      # matrix legs (a bare ref-based group made windows-latest cancel
+      # macos-14 — observed on this job's first run).
+      group: cross-platform-${{ matrix.os }}-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install deps
+        run: bun install --frozen-lockfile
+
+      # Same committed-manifest guard as ubuntu: a clean checkout must not have
+      # a source file that is untracked/ignored but still baked into the bundle.
+      - name: Manifest source integrity (committed; exists + tracked + not ignored)
+        run: bun run scripts/check-manifest-integrity.ts
+
+      - name: Harness consistency (capabilities.yaml ↔ code/docs/templates)
+        run: bun run scripts/check-harness-consistency.ts
+
+      - name: Type check
+        run: bunx tsc --noEmit
+
+      - name: Unit tests
+        run: bun test
+
+      - name: Skill self-checks (C1–C5)
+        run: bun run scripts/check-skills.ts

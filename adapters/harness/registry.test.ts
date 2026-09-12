@@ -3,6 +3,7 @@
 // capability is structurally valid, and pins the derived projection/cron sets.
 // Run: bun test adapters/harness/registry.test.ts
 import { expect, test } from "bun:test";
+import { join } from "node:path";
 import {
   cronHarnessNamesFrom,
   cronHarnessNames,
@@ -135,13 +136,13 @@ test("a fixture capability generates an adapter without a harness-specific file"
     "--tools",
     "Write",
   ]);
-  expect(adapter.hookFilePath?.("/wb")).toBe("/wb/.fixture/hooks.json");
+  expect(adapter.hookFilePath?.("/wb")).toBe(join("/wb", ".fixture/hooks.json"));
 });
 
 test("cursor adapter fails on headless argv (IDE-only) but exposes a hook path", () => {
   const cursor = getAdapter("cursor");
   expect(() => cursor.headlessArgv("x", "darwin", "/bin/x")).toThrow(/no headless CLI/);
-  expect(cursor.hookFilePath?.("/wb")).toBe("/wb/.cursor/hooks.json");
+  expect(cursor.hookFilePath?.("/wb")).toBe(join("/wb", ".cursor/hooks.json"));
 });
 
 test("pi capability declares the honest adapter boundary", () => {
