@@ -2,7 +2,7 @@
 
 > 本文件是整个项目的**最高对齐物**：所有 PRD、任务拆分、范围取舍、暂缓决策都向它对齐。
 > 根 `AGENTS.md` 的 Product Vision 是它的操作摘要；两者冲突时以本文件为准，并同步修订。
-> 最后更新：2026-08-25。决策留痕见当期任务 PRD 的 Key Decisions。
+> 最后更新：2026-09-12。决策留痕见当期任务 PRD 的 Key Decisions；本文件内的里程碑条目按「证据落条目」逐条回写。
 
 ## 一句话终局
 
@@ -105,7 +105,11 @@
   - **非目标**：不自动 session-end 写 gbrain；不用 CI 假数据关闭本里程碑；工程可观测（`memory.writeback_habit_unverified` 等 info 级门禁——doctor 不查 gbrain、量不到写回率）只提示自查，**不替代**本条要求的真实计数。
   - **FEBEL 工程落点（2026-08-28，PR [#28](https://github.com/jionpz/jspace/pull/28)）**：E → doctor info `memory.writeback_habit_unverified`（只提示自查，不量写回率）；B → `docs/PLATFORMS.md` 真机验证台账（#5 四条 E/A 闭合，H 型挂账）；Eco → `skills/memory-recall/references/real-second-machine-protocol.md` + GOAL #1 `eco.*` 回写槽；L → 本条协议与证据台账（`usage-mileage.md` R2/R3）。
   - **记忆分类学冻结（2026-08-29，PR [#32](https://github.com/jionpz/jspace/pull/32) + [#33](https://github.com/jionpz/jspace/pull/33)）**：五轴模型 + 命名空间/tag 词表 + archived 注入过滤 + recall 路由修正已发行；**M7 关闭前不再扩 taxonomy**（见 `gbrain.md`「Taxonomy freeze」）。下一阶段的 ROI 在真实使用（写回习惯 / retro 裁决 / 资产闭环），不在新类型设计。
-  - **待真实使用验证（尚未填数，不写假数字）**：① retro 无头首跑证据（日期 / 页 slug / log 路径：待验证）；② 两周 `source:session`（W1 / W2 计数：待验证）；③ 资产闭环或诚实 deferred（待验证）。三项各自填入真实证据前，本里程碑保持开放。
+  - **待真实使用验证（尚未填数，不写假数字）**：① retro 无头首跑证据 **已采（2026-09-12，见下）**；② 两周 `source:session`（W1 / W2 计数：待验证）；③ 资产闭环或诚实 deferred（待验证）。三项各自填入真实证据前，本里程碑保持开放。
+  - **R1 无头首跑已采（2026-09-12，本机 `~/jspace-work`）**：`jspace cron run workbench-retro --force --timeout 900` → exit 0，log `.jspace/logs/cron/workbench-retro/2026-09-12T194015-b1d1b41f.md`（1058 行），retro 页 `records/retro/2026-09-12` 含「写回率」一节；doctor 跑后 0 error / 0 warning / 1 info、未改工作台文件。**自省腿仍未关闭**：来源 tag 由人工纠正后才合规，且「自然触发」（周日 23:00 由调度器拉起）尚未发生。台账 §2a / §2a-1。
+  - **本次实证抓出的真实缺陷（能力缺口，非纪律问题）**：无头跑把 retro 页打成 `source:session`，而 skill 规定无头必经 `source:cron`。根因在 `adapters/process/spawn.ts` 的 `cronSpawnEnv()` —— 它只复制既有 env 白名单，**不注入任何「我是 cron 跑」的标记**，无头进程没有机器可读信号可自证身份，只能猜。后果：`source:cron` 结构性恒为 0，**「定时腿在转」永远无法被证明**。建议最小修复 = `cronSpawnEnv` 注入合成标记（如 `JSPACE_CRON_RUN=1`），写侧 skill 以标记而非感觉决定来源 tag。**待裁决，未擅自改。**
+  - **记忆腿计数口径补丁（2026-09-12 起生效）**：`source:session` 原始计数会被「agent 给工具自身记账」喂饱（本机 24 页中约 18 页属 `project/jspace*` 与工具知识），**写回率涨 ≠ 使用里程涨**。故记忆腿判读拆两行：**业务写入** = `source:session` 中排除 `project/jspace*` 与 `knowledge/{agent-harness,ai-infra,tools}*`（工具自证）；**工具写入** = 其余，单独记数不参与关闭判定。关闭条件仍是「连续两周**业务写入** > 0」，且两行都要进台账。理由：用工程厚度代替转速正是本里程碑要防的失效模式。
+  - **后续工程 backlog 的触发围栏（2026-09-12 起生效）**：父 PRD 登记的 R3 发布 provenance / R4 gbrain 版本兼容契约 / R5 lint+coverage 门禁 / R6 文档结构拆分，**从「未排期」改为「有触发条件才做」**，避免用工程厚度代替转速（M6 教训）：R3 → 出现一次产物完整性/来源存疑，或开始给第三方分发二进制；R4 → 出现一次 gbrain 版本差异导致的真实故障，或 gbrain 上游 breaking change；R5 → 出现一次因类型/风格/`catch {}` 漂移导致的真实回归，或协作方介入开发；R6 → `GOAL.md` 单文件长度或查找成本开始实际妨碍判断。**未命中触发条件时，正确的动作是用（M7），不是写 R3–R6。**唯一例外：真实使用暴露阻塞时立刻做被那件事证明必需的那一条。
 - 顺序理由：cron 的第一批任务操作资产层，故 M2 在 M3 前；里程碑随真实使用可重排，重排时更新本文件。
 
 ## 开放问题
