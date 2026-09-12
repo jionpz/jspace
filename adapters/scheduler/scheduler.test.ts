@@ -2,7 +2,7 @@
 // cross-workbench tag isolation + reconciliation identity.
 // Run: bun test adapters/scheduler/scheduler.test.ts
 import { expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { taskIdFor, workbenchTag, SCHEDULER_SPAWN_TIMEOUT_MS } from "./types.ts";
@@ -11,7 +11,7 @@ import { isWindowsInstallable } from "../../core/shared/schedule.ts";
 import { buildPlist } from "./darwin.ts";
 import { parseSchedule } from "../../core/shared/schedule.ts";
 import { linuxAdapter, makeLinuxAdapter, crontabBlock, crontabLine, crontabUnavailable, replaceManagedBlock, parseManagedLine, extractTagBlock, pidNamespaceIsolated, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
-import { darwinAdapter, plistPath, parsePlistName, plistBelongsToTag, scheduleFromIntervalDict, argvFromPlistStdout } from "./darwin.ts";
+import { darwinAdapter, inspectDarwin, plistPath, parsePlistName, plistBelongsToTag, scheduleFromIntervalDict, argvFromPlistStdout } from "./darwin.ts";
 import { schtasksArgs, parseOpContent, parseSchtasksXml, win32Adapter, csvTaskName, cronIdFromTaskName, queryTasksFromOutput } from "./win32.ts";
 import { planReconciliation } from "../../application/automation/scheduler.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
@@ -248,6 +248,19 @@ test("parseSchtasksXml: DAILY + WEEKLY + spaces root + unparseable", () => {
   expect(parseSchtasksXml(weekly)).toEqual({ schedule: "30 9 * * 0", argv: "cron run --id weekly --dir C:\\wb" });
   expect(parseSchtasksXml("<Task/>")).toBeNull();
   expect(parseSchtasksXml(`<Task><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary><ScheduleByDay/></CalendarTrigger></Triggers><Actions><Exec><Arguments>no --dir here</Arguments></Exec></Actions></Task>`)).toBeNull();
+});
+
+test("darwin inspect requires launchd-loaded state, not just a plist file", () => {
+  const home = mkdtempSync(join(tmpdir(), "jspace-darwin-inspect-"));
+  try {
+    const launchAgents = join(home, "Library", "LaunchAgents");
+    mkdirSync(launchAgents, { recursive: true });
+    writeFileSync(join(launchAgents, "com.jspace.cron.tagA.inbox.plist"), "stale");
+    const env = { jspaceBinary: "/bin/jspace", home, path: "/bin" };
+    expect(inspectDarwin("tagA", env, () => false)).toEqual([]);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test("darwin plistPath + parsePlistName use injected home + tagged identity", () => {

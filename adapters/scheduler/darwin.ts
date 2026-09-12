@@ -135,6 +135,30 @@ function plistArgv(name: string, home: string): string {
   return argvFromPlistStdout(res.stdout ?? "", name);
 }
 
+/** Pure-ish inspect seam: a plist file is only an installed task when launchd
+ *  also reports its label as loaded. Without this, a stale file left after a
+ *  failed/partial unload makes reconciliation a no-op forever (the observed
+ *  server-status never-run bug). */
+export function inspectDarwin(
+  tag: string,
+  env: SchedulerEnv,
+  isLoaded: (taskId: string) => boolean,
+): InstalledTask[] {
+  const out: InstalledTask[] = [];
+  for (const name of listPlists(env.home)) {
+    if (!plistBelongsToTag(name, tag)) continue; // other workbench / legacy untagged — never touch
+    const parsed = parsePlistName(name)!;
+    if (!isLoaded(parsed.taskId)) continue;
+    out.push({
+      taskId: parsed.taskId,
+      cronId: parsed.cronId,
+      schedule: plistSchedule(name, env.home),
+      argv: plistArgv(name, env.home),
+    });
+  }
+  return out;
+}
+
 /** Install one op (per-cron plist semantics). Private helper — the public write
  *  port is applyBatch (darwin applies ops one at a time, no whole-block reshape). */
 function applyOne(op: SchedulerOp, tag: string, root: string, env: SchedulerEnv): string[] {
@@ -169,18 +193,10 @@ export const darwinAdapter: SchedulerAdapter = {
   },
 
   inspect(tag: string, env: SchedulerEnv): InstalledTask[] {
-    const out: InstalledTask[] = [];
-    for (const name of listPlists(env.home)) {
-      if (!plistBelongsToTag(name, tag)) continue; // other workbench / legacy untagged — never touch
-      const parsed = parsePlistName(name)!;
-      out.push({
-        taskId: parsed.taskId,
-        cronId: parsed.cronId,
-        schedule: plistSchedule(name, env.home),
-        argv: plistArgv(name, env.home),
-      });
-    }
-    return out;
+    return inspectDarwin(tag, env, (taskId) => {
+      const loaded = schedulerSpawn("launchctl", ["list", taskId]);
+      return loaded.status === 0;
+    });
   },
 
   // darwin installs per-cron plists — one op at a time, no whole-block reshape.
