@@ -1,6 +1,6 @@
 # Cursor 接线参考（会话 harness，D6 保留）
 
-> Cursor 是 **IDE-only 会话 harness**：**无 headless CLI**（无 `-p` 模式），所以**永不进 cron enum**（`capabilities.cursor.headless: null`，`cron_harness_enum_value: null`）。用户拍板（D6）保留 Cursor 为会话 harness，本次改造只**数据化不深度改造**——维持现状接线（MCP + sessionStart hook + Rules），不做新的自动化通道。与 `harness-config` skill 的机器级接线分工：本文档是 JSpace 工作台对 Cursor 的支持声明；`~/.agents/agents.md` 全局治理的逐 harness 差异见 harness-config。
+> Cursor 是 **IDE-only 会话 harness**：**无 headless CLI**（无 `-p` 模式），所以**永不进 cron enum**（`capabilities.cursor.headless: null`，`cron_harness_enum_value: null`）。用户拍板（D6）保留 Cursor 为会话 harness，本次改造只**数据化不深度改造**——维持现状接线（MCP + sessionStart hook + Rules），不做新的自动化通道。与 `harness-config` skill 的机器级接线分工：本文档是 JSpace 工作台对 Cursor 的支持声明；`~/.agents/AGENTS.md` 全局治理的逐 harness 差异见 harness-config。
 > `<gbrain>` = gbrain 二进制绝对路径（`$GBRAIN_BIN` → `command -v gbrain` → `~/.bun/bin/gbrain`）。
 
 ## 支持面（capsules：capabilities.cursor）

@@ -64,7 +64,7 @@ Before changing files for non-trivial work, classify the request internally (imp
 
 ## Agents
 
-Agent 定义是**声明式**的:作为上下文读取、按描述扮演,不物化成各 harness 的 agent 文件(`~/.claude/agents/` 等仍归各 harness 系统 agent 所有)。归属按"覆盖面最小的那一层",上层被引用、不复制:用户个人 agents → 全局 `~/.agents/agents.md`(用户定义);工作台能力 agents → 官方 skill(skill 即 agent 形态,按需读对应 SKILL.md);项目专属 agents → 项目根 `AGENTS.md`。**项目级继承**:项目根 `AGENTS.md` 顶部加——`> Agents:读 ~/.agents/agents.md(用户级)+ 工作台 AGENTS.md(如在此工作台下);本项目只定义项目专属 agents。`
+Agent 定义是**声明式**的:作为上下文读取、按描述扮演,不物化成各 harness 的 agent 文件(`~/.claude/agents/` 等仍归各 harness 系统 agent 所有)。归属按"覆盖面最小的那一层",上层被引用、不复制:用户个人 agents → 全局 `~/.agents/AGENTS.md`(用户定义);工作台能力 agents → 官方 skill(skill 即 agent 形态,按需读对应 SKILL.md);项目专属 agents → 项目根 `AGENTS.md`。**项目级继承**:项目根 `AGENTS.md` 顶部加——`> Agents:读 ~/.agents/AGENTS.md(用户级)+ 工作台 AGENTS.md(如在此工作台下);本项目只定义项目专属 agents。`
 
 ## Confirmation Rules
 

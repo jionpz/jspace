@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "bundle_version": "1.0.22",
+  "bundle_version": "1.0.23",
   "files": [
     {
       "path": "templates/workbench/.claude/settings.json",
@@ -39,7 +39,7 @@
     },
     {
       "path": "templates/workbench/AGENTS.md",
-      "sha256": "ffe3c8512127d70eeba2858ec06df665d84b00c33f779fb24b10d83c8cb833e4",
+      "sha256": "d2a4ff1e2fe5bd93ba634bf19fcbdcdd3826ed88cb56db6ef459a1d6859cc662",
       "ownership": "seed"
     },
     {
@@ -59,7 +59,7 @@
     },
     {
       "path": "skills/jspace-use/SKILL.md",
-      "sha256": "81f7de7582843780b2a0393773c9a54d6f3e3a904b1285196eaf6e9fc5a637ff",
+      "sha256": "ba2ab481cb96b84b2f26a877557704d904f4f5743cd3d77276f7b4ff3a05f9ac",
       "ownership": "seed"
     },
     {
@@ -79,12 +79,12 @@
     },
     {
       "path": "skills/jspace-use/references/harness-claude.md",
-      "sha256": "df4a06715bdbc8808f9b1af0eef5bc1fbee2548dadc795e55524049b3835e9d4",
+      "sha256": "de5833dc591c4264add9980be60089cffb349ec6ea1a7ea3d87aa4dd8c6f7ce9",
       "ownership": "seed"
     },
     {
       "path": "skills/jspace-use/references/harness-cursor.md",
-      "sha256": "478d92828f46d46feaa33ab61fa81269579cd00f84aa573ce2fcd73d5d6652f8",
+      "sha256": "77d60fd362c679866b084f7d4bc03bf0577d850c1e426bbf3ecc4aaf5438e0bb",
       "ownership": "seed"
     },
     {
@@ -99,12 +99,12 @@
     },
     {
       "path": "skills/jspace-use/references/harness-pi.md",
-      "sha256": "1bdecbee7380d7ca83af17f356cdd9c799a88daae24f1a92b86a2ff4f14216da",
+      "sha256": "044a97aefe5a770d778f4a2b451bc406f8cd4af6577bd0c9c71c80a709e3b789",
       "ownership": "seed"
     },
     {
       "path": "skills/jspace-use/references/harnesses.md",
-      "sha256": "004713d96eca3a8bf25ef7bb100443f4e48ac93065a3d8c7c5cdcac517993769",
+      "sha256": "121faeec32597ab1103e539446510c808ac895aa865fd171c27d098183a17af4",
       "ownership": "seed"
     },
     {

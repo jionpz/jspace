@@ -1,6 +1,6 @@
 # Harness wiring reference(接线与推荐配置)
 
-> 面向 **5 个 AI harness**:Pi / Claude Code / Grok Build / OpenCode / Cursor（codex cron 兼容）。单一事实源 = **用户根目录** `~/.agents/agents.md`(治理文档,内容分层与安全红线见 `governance.md`)。
+> 面向 **5 个 AI harness**:Pi / Claude Code / Grok Build / OpenCode / Cursor（codex cron 兼容）。单一事实源 = **用户根目录** `~/.agents/AGENTS.md`(治理文档,内容分层与安全红线见 `governance.md`)。
 > 本文所有配置规则均以 **官方当前文档查证为准**(核查日期 2026-08-02,官方来源见各节末尾);与既有假设不一致处以官方文档为准并注明差异。
 > 符号:`<gbrain>` = gbrain 二进制路径,按 `$GBRAIN_BIN` → `command -v gbrain`(Windows `where gbrain`) → `~/.bun/bin/gbrain` 解析(Windows:`%USERPROFILE%\.bun\bin\gbrain.exe`);**MCP command 建议用绝对路径**(非登录 shell 可能找不到 PATH;Windows 下必须全路径)。
 > 接线目标由 `scripts/detect.sh` 检测决定(installed 接线 / not_found 跳过)。会话级配置(gbrain MCP、session 注入)只核对报告,不修改既有配置。
@@ -47,7 +47,7 @@
 - **symlink 跟随**:官方未文档化,但源码(`resource-loader.ts` 用 `existsSync`+`statSync().isFile()`+`readFileSync`,全程无 `lstat`)确认 symlink 会被正常读取。
 - **接线命令(幂等、带守卫)**:
   ```bash
-  target="$HOME/.agents/agents.md"; dest="$HOME/.pi/agent/AGENTS.md"
+  target="$HOME/.agents/AGENTS.md"; dest="$HOME/.pi/agent/AGENTS.md"
   mkdir -p "$(dirname "$dest")"
   if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$target" ]; then
     echo "already wired"
@@ -98,7 +98,7 @@
 - **symlink:官方推荐**。文档示例 `ln -s AGENTS.md CLAUDE.md`,并在下一会话 `/context` 确认显示在 Memory files。Windows 需管理员/开发者模式(默认 macOS/Unix)。
 - **接线命令(幂等、带守卫)**:
   ```bash
-  target="$HOME/.agents/agents.md"; dest="$HOME/.claude/CLAUDE.md"
+  target="$HOME/.agents/AGENTS.md"; dest="$HOME/.claude/CLAUDE.md"
   mkdir -p "$(dirname "$dest")"
   if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$target" ]; then
     echo "already wired"
@@ -110,7 +110,7 @@
   fi
   ```
   - 内容层验证:新会话运行 `/context`,确认治理文档出现在 Memory files;不生效则改用 `@import`。
-- **备选 `@import`**(symlink 不可用/不生效时):在 `~/.claude/CLAUDE.md` 首行写 `@~/.agents/agents.md`。`@import` 支持相对/绝对路径与 `~` 展开,递归 ≤4 层;**不支持 glob**。
+- **备选 `@import`**(symlink 不可用/不生效时):在 `~/.claude/CLAUDE.md` 首行写 `@~/.agents/AGENTS.md`。`@import` 支持相对/绝对路径与 `~` 展开,递归 ≤4 层;**不支持 glob**。
 - **MCP 信任**:用户级 server 对所有项目生效(无逐项目批准);要批准对话框则用 `--scope project`(项目级 `.mcp.json`)。
 - 注意:`/rewind` 不恢复 symlink/hard-link 文件(不影响读取,仅影响检查点恢复)。
 
@@ -160,7 +160,7 @@
 - **symlink:源码确认允许**("Symlinks are allowed",`agents_md.rs`;读取用 `fs::read_file` 跟随)。官方文档未明说,属实现级事实。
 - **接线命令(幂等、带守卫;含 override 检查)**:
   ```bash
-  target="$HOME/.agents/agents.md"; dest="$HOME/.codex/AGENTS.md"
+  target="$HOME/.agents/AGENTS.md"; dest="$HOME/.codex/AGENTS.md"
   # 若存在 AGENTS.override.md,它会遮蔽 AGENTS.md:优先接线 override 文件并提示
   if [ -e "$HOME/.codex/AGENTS.override.md" ]; then
     echo "note: ~/.codex/AGENTS.override.md 优先于 AGENTS.md;请接线 override 文件(或移除它)"
@@ -229,7 +229,7 @@
 - **Project Rules**:`<project>/.cursor/rules/*.mdc`,frontmatter 支持 3 个可选字段:
   ```markdown
   ---
-  description: "遵循用户根目录治理文档 ~/.agents/agents.md"
+  description: "遵循用户根目录治理文档 ~/.agents/AGENTS.md"
   alwaysApply: true
   # globs 可选(逗号分隔路径模式);alwaysApply: true 时忽略 globs
   ---
@@ -238,7 +238,7 @@
   - 纯 `.md`(无 frontmatter)在 `.cursor/rules/` 下被忽略,必须 `.mdc`。
 - **指针式规则:官方推荐**("Reference files instead of copying their contents";规则可用 `@filename.ts` 引用外部文件)。治理文档指针 `.mdc` 正文推荐用**遵循声明**或相对路径引用;`@$HOME` 绝对引用未经官方文档证实,不优先使用。
 - **Cursor 原生读取 AGENTS.md/CLAUDE.md**:项目根/子目录的纯 markdown `AGENTS.md`/`CLAUDE.md` 自动读取,更具体子目录优先;`CLAUDE.md` 始终应用。旧 `.cursorrules` 已废弃。
-- 全局治理的现实路径:① 把指针规则粘贴到 UI User Rules;② 每个项目放一个指针 `.mdc`(正文为对 `~/.agents/agents.md` 的遵循声明),或项目 `AGENTS.md` 顶部引用。
+- 全局治理的现实路径:① 把指针规则粘贴到 UI User Rules;② 每个项目放一个指针 `.mdc`(正文为对 `~/.agents/AGENTS.md` 的遵循声明),或项目 `AGENTS.md` 顶部引用。
 
 ### ② gbrain MCP/CLI
 
@@ -266,7 +266,7 @@
 
 ## 治理文档接线通用要点
 
-- **单一事实源**:只编辑 `~/.agents/agents.md`;symlink 入口自动跟随,`@import`/指针 `.mdc` 只读指向。
+- **单一事实源**:只编辑 `~/.agents/AGENTS.md`;symlink 入口自动跟随,`@import`/指针 `.mdc` 只读指向。
 - **幂等与守卫**:以上各节接线命令可重复运行(已接线 → `already wired`);空 stub 自动替换;非空文件拒绝覆盖并提示。
 - **不覆盖非空既有文件**:原内容并入治理文档,或保留原文件 + 附加接线,二选一向用户说明。
 - **跳过**:detect.sh 报 `not_found` 的 harness 不接线,列入报告。

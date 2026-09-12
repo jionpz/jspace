@@ -1,10 +1,10 @@
-# Governance 文档参考(`~/.agents/agents.md` 骨架模板)
+# Governance 文档参考(`~/.agents/AGENTS.md` 骨架模板)
 
 > **命名澄清**:本文所有 `~/.agents` 指 **用户根目录** 下的全局治理目录(`$HOME/.agents`),与任何项目级 `.agents/` 目录(Trellis skills 等)是不同位置。写文档与接线时务必区分。
 
 ## 1. 本文件是什么
 
-- **`~/.agents/agents.md` = 所有 AI harness 的单一事实源(治理层)**。Pi / Claude Code / Codex / Cursor 通过各自的全局入口(symlink / @import / .mdc 指针规则)读取它。
+- **`~/.agents/AGENTS.md` = 所有 AI harness 的单一事实源(治理层)**。Pi / Claude Code / Codex / Cursor 通过各自的全局入口(symlink / @import / .mdc 指针规则)读取它。
 - 只放 **harness 无关** 的静态治理规则;MCP、hooks、session 注入等 **会话级** 配置留在各 harness 自己的目录。
 - 记忆在 **gbrain**,规则在 **本文件**:事实 / 资产指针进 gbrain,规则与红线进本文件。
 - 工作台 `AGENTS.md` 是 **路由层**(域路由 + 资源治理),在其上;本文件不重复其路由细节。
@@ -22,7 +22,7 @@
 | 维护约定(单源) | 各 harness 专属语法 / 特性 |
 | 密钥声明(本文件不放密钥) | 会话注入的具体文本 |
 
-## 3. 骨架模板(可直接复制为 `~/.agents/agents.md`)
+## 3. 骨架模板(可直接复制为 `~/.agents/AGENTS.md`)
 
 ```markdown
 # 全局治理文档(用户根目录 ~/.agents)
@@ -79,7 +79,7 @@
 
 ## 4. 修改与回滚
 
-- 改治理规则:编辑 `~/.agents/agents.md`(symlink 入口自动跟随,无需动各 harness 文件)。
+- 改治理规则:编辑 `~/.agents/AGENTS.md`(symlink 入口自动跟随,无需动各 harness 文件)。
 - 接线动作(建 / 删 symlink、.mdc 指针)见 `~/.agents/skills/harness-config/references/harnesses.md`。
 - 撤销接线:**先删各 harness 入口 symlink,再删 `~/.agents` 目录**——只删目录会留下悬空 symlink(Codex 读悬空链接会报错,Claude/Pi 静默无治理)。
 - 若某 harness 原本有非空全局文件,不覆盖:内容并入本文件,或保留原文件 + 追加 import / 接线行(见 harnesses.md 对应节)。
@@ -87,4 +87,4 @@
 
 ## 5. 自包含约束
 
-- 本参考只描述 `~/.agents/agents.md` 的内容与维护;不含任何本仓库相对路径引用,可随 skill 独立分发。
+- 本参考只描述 `~/.agents/AGENTS.md` 的内容与维护;不含任何本仓库相对路径引用,可随 skill 独立分发。

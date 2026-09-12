@@ -22,7 +22,7 @@ test("capabilities file has the full support set (5 session + codex compat)", ()
   expect(harnessNames().sort()).toEqual(["claude", "codex", "cursor", "grok", "opencode", "pi"]);
   expect(caps.schema_version).toBe(1);
   expect(caps.shared_workbench_projection).toContain(".agents/skills");
-  expect(caps.global_governance.source).toBe("~/.agents/agents.md");
+  expect(caps.global_governance.source).toBe("~/.agents/AGENTS.md");
   expect(caps.global_governance.required_headings).toEqual(["安全与隐私红线", "决策原则", "维护约定"]);
 });
 

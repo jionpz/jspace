@@ -70,7 +70,7 @@ schema_version: 1
 # The prose contract lives in skills/harness-config/references/governance.md;
 # repair remains the harness-config skill's responsibility.
 global_governance:
-  source: "~/.agents/agents.md"
+  source: "~/.agents/AGENTS.md"
   required_headings:
     - "安全与隐私红线"
     - "决策原则"

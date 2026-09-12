@@ -27,7 +27,7 @@ triggers:
 
 ## 何时用 / 何时不用
 - ✅ 用:新工作台首次启用 / 日常「怎么用工作台 / 怎么路由 / 怎么维护诊断」/ registry 坏 / gbrain 缺失或未接线 / 故障排查。
-- ❌ 不用:配置**机器级**多-harness 全局治理文档(`~/.agents/agents.md` 单源接线)→ `harness-config`;日常把资料入库 → `asset-ingest`;用户问句召回 → `memory-recall`;会话收工写回 → `memory-writeback`;每周纪律自省 → `workbench-retro`。
+- ❌ 不用:配置**机器级**多-harness 全局治理文档(`~/.agents/AGENTS.md` 单源接线)→ `harness-config`;日常把资料入库 → `asset-ingest`;用户问句召回 → `memory-recall`;会话收工写回 → `memory-writeback`;每周纪律自省 → `workbench-retro`。
 - **前提**:至少一个 harness(Pi/Claude Code/Codex/Cursor)已装且可用;本指南不装 harness。
 
 ## 1. 工作台模型

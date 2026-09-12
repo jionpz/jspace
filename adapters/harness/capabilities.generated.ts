@@ -4,7 +4,7 @@ import type { HarnessCapabilitiesFile } from "./types.ts";
 export const CAPABILITIES: HarnessCapabilitiesFile = {
   "schema_version": 1,
   "global_governance": {
-    "source": "~/.agents/agents.md",
+    "source": "~/.agents/AGENTS.md",
     "required_headings": [
       "安全与隐私红线",
       "决策原则",

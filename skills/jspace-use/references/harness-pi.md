@@ -1,7 +1,7 @@
 # Pi 接线参考（honest boundary + 插件通道）
 
 > Pi 是 JSpace 支持集里的**最低能力 tier**（T3）：cron 无头 `pi -p` 可用，但**无 Claude 风格 hooks**（`hook_format: none`）。gbrain 接入靠 CLI 或第三方扩展 `pi-mcp-adapter`。本文档诚实标注「能做什么 / 怎么做 / 边界在哪」，不假装有自动接线。
-> 与 `harness-config` skill 的机器级接线分工：本文档是 JSpace 工作台对 Pi 的支持声明；`~/.agents/agents.md` 全局治理的逐 harness 差异见 harness-config。
+> 与 `harness-config` skill 的机器级接线分工：本文档是 JSpace 工作台对 Pi 的支持声明；`~/.agents/AGENTS.md` 全局治理的逐 harness 差异见 harness-config。
 > `<gbrain>` = gbrain 二进制绝对路径（`$GBRAIN_BIN` → `command -v gbrain` → `~/.bun/bin/gbrain`）。
 
 ## 支持面（capsules：capabilities.pi）

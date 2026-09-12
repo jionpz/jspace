@@ -1,6 +1,6 @@
 # Claude Code 接线参考（参考实现）
 
-> Claude Code 是 JSpace harness 接线的**参考实现**：hooks（`.claude/settings.json`）+ skills 投影（`.claude/skills/` + `.agents/skills/`）+ MCP（`~/.claude.json`）+ 用户级 `~/.agents/skills/`。其他 harness 的接线是对它的近似。与 `harness-config` skill 的机器级接线分工：本文档是 JSpace 工作台对 Claude Code 的支持声明；`~/.agents/agents.md` 全局治理的逐 harness 差异见 harness-config。
+> Claude Code 是 JSpace harness 接线的**参考实现**：hooks（`.claude/settings.json`）+ skills 投影（`.claude/skills/` + `.agents/skills/`）+ MCP（`~/.claude.json`）+ 用户级 `~/.agents/skills/`。其他 harness 的接线是对它的近似。与 `harness-config` skill 的机器级接线分工：本文档是 JSpace 工作台对 Claude Code 的支持声明；`~/.agents/AGENTS.md` 全局治理的逐 harness 差异见 harness-config。
 > `<gbrain>` = gbrain 二进制绝对路径（`$GBRAIN_BIN` → `command -v gbrain` → `~/.bun/bin/gbrain`）。
 
 ## 支持面（capsules：capabilities.claude）

@@ -1442,7 +1442,7 @@ test("healthy governance source + Claude import + Codex/Pi symlinks -> no govern
   const home = join(root, "home");
   const source = writeGovernanceSource(home);
   mkdirSync(join(home, ".claude"), { recursive: true });
-  writeFileSync(join(home, ".claude", "CLAUDE.md"), "@~/.agents/agents.md\n");
+  writeFileSync(join(home, ".claude", "CLAUDE.md"), "@~/.agents/AGENTS.md\n");
   mkdirSync(join(home, ".codex"), { recursive: true });
   symlinkSync(source, join(home, ".codex", "AGENTS.md"));
   mkdirSync(join(home, ".pi", "agent"), { recursive: true });
