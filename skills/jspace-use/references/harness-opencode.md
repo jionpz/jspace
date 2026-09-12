@@ -7,7 +7,7 @@
 
 | 维度 | 值 | 说明 |
 |---|---|---|
-| cron 无头 | ✅ `harness: opencode`（argv `opencode run <prompt>`，positional） | argv 有单测（`adapters/harness/opencode-plugin.test.ts` 部分）；**无头 cron 可靠性未在 CI 全链验证** → best_effort |
+| cron 无头 | ✅ `harness: opencode`（argv `opencode run --auto <prompt>`，positional） | `--auto` 仅随 headless argv 注入，交互会话仍按正常权限提示；argv 有单测，本地实测可写入；provider/退出码语义仍未在 CI 全链验证 → best_effort |
 | 会话事件 | ✅ `session.created` / `session.idle` / `experimental.session.compacting`（`.opencode/plugins/jspace.ts`） | best_effort（plugin 是否被 OpenCode 自动发现 + 事件真实触发**未实测**） |
 | MCP | ✅ 原生 | |
 | skills 投影 | `.opencode/skills/`（工作台级）+ `.agents/skills/`（共享） | init/upgrade 物化 |
@@ -42,12 +42,12 @@ OpenCode 事件总线里没有语义匹配的「会话收工」事件，所以 `
 
 1. `.opencode/plugins/jspace.ts` 是否被 OpenCode 自动发现/需配置引用——未实测。
 2. `experimental.session.compacting`（experimental 前缀）真实触发与 `output.context` 注入——未实测。
-3. headless `opencode run <prompt>` 在 unattended cron 下是否挂起等模型、exit code 语义——未在 CI 验证（CI 无 opencode）。
+3. headless `opencode run --auto <prompt>` 在 unattended cron 下是否挂起等模型、exit code 语义——未在 CI 验证（CI 无 opencode）。已实测：不加 `--auto` 时写操作会被拒绝但进程仍可能 exit 0，因此 `--auto` 是 headless 可靠性必需项，不是交互默认值。
 
 ## 验证
 
 ```bash
 jspace doctor --dir .          # checkHarness: 活跃 opencode 二进制在 PATH 检查
-jspace cron run <cron> --harness opencode --dry-run --dir .   # argv = opencode run <prompt>
+jspace cron run <cron> --harness opencode --dry-run --dir .   # argv = opencode run --auto <prompt>
 bun test adapters/harness/opencode-plugin.test.ts  # 事件分支（idle 不含 writeback）
 ```

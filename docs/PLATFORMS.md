@@ -26,7 +26,7 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 |---|---|---|---|
 | claude | `-p <prompt> --output-format text --allowedTools Bash,Read,Write,Edit,mcp__gbrain__*` | automated | argv 形状 + 白名单有单测（`adapters/harness/argv.test.ts`）；无头执行需本机 `claude` 可用 |
 | grok | `-p <prompt> --output-format json --allow Bash(*)` | best-effort | argv 组装有单测（`adapters/harness/grok.test.ts`）；无头执行需本机 `grok`，CI 未全链验证 |
-| opencode | `run <prompt>`（positional） | best-effort | argv 组装有单测；无头 cron 可靠性未在 CI 验证 |
+| opencode | `run --auto <prompt>`（positional；仅 headless 自动批准未显式 deny 的工具） | best-effort | argv 组装有单测；`--auto` 已本地实测可写；provider/退出码语义仍未在 CI 全链验证 |
 | codex | `exec <prompt>` | best-effort | argv 已实现，未在 CI 全链验证 |
 | pi | `-p <prompt>` | best-effort | argv 已实现，未在 CI 全链验证 |
 

@@ -53,8 +53,13 @@ test("grok headless argv shape (capability-driven flags)", () => {
   ]);
 });
 
-test("opencode headless argv is positional (opencode run <prompt>)", () => {
-  expect(harnessArgv("opencode", "do it", "darwin", "/bin/opencode")).toEqual(["/bin/opencode", "run", "do it"]);
+test("opencode headless argv auto-approves tools only for cron", () => {
+  expect(harnessArgv("opencode", "do it", "darwin", "/bin/opencode")).toEqual([
+    "/bin/opencode",
+    "run",
+    "--auto",
+    "do it",
+  ]);
 });
 
 test("cursor is a session harness with no headless CLI", () => {

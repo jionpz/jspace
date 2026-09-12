@@ -14,7 +14,7 @@
 |---|---|---|---|---|---|---|
 | claude | `claude -p …` | SessionStart / UserPromptSubmit / SessionEnd | native | claude_settings_json | none | best_effort / best_effort / manual / best_effort |
 | grok | `grok -p …` | SessionStart / UserPromptSubmit / PreCompact / SessionEnd | native | grok_hooks_json | full | best_effort / best_effort / manual / best_effort |
-| opencode | `opencode run …` | session.created / session.idle / experimental.session.compacting | native | opencode_plugin_ts | none | best_effort / manual / manual / best_effort |
+| opencode | `opencode run --auto …` | session.created / session.idle / experimental.session.compacting | native | opencode_plugin_ts | none | best_effort / manual / manual / best_effort |
 | pi | `pi -p …` | session_start / before_agent_start（扩展事件） | via: pi_mcp_adapter | none | none | best_effort / manual / manual / best_effort |
 | cursor | 无（IDE-only） | sessionStart / sessionEnd | native | cursor_hooks_json | none | best_effort / best_effort / manual / manual |
 | codex | `codex exec …` | — | native | none | none | manual / manual / manual / best_effort |

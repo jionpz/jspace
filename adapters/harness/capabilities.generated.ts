@@ -153,7 +153,8 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
     "opencode": {
       "headless": [
         "opencode",
-        "run"
+        "run",
+        "--auto"
       ],
       "argv_flags": {},
       "supports_tool_restriction": false,

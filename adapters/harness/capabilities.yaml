@@ -152,7 +152,9 @@ harnesses:
     documented: true
 
   opencode:
-    headless: ["opencode", "run"]
+    # Unattended cron needs non-interactive tool approval; scope --auto to the
+    # headless argv only. Interactive `opencode` keeps its normal prompts.
+    headless: ["opencode", "run", "--auto"]
     argv_flags: {}
     supports_tool_restriction: false
     cron_env:
