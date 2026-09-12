@@ -1,9 +1,12 @@
-// application/automation/lock.ts — exclusive cron single-instance lock.
+// application/lock.ts — shared O_EXCL file lock primitives and workbench mutation lock.
 // Acquired with O_EXCL create (no TOCTOU between check + create); the holder
 // writes an ownership token and release() only removes the file if it still
 // carries OUR token — a stale or replaced lock is never clobbered. fs/clock are
 // injected so acquisition and staleness are testable without real files.
-import { closeSync, existsSync, openSync, readFileSync, statSync, unlinkSync, writeSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fail } from "../core/shared/errors.ts";
 
 export interface LockFs {
   openSync: (p: string, flags: string) => number;
@@ -16,7 +19,7 @@ export interface LockFs {
   now: () => number;
 }
 
-export interface CronLock {
+export interface ExclusiveLock {
   readonly held: boolean;
   /** Remove the lock only when it still carries this holder's token. */
   release: () => void;
@@ -46,7 +49,7 @@ function isEexist(e: unknown): boolean {
  *  A stale lock (older than staleMs) is removed and the create retried once.
  *  A post-create write failure (ENOSPC/EIO) removes our own 0-byte poison lock
  *  and propagates — it is not contention (issue #8 #7). */
-export function acquireLock(path: string, token: string, staleMs: number, fs: LockFs = realFs): CronLock | null {
+export function acquireLock(path: string, token: string, staleMs: number, fs: LockFs = realFs): ExclusiveLock | null {
   for (let attempt = 0; attempt < 2; attempt++) {
     let created = false;
     let fd: number | undefined;
@@ -101,6 +104,67 @@ export function acquireLockWithClock(
   staleMs: number,
   now: () => number,
   fs: LockFs = realFs,
-): CronLock | null {
+): ExclusiveLock | null {
   return acquireLock(path, token, staleMs, { ...fs, now });
+}
+
+
+// ---- workbench mutation lock ----
+
+/** Registry / cron definition mutations are local fs read-modify-write sections
+ *  (normally milliseconds). 30s leaves more than three orders of magnitude of
+ *  headroom while keeping crash recovery bounded; this is deliberately much
+ *  shorter than the minute-level cron execution lock. */
+export const MUTATION_LOCK_STALE_MS = 30_000;
+
+export interface MutationLockDeps {
+  fs?: LockFs;
+  now?: () => number;
+  /** test seam; production tokens are process-unique */
+  token?: string;
+}
+
+/** One workbench-level lock protects hub.json + local.json + cron.json. One
+ *  lock (instead of per-file locks) keeps lock ordering impossible to get wrong;
+ *  registry mutations are low-frequency, so serializing across files is cheap. */
+export function mutationLockPath(root: string): string {
+  return join(root, ".jspace", "state", "locks", "mutation.lock");
+}
+
+const heldWorkbenchMutationLocks = new Set<string>();
+
+/** Run a synchronous read-validate-write mutation under the workbench lock.
+ *  The callback MUST include the full read → validate → mutate → write span;
+ *  wrapping only the final write still allows stale-snapshot validation to race. */
+export function withWorkbenchMutationLock<T>(
+  root: string,
+  fn: () => T,
+  deps: MutationLockDeps = {},
+): T {
+  const lockPath = mutationLockPath(root);
+  mkdirSync(dirname(lockPath), { recursive: true });
+
+  // A nested acquire in the same process is a programmer error: failing here is
+  // explicit and testable instead of waiting until the stale threshold expires.
+  if (heldWorkbenchMutationLocks.has(root)) {
+    throw new Error(`internal: nested workbench mutation lock for ${root}`);
+  }
+
+  const fs = deps.fs ?? realFs;
+  const token = deps.token ?? `${process.pid}:${randomUUID()}`;
+  const lock = acquireLockWithClock(lockPath, token, MUTATION_LOCK_STALE_MS, deps.now ?? fs.now, fs);
+  if (lock === null) {
+    fail(
+      `another jspace process is modifying this workbench (lock: ${lockPath}); ` +
+        `retry after it finishes — stale locks are reclaimed after ${MUTATION_LOCK_STALE_MS / 1000}s`,
+    );
+  }
+
+  heldWorkbenchMutationLocks.add(root);
+  try {
+    return fn();
+  } finally {
+    lock.release();
+    heldWorkbenchMutationLocks.delete(root);
+  }
 }

@@ -1,7 +1,7 @@
 // application/registry/project.test.ts — `jspace project` use cases.
 // Run: bun test application/registry/project.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initWorkbench } from "../workspace/init.ts";
@@ -9,6 +9,7 @@ import { loadHub } from "../workspace/state.ts";
 import { devRoot, expandTilde, isCompiled, materializeTree } from "../../cli/embed.ts";
 import { resolvePath } from "../../cli/paths.ts";
 import { BUNDLE_MANIFEST } from "../../cli/manifest.generated.ts";
+import { mutationLockPath } from "../lock.ts";
 import { domainAdd } from "./domain.ts";
 import { resourceAdd } from "./resource.ts";
 import { projectAdd, projectList, projectListStatus } from "./project.ts";
@@ -69,6 +70,7 @@ test("project add --dry-run leaves hub.json unchanged", () => {
   const before = JSON.stringify(loadHub(root));
   projectAdd(root, "books", undefined, undefined, true);
   expect(JSON.stringify(loadHub(root))).toBe(before);
+  expect(existsSync(mutationLockPath(root))).toBe(false);
   projectAdd(root, "books", undefined, undefined, false);
   expect(loadHub(root).projects.map((p) => p.id)).toEqual(["books"]);
 });

@@ -4,7 +4,9 @@
 import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { CliError } from "../../core/shared/errors.ts";
+import { mutationLockPath } from "../lock.ts";
 import { cronAck, cronAdd, cronRemove, cronSetEnabled } from "./use-cases.ts";
 import { cronInstall } from "./scheduler-service.ts";
 import { loadCrons } from "./definitions.ts";
@@ -207,5 +209,24 @@ test("cronAck with no incidents -> acknowledged 0", () => {
   const wb = makeWorkbench([]);
   const r = cronAck(wb, undefined);
   expect(r.lines[0]).toContain("acknowledged 0 incident");
+  rmSync(wb, { recursive: true, force: true });
+});
+
+
+test("cronAdd fails fast when another process holds the mutation lock", () => {
+  const wb = makeWorkbench([]);
+  const lockPath = mutationLockPath(wb);
+  mkdirSync(dirname(lockPath), { recursive: true });
+  writeFileSync(lockPath, "other-process");
+  let thrown: unknown;
+  try {
+    cronAdd(wb, "weekly", "0 21 * * *", "claude", "p", false, { isInstalled: () => false });
+  } catch (e) {
+    thrown = e;
+  }
+  expect(thrown).toBeInstanceOf(CliError);
+  expect((thrown as Error).message).toContain("another jspace process is modifying this workbench");
+  expect(loadCrons(wb).crons).toEqual([]);
+  expect(readFileSync(lockPath, "utf-8")).toBe("other-process");
   rmSync(wb, { recursive: true, force: true });
 });

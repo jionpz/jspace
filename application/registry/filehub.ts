@@ -17,6 +17,7 @@ export {
   FILEHUB_BLOCK_END,
   FILEHUB_CONTRACT_VERSION,
 } from "./filehub-block.ts";
+import { withWorkbenchMutationLock } from "../lock.ts";
 import { loadHub, loadLocal, freshLocal } from "../workspace/state.ts";
 import { cleanTags, isWithin } from "./helpers.ts";
 import {
@@ -200,6 +201,20 @@ export function filehubUpgrade(
 /** Register the filehub root as a type=filehub resource in the given workbench.
  *  Validation runs first so --dry-run can report an accurate plan. */
 function registerFilehub(
+  wbRoot: string,
+  root: string,
+  domainOpt: string | undefined,
+  lines: string[],
+  dryRun: boolean,
+): void {
+  if (dryRun) {
+    registerFilehubImpl(wbRoot, root, domainOpt, lines, true);
+    return;
+  }
+  withWorkbenchMutationLock(wbRoot, () => registerFilehubImpl(wbRoot, root, domainOpt, lines, false));
+}
+
+function registerFilehubImpl(
   wbRoot: string,
   root: string,
   domainOpt: string | undefined,

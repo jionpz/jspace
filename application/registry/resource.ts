@@ -11,6 +11,7 @@ import {
   writeHubAtomic,
 } from "../../adapters/fs/workbench-state.ts";
 import { resolveEffectiveRegistry } from "../../core/registry/effective.ts";
+import { withWorkbenchMutationLock } from "../lock.ts";
 import { loadHub, loadLocal, assertHubValid, freshLocal } from "../workspace/state.ts";
 import { cleanTags, findIndex } from "./helpers.ts";
 
@@ -52,6 +53,22 @@ export function resourceList(root: string, json: boolean): CmdResult {
 }
 
 export function resourceAdd(
+  root: string,
+  id: string,
+  domain: string,
+  typeOpt: string | undefined,
+  pathOpt: string | undefined,
+  urlOpt: string | undefined,
+  tagsRaw: string[] | undefined,
+  notes: string | undefined,
+  dryRun: boolean,
+): CmdResult {
+  return dryRun
+    ? resourceAddImpl(root, id, domain, typeOpt, pathOpt, urlOpt, tagsRaw, notes, true)
+    : withWorkbenchMutationLock(root, () => resourceAddImpl(root, id, domain, typeOpt, pathOpt, urlOpt, tagsRaw, notes, false));
+}
+
+function resourceAddImpl(
   root: string,
   id: string,
   domain: string,
@@ -107,6 +124,12 @@ export function resourceAdd(
 }
 
 export function resourceRemove(root: string, id: string, dryRun: boolean): CmdResult {
+  return dryRun
+    ? resourceRemoveImpl(root, id, true)
+    : withWorkbenchMutationLock(root, () => resourceRemoveImpl(root, id, false));
+}
+
+function resourceRemoveImpl(root: string, id: string, dryRun: boolean): CmdResult {
   const hub: HubV1 = loadHub(root);
   const index = findIndex(hub.resources, id);
   if (index === null) fail(`no such resource: ${id}`);

@@ -36,6 +36,93 @@
 - **Harness machine-config paths are SSOT data**: gbrain MCP config paths (path/format/server_key) and verified global-context entrypoints live in capabilities.yaml `mcp_config` / `global_context`, consumed by `harness wire` / `gbrain wire` / doctor — never hardcoded in wiring code (issue #8 #16). `manual` / `unverified` are explicit non-check states, not wiring paths.
 - **Structured diagnostics**: `doctor`/`inspect` classify invalid / unbound / missing / drift with distinct codes and severities — never collapsed.
 
+
+## Scenario: Workbench mutation lock
+
+### 1. Scope / Trigger
+
+- Trigger: any cross-process read-modify-write of the workbench's `hub.json`, `local.json`, or `cron.json`.
+- Goal: never silently lose a user-visible registry/cron mutation. A competing writer must either run after the first completes or fail loudly.
+
+### 2. Signatures
+
+```ts
+export const MUTATION_LOCK_STALE_MS = 30_000;
+export function mutationLockPath(root: string): string;
+export function withWorkbenchMutationLock<T>(
+  root: string,
+  fn: () => T,
+  deps?: { fs?: LockFs; now?: () => number; token?: string },
+): T;
+```
+
+- Public mutators keep their existing signatures; internally they delegate to a `*Impl` function wrapped by `withWorkbenchMutationLock`.
+- Covered paths: `domain add/remove`, `project add`, `resource add/remove`, `filehub init --register`, `cron add/remove/enable/disable`.
+- Read-only commands and `--dry-run` call the `*Impl` directly and never acquire the lock.
+
+### 3. Contracts
+
+- Lock file: `<workbench>/.jspace/state/locks/mutation.lock`.
+- One workbench-level lock protects all three JSON files; do not introduce per-file locks or lock ordering.
+- The callback MUST span the full `read → validate → mutate → write` section. Locking only the final write leaves duplicate-id/singleton checks racing on stale snapshots.
+- Acquisition is `O_EXCL`; the file contains a process-unique ownership token. Release unlinks only when the token still matches.
+- A fresh foreign lock fails fast. A lock older than 30 seconds is treated as a crash residue and reclaimed once.
+- Same-process nesting for the same root is an explicit programmer error; different roots may be held simultaneously.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+|---|---|
+| Fresh foreign lock | `CliError` exit 1; message contains the lock path and 30s retry guidance; no mutation runs |
+| Stale lock (`mtime` > 30s) | Remove and retry the exclusive create once |
+| `EEXIST` | Contention; fail fast (not an internal error) |
+| `EPERM` / `EACCES` / `ENOSPC` / `EIO` while creating/writing the lock | Propagate; never report it as "another process is running" |
+| Post-create token write fails | Remove our 0-byte poison lock, then propagate |
+| Callback throws | Release in `finally`; never leave our own fresh lock behind |
+| Same root nested in one process | Throw `internal: nested workbench mutation lock for <root>` |
+| Dry-run / read-only command | Do not create or inspect the lock file |
+
+### 5. Good/Base/Bad Cases
+
+- Good: two concurrent `domain add` processes either both succeed sequentially (both domains present) or one exits 1 with the lock-conflict message; `hub.json` stays valid.
+- Base: one mutation process acquires, writes, and releases normally.
+- Bad: two writers both `loadHub` before either writes, then each writes its own snapshot; the second silently overwrites the first.
+
+### 6. Tests Required
+
+- Unit lock tests: fresh contention, stale takeover, release-if-ours, same-root reentry, distinct-root holding, non-contention error propagation.
+- Deterministic lost-update control: an unlocked interleave drops a writer; the same locked sections preserve both updates.
+- Use-case contention tests: holding the lock makes `resourceAdd` / `cronAdd` fail before reading or writing state; the foreign lock remains untouched.
+- Dry-run tests assert `mutationLockPath(root)` does not exist afterward.
+- Manual concurrency smoke may exercise separate CLI processes, but automated tests must stay deterministic.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const hub = loadHub(root);       // stale snapshot read before the lock
+hub.domains.push(record);
+withWorkbenchMutationLock(root, () => writeHubAtomic(root, hub));
+```
+
+#### Correct
+
+```ts
+function domainAddImpl(root, id, ..., dryRun) {
+  const hub = loadHub(root);     // fresh read inside the critical section
+  // validate + mutate
+  writeHubAtomic(root, hub);
+}
+
+export function domainAdd(root, id, ..., dryRun) {
+  return dryRun
+    ? domainAddImpl(root, id, ..., true)
+    : withWorkbenchMutationLock(root, () => domainAddImpl(root, id, ..., false));
+}
+```
+
+
 ## Security & Red Lines (parent R8)
 
 - Secrets/tokens/provider credentials never appear in logs, state, or diagnostics output.

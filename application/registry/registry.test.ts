@@ -1,10 +1,11 @@
 // application/registry/registry.test.ts — registry use-case JSON schema + dry-run.
 // Run: bun test application/registry/registry.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { initWorkbench } from "../workspace/init.ts";
+import { mutationLockPath } from "../lock.ts";
 import { loadHub } from "../workspace/state.ts";
 import { devRoot, expandTilde, isCompiled, materializeTree } from "../../cli/embed.ts";
 import { resolvePath } from "../../cli/paths.ts";
@@ -14,6 +15,13 @@ import { inboxStatus } from "./inbox.ts";
 import { resourceAdd, resourceList, resourceRemove } from "./resource.ts";
 
 const initDeps = { resolvePath, expandTilde, isCompiled, devRoot, materialize: materializeTree, manifest: BUNDLE_MANIFEST };
+
+function holdMutationLock(root: string): string {
+  const lockPath = mutationLockPath(root);
+  mkdirSync(dirname(lockPath), { recursive: true });
+  writeFileSync(lockPath, "other-process");
+  return lockPath;
+}
 
 let root: string;
 beforeEach(() => {
@@ -62,6 +70,7 @@ test("domain add --dry-run leaves hub.json unchanged", () => {
   const before = JSON.stringify(loadHub(root));
   domainAdd(root, "b", undefined, undefined, undefined, true);
   expect(JSON.stringify(loadHub(root))).toBe(before);
+  expect(existsSync(mutationLockPath(root))).toBe(false);
   // the real add still works after the dry-run
   domainAdd(root, "b", undefined, undefined, undefined, false);
   expect(loadHub(root).domains.map((d) => d.id)).toEqual(["a", "b"]);
@@ -74,6 +83,7 @@ test("resource add/remove --dry-run leaves hub+local unchanged", () => {
   resourceAdd(root, "y", "sales", undefined, "/tmp/fh", undefined, undefined, undefined, true);
   resourceRemove(root, "x", true);
   expect(JSON.stringify(loadHub(root))).toBe(before);
+  expect(existsSync(mutationLockPath(root))).toBe(false);
 });
 
 test("domain remove --dry-run reports plan without mutating", () => {
@@ -86,7 +96,11 @@ test("domain remove --dry-run reports plan without mutating", () => {
 
 test.skipIf(process.platform === "win32")("domain add rolls back the skeleton when the hub write fails (issue #8 #13)", () => {
   // win32 skip: chmod-based write failure differs on Windows (ACL semantics).
-  // make .jspace unwritable so writeHubAtomic's temp write throws EACCES
+  // Pre-create the lock directory, then make .jspace unwritable: the lock lives
+  // in a writable child dir, while writeHubAtomic still fails creating its temp
+  // sibling directly under .jspace. This keeps testing the hub-write rollback
+  // instead of accidentally failing at lock creation.
+  mkdirSync(join(root, ".jspace", "state", "locks"), { recursive: true });
   chmodSync(join(root, ".jspace"), 0o555);
   try {
     expect(() => domainAdd(root, "work", undefined, ["t"], undefined, false)).toThrow();
@@ -100,4 +114,14 @@ test("resource add rejects a second filehub resource (issue #8 #10)", () => {
   domainAdd(root, "files", undefined, undefined, undefined, false);
   resourceAdd(root, "fh", "files", "filehub", "/tmp/fh", undefined, undefined, undefined, false);
   expect(() => resourceAdd(root, "fh2", "files", "filehub", "/tmp/fh2", undefined, undefined, undefined, false)).toThrow(/filehub resource is already registered/);
+});
+
+
+test("resource add fails fast when another process holds the mutation lock", () => {
+  domainAdd(root, "sales", undefined, undefined, undefined, false);
+  const lockPath = holdMutationLock(root);
+  expect(() => resourceAdd(root, "x", "sales", undefined, "/tmp/fh", undefined, undefined, undefined, false))
+    .toThrow(/another jspace process is modifying this workbench/);
+  expect(loadHub(root).resources).toEqual([]);
+  expect(readFileSync(lockPath, "utf-8")).toBe("other-process");
 });

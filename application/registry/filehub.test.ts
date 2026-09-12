@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { mutationLockPath } from "../lock.ts";
 import { initWorkbench } from "../workspace/init.ts";
 import { loadHub, loadLocal } from "../workspace/state.ts";
 import { devRoot, expandTilde, filehubReadme as embeddedFilehubReadme, isCompiled, materializeTree } from "../../cli/embed.ts";
@@ -83,6 +84,7 @@ test("register with new domain creates domain skeleton + hub resource + local bi
 test("register dry-run reports plan without writing", () => {
   const fh = join(wb, "filehub");
   const r = filehubInit(fh, true, "files", fhDeps(wb), true);
+  expect(existsSync(mutationLockPath(wb))).toBe(false);
   expect(r.lines.some((l) => l.includes("would create domain: files"))).toBe(true);
   expect(r.lines.some((l) => l.includes("would register filehub resource"))).toBe(true);
   expect(loadHub(wb).resources).toHaveLength(0);

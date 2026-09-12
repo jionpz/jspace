@@ -7,6 +7,7 @@ import { isId } from "../../core/contracts/ids.ts";
 import { normalizePortablePath } from "../../core/contracts/paths.ts";
 import { decodeHub } from "../../core/contracts/hub.ts";
 import { writeHubAtomic } from "../../adapters/fs/workbench-state.ts";
+import { withWorkbenchMutationLock } from "../lock.ts";
 import { loadHub, assertHubValid } from "../workspace/state.ts";
 import { cleanTags, confinedWithin, findIndex, isWithin } from "./helpers.ts";
 
@@ -103,6 +104,19 @@ export function domainAdd(
   purposeOpt: string | undefined,
   dryRun: boolean,
 ): CmdResult {
+  return dryRun
+    ? domainAddImpl(root, domainId, pathOpt, tagsRaw, purposeOpt, true)
+    : withWorkbenchMutationLock(root, () => domainAddImpl(root, domainId, pathOpt, tagsRaw, purposeOpt, false));
+}
+
+function domainAddImpl(
+  root: string,
+  domainId: string,
+  pathOpt: string | undefined,
+  tagsRaw: string[] | undefined,
+  purposeOpt: string | undefined,
+  dryRun: boolean,
+): CmdResult {
   if (!isId(domainId)) {
     fail(`invalid domain id: ${domainId} (lowercase letters, digits, and hyphens)`);
   }
@@ -147,6 +161,12 @@ export function domainAdd(
 }
 
 export function domainRemove(root: string, id: string, purge: boolean, dryRun: boolean): CmdResult {
+  return dryRun
+    ? domainRemoveImpl(root, id, purge, true)
+    : withWorkbenchMutationLock(root, () => domainRemoveImpl(root, id, purge, false));
+}
+
+function domainRemoveImpl(root: string, id: string, purge: boolean, dryRun: boolean): CmdResult {
   const hub = loadHub(root);
   const index = findIndex(hub.domains, id);
   if (index === null) fail(`no such domain: ${id}`);
