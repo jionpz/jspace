@@ -8,6 +8,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync, uti
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { doctorWorkbench, type CronHealthDeps, type CronLike } from "./doctor.ts";
+import { loadCapabilities } from "../../adapters/harness/registry.ts";
 import { loadCrons, parseSchedule } from "../automation/definitions.ts";
 import { sha256Of } from "../workspace/manifest.ts";
 import { filehubReadme as embeddedFilehubReadme } from "../../cli/embed.ts";
@@ -1395,8 +1396,9 @@ const GOVERNANCE_BODY = [
 ].join("\n");
 
 function writeGovernanceSource(home: string, body = GOVERNANCE_BODY): string {
-  const source = join(home, ".agents", "agents.md");
-  mkdirSync(join(home, ".agents"), { recursive: true });
+  const declared = loadCapabilities().global_governance.source;
+  const source = join(home, declared.replace(/^~\//, ""));
+  mkdirSync(join(source, ".."), { recursive: true });
   writeFileSync(source, body);
   return source;
 }
