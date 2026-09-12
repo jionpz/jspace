@@ -23,6 +23,7 @@ import {
   type IngestPlan,
 } from "./journal.ts";
 import type { IngestJournalV1 } from "../../core/contracts/ingest.ts";
+import { mutationLockPath } from "../lock.ts";
 
 let root: string;
 let inbox: string;
@@ -401,4 +402,36 @@ test("sha256File is byte-level (matches shasum, not utf-8 text hash)", () => {
     const textHash = createHash("sha256").update(buf.toString("utf-8")).digest("hex");
     expect(sha256File(p)).not.toBe(textHash);
   }
+});
+
+// ---- workbench mutation lock coverage ----
+
+/** Simulate a concurrent jspace process by planting a FRESH foreign lock. */
+function plantForeignWorkbenchLock(): string {
+  const p = mutationLockPath(root);
+  mkdirSync(join(root, ".jspace", "state", "locks"), { recursive: true });
+  writeFileSync(p, "other-process");
+  return p;
+}
+
+test("every journal writer fails before touching state while another process holds the lock", () => {
+  const src = sourceFile();
+  const t = track();
+  const { journal } = beginIngest(root, plan(src), t.ops) as { kind: "created"; journal: { id: string } };
+  const id = journal.id;
+  const before = readJournal(root, id);
+
+  plantForeignWorkbenchLock();
+
+  // each write entry point must fail on the lock BEFORE its read/validate/write
+  expect(() => advanceIngest(root, id, "gbrain", t.ops)).toThrow(/modifying this workbench/);
+  expect(() => completeIngest(root, id, t.ops)).toThrow(/modifying this workbench/);
+  expect(() => failIngest(root, id, "boom", t.ops)).toThrow(/modifying this workbench/);
+  expect(() => rollbackIngest(root, id, t.ops)).toThrow(/modifying this workbench/);
+  expect(() => beginIngest(root, plan(sourceFile()), t.ops)).toThrow(/modifying this workbench/);
+
+  // ...and the journal is byte-identical: no partial state machine transition
+  expect(readJournal(root, id)).toEqual(before);
+  expect(readJournals(root).records).toHaveLength(1);
+  expect(t.unlinked).toEqual([]); // no compensation ran either
 });

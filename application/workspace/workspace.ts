@@ -17,6 +17,7 @@ import { readMaterializedJournal, writeJournalLinks, writeUpdatedMaterializedJou
 import { applyProjectionLinks, manifestSkillNames, planProjectionLinks } from "./projections.ts";
 import { safeReadFile } from "./fs-helpers.ts";
 import { migrateHubSchema, type HubTransform, type MigrationOutcome } from "../../core/registry/migrations.ts";
+import { withWorkbenchMutationLock } from "../lock.ts";
 
 function setTemplateVersion(root: string, version: string): void {
   const marker = readMarker(root);
@@ -194,6 +195,22 @@ function rollbackUpgrade(root: string, id: string, deps: UpgradeDeps): CmdResult
 }
 
 export function workspaceUpgrade(
+  root: string,
+  opts: UpgradeOptions,
+  deps: UpgradeDeps,
+): CmdResult {
+  // Upgrade rewrites seeds/skills/hub.json in place: without the lock a
+  // concurrent `domain add` can be silently overwritten by the hub migration.
+  // A plain --dry-run preview mutates nothing and must not create a lock file.
+  // NOTE: --rollback ignores --dry-run today (see rollbackUpgrade), so a
+  // rollback takes the lock even when dryRun is set — it really does mutate.
+  if (opts.dryRun && opts.rollbackId === undefined) {
+    return workspaceUpgradeImpl(root, opts, deps);
+  }
+  return withWorkbenchMutationLock(root, () => workspaceUpgradeImpl(root, opts, deps));
+}
+
+function workspaceUpgradeImpl(
   root: string,
   opts: UpgradeOptions,
   deps: UpgradeDeps,

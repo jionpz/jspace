@@ -3,6 +3,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CliError } from "../../core/shared/errors.ts";
+import { mutationLockPath } from "../lock.ts";
 import { BRIEFING_STALE_MS, claimWritebackNudge, isBriefingStale, readBriefing, touchBriefing, type BriefingStateV1 } from "./briefing.ts";
 
 let root: string;
@@ -75,4 +77,24 @@ test("damaged briefing -> issues + state null", () => {
   const r = readBriefing(root);
   expect(r.state).toBeNull();
   expect(r.issues.length).toBeGreaterThan(0);
+});
+
+// ---- workbench mutation lock coverage ----
+
+/** Simulate a concurrent session-start hook by planting a FRESH foreign lock. */
+function plantForeignWorkbenchLock(): void {
+  const p = mutationLockPath(root);
+  mkdirSync(join(root, ".jspace", "state", "locks"), { recursive: true });
+  writeFileSync(p, "other-process");
+}
+
+test("touchBriefing / claimWritebackNudge throw on a held lock and leave state untouched", () => {
+  touchBriefing(root, new Date("2026-08-17T10:00:00Z"));
+  const before = readBriefing(root).state;
+  plantForeignWorkbenchLock();
+
+  expect(() => touchBriefing(root, new Date("2026-08-17T11:00:00Z"))).toThrow(CliError);
+  expect(() => claimWritebackNudge(root)).toThrow(CliError);
+  // session_count neither advanced nor rolled back: the caller (hook) degrades
+  expect(readBriefing(root).state).toEqual(before);
 });

@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
+import { filehubMutationLockPath } from "../lock.ts";
 import { readEnvelopes, writeEnvelope } from "./envelope.ts";
 import { pendingAck, pendingApply, pendingList, pendingStage } from "./use-cases.ts";
 
@@ -81,4 +82,17 @@ test("no filehub -> stage fails cleanly", () => {
   expect(() => pendingStage(empty, "assets/foo/doc", join(empty, "content.md"), "asset-ingest")).toThrow(/no filehub registered/);
   expect(existsSync(empty)).toBe(true);
   rmSync(empty, { recursive: true, force: true });
+});
+
+test("ack fails fast while another process holds the filehub lock; status unchanged", () => {
+  pendingStage(wb, "assets/foo/doc", contentFile(), "asset-ingest");
+  const envId = id();
+  writeEnvelope(fh, { ...readEnvelopes(fh).records[0], status: "terminal_failed", error: "x" });
+
+  const lockPath = filehubMutationLockPath(fh);
+  mkdirSync(join(fh, ".jspace-logs"), { recursive: true });
+  writeFileSync(lockPath, "other-process");
+
+  expect(() => pendingAck(wb, envId)).toThrow(/modifying this filehub/);
+  expect(readEnvelopes(fh).records[0].status).toBe("terminal_failed");
 });

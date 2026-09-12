@@ -28,6 +28,7 @@ import { ASSETS } from "../../cli/assets.generated.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import { JSPACE_BLOCK_START } from "./agents-block.ts";
 import { sha256Of } from "./manifest.ts";
+import { mutationLockPath } from "../lock.ts";
 import type { UpgradeDeps } from "./workspace.ts";
 
 const initDeps = {
@@ -502,4 +503,33 @@ test("rollback rejects a tampered journal plan rel with .. (issue #8 #15)", () =
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+// ---- workbench mutation lock coverage ----
+
+/** Simulate a concurrent jspace process by planting a FRESH foreign lock. */
+function plantForeignWorkbenchLock(root: string): void {
+  const p = mutationLockPath(root);
+  mkdirSync(join(root, ".jspace", "state", "locks"), { recursive: true });
+  writeFileSync(p, "other-process");
+}
+
+test("upgrade fails on a held workbench lock without writing any seed", () => {
+  const root = tmp();
+  oldWorkbench(root);
+  const before = readFileSync(join(root, "AGENTS.md"), "utf-8");
+  plantForeignWorkbenchLock(root);
+
+  expect(() => workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps)).toThrow(/modifying this workbench/);
+  expect(readFileSync(join(root, "AGENTS.md"), "utf-8")).toBe(before);
+  expect(existsSync(join(root, ".jspace", "hub.json"))).toBe(false);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("dry-run preview creates no lock file", () => {
+  const root = tmp();
+  oldWorkbench(root);
+  workspaceUpgrade(root, { dryRun: true, acceptConflicts: true }, upgradeDeps);
+  expect(existsSync(mutationLockPath(root))).toBe(false);
+  rmSync(root, { recursive: true, force: true });
 });
