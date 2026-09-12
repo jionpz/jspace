@@ -2,7 +2,17 @@
 // stale removal, and ownership-token release (never clobbers a newer holder).
 // Run: bun test application/lock.test.ts
 import { expect, test } from "bun:test";
-import { acquireLock, type LockFs } from "./lock.ts";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { CliError } from "../core/shared/errors.ts";
+import {
+  acquireLock,
+  MUTATION_LOCK_STALE_MS,
+  mutationLockPath,
+  withWorkbenchMutationLock,
+  type LockFs,
+} from "./lock.ts";
 
 interface FakeFs extends LockFs {
   files: Record<string, string>;
@@ -102,4 +112,131 @@ test("post-create write failure removes the poison lock and propagates (not EEXI
   expect(() => acquireLock("lock", "me", 1000, fs)).toThrow(/ENOSPC/);
   expect(fs.files).toEqual({}); // poison lock cleaned up
   expect(fs.existsSync("lock")).toBe(false);
+});
+
+
+test("non-contention open error (EACCES) propagates, never becomes lock contention", () => {
+  const fs = fakeFs();
+  fs.openSync = () => {
+    const e = new Error("EACCES: permission denied");
+    (e as { code?: string }).code = "EACCES";
+    throw e;
+  };
+  expect(() => acquireLock("lock", "me", 1000, fs)).toThrow(/EACCES/);
+});
+
+test("mutationLockPath uses .jspace/state/locks", () => {
+  expect(mutationLockPath("/wb")).toBe(join("/wb", ".jspace", "state", "locks", "mutation.lock"));
+});
+
+test("workbench mutation lock fails fast when another holder is fresh", () => {
+  const root = mkdtempSync(join(tmpdir(), "jspace-lock-"));
+  try {
+    const lockPath = mutationLockPath(root);
+    const fs = fakeFs({ [lockPath]: "other-process" });
+    fs.mtime[lockPath] = fs.now0;
+    let ran = false;
+    let thrown: unknown;
+    try {
+      withWorkbenchMutationLock(root, () => { ran = true; }, { fs, token: "me" });
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(CliError);
+    expect((thrown as Error).message).toContain("another jspace process is modifying this workbench");
+    expect((thrown as Error).message).toContain(lockPath);
+    expect(ran).toBe(false);
+    expect(fs.files[lockPath]).toBe("other-process"); // fresh foreign lock untouched
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("workbench mutation lock reclaims a stale lock and releases it after the callback", () => {
+  const root = mkdtempSync(join(tmpdir(), "jspace-lock-"));
+  try {
+    const lockPath = mutationLockPath(root);
+    const fs = fakeFs({ [lockPath]: "crashed-holder" });
+    fs.mtime[lockPath] = fs.now0 - MUTATION_LOCK_STALE_MS - 1;
+    let tokenWhileHeld = "";
+    const result = withWorkbenchMutationLock(root, () => {
+      tokenWhileHeld = fs.files[lockPath];
+      return "ok";
+    }, { fs, token: "me" });
+    expect(result).toBe("ok");
+    expect(tokenWhileHeld).toBe("me");
+    expect(fs.existsSync(lockPath)).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("workbench mutation lock release never deletes a newer holder", () => {
+  const root = mkdtempSync(join(tmpdir(), "jspace-lock-"));
+  try {
+    const lockPath = mutationLockPath(root);
+    const fs = fakeFs();
+    withWorkbenchMutationLock(root, () => {
+      fs.files[lockPath] = "newer-holder"; // lock replaced after our critical section
+    }, { fs, token: "me" });
+    expect(fs.files[lockPath]).toBe("newer-holder");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("same-root reentry fails explicitly; different roots may be held together", () => {
+  const rootA = mkdtempSync(join(tmpdir(), "jspace-lock-a-"));
+  const rootB = mkdtempSync(join(tmpdir(), "jspace-lock-b-"));
+  try {
+    let differentRootRan = false;
+    withWorkbenchMutationLock(rootA, () => {
+      expect(() => withWorkbenchMutationLock(rootA, () => undefined)).toThrow(/nested workbench mutation lock/);
+      withWorkbenchMutationLock(rootB, () => { differentRootRan = true; });
+    });
+    expect(differentRootRan).toBe(true);
+    expect(existsSync(mutationLockPath(rootA))).toBe(false);
+    expect(existsSync(mutationLockPath(rootB))).toBe(false);
+  } finally {
+    rmSync(rootA, { recursive: true, force: true });
+    rmSync(rootB, { recursive: true, force: true });
+  }
+});
+
+test("lost-update control: unlocked interleave drops one writer", () => {
+  const root = mkdtempSync(join(tmpdir(), "jspace-lock-"));
+  const stateFile = join(root, "state.json");
+  try {
+    writeFileSync(stateFile, JSON.stringify({ items: [] }));
+    const first = JSON.parse(readFileSync(stateFile, "utf-8")) as { items: string[] };
+    const second = JSON.parse(readFileSync(stateFile, "utf-8")) as { items: string[] };
+    first.items.push("first");
+    second.items.push("second");
+    writeFileSync(stateFile, JSON.stringify(first));
+    writeFileSync(stateFile, JSON.stringify(second));
+    expect((JSON.parse(readFileSync(stateFile, "utf-8")) as { items: string[] }).items).toEqual(["second"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("locked read-modify-write sections serialize: both updates survive", () => {
+  const root = mkdtempSync(join(tmpdir(), "jspace-lock-"));
+  const stateFile = join(root, "state.json");
+  try {
+    writeFileSync(stateFile, JSON.stringify({ items: [] }));
+    withWorkbenchMutationLock(root, () => {
+      const state = JSON.parse(readFileSync(stateFile, "utf-8")) as { items: string[] };
+      state.items.push("first");
+      writeFileSync(stateFile, JSON.stringify(state));
+    });
+    withWorkbenchMutationLock(root, () => {
+      const state = JSON.parse(readFileSync(stateFile, "utf-8")) as { items: string[] };
+      state.items.push("second");
+      writeFileSync(stateFile, JSON.stringify(state));
+    });
+    expect((JSON.parse(readFileSync(stateFile, "utf-8")) as { items: string[] }).items).toEqual(["first", "second"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
