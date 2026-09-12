@@ -66,6 +66,15 @@ test("dry-run returns the would-run argv without executing", async () => {
   expect(res.lines[1]).toContain(fakeHarness); // argv routed to the fake harness
 });
 
+test("skill-target argv carries the run-mode notice; prose prompts stay untouched", async () => {
+  // The notice must reach the harness on the skill-target path (this is what
+  // makes source:cron countable) and must NOT leak into the prose escape hatch.
+  const skill = await cronRun(root, { cronId: "inbox-tidy", timeoutSec: 10, force: false, dryRun: true }, inboxDeps());
+  expect(skill.lines[1]).toContain("source:cron");
+  const prose = await run({ cronId: "weekly", dryRun: true });
+  expect(prose.lines[1]).not.toContain("source:cron");
+});
+
 test("harnessOverride routes the argv to the override harness (grok probe seam)", async () => {
   // `jspace cron run <cron> --harness grok`: the cron defines claude,
   // the override forces grok's argv shape without editing cron.json. Dry-run so
