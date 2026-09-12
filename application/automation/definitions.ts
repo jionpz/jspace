@@ -69,12 +69,6 @@ export interface SkillTargetContext {
 
 export type SkillTargetResult = { ok: true; prompt: string } | { ok: false; fix: string };
 
-/** Validate a cron skill target against the workbench and compile its headless
- *  prompt. Pure (manifest/journal/fs injected). Fails before execution when the
- *  skill is unknown, its SKILL.md is missing, the entrypoint is not declared,
- *  or the materialized skill is stale vs the running bundle (diffBundle action
- *  is anything but no-op — update/conflict/create/stale, all fixable by
- *  `workspace upgrade` because skills are managed). */
 /** Stamped at the head of every compiled skill-target prompt. A headless cron
  *  child cannot tell how it was launched — cronSpawnEnv() only copies an
  *  allowlist of EXISTING env vars, so it injects no marker — and that is exactly
@@ -87,6 +81,12 @@ export type SkillTargetResult = { ok: true; prompt: string } | { ok: false; fix:
 export const CRON_RUN_MODE_NOTICE =
   "【运行模式:无头 cron 触发(非人工会话)——本次写 gbrain 页的来源 tag 用 source:cron】";
 
+/** Validate a cron skill target against the workbench and compile its headless
+ *  prompt. Pure (manifest/journal/fs injected). Fails before execution when the
+ *  skill is unknown, its SKILL.md is missing, the entrypoint is not declared,
+ *  or the materialized skill is stale vs the running bundle (diffBundle action
+ *  is anything but no-op — update/conflict/create/stale, all fixable by
+ *  `workspace upgrade` because skills are managed). */
 export function compileSkillTarget(target: CronSkillTarget, wbRoot: string, ctx: SkillTargetContext): SkillTargetResult {
   const entry = ctx.skillsManifest.workbench.find((s) => s.name === target.skill);
   if (!entry) {
