@@ -1,6 +1,6 @@
-// application/automation/lock.test.ts — exclusive cron lock: O_EXCL acquire,
+// application/lock.test.ts — exclusive file lock: O_EXCL acquire,
 // stale removal, and ownership-token release (never clobbers a newer holder).
-// Run: bun test application/automation/lock.test.ts
+// Run: bun test application/lock.test.ts
 import { expect, test } from "bun:test";
 import { acquireLock, type LockFs } from "./lock.ts";
 

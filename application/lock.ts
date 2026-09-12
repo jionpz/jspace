@@ -1,4 +1,4 @@
-// application/automation/lock.ts — exclusive cron single-instance lock.
+// application/lock.ts — shared O_EXCL file lock primitives and workbench mutation lock.
 // Acquired with O_EXCL create (no TOCTOU between check + create); the holder
 // writes an ownership token and release() only removes the file if it still
 // carries OUR token — a stale or replaced lock is never clobbered. fs/clock are
@@ -16,7 +16,7 @@ export interface LockFs {
   now: () => number;
 }
 
-export interface CronLock {
+export interface ExclusiveLock {
   readonly held: boolean;
   /** Remove the lock only when it still carries this holder's token. */
   release: () => void;
@@ -46,7 +46,7 @@ function isEexist(e: unknown): boolean {
  *  A stale lock (older than staleMs) is removed and the create retried once.
  *  A post-create write failure (ENOSPC/EIO) removes our own 0-byte poison lock
  *  and propagates — it is not contention (issue #8 #7). */
-export function acquireLock(path: string, token: string, staleMs: number, fs: LockFs = realFs): CronLock | null {
+export function acquireLock(path: string, token: string, staleMs: number, fs: LockFs = realFs): ExclusiveLock | null {
   for (let attempt = 0; attempt < 2; attempt++) {
     let created = false;
     let fd: number | undefined;
@@ -101,6 +101,6 @@ export function acquireLockWithClock(
   staleMs: number,
   now: () => number,
   fs: LockFs = realFs,
-): CronLock | null {
+): ExclusiveLock | null {
   return acquireLock(path, token, staleMs, { ...fs, now });
 }

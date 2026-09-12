@@ -22,7 +22,7 @@ import { loadCrons, resolveCronPrompt, type SkillTargetContext } from "./definit
 import { skillRel, skillRoot } from "../fs.ts";
 import { lastRun, writeRun } from "./runs.ts";
 import { openOrUpdate, resolveIncidents } from "./incidents.ts";
-import { acquireLockWithClock } from "./lock.ts";
+import { acquireLockWithClock } from "../lock.ts";
 import { harnessArgv } from "../../adapters/harness/argv.ts";
 import { assertHarnessSupportsTools } from "../../adapters/harness/registry.ts";
 import { isFile } from "../fs.ts";
