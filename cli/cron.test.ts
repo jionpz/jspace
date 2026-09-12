@@ -3,6 +3,7 @@
 // surface lives in application/automation/status.test.ts.
 // Run: bun test cli/cron.test.ts
 import { expect, test } from "bun:test";
+import { join } from "node:path";
 import { jspaceBinary } from "./cron.ts";
 import { parseSchedule } from "../application/automation/definitions.ts";
 
@@ -21,7 +22,7 @@ test("parseSchedule rejects lists/ranges/steps and DOM+DOW both set", () => {
 
 test("jspaceBinary win32 probes .exe", () => {
   const b = jspaceBinary("win32");
-  expect(b.endsWith("bin/jspace") || b.endsWith("bin/jspace.exe")).toBe(true);
-  expect(jspaceBinary("darwin").endsWith("bin/jspace")).toBe(true);
-  expect(jspaceBinary("linux").endsWith("bin/jspace")).toBe(true);
+  expect(b.endsWith(join("bin", "jspace")) || b.endsWith(join("bin", "jspace.exe"))).toBe(true);
+  expect(jspaceBinary("darwin").endsWith(join("bin", "jspace"))).toBe(true);
+  expect(jspaceBinary("linux").endsWith(join("bin", "jspace"))).toBe(true);
 });

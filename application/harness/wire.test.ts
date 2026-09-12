@@ -423,7 +423,9 @@ describe("harness wire — grok (reuses application/gbrain/grok-wiring.ts)", () 
   });
 
   test("already-wired grok → already-wired", () => {
-    const toml = `[mcp_servers.gbrain]\ncommand = "gbrain"\nenv = { GBRAIN_SKILLS_DIR = "${WB_SKILLS}" }\n`;
+    // TOML basic strings escape backslashes; on Windows a raw path would be an
+    // invalid escape, so the fixture must use the same JSON encoding the writer does.
+    const toml = `[mcp_servers.gbrain]\ncommand = "gbrain"\nenv = { GBRAIN_SKILLS_DIR = ${JSON.stringify(WB_SKILLS)} }\n`;
     const { deps, writes } = makeCtx({ files: { [GROK_TOML]: toml }, dryRun: true });
     const r = wireHarness("grok", deps, ROOT);
     expect(r.ok).toBe(true);

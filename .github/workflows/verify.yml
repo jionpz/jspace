@@ -161,9 +161,11 @@ jobs:
         os: [macos-14, windows-latest]
     timeout-minutes: 20
     concurrency:
-      # Independent of the verify group — sharing a group would cancel/queue
-      # this job against the ubuntu job inside the same workflow run.
-      group: cross-platform-${{ github.ref }}
+      # Two levels of isolation: from the ubuntu `verify` job (a shared group
+      # would cancel one against the other inside the same run) AND between the
+      # matrix legs (a bare ref-based group made windows-latest cancel
+      # macos-14 — observed on this job's first run).
+      group: cross-platform-${{ matrix.os }}-${{ github.ref }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v5

@@ -33,7 +33,8 @@ function ctx(overrides: { current?: string | null; recorded?: string } = {}): Sk
   return {
     skillsManifest,
     bundleManifest,
-    readFile: (p) => (p.endsWith(".jspace/skills/asset-ingest/SKILL.md") ? current : null),
+    // compileSkillTarget reads skillRoot(root, name) -> join(); backslashes on Windows.
+    readFile: (p) => (p.replace(/\\/g, "/").endsWith(".jspace/skills/asset-ingest/SKILL.md") ? current : null),
     recorded: overrides.recorded !== undefined ? { ".jspace/skills/asset-ingest/SKILL.md": { sha256: sha256Of(overrides.recorded) } } : {},
     diffBundle,
   };
@@ -53,7 +54,7 @@ test("valid up-to-date skill target compiles a prompt with the skill path", () =
   const r = compileSkillTarget(targetCron().target!, "/wb", ctx());
   expect(r.ok).toBe(true);
   if (r.ok) {
-    expect(r.prompt).toContain("/wb/.jspace/skills/asset-ingest/SKILL.md");
+    expect(r.prompt).toContain(join("/wb", ".jspace/skills/asset-ingest/SKILL.md"));
     expect(r.prompt).toContain("batch");
     expect(r.prompt).toContain("整理 inbox");
   }

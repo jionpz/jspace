@@ -80,14 +80,16 @@ test("harnessOverride routes the argv to the override harness (grok probe seam)"
   expect(claudeRes.lines[1]).toContain("--allowedTools");
 });
 
-test("same-day success skip: second run is skipped without executing", async () => {
+test.skipIf(process.platform === "win32")("same-day success skip: second run is skipped without executing", async () => {
+  // win32 skip: the fixture harness is a POSIX /bin/sh script and deps.platform pins the linux spawn path.
   const d = deps();
   await run({ cronId: "weekly" }, d); // first run writes status: ok
   const res = await run({ cronId: "weekly" }, d);
   expect(res.lines[0]).toContain("already succeeded today");
 });
 
-test("crash window: prose log says ok but RunRecord missing -> NOT skipped", async () => {
+test.skipIf(process.platform === "win32")("crash window: prose log says ok but RunRecord missing -> NOT skipped", async () => {
+  // win32 skip: the fixture harness is a POSIX /bin/sh script and deps.platform pins the linux spawn path.
   // Simulate a crash between the prose-log write and the RunRecord write: a
   // .md says "status: ok" for today, but no structured record exists. Same-day
   // skip must NOT fire (machine truth = RunRecord, prose log is human payload).
@@ -112,7 +114,8 @@ test("lock occupied -> skip (no execution)", async () => {
   expect(res.lines[0]).toContain("already running");
 });
 
-test("lock staleness: threshold is timeoutSec*2000ms, not timeoutSec*2ms", async () => {
+test.skipIf(process.platform === "win32")("lock staleness: threshold is timeoutSec*2000ms, not timeoutSec*2ms", async () => {
+  // win32 skip: the fixture harness is a POSIX /bin/sh script and deps.platform pins the linux spawn path.
   // Integration-level unit-conversion guard: acquireLock's staleMs is ms, so
   // timeoutSec=1800 must yield a 3_600_000ms (1h) stale threshold. A 3.6s-old
   // lock must be FRESH (skip); a >1h lock must be stale (taken over). Under the
@@ -127,13 +130,15 @@ test("lock staleness: threshold is timeoutSec*2000ms, not timeoutSec*2ms", async
   expect(stale.lines[0]).toContain("(exit 0)"); // executed for real after taking over
 });
 
-test("suspect: exit 0 with no output", async () => {
+test.skipIf(process.platform === "win32")("suspect: exit 0 with no output", async () => {
+  // win32 skip: the fixture harness is a POSIX /bin/sh script and deps.platform pins the linux spawn path.
   const d = deps({ harnessBin: silentHarness });
   const res = await run({ cronId: "weekly" }, d);
   expect(res.lines[0]).toContain("suspect");
 });
 
-test("timeout: harness that sleeps longer than timeout -> failed", async () => {
+test.skipIf(process.platform === "win32")("timeout: harness that sleeps longer than timeout -> failed", async () => {
+  // win32 skip: the fixture harness is a POSIX /bin/sh script and deps.platform pins the linux spawn path.
   const slow = join(root, "slow-harness");
   writeFileSync(slow, "#!/bin/sh\nsleep 30\nexit 0\n");
   chmodSync(slow, 0o755);
@@ -141,7 +146,8 @@ test("timeout: harness that sleeps longer than timeout -> failed", async () => {
   expect(res.lines[0]).toContain("failed");
 });
 
-test("lock is released after success AND failure (no stale lock left)", async () => {
+test.skipIf(process.platform === "win32")("lock is released after success AND failure (no stale lock left)", async () => {
+  // win32 skip: the fixture harness is a POSIX /bin/sh script and deps.platform pins the linux spawn path.
   const lock = join(root, ".jspace", "logs", "cron", "weekly.lock");
   await run({ cronId: "weekly" }, deps({ harnessBin: fakeHarness }));
   expect(existsSync(lock)).toBe(false); // success path releases
@@ -169,14 +175,16 @@ const inboxDeps = (over: Partial<ExecuteDeps> = {}): ExecuteDeps => deps({
   ...over,
 });
 
-test("inbox-tidy with no filehub -> batch-stale incident, not ok (issue #8 #6)", async () => {
+test.skipIf(process.platform === "win32")("inbox-tidy with no filehub -> batch-stale incident, not ok (issue #8 #6)", async () => {
+  // win32 skip: the fixture harness is a POSIX /bin/sh script and deps.platform pins the linux spawn path.
   const res = await run({ cronId: "inbox-tidy" }, inboxDeps()); // filehubRoot: () => null → batchLog === null
   expect(lastRun(root, "inbox-tidy")!.batchChanged).toBe(false);
   expect(hasBatchStaleIncident("inbox-tidy")).toBe(true);
   expect(res.lines[0]).not.toContain("already succeeded today");
 });
 
-test("inbox-tidy with filehub but batch log never appeared -> batch-stale (issue #8 #6)", async () => {
+test.skipIf(process.platform === "win32")("inbox-tidy with filehub but batch log never appeared -> batch-stale (issue #8 #6)", async () => {
+  // win32 skip: the fixture harness is a POSIX /bin/sh script and deps.platform pins the linux spawn path.
   const fh = mkdtempSync(join(tmpdir(), "jspace-exec-fh-"));
   try {
     const res = await run({ cronId: "inbox-tidy" }, inboxDeps({ filehubRoot: () => fh }));
@@ -188,7 +196,8 @@ test("inbox-tidy with filehub but batch log never appeared -> batch-stale (issue
   }
 });
 
-test("inbox-tidy with unchanged batch log -> batch-stale (issue #8 #6)", async () => {
+test.skipIf(process.platform === "win32")("inbox-tidy with unchanged batch log -> batch-stale (issue #8 #6)", async () => {
+  // win32 skip: the fixture harness is a POSIX /bin/sh script and deps.platform pins the linux spawn path.
   const fh = mkdtempSync(join(tmpdir(), "jspace-exec-fh-"));
   try {
     const batchLog = join(fh, ".jspace-logs", "inbox-batch.md");
@@ -203,7 +212,8 @@ test("inbox-tidy with unchanged batch log -> batch-stale (issue #8 #6)", async (
   }
 });
 
-test("inbox-tidy with batch log updated by the harness -> ok (positive control, issue #8 #6)", async () => {
+test.skipIf(process.platform === "win32")("inbox-tidy with batch log updated by the harness -> ok (positive control, issue #8 #6)", async () => {
+  // win32 skip: the fixture harness is a POSIX /bin/sh script and deps.platform pins the linux spawn path.
   const fh = mkdtempSync(join(tmpdir(), "jspace-exec-fh-"));
   try {
     const batchLog = join(fh, ".jspace-logs", "inbox-batch.md");

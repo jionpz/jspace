@@ -41,7 +41,7 @@ test("fresh workbench: plan is all create; apply creates dir links resolving to 
   const opts = OPTS(manifestWithSkill("v1"));
   const plan = planProjectionLinks(root, opts);
   expect(plan.map((o) => o.action)).toEqual(["create", "create"]);
-  expect(plan[0].target).toBe("../../.jspace/skills/jspace-use");
+  expect(plan[0].target).toBe(join("..", "..", ".jspace", "skills", "jspace-use"));
 
   const r1 = applyProjectionLinks(root, opts);
   expect(Object.keys(r1.links).sort()).toEqual([".agents/skills/jspace-use", ".claude/skills/jspace-use"]);
@@ -166,7 +166,7 @@ test("ensureUserSkillLink: create, no-op, and divergent copy REPLACED by the lin
 
   // divergent real dir where the link belongs: REPLACED (official skills are
   // fully managed — leaving it would let a harness read a stale contract)
-  rmSync(entry);
+  rmSync(entry, { recursive: true, force: true });
   mkdirSync(entry, { recursive: true });
   writeFileSync(join(entry, "SKILL.md"), "user-edit");
   const r3 = ensureUserSkillLink(entry, ssot);

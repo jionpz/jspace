@@ -74,7 +74,8 @@ test("skills install: covers machine-global skills (manifest.global, issue #37)"
     userSkillsRoot: () => join(tmp, ".agents", "skills"),
     exists: () => false,
     readFile: () => null,
-    writeFile: (p, c) => void written.set(p, c),
+    // installSkills builds abs paths with join() -> backslashes on Windows.
+    writeFile: (p, c) => void written.set(p.replace(/\\/g, "/"), c),
     dryRun: false,
   };
   const r = installHandler(ctx(), { refresh: false }, deps);

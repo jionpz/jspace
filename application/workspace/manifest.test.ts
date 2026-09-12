@@ -1,6 +1,7 @@
 // application/workspace/manifest.test.ts — bundle manifest ownership/path/freshness.
 // Run: bun test application/workspace/manifest.test.ts
 import { expect, test } from "bun:test";
+import { join } from "node:path";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import { JSPACE_BLOCK_END, JSPACE_BLOCK_START } from "./agents-block.ts";
 import { diffBundle, materializedRels, ownershipFor, recreateOnMissing, sha256Of, skillRel, skillRoot } from "./manifest.ts";
@@ -32,12 +33,18 @@ function deps(
 ) {
   return {
     // diffBundle reads join(root, rel); the fixture keys are root-relative.
-    readFile: (p: string) => files[p] ?? files[p.replace("/wb/", "")] ?? null,
+    // Normalize separators: on Windows join() yields `\wb\...`, so a POSIX-only
+    // strip would leave the lookup empty and misreport every file as "create".
+    readFile: (p: string) => files[relKey(p)] ?? null,
     recorded,
     bundleContent:
       bundleContent ??
       ((key: string) => (key === "templates/workbench/AGENTS.md" ? AGENTS_BUNDLE : null)),
   };
+}
+
+function relKey(p: string): string {
+  return p.replace(/\\/g, "/").replace(/^\/wb\//, "");
 }
 
 function byRel(entries: ReturnType<typeof diffBundle>): Record<string, string> {
@@ -72,7 +79,7 @@ test("materializedRels maps workbench files + skill SSOT only; projections are l
 
 test("skillRel / skillRoot resolve official skills under .jspace/skills/", () => {
   expect(skillRel("jspace-use")).toBe(".jspace/skills/jspace-use");
-  expect(skillRoot("/wb", "asset-ingest")).toBe("/wb/.jspace/skills/asset-ingest");
+  expect(skillRoot("/wb", "asset-ingest")).toBe(join("/wb", ".jspace/skills/asset-ingest"));
   expect(materializedRels("skills/jspace-use/SKILL.md")[0]).toBe(`${skillRel("jspace-use")}/SKILL.md`);
 });
 
