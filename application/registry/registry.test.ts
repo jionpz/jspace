@@ -84,8 +84,8 @@ test("domain remove --dry-run reports plan without mutating", () => {
   expect(JSON.stringify(loadHub(root))).toBe(before);
 });
 
-test("domain add rolls back the skeleton when the hub write fails (issue #8 #13)", () => {
-  if (process.platform === "win32") return; // chmod-based write failure differs on Windows
+test.skipIf(process.platform === "win32")("domain add rolls back the skeleton when the hub write fails (issue #8 #13)", () => {
+  // win32 skip: chmod-based write failure differs on Windows (ACL semantics).
   // make .jspace unwritable so writeHubAtomic's temp write throws EACCES
   chmodSync(join(root, ".jspace"), 0o555);
   try {

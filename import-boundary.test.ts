@@ -11,6 +11,27 @@ const ROOT = join(import.meta.dir);
 const LAYERS = ["core", "adapters", "application", "cli"] as const;
 type Layer = (typeof LAYERS)[number];
 
+/** Split a `node:path` relative() result on EITHER separator. Windows returns
+ *  `core\\contracts\\hub.ts`; POSIX returns `core/contracts/hub.ts`. Using
+ *  `split("/")` here silently disabled both gates on Windows (every lookup
+ *  missed, so the file passed while gating nothing) — the regression cases at
+ *  the bottom feed the Windows shape on every platform. */
+export function splitRelPath(rel: string): string[] {
+  return rel.split(/[\\/]+/).filter((part) => part.length > 0);
+}
+
+/** Layer of a repo-relative path, or null when it is not under a gated layer. */
+export function layerFromRelPath(rel: string): Layer | null {
+  const head = splitRelPath(rel)[0];
+  return (LAYERS as readonly string[]).includes(head) ? (head as Layer) : null;
+}
+
+/** The single forbidden-edge predicate used by the scan, so the portability
+ *  regression can prove the comparison fires for Windows-shaped paths. */
+export function isForbiddenEdge(imp: Layer | null, target: Layer | null): boolean {
+  return FORBIDDEN.some(([from, to]) => imp === from && target === to);
+}
+
 /** All production .ts files under a layer (tests + generated excluded). */
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
@@ -41,11 +62,7 @@ function importSpecifiers(file: string): string[] {
 }
 
 function layerOf(p: string): Layer | null {
-  const rel = relative(ROOT, p);
-  for (const l of LAYERS) {
-    if (rel === l || rel.startsWith(`${l}/`)) return l;
-  }
-  return null;
+  return layerFromRelPath(relative(ROOT, p));
 }
 
 /** Forbidden edges: importer layer must not import the target layer. */
@@ -62,13 +79,19 @@ test("production imports respect the layer direction (no forbidden edges)", () =
   const violations: string[] = [];
   for (const layer of LAYERS) {
     for (const file of sourceFiles(join(ROOT, layer))) {
-      const imp = layerOf(file)!;
+      const imp = layerOf(file);
+      if (imp === null) {
+        // A file discovered under a gated layer MUST map back to that layer.
+        // A silent skip here is exactly how the separator bug hid on Windows.
+        violations.push(`${relative(ROOT, file)} -> (unmapped gated source path)`);
+        continue;
+      }
       for (const spec of importSpecifiers(file)) {
         if (!spec.startsWith(".")) continue; // node:/package/bare imports never cross layers
         const target = layerOf(resolve(dirname(file), spec));
         if (target === null) continue; // scripts/, templates/, etc. are not gated
-        for (const [from, to] of FORBIDDEN) {
-          if (imp === from && target === to) violations.push(`${relative(ROOT, file)} -> ${relative(ROOT, resolve(dirname(file), spec))}`);
+        if (isForbiddenEdge(imp, target)) {
+          violations.push(`${relative(ROOT, file)} -> ${relative(ROOT, resolve(dirname(file), spec))}`);
         }
       }
     }
@@ -86,13 +109,13 @@ test("application business submodules form no import cycles (intra-layer ring gu
   const graph = new Map<string, Set<string>>();
   for (const s of BUSINESS_SUBMODULES) graph.set(s, new Set());
   for (const file of sourceFiles(join(ROOT, "application"))) {
-    const parts = relative(ROOT, file).split("/");
+    const parts = splitRelPath(relative(ROOT, file));
     if (parts.length < 3) continue; // application/x.ts shared files are not a submodule
     const imp = parts[1];
     if (!(BUSINESS_SUBMODULES as readonly string[]).includes(imp)) continue;
     for (const spec of importSpecifiers(file)) {
       if (!spec.startsWith(".")) continue;
-      const tparts = relative(ROOT, resolve(dirname(file), spec)).split("/");
+      const tparts = splitRelPath(relative(ROOT, resolve(dirname(file), spec)));
       if (tparts.length < 3 || tparts[0] !== "application") continue;
       const tgt = tparts[1];
       if (tgt !== imp && (BUSINESS_SUBMODULES as readonly string[]).includes(tgt)) graph.get(imp)!.add(tgt);
@@ -132,4 +155,27 @@ test("application business submodules form no import cycles (intra-layer ring gu
   };
   for (const s of BUSINESS_SUBMODULES) if (!idx.has(s)) strongconnect(s);
   expect(cycles).toEqual([]);
+});
+
+/** Portability regression (issue: Windows gate was silently vacuous).
+ *  `relative()` yields backslashes on Windows, so these cases exercise the
+ *  exact shape that used to bypass startsWith("core/") / split("/"). They run
+ *  on every platform, which is what keeps the gate honest between Windows CI
+ *  runs. */
+test("path portability: backslash paths resolve to the same layer/submodule", () => {
+  expect(layerFromRelPath("core\\contracts\\hub.ts")).toBe("core");
+  expect(layerFromRelPath("application\\registry\\resource.ts")).toBe("application");
+  expect(splitRelPath("application\\registry\\resource.ts")[1]).toBe("registry");
+  expect(splitRelPath("application\\x.ts").length).toBe(2); // shared top-level module, not a submodule
+  expect(layerFromRelPath("scripts\\gen-assets.ts")).toBeNull();
+});
+
+test("path portability: a Windows-shaped adapter -> application edge is detected as forbidden", () => {
+  const imp = layerFromRelPath("adapters\\process\\spawn.ts");
+  const target = layerFromRelPath("application\\automation\\execute.ts");
+  expect(imp).toBe("adapters");
+  expect(target).toBe("application");
+  expect(isForbiddenEdge(imp, target)).toBe(true);
+  expect(isForbiddenEdge("application", "core")).toBe(false);
+  expect(isForbiddenEdge(null, "application")).toBe(false);
 });
