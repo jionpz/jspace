@@ -3,7 +3,9 @@
 // envelopes live in a temp filehub dir only.
 // Run: bun test application/pending/apply.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { CliError } from "../../core/shared/errors.ts";
+import { filehubMutationLockPath } from "../lock.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readEnvelopes, stageEnvelope, writeEnvelope } from "./envelope.ts";
@@ -137,4 +139,46 @@ test("applying a specific id only touches that envelope", async () => {
   expect(res.applied).toEqual([a.id]);
   expect(readEnvelopes(fh).records.map((e) => e.id).sort()).toEqual([a.id, b.id].sort());
   expect(readEnvelopes(fh).records.find((e) => e.id === b.id)!.status).toBe("staged");
+});
+
+// ---- filehub mutation lock coverage ----
+
+/** Simulate a concurrent applier by planting a FRESH foreign lock. */
+function plantForeignFilehubLock(): string {
+  const p = filehubMutationLockPath(fh);
+  mkdirSync(join(fh, ".jspace-logs"), { recursive: true });
+  writeFileSync(p, "other-process");
+  return p;
+}
+
+test("apply refuses to start (no gbrain call) while another process holds the filehub lock", async () => {
+  const env = stageEnvelope(fh, "memory-writeback", "assets/foo/doc", "content");
+  plantForeignFilehubLock();
+  const s = stub();
+
+  await expect(applyPending(fh, s.deps)).rejects.toThrow(CliError);
+  // the lock is checked before the envelope is read, so nothing was put and the
+  // envelope is still exactly `staged` for a later retry
+  expect(s.gets).toEqual([]);
+  expect(s.puts).toEqual([]);
+  expect(readEnvelopes(fh).records[0]!.status).toBe("staged");
+  expect(readEnvelopes(fh).records[0]!.id).toBe(env.id);
+});
+
+test("apply takes the filehub lock per envelope and releases it after the batch", async () => {
+  stageEnvelope(fh, "memory-writeback", "assets/foo/a", "a");
+  stageEnvelope(fh, "memory-writeback", "assets/foo/b", "b");
+  const s = stub();
+  const res = await applyPending(fh, s.deps);
+  expect(res.applied).toHaveLength(2);
+  expect(existsSync(filehubMutationLockPath(fh))).toBe(false);
+});
+
+test("apply to a specific id also fails fast on a held filehub lock, without putting", async () => {
+  const env = stageEnvelope(fh, "memory-writeback", "assets/foo/doc", "content");
+  plantForeignFilehubLock();
+  const s = stub();
+  await expect(applyPending(fh, s.deps, env.id)).rejects.toThrow(/modifying this filehub/);
+  expect(s.puts).toEqual([]);
+  expect(statuses()).toEqual(["staged"]);
 });

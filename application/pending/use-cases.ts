@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import type { CmdResult } from "../commands/command.ts";
 import { fail } from "../../core/shared/errors.ts";
 import { resolveFilehubRoot } from "../registry/filehub-lookup.ts";
+import { withFilehubMutationLock } from "../lock.ts";
 import { readEnvelopes, readEnvelope, stageEnvelope, writeEnvelope } from "./envelope.ts";
 import { applyPending } from "./apply.ts";
 import { realGbrain, type GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
@@ -49,8 +50,12 @@ export async function pendingApply(root: string, id: string | undefined, gbrain:
 export function pendingAck(root: string, id: string): CmdResult {
   const fh = resolveFilehubRoot(root);
   if (!fh) fail(`no filehub registered for workbench ${root}`);
-  const env = readEnvelope(fh, id);
-  if (env.status !== "terminal_failed") fail(`envelope ${id} is ${env.status}; only terminal_failed can be acked`);
-  writeEnvelope(fh, { ...env, status: "acked" });
-  return { lines: [`jspace: ok: acknowledged pending write ${id} (${env.slug}); evidence retained`] };
+  // read(status check) -> write under the filehub lock: an ack racing the
+  // applier could otherwise write a stale snapshot over a fresher status.
+  return withFilehubMutationLock(fh, () => {
+    const env = readEnvelope(fh, id);
+    if (env.status !== "terminal_failed") fail(`envelope ${id} is ${env.status}; only terminal_failed can be acked`);
+    writeEnvelope(fh, { ...env, status: "acked" });
+    return { lines: [`jspace: ok: acknowledged pending write ${id} (${env.slug}); evidence retained`] };
+  });
 }

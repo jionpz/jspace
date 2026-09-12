@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
+import { withWorkbenchMutationLock } from "../lock.ts";
 import { isFile } from "../fs.ts";
 
 export interface BriefingStateV1 {
@@ -62,6 +63,14 @@ export function readBriefing(root: string): BriefingRead {
 /** Best-effort record of a session-start briefing. Never blocks hooks: callers
  *  should catch and ignore failures. */
 export function touchBriefing(root: string, now: Date = new Date()): void {
+  // read-modify-write of session_count: two concurrent session-start hooks
+  // would otherwise let the later writer resurrect the earlier count.
+  // Lock conflict still throws — the hook callers catch it and degrade to
+  // "this session was not recorded", never "the hook failed".
+  withWorkbenchMutationLock(root, () => touchBriefingImpl(root, now));
+}
+
+function touchBriefingImpl(root: string, now: Date): void {
   const prev = readBriefing(root);
   const next: BriefingStateV1 = {
     schema_version: 1,
@@ -84,6 +93,12 @@ export function touchBriefing(root: string, now: Date = new Date()): void {
  *  every single turn. Best-effort like touchBriefing — callers catch and treat
  *  a failure as "no nudge" (a hook must never fail over machine state). */
 export function claimWritebackNudge(root: string): boolean {
+  // The claim must be exactly-once per session; an unlocked read→write lets two
+  // turns of the same session both claim and emit the nudge twice.
+  return withWorkbenchMutationLock(root, () => claimWritebackNudgeImpl(root));
+}
+
+function claimWritebackNudgeImpl(root: string): boolean {
   const prev = readBriefing(root);
   if (!prev.state) return false;
   if (prev.state.writeback_nudge_for_session === prev.state.session_count) return false;

@@ -6,10 +6,15 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CliError } from "../core/shared/errors.ts";
+import { GBRAIN_TIMEOUT_MS } from "../adapters/gbrain/gbrain.ts";
 import {
   acquireLock,
+  FILEHUB_MUTATION_LOCK_STALE_MS,
+  filehubMutationLockPath,
   MUTATION_LOCK_STALE_MS,
   mutationLockPath,
+  withFilehubMutationLock,
+  withFilehubMutationLockAsync,
   withWorkbenchMutationLock,
   type LockFs,
 } from "./lock.ts";
@@ -238,5 +243,89 @@ test("locked read-modify-write sections serialize: both updates survive", () => 
     expect((JSON.parse(readFileSync(stateFile, "utf-8")) as { items: string[] }).items).toEqual(["first", "second"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ---- filehub mutation lock (pending envelopes) ----
+
+test("filehubMutationLockPath lives next to the envelopes, not in a workbench", () => {
+  expect(filehubMutationLockPath("/fh")).toBe(join("/fh", ".jspace-logs", "mutation.lock"));
+});
+
+test("filehub stale budget outlives one gbrain call, or a slow applier loses its lock", () => {
+  // applyPending awaits gbrain inside the lock. If the stale budget were <= the
+  // gbrain timeout, a slow-but-alive applier would be reclaimed mid-await and
+  // two appliers could put the same envelope. Keep the two constants coupled.
+  expect(FILEHUB_MUTATION_LOCK_STALE_MS).toBeGreaterThan(GBRAIN_TIMEOUT_MS);
+});
+
+test("filehub mutation lock fails fast when another holder is fresh", () => {
+  const fhRoot = mkdtempSync(join(tmpdir(), "jspace-fhlock-"));
+  try {
+    const lockPath = filehubMutationLockPath(fhRoot);
+    const fs = fakeFs({ [lockPath]: "other-process" });
+    fs.mtime[lockPath] = fs.now0;
+    let ran = false;
+    let thrown: unknown;
+    try {
+      withFilehubMutationLock(fhRoot, () => { ran = true; }, { fs, token: "me" });
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(CliError);
+    expect((thrown as Error).message).toContain("another jspace process is modifying this filehub");
+    expect((thrown as Error).message).toContain(lockPath);
+    expect(ran).toBe(false);
+    expect(fs.files[lockPath]).toBe("other-process");
+  } finally {
+    rmSync(fhRoot, { recursive: true, force: true });
+  }
+});
+
+test("filehub stale threshold is the filehub budget, not the workbench one", () => {
+  const fhRoot = mkdtempSync(join(tmpdir(), "jspace-fhlock-"));
+  try {
+    const lockPath = filehubMutationLockPath(fhRoot);
+    const fs = fakeFs({ [lockPath]: "crashed-holder" });
+    // older than the workbench budget but younger than the filehub budget:
+    // a live applier awaiting gbrain must NOT be reclaimed.
+    fs.mtime[lockPath] = fs.now0 - MUTATION_LOCK_STALE_MS - 1;
+    expect(() => withFilehubMutationLock(fhRoot, () => undefined, { fs, token: "me" })).toThrow(CliError);
+  } finally {
+    rmSync(fhRoot, { recursive: true, force: true });
+  }
+});
+
+test("filehub mutation lock rejects same-fhRoot reentry", () => {
+  const fhRoot = mkdtempSync(join(tmpdir(), "jspace-fhlock-"));
+  try {
+    withFilehubMutationLock(fhRoot, () => {
+      expect(() => withFilehubMutationLock(fhRoot, () => undefined)).toThrow(/nested filehub mutation lock/);
+    });
+    expect(existsSync(filehubMutationLockPath(fhRoot))).toBe(false);
+  } finally {
+    rmSync(fhRoot, { recursive: true, force: true });
+  }
+});
+
+test("async filehub lock releases in finally when the callback rejects", async () => {
+  const fhRoot = mkdtempSync(join(tmpdir(), "jspace-fhlock-"));
+  try {
+    await expect(
+      withFilehubMutationLockAsync(fhRoot, async () => {
+        throw new Error("put failed");
+      }),
+    ).rejects.toThrow("put failed");
+    expect(existsSync(filehubMutationLockPath(fhRoot))).toBe(false);
+
+    // and it serializes: a nested async acquire while held is a programmer error
+    await withFilehubMutationLockAsync(fhRoot, async () => {
+      await Promise.resolve();
+      await expect(
+        withFilehubMutationLockAsync(fhRoot, async () => undefined),
+      ).rejects.toThrow(/nested filehub mutation lock/);
+    });
+  } finally {
+    rmSync(fhRoot, { recursive: true, force: true });
   }
 });

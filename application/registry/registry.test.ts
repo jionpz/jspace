@@ -1,7 +1,7 @@
 // application/registry/registry.test.ts — registry use-case JSON schema + dry-run.
 // Run: bun test application/registry/registry.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { initWorkbench } from "../workspace/init.ts";
@@ -124,4 +124,47 @@ test("resource add fails fast when another process holds the mutation lock", () 
     .toThrow(/another jspace process is modifying this workbench/);
   expect(loadHub(root).resources).toEqual([]);
   expect(readFileSync(lockPath, "utf-8")).toBe("other-process");
+});
+
+// ---- purge: lock-held section stays O(1), delete happens outside ----
+
+test("domain remove --purge deletes the tree and leaves no trash residue", () => {
+  domainAdd(root, "sales", undefined, undefined, undefined, false);
+  const dir = join(root, "workspace", "sales");
+  writeFileSync(join(dir, "bundle.txt"), "x".repeat(512));
+
+  const { lines } = domainRemove(root, "sales", true, false);
+  expect(lines[0]).toContain("removed domain: sales");
+  expect(existsSync(dir)).toBe(false);
+  expect(loadHub(root).domains.map((d) => d.id)).toEqual([]);
+  const trash = join(root, ".jspace", "state", "trash");
+  expect(existsSync(trash) ? readdirSync(trash) : []).toEqual([]);
+  expect(existsSync(mutationLockPath(root))).toBe(false);
+});
+
+test("purge reclaims stale trash but never a fresh entry another process may still be deleting", () => {
+  domainAdd(root, "sales", undefined, undefined, undefined, false);
+  const trash = join(root, ".jspace", "state", "trash");
+  const stale = join(trash, "stale-from-crash");
+  const fresh = join(trash, "fresh-in-flight-delete");
+  mkdirSync(stale, { recursive: true });
+  mkdirSync(fresh, { recursive: true });
+  const twoDaysAgo = (Date.now() - 2 * 24 * 60 * 60 * 1000) / 1000;
+  utimesSync(stale, twoDaysAgo, twoDaysAgo);
+
+  domainRemove(root, "sales", true, false);
+
+  expect(existsSync(stale)).toBe(false);  // crash residue reclaimed
+  expect(existsSync(fresh)).toBe(true);   // too young to safely touch
+});
+
+test("purge refuses while another process holds the lock, leaving hub and dir intact", () => {
+  domainAdd(root, "sales", undefined, undefined, undefined, false);
+  const dir = join(root, "workspace", "sales");
+  const before = JSON.stringify(loadHub(root));
+  holdMutationLock(root);
+
+  expect(() => domainRemove(root, "sales", true, false)).toThrow(/modifying this workbench/);
+  expect(JSON.stringify(loadHub(root))).toBe(before);
+  expect(existsSync(dir)).toBe(true);
 });

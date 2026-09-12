@@ -108,14 +108,20 @@ export function acquireLockWithClock(
   return acquireLock(path, token, staleMs, { ...fs, now });
 }
 
+// ---- mutation locks (shared state-root primitive) ----
 
-// ---- workbench mutation lock ----
-
-/** Registry / cron definition mutations are local fs read-modify-write sections
+/** Registry / cron / journal mutations are local fs read-modify-write sections
  *  (normally milliseconds). 30s leaves more than three orders of magnitude of
  *  headroom while keeping crash recovery bounded; this is deliberately much
  *  shorter than the minute-level cron execution lock. */
 export const MUTATION_LOCK_STALE_MS = 30_000;
+
+/** Pending-envelope apply holds the lock across one gbrain call, whose own
+ *  timeout is GBRAIN_TIMEOUT_MS (30s). The stale budget must stay strictly
+ *  above that, or a slow-but-alive applier would be mistaken for crash residue
+ *  and have its lock stolen mid-await. 4x is the margin; the coupling is
+ *  asserted in application/lock.test.ts. */
+export const FILEHUB_MUTATION_LOCK_STALE_MS = 120_000;
 
 export interface MutationLockDeps {
   fs?: LockFs;
@@ -131,40 +137,111 @@ export function mutationLockPath(root: string): string {
   return join(root, ".jspace", "state", "locks", "mutation.lock");
 }
 
-const heldWorkbenchMutationLocks = new Set<string>();
+/** Pending envelopes live in `<filehub>/.jspace-logs/`. The lock sits next to
+ *  them, NOT in the workbench: several workbenches can bind the same filehub,
+ *  so a workbench-scoped lock would not serialize envelope writers at all. */
+export function filehubMutationLockPath(fhRoot: string): string {
+  return join(fhRoot, ".jspace-logs", "mutation.lock");
+}
 
-/** Run a synchronous read-validate-write mutation under the workbench lock.
+interface MutationLockSpec {
+  lockPath: string;
+  /** identity used in the nested-acquire programmer error */
+  key: string;
+  noun: string;
+  staleMs: number;
+}
+
+const heldMutationLocks = new Set<string>();
+
+/** Acquire, or fail loudly. Nested acquire of the SAME lock path in one process
+ *  is a programmer error, not contention: waiting would deadlock until stale. */
+function acquireMutationLock(spec: MutationLockSpec, deps: MutationLockDeps): ExclusiveLock {
+  mkdirSync(dirname(spec.lockPath), { recursive: true });
+
+  if (heldMutationLocks.has(spec.lockPath)) {
+    throw new Error(`internal: nested ${spec.noun} mutation lock for ${spec.key}`);
+  }
+
+  const fs = deps.fs ?? realFs;
+  const token = deps.token ?? `${process.pid}:${randomUUID()}`;
+  const lock = acquireLockWithClock(spec.lockPath, token, spec.staleMs, deps.now ?? fs.now, fs);
+  if (lock === null) {
+    fail(
+      `another jspace process is modifying this ${spec.noun} (lock: ${spec.lockPath}); ` +
+        `retry after it finishes — stale locks are reclaimed after ${spec.staleMs / 1000}s`,
+    );
+  }
+
+  heldMutationLocks.add(spec.lockPath);
+  return lock;
+}
+
+function releaseMutationLock(spec: MutationLockSpec, lock: ExclusiveLock): void {
+  lock.release();
+  heldMutationLocks.delete(spec.lockPath);
+}
+
+function withMutationLock<T>(spec: MutationLockSpec, fn: () => T, deps: MutationLockDeps): T {
+  const lock = acquireMutationLock(spec, deps);
+  try {
+    return fn();
+  } finally {
+    releaseMutationLock(spec, lock);
+  }
+}
+
+async function withMutationLockAsync<T>(spec: MutationLockSpec, fn: () => Promise<T>, deps: MutationLockDeps): Promise<T> {
+  const lock = acquireMutationLock(spec, deps);
+  try {
+    return await fn();
+  } finally {
+    releaseMutationLock(spec, lock);
+  }
+}
+
+/** Run a synchronous workbench read-validate-write mutation under the lock.
  *  The callback MUST include the full read → validate → mutate → write span;
- *  wrapping only the final write still allows stale-snapshot validation to race. */
+ *  wrapping only the final write still allows stale-snapshot validation to race.
+ *  Keep the span bounded — see the critical-section budget rule in
+ *  .trellis/spec/backend/quality-guidelines.md. */
 export function withWorkbenchMutationLock<T>(
   root: string,
   fn: () => T,
   deps: MutationLockDeps = {},
 ): T {
-  const lockPath = mutationLockPath(root);
-  mkdirSync(dirname(lockPath), { recursive: true });
+  return withMutationLock(
+    { lockPath: mutationLockPath(root), key: root, noun: "workbench", staleMs: MUTATION_LOCK_STALE_MS },
+    fn,
+    deps,
+  );
+}
 
-  // A nested acquire in the same process is a programmer error: failing here is
-  // explicit and testable instead of waiting until the stale threshold expires.
-  if (heldWorkbenchMutationLocks.has(root)) {
-    throw new Error(`internal: nested workbench mutation lock for ${root}`);
-  }
+/** Filehub-scoped variant for `<filehub>/.jspace-logs/` state (pending
+ *  envelopes). Sync, for short state transitions. */
+export function withFilehubMutationLock<T>(
+  fhRoot: string,
+  fn: () => T,
+  deps: MutationLockDeps = {},
+): T {
+  return withMutationLock(
+    { lockPath: filehubMutationLockPath(fhRoot), key: fhRoot, noun: "filehub", staleMs: FILEHUB_MUTATION_LOCK_STALE_MS },
+    fn,
+    deps,
+  );
+}
 
-  const fs = deps.fs ?? realFs;
-  const token = deps.token ?? `${process.pid}:${randomUUID()}`;
-  const lock = acquireLockWithClock(lockPath, token, MUTATION_LOCK_STALE_MS, deps.now ?? fs.now, fs);
-  if (lock === null) {
-    fail(
-      `another jspace process is modifying this workbench (lock: ${lockPath}); ` +
-        `retry after it finishes — stale locks are reclaimed after ${MUTATION_LOCK_STALE_MS / 1000}s`,
-    );
-  }
-
-  heldWorkbenchMutationLocks.add(root);
-  try {
-    return fn();
-  } finally {
-    lock.release();
-    heldWorkbenchMutationLocks.delete(root);
-  }
+/** Async variant: the pending applier awaits an external gbrain call inside the
+ *  lock. Hold the lock for ONE envelope, never an unbounded batch — the stale
+ *  budget is sized for a single call (see FILEHUB_MUTATION_LOCK_STALE_MS). */
+export function withFilehubMutationLockAsync<T>(
+  fhRoot: string,
+  fn: () => Promise<T>,
+  deps: MutationLockDeps = {},
+): Promise<T> {
+  return withMutationLockAsync(
+    { lockPath: filehubMutationLockPath(fhRoot), key: fhRoot, noun: "filehub", staleMs: FILEHUB_MUTATION_LOCK_STALE_MS },
+    fn,
+    deps,
+  );
 }

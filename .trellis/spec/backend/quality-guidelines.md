@@ -41,29 +41,38 @@
 
 ### 1. Scope / Trigger
 
-- Trigger: any cross-process read-modify-write of the workbench's `hub.json`, `local.json`, or `cron.json`.
-- Goal: never silently lose a user-visible registry/cron mutation. A competing writer must either run after the first completes or fail loudly.
+- Trigger: any cross-process read-modify-write of persistent state under a **state root**.
+- Two roots exist, each with its own lock file:
+  - workbench root: `hub.json`, `local.json`, `cron.json`, `state/ingest/*.json`, `state/briefing.json`, workspace seeds/skills/upgrade journal.
+  - filehub root: `.jspace-logs/*.APPLY.json` pending envelopes.
+- Goal: never silently lose a user-visible mutation. A competing writer must either run after the first completes or fail loudly.
 
 ### 2. Signatures
 
 ```ts
-export const MUTATION_LOCK_STALE_MS = 30_000;
-export function mutationLockPath(root: string): string;
-export function withWorkbenchMutationLock<T>(
-  root: string,
-  fn: () => T,
-  deps?: { fs?: LockFs; now?: () => number; token?: string },
-): T;
+export const MUTATION_LOCK_STALE_MS = 30_000;        // workbench budget
+export const FILEHUB_MUTATION_LOCK_STALE_MS = 120_000; // > one gbrain call
+
+export function mutationLockPath(root: string): string;        // <root>/.jspace/state/locks/mutation.lock
+export function filehubMutationLockPath(fhRoot: string): string; // <fhRoot>/.jspace-logs/mutation.lock
+
+export function withWorkbenchMutationLock<T>(root, fn: () => T, deps?): T;
+export function withFilehubMutationLock<T>(fhRoot, fn: () => T, deps?): T;
+export function withFilehubMutationLockAsync<T>(fhRoot, fn: () => Promise<T>, deps?): Promise<T>;
 ```
 
-- Public mutators keep their existing signatures; internally they delegate to a `*Impl` function wrapped by `withWorkbenchMutationLock`.
-- Covered paths: `domain add/remove`, `project add`, `resource add/remove`, `filehub init --register`, `cron add/remove/enable/disable`.
+- Public mutators keep their existing signatures; internally they delegate to a `*Impl` function wrapped by the matching lock.
+- Covered paths: `domain add/remove(--purge)`, `project add`, `resource add/remove`, `filehub init --register`, `cron add/remove/enable/disable`, `ingest begin/advance/complete/fail/rollback`, `pending apply/ack`, `context session-start`/`turn` briefing writes, `workspace upgrade/rollback`.
 - Read-only commands and `--dry-run` call the `*Impl` directly and never acquire the lock.
+- Pending envelopes are locked at the **filehub** root: several workbenches can bind one filehub, so a workbench-scoped lock would not serialize envelope writers at all.
 
 ### 3. Contracts
 
-- Lock file: `<workbench>/.jspace/state/locks/mutation.lock`.
-- One workbench-level lock protects all three JSON files; do not introduce per-file locks or lock ordering.
+- Lock file: `<workbench>/.jspace/state/locks/mutation.lock` (or `<filehub>/.jspace-logs/mutation.lock`).
+- One workbench-level lock protects every workbench state file; do not introduce per-file locks or lock ordering.
+- **Critical-section budget**: a lock is held at most `staleMs`. Anything whose duration is unbounded (recursive deletion of a directory tree) or that can block for longer than the budget (an external call) must run OUTSIDE the lock, or the next process will treat a live holder as crash residue and steal the lock. Expensive-but-bounded steps (single-file copy) may stay if the design names the boundary and the follow-up trigger.
+- A heartbeat/lease renewal is NOT a valid way to exceed the budget here: this codebase's fs work is synchronous, so a timer cannot fire while a blocking call runs.
+- The workbench budget (30s) is shorter than `GBRAIN_TIMEOUT_MS`; any lock held across a gbrain call MUST use the filehub budget (120s = 4x) and MUST hold for a single unit of work, never an unbounded batch.
 - The callback MUST span the full `read → validate → mutate → write` section. Locking only the final write leaves duplicate-id/singleton checks racing on stale snapshots.
 - Acquisition is `O_EXCL`; the file contains a process-unique ownership token. Release unlinks only when the token still matches.
 - A fresh foreign lock fails fast. A lock older than 30 seconds is treated as a crash residue and reclaimed once.
@@ -79,8 +88,10 @@ export function withWorkbenchMutationLock<T>(
 | `EPERM` / `EACCES` / `ENOSPC` / `EIO` while creating/writing the lock | Propagate; never report it as "another process is running" |
 | Post-create token write fails | Remove our 0-byte poison lock, then propagate |
 | Callback throws | Release in `finally`; never leave our own fresh lock behind |
-| Same root nested in one process | Throw `internal: nested workbench mutation lock for <root>` |
+| Same root nested in one process | Throw `internal: nested workbench mutation lock for <root>` (filehub: `... nested filehub mutation lock for <fhRoot>`) |
 | Dry-run / read-only command | Do not create or inspect the lock file |
+| Lock held across a > budget step | Forbidden — restructure so the lock spans only the O(1) handoff (e.g. `rename`), and do the slow part after release |
+| Crashed pending applier | Its filehub lock is reclaimed after 120s; the envelope stays `staged` and the next apply is idempotent |
 
 ### 5. Good/Base/Bad Cases
 
@@ -91,6 +102,9 @@ export function withWorkbenchMutationLock<T>(
 ### 6. Tests Required
 
 - Unit lock tests: fresh contention, stale takeover, release-if-ours, same-root reentry, distinct-root holding, non-contention error propagation.
+- Filehub lock tests: envelope-adjacent path, `FILEHUB_MUTATION_LOCK_STALE_MS > GBRAIN_TIMEOUT_MS`, per-root nesting, async release-on-reject.
+- Long-operation tests: `domain remove --purge` leaves no trash residue on the happy path, reclaims only stale residue, and is covered by a `--dry-run` no-lock assertion.
+- Best-effort hook paths (briefing) assert the lock conflict THROWS; the call site owns the degrade-to-no-op catch.
 - Deterministic lost-update control: an unlocked interleave drops a writer; the same locked sections preserve both updates.
 - Use-case contention tests: holding the lock makes `resourceAdd` / `cronAdd` fail before reading or writing state; the foreign lock remains untouched.
 - Dry-run tests assert `mutationLockPath(root)` does not exist afterward.
@@ -122,6 +136,26 @@ export function domainAdd(root, id, ..., dryRun) {
 }
 ```
 
+#### Wrong (unbounded work inside the lock)
+
+```ts
+withWorkbenchMutationLock(root, () => {
+  writeHubAtomic(root, hub);
+  rmSync(domainDir, { recursive: true });   // minutes on a big tree -> lock stolen mid-delete
+});
+```
+
+#### Correct
+
+```ts
+const { result, trash } = withWorkbenchMutationLock(root, () => {
+  writeHubAtomic(root, hub);
+  renameSync(domainDir, trashPath);          // O(1): the locked handoff
+  return { result, trash: [trashPath] };
+});
+for (const p of trash) rmSync(p, { recursive: true, force: true }); // outside the lock
+```
+
 
 ## Security & Red Lines (parent R8)
 
@@ -134,7 +168,7 @@ export function domainAdd(root, id, ..., dryRun) {
 
 ## Testing Requirements
 
-- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 834 tests across 72 files).
+- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 861 tests across 72 files).
 - New function → unit test; bug fix → regression test; changed behavior → update existing tests.
 - Fault-injection via injected deps (ingest journal fs ops, pending envelope gbrain stub).
 - Contract round-trip + decode-issue tests for every decoder.

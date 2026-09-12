@@ -21,6 +21,7 @@ import {
   type IngestStep,
   type IngestStatus,
 } from "../../core/contracts/ingest.ts";
+import { withWorkbenchMutationLock } from "../lock.ts";
 import { localStamp } from "../time.ts";
 import { readJsonRecords } from "../fs.ts";
 import type { ContractIssue } from "../../core/contracts/diagnostics.ts";
@@ -129,6 +130,12 @@ function withStamp(j: IngestJournalV1): IngestJournalV1 {
  *  without re-staging. A missing source is a hard error unless it is already
  *  recorded as committed (source removed after commit). */
 export function beginIngest(root: string, plan: IngestPlan, ops: IngestFileOps): BeginResult {
+  // The dedupe read, the staged copy, and the journal write must not interleave
+  // with another ingest: two processes seeing "no duplicate" both stage.
+  return withWorkbenchMutationLock(root, () => beginIngestImpl(root, plan, ops));
+}
+
+function beginIngestImpl(root: string, plan: IngestPlan, ops: IngestFileOps): BeginResult {
   const journals = readJournals(root).records;
   // a previous commit left cleanup pending for this source: do NOT stage a
   // second copy/journal — the user/skill must finish cleanup with --complete.
@@ -191,7 +198,13 @@ export function beginIngest(root: string, plan: IngestPlan, ops: IngestFileOps):
  *  failed source removal stays visible and retryable instead of a fake success.
  *  A cleanup-pending journal (failed/failedStep=committed) can only move forward
  *  via completeIngest(); other failed states stay illegal. */
-export function advanceIngest(root: string, id: string, step: IngestStep, _ops: IngestFileOps): IngestJournalV1 {
+export function advanceIngest(root: string, id: string, step: IngestStep, ops: IngestFileOps): IngestJournalV1 {
+  // state machine read → validate → write on ONE journal: concurrent advance of
+  // the same id would otherwise let the later writer resurrect an older step.
+  return withWorkbenchMutationLock(root, () => advanceIngestImpl(root, id, step, ops));
+}
+
+function advanceIngestImpl(root: string, id: string, step: IngestStep, _ops: IngestFileOps): IngestJournalV1 {
   const j = readJournal(root, id);
   if (j.status === "failed") {
     if (isCleanupPending(j)) {
@@ -230,6 +243,17 @@ export function completeIngest(
   id: string,
   ops: IngestFileOps,
   write: JournalWriter = writeJournal,
+): CompleteResult {
+  // Spans the whole cleanup-pending sequence (record → unlink → commit) so a
+  // concurrent advance/fail cannot interleave between its durable steps.
+  return withWorkbenchMutationLock(root, () => completeIngestImpl(root, id, ops, write));
+}
+
+function completeIngestImpl(
+  root: string,
+  id: string,
+  ops: IngestFileOps,
+  write: JournalWriter,
 ): CompleteResult {
   const j = readJournal(root, id);
   const pending =
@@ -293,6 +317,10 @@ function finishCleanup(root: string, pending: IngestJournalV1, ops: IngestFileOp
  *  source removal is in doubt. A plain failure must not masquerade as
  *  cleanup-pending, or `--complete` would force-commit it and unlink the source. */
 export function failIngest(root: string, id: string, reason: string, ops: IngestFileOps): IngestJournalV1 {
+  return withWorkbenchMutationLock(root, () => failIngestImpl(root, id, reason, ops));
+}
+
+function failIngestImpl(root: string, id: string, reason: string, ops: IngestFileOps): IngestJournalV1 {
   const j = readJournal(root, id);
   if (j.status === "committed") throw new Error(`ingest ${id} is already committed`);
   if (isCleanupPending(j)) {
@@ -317,6 +345,10 @@ export function failIngest(root: string, id: string, reason: string, ops: Ingest
  *  staged target copy so the source is the only copy. Refuses once the page
  *  exists (gbrain/index) — there a page would be orphaned by removal. */
 export function rollbackIngest(root: string, id: string, ops: IngestFileOps): IngestJournalV1 {
+  return withWorkbenchMutationLock(root, () => rollbackIngestImpl(root, id, ops));
+}
+
+function rollbackIngestImpl(root: string, id: string, ops: IngestFileOps): IngestJournalV1 {
   const j = readJournal(root, id);
   if (j.status === "committed") throw new Error(`ingest ${id} is already committed`);
   if (isCleanupPending(j)) {
