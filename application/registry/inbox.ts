@@ -63,19 +63,20 @@ export function inboxStatus(root: string, json: boolean): CmdResult {
     };
   }
 
-  const files = readdirSync(inbox)
-    .filter((n) => isInboxPayload(inbox, n))
-    .map((n) => {
-      const p = join(inbox, n);
+  // Stat each entry defensively: a dangling symlink (or an entry racing with a
+  // sync client) must not take the whole listing down — skip what cannot be read.
+  const files: { name: string; size: number; mtime: string; dir: boolean }[] = [];
+  for (const n of readdirSync(inbox)) {
+    if (!isInboxPayload(inbox, n)) continue;
+    const p = join(inbox, n);
+    try {
       const st = statSync(p);
-      return {
-        name: n,
-        size: st.size,
-        mtime: st.mtime.toISOString(),
-        dir: st.isDirectory(),
-      };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
+      files.push({ name: n, size: st.size, mtime: st.mtime.toISOString(), dir: st.isDirectory() });
+    } catch {
+      continue;
+    }
+  }
+  files.sort((a, b) => a.name.localeCompare(b.name));
 
   if (json) {
     return { lines: [], data: { inbox, count: files.length, files } };

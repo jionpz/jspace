@@ -1,5 +1,5 @@
 // application/diagnostics/checks/inbox.ts — filehub, pending, ingest, domains.
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { RegistryDiagnostic } from "../../../core/contracts/diagnostics.ts";
 import type { readWorkbenchState } from "../../../adapters/fs/workbench-state.ts";
@@ -26,6 +26,39 @@ export function resolveFhRoot(reads: WorkbenchReads): string | null {
   return primaryPathForResourceType(effective, "filehub");
 }
 
+/** Non-throwing classification of a directory path. `existsSync` collapses
+ *  EACCES into "missing" and a bare `statSync` throws, so diagnostics probe with
+ *  lstat and distinguish "absent" from "present but unreadable" — doctor must
+ *  degrade, never crash (a chmod 000 dir used to take the whole command down). */
+type DirProbe = "dir" | "missing" | "unreadable" | "not-dir";
+
+function probeDir(p: string): DirProbe {
+  let st: ReturnType<typeof lstatSync>;
+  try {
+    st = lstatSync(p);
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    return code === "ENOENT" || code === "ENOTDIR" ? "missing" : "unreadable";
+  }
+  if (st.isSymbolicLink()) {
+    try {
+      st = statSync(p);
+    } catch {
+      return "unreadable"; // dangling or unreadable link target
+    }
+  }
+  return st.isDirectory() ? "dir" : "not-dir";
+}
+
+/** readdir that returns null instead of throwing on EACCES / races. */
+function safeReaddir(p: string): string[] | null {
+  try {
+    return readdirSync(p);
+  } catch {
+    return null;
+  }
+}
+
 /** filehub resource-level health: unregistered (info), _inbox state, stale
  *  projects (info nudge). Read-only; never throws. */
 export function checkInbox(reads: WorkbenchReads): RegistryDiagnostic[] {
@@ -40,25 +73,52 @@ export function checkInbox(reads: WorkbenchReads): RegistryDiagnostic[] {
     });
     return diags;
   }
+  // A bound-but-absent root means the drive is not mounted / the sync folder is
+  // not materialised yet. The registry layer already reports that once as
+  // binding.missing; every content check below would only restate "we cannot see
+  // it", so stop here instead of emitting a cascade of misleading warnings.
+  if (probeDir(fhRoot) !== "dir") return diags;
+
   const inboxDir = join(fhRoot, "_inbox");
-  if (!existsSync(inboxDir) || !statSync(inboxDir).isDirectory()) {
-    diags.push({ severity: "warning", code: "filehub.inbox_missing", path: `filehub.${fhRoot}`, message: `filehub: _inbox missing: ${inboxDir}` });
-  } else {
-    const unfiled = countInbox(inboxDir);
-    if (unfiled > 0) {
-      diags.push({ severity: "warning", code: "filehub.inbox_unfiled", path: `filehub.${fhRoot}`, message: `filehub: _inbox has ${unfiled} unfiled file(s); run asset-ingest ("整理一下 inbox")` });
+  switch (probeDir(inboxDir)) {
+    case "dir": {
+      let unfiled: number;
+      try {
+        unfiled = countInbox(inboxDir);
+      } catch {
+        diags.push({ severity: "warning", code: "filehub.inbox_unreadable", path: `filehub.${fhRoot}`, message: `filehub: _inbox is not readable: ${inboxDir} (fix permissions to let inbox checks run)` });
+        break;
+      }
+      if (unfiled > 0) {
+        diags.push({ severity: "warning", code: "filehub.inbox_unfiled", path: `filehub.${fhRoot}`, message: `filehub: _inbox has ${unfiled} unfiled file(s); run asset-ingest ("整理一下 inbox")` });
+      }
+      break;
     }
+    case "unreadable":
+      diags.push({ severity: "warning", code: "filehub.inbox_unreadable", path: `filehub.${fhRoot}`, message: `filehub: _inbox is not readable: ${inboxDir} (fix permissions to let inbox checks run)` });
+      break;
+    default:
+      diags.push({ severity: "warning", code: "filehub.inbox_missing", path: `filehub.${fhRoot}`, message: `filehub: _inbox missing: ${inboxDir}` });
   }
   const now = Date.now();
   const registeredAssetPaths = new Set(
     (reads.hub.status === "ok" ? reads.hub.value.projects ?? [] : []).map((p) => p.asset_rel_path),
   );
   const projectsDir = join(fhRoot, "projects");
-  if (existsSync(projectsDir) && statSync(projectsDir).isDirectory()) {
-    for (const name of readdirSync(projectsDir)) {
+  const projectNames = probeDir(projectsDir) === "dir" ? safeReaddir(projectsDir) : null;
+  if (projectNames === null && probeDir(projectsDir) === "dir") {
+    diags.push({
+      severity: "warning",
+      code: "filehub.projects_unreadable",
+      path: `filehub.${fhRoot}`,
+      message: `filehub: projects/ is not readable: ${projectsDir} (fix permissions to let project checks run)`,
+    });
+  }
+  if (projectNames !== null) {
+    for (const name of projectNames) {
       if (name.startsWith(".")) continue;
       const p = join(projectsDir, name);
-      if (!statSync(p).isDirectory()) continue;
+      if (probeDir(p) !== "dir") continue; // vanished / unreadable / not a dir
       if (!registeredAssetPaths.has(`projects/${name}`)) {
         diags.push({
           severity: "info",
@@ -127,18 +187,57 @@ export function checkFilehubContract(reads: WorkbenchReads): RegistryDiagnostic[
   const fhRoot = resolveFhRoot(reads);
   if (!fhRoot) return diags; // unregistered already reported by checkInbox
 
+  // Root not materialised on this machine (unmounted drive, unsynced cloud
+  // folder): binding.missing is the honest diagnostic. Reporting "README missing"
+  // here would also suggest `filehub upgrade <path>`, a command that fails
+  // immediately because the root does not exist.
+  if (probeDir(fhRoot) !== "dir") return diags;
+
   const readme = join(fhRoot, "README.md");
-  if (!existsSync(readme)) {
+  let readmeText: string | null = null;
+  let readmeMissing = false;
+  let readmeUnreadable = false;
+  try {
+    readmeText = readFileSync(readme, "utf-8");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") readmeMissing = true;
+    else readmeUnreadable = true;
+  }
+  const readmeIsSymlink = (() => {
+    try {
+      return lstatSync(readme).isSymbolicLink();
+    } catch {
+      return false;
+    }
+  })();
+
+  if (readmeMissing) {
     diags.push({
       severity: "warning",
       code: "filehub.contract_stale",
       path: `filehub.${fhRoot}`,
       message: `filehub README missing: ${readme}; run "${UPGRADE_HINT} ${fhRoot} --dry-run" to preview the contract file, then apply`,
     });
+  } else if (readmeUnreadable || readmeText === null) {
+    diags.push({
+      severity: "warning",
+      code: "filehub.contract_stale",
+      path: `filehub.${fhRoot}`,
+      message: `filehub README is not readable: ${readme}; fix file permissions first — "${UPGRADE_HINT}" cannot repair an unreadable file`,
+    });
+  } else if (readmeIsSymlink) {
+    // `filehub upgrade` refuses symlinked READMEs by design, so pointing at it
+    // would send the user into a command that always fails.
+    diags.push({
+      severity: "warning",
+      code: "filehub.contract_stale",
+      path: `filehub.${fhRoot}`,
+      message: `filehub README is a symlink: ${readme}; replace it with a regular file first — "${UPGRADE_HINT}" refuses symlinks and will not touch its target`,
+    });
   } else {
     let state: ReturnType<typeof inspectFilehubContractBlock>;
     try {
-      state = inspectFilehubContractBlock(readFileSync(readme, "utf-8"));
+      state = inspectFilehubContractBlock(readmeText);
     } catch {
       state = { kind: "malformed", reason: "README unreadable" };
     }
@@ -182,15 +281,23 @@ export function checkFilehubContract(reads: WorkbenchReads): RegistryDiagnostic[
     scanRoots.push({ abs: join(fhRoot, project.asset_rel_path), rel: project.asset_rel_path });
   }
   const areasDir = join(fhRoot, "areas");
-  try {
-    if (statSync(areasDir).isDirectory()) {
-      for (const name of readdirSync(areasDir)) {
-        if (name.startsWith(".")) continue;
-        if (isDir(join(areasDir, name))) scanRoots.push({ abs: join(areasDir, name), rel: `areas/${name}` });
+  const areaNames = probeDir(areasDir) === "dir" ? safeReaddir(areasDir) : null;
+  if (areaNames !== null) {
+    for (const name of areaNames) {
+      if (name.startsWith(".")) continue;
+      const abs = join(areasDir, name);
+      // Areas are discovered by name (nobody declared them), so a symlinked
+      // entry must never widen the scan outside the filehub. Registered project
+      // roots are explicitly declared and keep their follow-link behaviour.
+      let st: ReturnType<typeof lstatSync>;
+      try {
+        st = lstatSync(abs);
+      } catch {
+        continue;
       }
+      if (st.isSymbolicLink()) continue;
+      if (st.isDirectory()) scanRoots.push({ abs, rel: `areas/${name}` });
     }
-  } catch {
-    // missing/unreadable areas/ is not a contract problem
   }
 
   for (const { abs, rel } of scanRoots) {
@@ -212,6 +319,7 @@ export function checkPending(reads: WorkbenchReads): RegistryDiagnostic[] {
   const diags: RegistryDiagnostic[] = [];
   const fhRoot = resolveFhRoot(reads);
   if (!fhRoot) return diags;
+  if (probeDir(fhRoot) !== "dir") return diags; // binding.missing covers this
   const envRead = readEnvelopes(fhRoot);
   for (const issue of envRead.issues) {
     diags.push({

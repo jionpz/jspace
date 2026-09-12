@@ -13,7 +13,7 @@ export const FILEHUB_BLOCK_END = "<!-- JSPACE:FILEHUB:END -->";
 
 /** Current filehub README contract version. Bump only when the managed text
  *  changes in a way installed filehubs should adopt via `jspace filehub upgrade`. */
-export const FILEHUB_CONTRACT_VERSION = 2;
+export const FILEHUB_CONTRACT_VERSION = 3;
 
 const VERSION_RE = /^>\s*filehub-contract-version:\s*(\d+)\s*$/m;
 
@@ -22,27 +22,33 @@ export type FilehubBlockState =
   | { kind: "ok"; block: string }
   | { kind: "malformed"; reason: string };
 
-function countOccurrences(content: string, needle: string): number {
-  let count = 0;
-  let from = 0;
-  for (;;) {
-    const idx = content.indexOf(needle, from);
-    if (idx < 0) return count;
-    count += 1;
-    from = idx + needle.length;
+/** Line-anchored marker offsets: a line whose trimmed content is exactly the
+ *  marker counts; an inline mention (`see <!-- JSPACE:FILEHUB:START --> xx`)
+ *  does not. Returns the offset of the marker token itself, so callers can
+ *  slice without assuming the marker sits at column 0. */
+function markerLineStarts(content: string, needle: string): number[] {
+  const out: number[] = [];
+  let at = 0;
+  for (const raw of content.split("\n")) {
+    const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+    if (line.trim() === needle) out.push(at + line.indexOf(needle));
+    at += raw.length + 1;
   }
+  return out;
 }
 
 /** Read-only block probe used by doctor (no throwing): distinguishes "no
  *  markers" from damaged markers so the diagnostic can say which one it is. */
 export function inspectFilehubContractBlock(content: string): FilehubBlockState {
-  const starts = countOccurrences(content, FILEHUB_BLOCK_START);
-  const ends = countOccurrences(content, FILEHUB_BLOCK_END);
-  if (starts === 0 && ends === 0) return { kind: "none" };
-  if (starts === 0 || ends === 0) return { kind: "malformed", reason: "only one marker present" };
-  if (starts > 1 || ends > 1) return { kind: "malformed", reason: "duplicate markers" };
-  const startIdx = content.indexOf(FILEHUB_BLOCK_START);
-  const endIdx = content.indexOf(FILEHUB_BLOCK_END);
+  const starts = markerLineStarts(content, FILEHUB_BLOCK_START);
+  const ends = markerLineStarts(content, FILEHUB_BLOCK_END);
+  if (starts.length === 0 && ends.length === 0) return { kind: "none" };
+  if (starts.length === 0 || ends.length === 0) {
+    return { kind: "malformed", reason: "only one marker present" };
+  }
+  if (starts.length > 1 || ends.length > 1) return { kind: "malformed", reason: "duplicate markers" };
+  const startIdx = starts[0];
+  const endIdx = ends[0];
   if (endIdx < startIdx) return { kind: "malformed", reason: "end marker appears before start marker" };
   return { kind: "ok", block: content.slice(startIdx, endIdx + FILEHUB_BLOCK_END.length) };
 }
@@ -67,15 +73,36 @@ export function malformedBlockError(reason: string): Error {
 }
 
 /** Replace the managed block in `content` with `block` (markers inclusive).
- *  When the README has no block, insert it at the top with one blank line
- *  before the original content; text outside the block is preserved byte-for-byte.
- *  Malformed markers throw — never mutate a damaged file. */
+ *  When the README has no block, insert it after a leading BOM and any YAML
+ *  frontmatter (one blank line before the original content); text outside the
+ *  block is preserved byte-for-byte. Malformed markers throw — never mutate a
+ *  damaged file. */
+const BOM = "\uFEFF";
+
+/** Leading YAML frontmatter: an opening `---` on the first logical line up to the
+ *  next `---` on a line of its own. Deliberately strict — an unclosed `---` is
+ *  NOT frontmatter, so a stray horizontal rule never pushes the block down. */
+const FRONTMATTER_RE = /^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*\r?\n/;
+
+/** Where an inserted block belongs: after a leading BOM (which must stay at byte
+ *  offset 0) and after YAML frontmatter (which must stay at the top of the file,
+ *  so `layout:`-style keys keep parsing). */
+function insertionOffset(content: string): number {
+  const bom = content.startsWith(BOM) ? BOM.length : 0;
+  const fm = FRONTMATTER_RE.exec(content.slice(bom));
+  return bom + (fm ? fm[0].length : 0);
+}
+
 export function replaceFilehubContractBlock(content: string, block: string): string {
   const state = inspectFilehubContractBlock(content);
   if (state.kind === "malformed") throw malformedBlockError(state.reason);
-  if (state.kind === "none") return `${block}\n\n${content}`;
-  const startIdx = content.indexOf(FILEHUB_BLOCK_START);
-  const endIdx = content.indexOf(FILEHUB_BLOCK_END);
+  if (state.kind === "none") {
+    const at = insertionOffset(content);
+    const nl = content.includes("\r\n") ? "\r\n" : "\n";
+    return `${content.slice(0, at)}${block}${nl}${nl}${content.slice(at)}`;
+  }
+  const startIdx = markerLineStarts(content, FILEHUB_BLOCK_START)[0];
+  const endIdx = markerLineStarts(content, FILEHUB_BLOCK_END)[0];
   return `${content.slice(0, startIdx)}${block}${content.slice(endIdx + FILEHUB_BLOCK_END.length)}`;
 }
 

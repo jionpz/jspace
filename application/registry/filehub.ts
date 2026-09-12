@@ -1,5 +1,5 @@
 // application/registry/filehub.ts — `jspace filehub init` use case (moved from cli/cmds.ts).
-import { existsSync, lstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { accessSync, constants, existsSync, lstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fail } from "../../core/shared/errors.ts";
 import type { CmdResult } from "../commands/command.ts";
@@ -33,6 +33,55 @@ export interface FilehubDeps {
   devRoot: () => string;
   /** workbench root for --register (current cwd) */
   wbRoot: string;
+}
+
+/** Strict UTF-8 decode: `null` instead of U+FFFD substitution so invalid bytes
+ *  are never silently rewritten into a user's README. `ignoreBOM: true` keeps a
+ *  leading BOM inside the string so re-encoding stays byte-faithful. */
+function decodeUtf8Strict(buf: Uint8Array): string | null {
+  try {
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(buf);
+  } catch {
+    return null;
+  }
+}
+
+/** Refuse to replace a file the user cannot write. `rename` only needs the
+ *  parent directory, so without this a 0444 README would be silently swapped
+ *  for a 0644 one. Runs for apply AND dry-run so the preview tells the truth. */
+function assertWritableFile(path: string): void {
+  try {
+    accessSync(path, constants.W_OK);
+  } catch {
+    fail(`filehub README is not writable: ${path} (fix the file mode or ACL, then re-run)`);
+  }
+}
+
+/** Identity of the bytes we planned the rewrite from. */
+interface FileIdentity {
+  ino: number;
+  size: number;
+  mtimeMs: number;
+}
+
+/** Re-check the file between read and rename so a concurrent edit (editor, sync
+ *  client, second session) is never clobbered by our stale in-memory copy. */
+function assertUnchangedFile(path: string, expected: FileIdentity): void {
+  let st: ReturnType<typeof lstatSync>;
+  try {
+    st = lstatSync(path);
+  } catch {
+    fail(`filehub README disappeared while upgrading: ${path} (re-run the command)`);
+  }
+  if (st.isSymbolicLink()) {
+    fail(`refusing to write a symlinked README: ${path} (replace it with a regular file first)`);
+  }
+  if (st.ino !== expected.ino || st.size !== expected.size || st.mtimeMs !== expected.mtimeMs) {
+    fail(
+      `filehub README changed while upgrading (concurrent edit or sync): ${path} — ` +
+        "re-run to pick up the new content; nothing was written",
+    );
+  }
 }
 
 /** Dependencies for the explicit README-contract upgrade use case. */
@@ -83,16 +132,33 @@ export function filehubUpgrade(
   const lines: string[] = [];
   let action: "create-readme" | "create-block" | "update-block" | "no-op";
   let next: string;
+  let identity: FileIdentity | null = null;
+  let mode: number | undefined;
 
-  if (!existsSync(readme)) {
+  // lstat, not existsSync: a DANGLING symlink must still be recognised as a link.
+  // existsSync follows the link, reports "missing", and the create branch would
+  // then replace the link itself with a regular file.
+  let readmeStat: ReturnType<typeof lstatSync> | null = null;
+  try {
+    readmeStat = lstatSync(readme);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") {
+      fail(`cannot read filehub README: ${readme} (${(e as Error).message})`);
+    }
+  }
+
+  if (readmeStat === null) {
     action = "create-readme";
     next = template;
   } else {
-    if (lstatSync(readme).isSymbolicLink()) {
+    if (readmeStat.isSymbolicLink()) {
       fail(`refusing to write a symlinked README: ${readme} (replace it with a regular file first)`);
     }
-    if (!statSync(readme).isFile()) fail(`not a file: ${readme}`);
-    const current = readFileSync(readme, "utf-8");
+    if (!readmeStat.isFile()) fail(`not a file: ${readme}`);
+    const current = decodeUtf8Strict(readFileSync(readme));
+    if (current === null) {
+      fail(`filehub README is not valid UTF-8: ${readme} (refusing to rewrite it and lose bytes)`);
+    }
     const state = inspectFilehubContractBlock(current);
     if (state.kind === "malformed") {
       fail(
@@ -102,6 +168,8 @@ export function filehubUpgrade(
     }
     next = replaceFilehubContractBlock(current, block);
     action = next === current ? "no-op" : state.kind === "ok" ? "update-block" : "create-block";
+    identity = { ino: readmeStat.ino, size: readmeStat.size, mtimeMs: readmeStat.mtimeMs };
+    mode = readmeStat.mode;
   }
 
   if (action === "no-op") {
@@ -110,13 +178,20 @@ export function filehubUpgrade(
     return { lines };
   }
 
+  // Fail-closed checks that apply to dry-run too, so the preview cannot promise
+  // a write the apply would refuse.
+  if (identity !== null) {
+    assertWritableFile(readme);
+    assertUnchangedFile(readme, identity);
+  }
+
   if (dryRun) {
     lines.push(`jspace: ok: would ${action}: ${readme} (dry-run, nothing written)`);
     lines.push("jspace: info: assets untouched (only the README contract block is managed)");
     return { lines };
   }
 
-  writeBytesAtomic(readme, next);
+  writeBytesAtomic(readme, next, mode);
   lines.push(`jspace: ok: ${action}: ${readme}`);
   lines.push("jspace: info: assets untouched (only the README contract block is managed)");
   return { lines };

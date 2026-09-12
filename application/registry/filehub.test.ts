@@ -4,7 +4,7 @@
 // upgrade algorithm (insert/replace/no-op/dry-run/malformed/symlink).
 // Run: bun test application/registry/filehub.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initWorkbench } from "../workspace/init.ts";
@@ -16,6 +16,7 @@ import {
   FILEHUB_CONTRACT_VERSION,
   extractFilehubContractBlock,
   filehubInit,
+  inspectFilehubContractBlock,
   filehubUpgrade,
   parseFilehubContractVersion,
   replaceFilehubContractBlock,
@@ -190,6 +191,93 @@ test("upgrade refuses a symlinked README and leaves the link target unchanged", 
 
   expect(() => filehubUpgrade(fh, fhDeps(wb), false)).toThrow(/symlinked/);
   expect(readFileSync(target, "utf-8")).toBe("# 外部文件\n");
+});
+
+test("upgrade refuses a DANGLING README symlink instead of replacing the link", () => {
+  const fh = join(wb, "filehub");
+  mkdirSync(fh, { recursive: true });
+  const target = join(wb, "never-created.md");
+  symlinkSync(target, join(fh, "README.md"));
+
+  expect(() => filehubUpgrade(fh, fhDeps(wb), false)).toThrow(/symlinked/);
+  expect(lstatSync(join(fh, "README.md")).isSymbolicLink()).toBe(true);
+  expect(existsSync(target)).toBe(false);
+});
+
+test("upgrade --dry-run refuses a dangling README symlink too", () => {
+  const fh = join(wb, "filehub");
+  mkdirSync(fh, { recursive: true });
+  symlinkSync(join(wb, "never-created.md"), join(fh, "README.md"));
+
+  expect(() => filehubUpgrade(fh, fhDeps(wb), true)).toThrow(/symlinked/);
+  expect(lstatSync(join(fh, "README.md")).isSymbolicLink()).toBe(true);
+});
+
+test("upgrade refuses a non-UTF-8 README and leaves every byte untouched", () => {
+  const fh = join(wb, "filehub");
+  mkdirSync(fh, { recursive: true });
+  const raw = Buffer.concat([Buffer.from("# 用户说明\n", "utf-8"), Buffer.from([0xff, 0xfe, 0x00])]);
+  writeFileSync(join(fh, "README.md"), raw);
+
+  expect(() => filehubUpgrade(fh, fhDeps(wb), false)).toThrow(/UTF-8/);
+  expect(readFileSync(join(fh, "README.md")).equals(raw)).toBe(true);
+});
+
+test("upgrade keeps a UTF-8 BOM at byte offset zero", () => {
+  const fh = join(wb, "filehub");
+  mkdirSync(fh, { recursive: true });
+  writeFileSync(join(fh, "README.md"), "\uFEFF# 用户说明\n", "utf-8");
+
+  filehubUpgrade(fh, fhDeps(wb), false);
+  const out = readFileSync(join(fh, "README.md"));
+  expect([...out.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+  expect(out.toString("utf-8")).toContain("# 用户说明");
+  expect(filehubUpgrade(fh, fhDeps(wb), false).lines.join("\n")).toContain("no-op");
+});
+
+test("upgrade inserts the block AFTER YAML frontmatter, not above it", () => {
+  const fh = join(wb, "filehub");
+  mkdirSync(fh, { recursive: true });
+  writeFileSync(join(fh, "README.md"), "---\ntags: [filehub]\n---\n# 用户说明\n");
+
+  filehubUpgrade(fh, fhDeps(wb), false);
+  const out = readFileSync(join(fh, "README.md"), "utf-8");
+  expect(out.startsWith("---\ntags: [filehub]\n---\n")).toBe(true);
+  expect(out.indexOf("JSPACE:FILEHUB:START")).toBeGreaterThan(out.indexOf("tags: [filehub]"));
+  expect(filehubUpgrade(fh, fhDeps(wb), false).lines.join("\n")).toContain("no-op");
+});
+
+test("upgrade refuses a read-only README instead of silently replacing it", () => {
+  const fh = join(wb, "filehub");
+  mkdirSync(fh, { recursive: true });
+  const p = join(fh, "README.md");
+  writeFileSync(p, "# 用户说明\n");
+  chmodSync(p, 0o444);
+  try {
+    expect(() => filehubUpgrade(fh, fhDeps(wb), false)).toThrow(/not writable/);
+    expect(readFileSync(p, "utf-8")).toBe("# 用户说明\n");
+  } finally {
+    chmodSync(p, 0o644);
+  }
+});
+
+test("upgrade preserves a restrictive mode (0600 README stays private)", () => {
+  const fh = join(wb, "filehub");
+  mkdirSync(fh, { recursive: true });
+  const p = join(fh, "README.md");
+  writeFileSync(p, "# 用户说明\n");
+  chmodSync(p, 0o600);
+
+  filehubUpgrade(fh, fhDeps(wb), false);
+  expect(statSync(p).mode & 0o777).toBe(0o600);
+});
+
+test("an inline marker mention is not mistaken for a managed block", () => {
+  const inline = "# 用户说明\n\n写法见 <!-- JSPACE:FILEHUB:START --> 一节\n";
+  expect(inspectFilehubContractBlock(inline).kind).toBe("none");
+  const out = replaceFilehubContractBlock(inline, extractFilehubContractBlock(README_V2)!);
+  expect(out.startsWith("<!-- JSPACE:FILEHUB:START -->")).toBe(true);
+  expect(out).toContain("写法见 <!-- JSPACE:FILEHUB:START --> 一节");
 });
 
 test("upgrade resolves the registered filehub when no path is given", () => {

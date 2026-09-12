@@ -5,7 +5,7 @@
 > 本目录可被 Obsidian 作为 vault 打开。AI 只写纯 md 与相对链接,不依赖任何插件——哪天换工具,资料一点不坏。
 
 <!-- JSPACE:FILEHUB:START -->
-> filehub-contract-version: 2
+> filehub-contract-version: 3
 
 ## 归档契约
 
@@ -32,7 +32,7 @@ layout: flat | workstream | period
 - `period`: 按稳定周期分组,如 `2026-Q3/`。
 - 同一层级只能使用一种组织轴;不得同时混用工作流、周期或文件格式。
 - 不为单个文件机械建目录。只有同一稳定组已形成明显集合,或直接子项过多影响浏览时,才创建语义目录。
-- **禁止**把 `docs/`、`decks/`、`data/`、`notes/` 等文件形态作为归档目录。类型写入 `index.md`,不写进路径。
+- **保留目录名(禁止用作目录)**:`docs`、`decks`、`data`、`notes` 四个名字在 filehub 内一律不得作为目录名(它们描述文件形态,不描述归属或稳定阶段)。类型写入 `index.md`,不写进路径;`jspace doctor` 检测它们。
 
 ### 类型与索引
 

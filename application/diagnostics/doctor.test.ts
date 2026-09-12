@@ -11,6 +11,7 @@ import { doctorWorkbench, type CronHealthDeps, type CronLike } from "./doctor.ts
 import { loadCrons, parseSchedule } from "../automation/definitions.ts";
 import { sha256Of } from "../workspace/manifest.ts";
 import { filehubReadme as embeddedFilehubReadme } from "../../cli/embed.ts";
+import { FILEHUB_CONTRACT_VERSION } from "../registry/filehub-block.ts";
 import type { CmdResult } from "../commands/command.ts";
 
 let root: string;
@@ -682,7 +683,7 @@ test("filehub README with an outdated contract version -> filehub.contract_stale
   const diags = (doctorWorkbench(root, stubDeps()).data as { diagnostics: { code: string; message: string }[] }).diagnostics;
   const d = diags.find((x) => x.code === "filehub.contract_stale");
   expect(d).toBeDefined();
-  expect(d!.message).toContain("v1 < v2");
+  expect(d!.message).toContain(`v1 < v${FILEHUB_CONTRACT_VERSION}`);
 });
 
 test("compliant filehub (current block + flat project) -> no contract diagnostics", () => {
@@ -728,6 +729,58 @@ test("legacy taxonomy scan is one level only (semantic dir may contain a docs/ f
   writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
   mkdirSync(join(fh, "projects", "acme", "delivery", "docs"), { recursive: true });
   expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("filehub.legacy_taxonomy");
+});
+
+test("registered filehub root absent on this machine -> no content-check cascade", () => {
+  const fh = withFilehub([{ id: "acme", domain: "files", asset_rel_path: "projects/acme", status: "active" }]);
+  writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
+  mkdirSync(join(fh, "projects", "acme", "docs"), { recursive: true });
+  rmSync(fh, { recursive: true, force: true }); // unmounted drive / unsynced folder
+  const c = codes(doctorWorkbench(root, stubDeps()));
+  expect(c).not.toContain("filehub.contract_stale");
+  expect(c).not.toContain("filehub.legacy_taxonomy");
+  expect(c).not.toContain("filehub.inbox_missing");
+});
+
+test("unreadable _inbox root degrades to a diagnostic instead of throwing", () => {
+  const fh = withFilehub([]);
+  writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
+  const inbox = join(fh, "_inbox");
+  mkdirSync(inbox, { recursive: true });
+  chmodSync(inbox, 0o000);
+  try {
+    const r = doctorWorkbench(root, stubDeps());
+    expect(r.exitCode ?? 0).toBe(0);
+    expect(codes(r)).toContain("filehub.inbox_unreadable");
+  } finally {
+    chmodSync(inbox, 0o755);
+  }
+});
+
+test("unreadable projects/ root degrades to a diagnostic instead of throwing", () => {
+  const fh = withFilehub([{ id: "acme", domain: "files", asset_rel_path: "projects/acme", status: "active" }]);
+  writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
+  mkdirSync(join(fh, "projects", "acme"), { recursive: true });
+  const projects = join(fh, "projects");
+  chmodSync(projects, 0o000);
+  try {
+    const r = doctorWorkbench(root, stubDeps());
+    expect(r.exitCode ?? 0).toBe(0);
+    expect(codes(r)).toContain("filehub.projects_unreadable");
+  } finally {
+    chmodSync(projects, 0o755);
+  }
+});
+
+test("a symlinked areas entry is never followed outside the filehub", () => {
+  const fh = withFilehub([]);
+  writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
+  const outside = join(root, "outside-area");
+  mkdirSync(join(outside, "docs"), { recursive: true }); // legacy dir OUTSIDE the filehub
+  mkdirSync(join(fh, "areas"), { recursive: true });
+  symlinkSync(outside, join(fh, "areas", "external"));
+  const c = codes(doctorWorkbench(root, stubDeps()));
+  expect(c).not.toContain("filehub.legacy_taxonomy");
 });
 
 test("unregistered filehub -> no contract_stale / legacy_taxonomy noise", () => {

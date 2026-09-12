@@ -4,6 +4,7 @@
 import {
   closeSync,
   existsSync,
+  fchmodSync,
   fsyncSync,
   mkdirSync,
   openSync,
@@ -96,14 +97,18 @@ function cleanupTemps(paths: string[]): void {
 }
 
 /** Atomic single-file write: temp sibling + fsync + rename. A temp orphan is
- *  cleaned up on rename failure (issue #8 #19). */
-export function writeBytesAtomic(p: string, content: string): void {
+ *  cleaned up on rename failure (issue #8 #19). `mode` (optional) fchmods the
+ *  temp file before the rename so replacing an existing file preserves its
+ *  permission bits instead of imposing the open()-default 0644 — callers that
+ *  care about a 0600 file staying private pass the destination's mode. */
+export function writeBytesAtomic(p: string, content: string, mode?: number): void {
   mkdirSync(dirname(p), { recursive: true });
   const tmp = tmpSibling(p);
   let fd: number | undefined;
   try {
     fd = openSync(tmp, "w");
     writeFileSync(fd, content, "utf-8");
+    if (mode !== undefined) fchmodSync(fd, mode & 0o777);
     fsyncSync(fd); // durable before the rename publishes the new state
     closeSync(fd);
     fd = undefined;
