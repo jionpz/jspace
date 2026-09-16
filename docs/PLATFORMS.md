@@ -7,10 +7,25 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 | 平台 | `jspace cron install` 后端 | 补跑语义 | 运行上下文 |
 |---|---|---|---|
 | macOS | launchd(一 cron 一 plist,`~/Library/LaunchAgents/com.jspace.cron.<tag>.<id>.plist`) | 睡眠错过 → **下次唤醒补跑一次**(多次合并一次);整夜关机不唤醒则跳过 | 仅用户已登录会话 |
-| Linux | crontab(注释块 `# jspace crons <tag> (managed) DO NOT EDIT`…`# end jspace <tag>`,tag 见 §Scheduler 任务隔离) | **无补跑**(错过即跳过) | 登录用户,环境最小(PATH/HOME 由 install 烘焙) |
+| Linux | crontab(注释块 `# jspace crons <tag> (managed) DO NOT EDIT`…`# end jspace <tag>`,tag 见 §Scheduler 任务隔离) | **无补跑**(错过即跳过) | 登录用户,环境最小(PATH/HOME 由 install 烘焙,见 §受管条目的 PATH 合同) |
 | Windows | Task Scheduler(`schtasks`,任务名 `JSpaceCron_<wb-id>_<id>`) | **无补跑** | **默认仅登录时运行**(登出不触发);`/it` 交互令牌 |
 
 > **调度语义差异诚实声明**:三个平台对「错过的时间点」行为不同——macOS 会唤醒补跑,Linux/Windows 直接跳过。这是各系统调度器的固有差异,cron 定义(`.jspace/cron.json`)是平台无关的,同一份定义在三平台行为可能不同。Linux 侧「无补跑」的代码审计结论与合同边界见 §补跑语义合同;Windows 侧「仅登录时运行」的 argv 合同与登出协议见 §Windows 登录/登出边界 runbook。失败都会打开结构化 incident(`.jspace/state/incidents/`),`cron failures` 在下个会话可见;成功 retry 自动 resolve,`cron ack` 保留证据但停止告警。
+
+### 受管条目的 PATH 合同(issue #50)
+
+写进调度条目的 `PATH` **不是**调用者 shell 的 `process.env.PATH`。那段值有两个性质使它不能进调度条目:
+
+- **无界**:crontab 行有 1000 字符上限,交互 shell 的 PATH 随时可能越过它 —— 于是 `cron install`(含 `--dry-run`)会因为一段与它要做的事无关的 PATH 而失败(实测 2196 字符行)。
+- **不确定**:同一个 install 在不同 shell 下会写出**不同**的条目。
+
+合同:条目里的 PATH = **运行时按名解析的二进制所在目录** ∪ 系统惯例目录。
+
+- 只有两个东西真的需要 PATH:harness(`harnessArgv` 经 `which`/`where` 解析)与 `gbrain`(以裸 `argv[0]` 起进程;`$GBRAIN_BIN` 可覆盖,且 `GBRAIN_*` 本就在 cron env 白名单里,所以覆盖不需要 PATH)。
+- 每个解析结果取 `dirname`,去重后放在系统目录(`/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`)**之前**,使用户自装的 harness 优先;解析不到的条目直接丢弃(裸名回退 = `which` miss)。
+- 因此条目长度由**机器上二进制的位置**决定,与调用者 PATH 的长度**无关**;条目的其余部分(`cd … && jspace cron run --dir … --id …`)不变,提示词始终留在 `cron.json`。
+
+唯一装配点是 `cli/scheduler.ts::schedulerPath` —— launchd plist 与 crontab 行共用同一份值;单测 `cli/scheduler.test.ts` 锁定「超长 shell PATH 不能把行推过 1000」与「深层 harness 目录仍留在行内」两条。`crontabLine` 的 1000 字符守卫保留不变 —— 错的是输入,不是守卫。
 
 ## 运行状态与 incidents（结构化，M3）
 
