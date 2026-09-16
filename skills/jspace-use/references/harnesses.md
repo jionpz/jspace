@@ -43,6 +43,12 @@
 - [`harness-cursor.md`](harness-cursor.md) — 会话 harness（D6 保留）：无 headless，`jspace harness wire --harness cursor`（写 `~/.cursor/mcp.json` + 官方 skills 薄链到 `~/.cursor/skills/`）
 - codex：cron 兼容条目（`documented: false`，无独立 doc——现有 cron 契约继续可用；`harness wire` 不接受 codex）
 
+## harness 接线诊断的范围与「已改 seed」(issue #52)
+
+- **范围 = 本工作台在不在用这个 harness**:`harness.session_start_not_wired` / `hooks.not_wired` / `claude.pointer_missing` / `governance.harness_unwired` 只对**本工作台实际在用**的 harness 报 warning——cron.json 里 `enabled` 的 harness,或存在 `.pi/`(Pi 的工作台级状态)。**二进制在 PATH 上 ≠ 本工作台在用**:范围外的 finding 一律降为 **info**(`jspace doctor --verbose` / `--json` 可见),不再替用户没选的 harness 报警告。
+- **已改的 seed 不会被 upgrade 覆盖**:本地改过的 seed(`.claude/settings.json` / `CLAUDE.md` / 各 harness 的 hook seed),`jspace workspace upgrade` 是 `skip`(`jspace workspace diff` 显示 `seed: local content kept`),所以 doctor 的修法**不再写「跑 upgrade 就能把丢掉的接线装回来」**(那对已改文件是假的)。要恢复随包 seed 就**显式**做两步:删掉该文件 → 再跑 `jspace workspace upgrade`(文件缺失时 upgrade 会重新物化它,`--rollback` 可回退本次 upgrade)——**这会丢掉你对该文件的本地修改**。
+- **功能面兜底**:上面这些 finding 无论 warning 还是 info,「hook 根本没在跑」都由工作台级的 `briefing.stale` 报警告(`.jspace/state/briefing.json` 缺失或过期)。
+
 ## 跨平台路径速查(Windows / macOS / Linux)
 
 | 项 | macOS / Linux | Windows |

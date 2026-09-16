@@ -82,7 +82,7 @@ JSpace 工作台 = 本地工作控制平面:根 `AGENTS.md` 是入口面,其余�
 进工作台后,会话 hook 已注入工作台状态(见下);`AGENTS.md` 是路由规则常驻源,本指南只给动线、不复制规则。四个高频场景:
 
 ### 进入工作台(每天第一件事)
-SessionStart hook(`.claude/settings.json`)注入 `<current-state>`(域/pending/cron 失败/inbox)与 `<next-action>`(求值后的下一步)。**直接按 `<next-action>` 走**;要看全貌读 `.jspace/hub.json`。状态没出现 → `jspace doctor --dir .` 查 `hooks.not_wired` / `claude.pointer_missing`。
+SessionStart hook(`.claude/settings.json`)注入 `<current-state>`(域/pending/cron 失败/inbox)与 `<next-action>`(求值后的下一步)。**直接按 `<next-action>` 走**;要看全貌读 `.jspace/hub.json`。状态没出现 → `jspace doctor --verbose --dir .` 查 `hooks.not_wired` / `claude.pointer_missing`(harness 接线类诊断只在**本工作台 cron 启用了该 harness** 时才是 warning,否则为 info,默认输出不显示)。
 
 ### 进入某个域
 读 `workspace/<domain>/README.md` + `domain.json`(域入口与细节);该域有 `AGENTS.md` / `runbook.md` 则一并读。域该不该建/怎么建 → 第 8 章。

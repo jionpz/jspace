@@ -65,6 +65,16 @@ function codes(result: CmdResult): string[] {
   return data.diagnostics.map((d) => d.code);
 }
 
+function severityOf(result: CmdResult, code: string): string | undefined {
+  const data = result.data as { diagnostics: { code: string; severity: string }[] };
+  return data.diagnostics.find((d) => d.code === code)?.severity;
+}
+
+function messageOf(result: CmdResult, code: string): string {
+  const data = result.data as { diagnostics: { code: string; message: string }[] };
+  return data.diagnostics.find((d) => d.code === code)?.message ?? "";
+}
+
 test("healthy empty workbench -> exit ok; filehub.unregistered is info, local.missing warning, no cron diagnostics", () => {
   const r = doctorWorkbench(root, stubDeps());
   expect(r.exitCode ?? 0).toBe(0);
@@ -416,6 +426,25 @@ test("missing CLAUDE.md -> claude.pointer_missing; importing CLAUDE.md -> no dia
   expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("claude.pointer_missing");
 });
 
+test("claude pointer: the missing case points at upgrade, the edited case tells the truth about skip (issue #52)", () => {
+  // missing seed -> upgrade really does re-create it, so naming that command is honest
+  expect(messageOf(doctorWorkbench(root, stubDeps()), "claude.pointer_missing")).toContain(
+    "a missing seed is re-created by 'jspace workspace upgrade'",
+  );
+
+  // edited seed (present, import removed) -> upgrade skips it: same two-step contract as the hooks
+  writeFileSync(join(root, "CLAUDE.md"), "# notes\n");
+  const edited = messageOf(doctorWorkbench(root, stubDeps()), "claude.pointer_missing");
+  expect(edited).toContain("no longer imports @AGENTS.md");
+  expect(edited).toContain("keeps it as-is (skip)");
+  expect(edited).toContain("delete the file and re-run 'jspace workspace upgrade'");
+
+  // range rule applies here too: unscheduled claude is info, scheduled claude is a warning
+  expect(severityOf(doctorWorkbench(root, stubDeps()), "claude.pointer_missing")).toBe("info");
+  setCrons([{ id: "inbox-tidy", schedule: "0 21 * * *", enabled: true }]);
+  expect(severityOf(doctorWorkbench(root, stubDeps()), "claude.pointer_missing")).toBe("warning");
+});
+
 test("settings.json exists without context hooks -> hooks.not_wired; wired -> none", () => {
   // seed settings.json registers jspace context hooks
   mkdirSync(join(root, ".claude"), { recursive: true });
@@ -428,6 +457,69 @@ test("settings.json exists without context hooks -> hooks.not_wired; wired -> no
   // a user-edited settings.json without the hooks (upgrade would skip it)
   writeFileSync(join(root, ".claude", "settings.json"), JSON.stringify({ hooks: {} }));
   expect(codes(doctorWorkbench(root, stubDeps()))).toContain("hooks.not_wired");
+});
+
+test("edited seed: hooks.not_wired and harness.session_start_not_wired share one honest repair sentence (issue #52)", () => {
+  // The reported contradiction: one check said "upgrade preserves your edit",
+  // the other said "run upgrade to restore the seed" — for the same file, and
+  // upgrade really does skip it (manifest.ts: seed + local edit -> skip).
+  mkdirSync(join(root, ".claude"), { recursive: true });
+  writeFileSync(join(root, ".claude", "settings.json"), JSON.stringify({ hooks: {} }));
+  const r = doctorWorkbench(root, stubDeps());
+  const hooks = messageOf(r, "hooks.not_wired");
+  const session = messageOf(r, "harness.session_start_not_wired");
+  expect(hooks).not.toBe("");
+  expect(session).not.toBe("");
+
+  // same repair clause, verbatim, on both checks
+  const repair = (m: string): string => m.slice(m.indexOf("; ") + 2);
+  expect(repair(hooks)).toBe(repair(session));
+  // honest about the skip, and the restore path is explicit about destroying edits
+  expect(repair(hooks)).toContain("'jspace workspace upgrade' keeps it as-is (skip)");
+  expect(repair(hooks)).toContain("delete the file and re-run 'jspace workspace upgrade'");
+  expect(repair(hooks)).toContain("discards your local edits");
+  // and never the old promise that upgrade clears the warning by itself
+  expect(repair(hooks)).not.toContain("to restore the seed'");
+});
+
+test("harness-scoped wiring findings: warning only for harnesses this workbench schedules (issue #52)", () => {
+  // an edited claude seed in a workbench that schedules nothing -> info, not warning
+  mkdirSync(join(root, ".claude"), { recursive: true });
+  writeFileSync(join(root, ".claude", "settings.json"), JSON.stringify({ hooks: {} }));
+  expect(severityOf(doctorWorkbench(root, stubDeps()), "hooks.not_wired")).toBe("info");
+  expect(severityOf(doctorWorkbench(root, stubDeps()), "harness.session_start_not_wired")).toBe("info");
+
+  // the same workbench with claude scheduled -> both are warnings again
+  setCrons([{ id: "inbox-tidy", schedule: "0 21 * * *", enabled: true }]);
+  const active = doctorWorkbench(root, stubDeps());
+  expect(severityOf(active, "hooks.not_wired")).toBe("warning");
+  expect(severityOf(active, "harness.session_start_not_wired")).toBe("warning");
+});
+
+test("non-claude seed of an unscheduled harness -> info; scheduled -> warning (issue #52)", () => {
+  // grok, not cursor: only harnesses with a cron enum value can ever be
+  // "scheduled here", so an IDE-only harness (cursor) is always info — its
+  // functional signal is briefing.stale, which stays a warning.
+  mkdirSync(join(root, ".grok", "hooks"), { recursive: true });
+  writeFileSync(join(root, ".grok", "hooks", "jspace.json"), JSON.stringify({ hooks: {} }));
+  expect(severityOf(doctorWorkbench(root, stubDeps()), "harness.session_start_not_wired")).toBe("info");
+
+  writeFileSync(
+    join(root, ".jspace", "cron.json"),
+    JSON.stringify({ schema_version: 1, crons: [{ id: "c", schedule: "0 21 * * *", harness: "grok", enabled: true, prompt: "p" }] }),
+  );
+  expect(severityOf(doctorWorkbench(root, stubDeps()), "harness.session_start_not_wired")).toBe("warning");
+});
+
+test("an unscheduled harness never turns its seed finding into a lost signal: briefing.stale still warns (issue #52)", () => {
+  // The per-harness seed finding is informational when the harness is not used
+  // here; the functional "hooks are not actually running" signal is the
+  // harness-agnostic briefing.stale warning, which stays a warning either way.
+  mkdirSync(join(root, ".cursor"), { recursive: true });
+  writeFileSync(join(root, ".cursor", "hooks.json"), JSON.stringify({ hooks: {} }));
+  const r = doctorWorkbench(root, stubDeps());
+  expect(severityOf(r, "harness.session_start_not_wired")).toBe("info");
+  expect(severityOf(r, "briefing.stale")).toBe("warning");
 });
 
 test("harness projection drift -> skills.projection_drift", () => {
@@ -1464,15 +1556,33 @@ test("healthy governance source + Claude import + Codex/Pi symlinks -> no govern
 test("installed Claude with a missing governance entry -> harness_unwired warning", () => {
   const home = join(root, "home");
   writeGovernanceSource(home);
+  setCrons([{ id: "inbox-tidy", schedule: "0 21 * * *", enabled: true }]); // claude is a cron harness here
   const r = doctorWorkbench(
     root,
     stubDeps({ globalGovernanceHome: () => home, harnessBinOnPath: (name) => name === "claude" }),
   );
   expect(governanceCodes(r)).toEqual(["governance.harness_unwired"]);
+  expect(severityOf(r, "governance.harness_unwired")).toBe("warning");
   const diag = (r.data as { diagnostics: { code: string; message: string }[] }).diagnostics.find(
     (d) => d.code === "governance.harness_unwired",
   );
   expect(diag?.message).toContain("run harness-config");
+});
+
+test("harness on PATH but not scheduled here -> governance.harness_unwired is info, never a warning (issue #52)", () => {
+  // The old range was "binary is on PATH", so a workbench the user runs with one
+  // harness warned about every other installed harness. harness.ts had already
+  // settled the range as cron-enabled; governance now matches it.
+  const home = join(root, "home");
+  writeGovernanceSource(home);
+  const deps = stubDeps({ globalGovernanceHome: () => home, harnessBinOnPath: (name) => name === "claude" });
+  const idle = doctorWorkbench(root, deps);
+  expect(governanceCodes(idle)).toEqual(["governance.harness_unwired"]);
+  expect(severityOf(idle, "governance.harness_unwired")).toBe("info");
+
+  // scheduled -> the same finding becomes actionable
+  setCrons([{ id: "inbox-tidy", schedule: "0 21 * * *", enabled: true }]);
+  expect(severityOf(doctorWorkbench(root, deps), "governance.harness_unwired")).toBe("warning");
 });
 
 test("uninstalled harnesses produce no governance wiring diagnostics", () => {

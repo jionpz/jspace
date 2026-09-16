@@ -3,6 +3,7 @@ import type { RegistryDiagnostic } from "../../../core/contracts/diagnostics.ts"
 import { loadCapabilities } from "../../../adapters/harness/registry.ts";
 import { binaryOnPath } from "../../../adapters/harness/bin.ts";
 import type { HarnessCheckDeps } from "../deps.ts";
+import { cronEnabledHarnesses } from "./shared.ts";
 
 /** Harness support health for the ACTIVE harnesses (the cron.json harness values
  *  of this workbench). Active-only by design: a full matrix scan of every
@@ -10,17 +11,9 @@ import type { HarnessCheckDeps } from "../deps.ts";
  *  the user never selected — noise, not signal. */
 export function checkHarness(root: string, cron: HarnessCheckDeps): RegistryDiagnostic[] {
   const diags: RegistryDiagnostic[] = [];
-  let crons;
-  try {
-    crons = cron.loadCrons(root).crons;
-  } catch {
-    return diags;
-  }
   const caps = loadCapabilities();
   const binOnPath = cron.harnessBinOnPath ?? ((name: string) => binaryOnPath(name, cron.platform ?? process.platform));
-  const active = new Set<string>();
-  for (const c of crons) if (c.harness && c.enabled) active.add(c.harness);
-  for (const name of active) {
+  for (const name of cronEnabledHarnesses(root, cron)) {
     const cap = caps.harnesses[name];
     if (!cap) {
       diags.push({ severity: "warning", code: "harness.unknown", path: `harness.${name}`, message: `cron harness ${name} is not in capabilities.yaml; run jspace update and check cron.json` });

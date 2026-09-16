@@ -53,7 +53,7 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps, verbose = fa
     ...checkCursorSkills(cron),
     ...checkCrons(root, cron),
     ...checkHarness(root, cron),
-    ...checkGovernance(cron),
+    ...checkGovernance(root, cron),
     ...checkSessionStartHooks(root, cron),
     ...checkWritebackHabit(root),
     ...checkUsageMileageLedger(root),

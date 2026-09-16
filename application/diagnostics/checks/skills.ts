@@ -7,7 +7,15 @@ import { readMaterializedJournal } from "../../workspace/journal.ts";
 import { skillProjections } from "../../workspace/manifest.ts";
 import { isFile } from "../../fs.ts";
 import type { SkillsDeps } from "../deps.ts";
-import { BLOCK_END, diffDirs, RETIRED_SKILL_NAMES } from "./shared.ts";
+import {
+  activeHarnesses,
+  BLOCK_END,
+  diffDirs,
+  editedSeedRepair,
+  harnessFindingSeverity,
+  RETIRED_SKILL_NAMES,
+  SEED_HOOK_REPAIR,
+} from "./shared.ts";
 
 /** Existence probe that also sees dangling symlinks (existsSync does not), so a
  *  retired name left as a broken link still counts as residue. */
@@ -56,20 +64,25 @@ export function checkSkills(root: string, deps: SkillsDeps): RegistryDiagnostic[
 
   {
     const claudeMd = join(root, "CLAUDE.md");
-    let pointerOk = existsSync(claudeMd) && statSync(claudeMd).isFile();
-    if (pointerOk) {
+    const present = existsSync(claudeMd) && statSync(claudeMd).isFile();
+    let imports = false;
+    if (present) {
       try {
-        pointerOk = /@(?:\.\/)?AGENTS\.md/.test(readFileSync(claudeMd, "utf-8"));
+        imports = /@(?:\.\/)?AGENTS\.md/.test(readFileSync(claudeMd, "utf-8"));
       } catch {
-        pointerOk = false;
+        imports = false;
       }
     }
-    if (!pointerOk) {
+    if (!imports) {
+      // Two different situations, two honest instructions (issue #52): a missing
+      // seed IS re-created by upgrade, an edited one is preserved (skip).
       diags.push({
-        severity: "warning",
+        severity: harnessFindingSeverity("claude", activeHarnesses(root, deps)),
         code: "claude.pointer_missing",
         path: "CLAUDE.md",
-        message: "CLAUDE.md missing or does not import @AGENTS.md; Claude Code cannot see the workbench context (run jspace workspace upgrade to re-create the seed file; irrelevant if you use a non-Claude harness)",
+        message: present
+          ? `CLAUDE.md exists but no longer imports @AGENTS.md, so Claude Code cannot see the workbench context; ${editedSeedRepair("the @AGENTS.md import")}`
+          : "CLAUDE.md missing or not a regular file; Claude Code cannot see the workbench context (a missing seed is re-created by 'jspace workspace upgrade'; irrelevant if you use a non-Claude harness)",
       });
     }
   }
@@ -80,11 +93,15 @@ export function checkSkills(root: string, deps: SkillsDeps): RegistryDiagnostic[
       try {
         const wired = readFileSync(settingsPath, "utf-8").includes("jspace context");
         if (!wired) {
+          // Same range rule + same repair sentence as
+          // harness.session_start_not_wired (issue #52): one edited seed, one
+          // honest instruction — never "run upgrade and the warning clears".
+          const active = activeHarnesses(root, deps);
           diags.push({
-            severity: "warning",
+            severity: harnessFindingSeverity("claude", active),
             code: "hooks.not_wired",
             path: ".claude/settings.json",
-            message: ".claude/settings.json exists but lacks the jspace context hooks; upgrade preserves a user-edited seed file (skip) — merge the hooks manually or restore the seed file",
+            message: `.claude/settings.json exists but lacks the jspace context hooks; ${SEED_HOOK_REPAIR}`,
           });
         }
       } catch {

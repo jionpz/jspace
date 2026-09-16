@@ -1,5 +1,5 @@
 // application/diagnostics/checks/session-hooks.ts — session-start hook wiring + briefing.
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { RegistryDiagnostic } from "../../../core/contracts/diagnostics.ts";
@@ -7,6 +7,7 @@ import { loadCapabilities } from "../../../adapters/harness/registry.ts";
 import { isBriefingStale, readBriefing } from "../../context/briefing.ts";
 import { isFile } from "../../fs.ts";
 import type { SessionHooksDeps } from "../deps.ts";
+import { activeHarnesses, harnessFindingSeverity, SEED_HOOK_REPAIR } from "./shared.ts";
 
 /** Session-start briefing behavior checks (issue #13): the file-level doctor
  *  checks were not enough — a workbench can be perfectly materialized while the
@@ -16,15 +17,11 @@ export function checkSessionStartHooks(root: string, cron: SessionHooksDeps): Re
   const caps = loadCapabilities();
   const home = homedir();
 
-  const activeCron = new Set<string>();
-  try {
-    for (const c of cron.loadCrons(root).crons) {
-      if (c.harness && c.enabled) activeCron.add(c.harness);
-    }
-  } catch {
-    // cron.json unreadable -> checkCrons reports it
-  }
-  const piActive = activeCron.has("pi") || existsSync(join(root, ".pi"));
+  // Range rule (issue #52): only the harnesses this workbench actually uses
+  // (cron-enabled, or Pi's own `.pi/` dir — see activeHarnesses) get a warning.
+  // A harness that is merely installed or merely seeded is info, matching the
+  // range harness.ts already applied to its own checks.
+  const active = activeHarnesses(root, cron);
   let anySessionStartSignal = false;
 
   for (const [name, cap] of Object.entries(caps.harnesses)) {
@@ -56,9 +53,9 @@ export function checkSessionStartHooks(root: string, cron: SessionHooksDeps): Re
       if (name === "pi") {
         const piSettings = join(home, ".pi", "agent", "settings.json");
         const piInstalled = cron.readHarnessConfig?.(piSettings) !== null;
-        if (piInstalled && piActive) {
+        if (piInstalled && active.has("pi")) {
           diags.push({
-            severity: "warning",
+            severity: harnessFindingSeverity(name, active),
             code: "harness.session_start_not_wired",
             path: `harness.${name}`,
             message: `Pi is installed and active for this workbench, but the jspace session-start extension is missing or stale at ${abs}; run 'jspace harness wire --harness pi' to enable automatic briefing`,
@@ -66,18 +63,21 @@ export function checkSessionStartHooks(root: string, cron: SessionHooksDeps): Re
         }
       } else if (raw !== null) {
         diags.push({
-          severity: "warning",
+          severity: harnessFindingSeverity(name, active),
           code: "harness.session_start_not_wired",
           path: `harness.${name}`,
-          message: `${name} session-start hook exists but is missing 'jspace context session-start' at ${abs}; run the harness's wire/upgrade command to repair it`,
+          message: `${name} session-start hook exists but is missing 'jspace context session-start' at ${abs}; run 'jspace harness wire --harness ${name}' to repair it`,
         });
       }
     } else if (raw !== null) {
+      // A workbench seed is user data once edited: upgrade preserves it (skip),
+      // so the repair instruction must not claim that upgrade restores the hook
+      // (issue #52). Both seed checks share the sentence verbatim.
       diags.push({
-        severity: "warning",
+        severity: harnessFindingSeverity(name, active),
         code: "harness.session_start_not_wired",
         path: `harness.${name}`,
-        message: `${name} session-start seed exists but is missing 'jspace context session-start' at ${abs}; run 'jspace workspace upgrade' to restore the seed`,
+        message: `${name} session-start seed exists but is missing 'jspace context session-start' at ${abs}; ${SEED_HOOK_REPAIR}`,
       });
     }
   }
