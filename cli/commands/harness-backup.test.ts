@@ -26,7 +26,7 @@ test("backupConfig keeps at most 3 .jspace-bak-* siblings after repeated writes"
   expect(existsSync(configPath)).toBe(true);
 });
 
-test("writeConfigAtomic keeps an existing 0600 mode and replaces symlinks", () => {
+test.skipIf(process.platform === "win32")("writeConfigAtomic keeps an existing 0600 mode and replaces symlinks", () => {
   dir = mkdtempSync(join(tmpdir(), "jspace-harness-mode-"));
   configPath = join(dir, "claude.json");
   writeFileSync(configPath, "{}", "utf-8");

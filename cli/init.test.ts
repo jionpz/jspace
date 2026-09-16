@@ -98,7 +98,8 @@ test("init materializes the Grok hook file and the .grok/.opencode skill project
     const skillDir = join(root, proj, "jspace-use");
     expect(existsSync(join(skillDir, "SKILL.md"))).toBe(true);
     expect(lstatSync(skillDir).isSymbolicLink()).toBe(true);
-    expect(readlinkSync(skillDir)).toBe("../../.jspace/skills/jspace-use");
+    // readlink() text is OS-native: win32 junctions report `..\..\.jspace\...`
+    expect(readlinkSync(skillDir).split("\\").join("/")).toBe("../../.jspace/skills/jspace-use");
   }
 
   rmSync(root, { recursive: true, force: true });
