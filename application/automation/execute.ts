@@ -87,7 +87,7 @@ function todaySuccess(root: string, cronId: string): boolean {
   const last = lastRun(root, cronId);
   if (!last) return false;
   if (!last.startedAt.startsWith(localDate())) return false;
-  return last.status === "ok" && !last.timedOut;
+  return last.status === "ok" && !last.timedOut && last.batchChanged;
 }
 
 function pruneLogs(root: string, cronId: string, keep: number, logDir: (r: string, c: string) => string): void {
@@ -228,8 +228,7 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
     const timedOut = spawned.timedOut;
     const exitOk = exited === 0 && !timedOut;
     const hasOutput = output.trim().length > 0;
-    const suspect = exited === 0 && !timedOut && !hasOutput;
-    const status: "ok" | "suspect" | "failed" = exitOk ? (suspect ? "suspect" : "ok") : "failed";
+    const suspect = exitOk && !hasOutput;
 
     let batchChanged = true;
     if (isInboxTask) {
@@ -242,14 +241,19 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
         batchChanged = false;
       }
     }
+    // Fail-closed: an unverifiable inbox batch is not a success. Recording
+    // status "ok" (even with a batch-stale incident) lets todaySuccess skip
+    // the rest of the day and prints `jspace: ok:` — a fake-success exit.
+    const batchStale = isInboxTask && !batchChanged;
+    const status: "ok" | "suspect" | "failed" = !exitOk || batchStale ? "failed" : suspect ? "suspect" : "ok";
 
     const { runId, logPath } = recordRun(root, opts, argv, exited, status, timedOut, batchChanged, output, deps);
 
-    const failed = status === "failed" || suspect || (isInboxTask && !batchChanged);
+    const failed = status !== "ok";
     if (failed) {
-      const failureClass = status === "failed" ? "failed" : isInboxTask && !batchChanged ? "batch-stale" : "suspect";
+      const failureClass = !exitOk ? "failed" : batchStale ? "batch-stale" : "suspect";
       openOrUpdate(root, opts.cronId, failureClass, runId);
-      return { exitCode: status === "failed" ? 1 : 0, lines: [`jspace: ${status}: cron ${opts.cronId} (exit ${exited}); log ${logPath}`] };
+      return { exitCode: status === "failed" ? 1 : 0, lines: [`jspace: ${failureClass}: cron ${opts.cronId} (exit ${exited}); log ${logPath}`] };
     }
     resolveIncidents(root, opts.cronId);
     return { lines: [`jspace: ok: cron ${opts.cronId} (exit ${exited}); log ${logPath}`] };

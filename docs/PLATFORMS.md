@@ -14,8 +14,9 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 
 ## 运行状态与 incidents（结构化，M3）
 
-- 每次 run 写 `.jspace/state/runs/<cron>/<run-id>.json`（exit/status/timedOut/outputLog/batchChanged）；prose 日志保留在 `.jspace/logs/cron/<id>/` 作为人类 payload。
+- 每次 run 写 `.jspace/state/runs/<cron>/<run-id>.json`（`exit` = harness 子进程退出码；`status` = jspace 判定 ok/suspect/failed；另含 timedOut/outputLog/batchChanged）；prose 日志保留在 `.jspace/logs/cron/<id>/` 作为人类 payload。
 - failed/suspect/batch-stale run 打开或更新 incident（keyed by cron + failure class）；成功 retry 自动 resolve。
+- **fail-closed**：inbox 类 cron 无法验证批次变化（无 filehub / batch 日志未出现 / 未变）时，记 `batchChanged: false` 且 `status: "failed"`，incident class 为 `batch-stale`，CLI 退出码 1 —— 此时 harness 自身 `exit` 可能为 0，两者不矛盾（判定 vs 子进程事实）。同日成功判定要求 `status: "ok"`，并额外要求 `batchChanged`，所以 stale 会被下一个触发点重跑，不会静默跳过一天。
 - `cron ack [id]`：open → acknowledged（证据保留，不再告警）；`cron check` 仅对 open（未 ack）incident 或 actionable pending write 返回非 0。
 
 ## Harness 能力矩阵（M4，cron argv）

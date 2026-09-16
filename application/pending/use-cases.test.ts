@@ -46,6 +46,17 @@ test("stage writes an envelope; list reports it", () => {
   expect((res.data as { envelopes: unknown[] }).envelopes).toHaveLength(1);
 });
 
+test("list surfaces damaged envelopes as warnings, never fake empty-ok", () => {
+  mkdirSync(join(fh, ".jspace-logs"), { recursive: true });
+  writeFileSync(join(fh, ".jspace-logs", "dead.APPLY.json"), "{not-json", "utf-8");
+  const res = pendingList(wb, false);
+  expect(res.lines[0]).not.toContain("ok: no pending envelopes");
+  expect(res.warnings?.some((w) => w.includes("damaged"))).toBe(true);
+  const json = pendingList(wb, true);
+  expect((json.data as { envelopes: unknown[]; issues: unknown[] }).envelopes).toHaveLength(0);
+  expect((json.data as { envelopes: unknown[]; issues: unknown[] }).issues.length).toBeGreaterThan(0);
+});
+
 test("apply with a stub gbrain puts once and marks applied", async () => {
   pendingStage(wb, "assets/foo/doc", contentFile(), "asset-ingest");
   const envId = id();
@@ -58,6 +69,18 @@ test("apply with a stub gbrain puts once and marks applied", async () => {
   expect(res.lines[0]).toContain("applied 1");
   expect(readEnvelopes(fh).records[0].status).toBe("applied");
   void envId;
+});
+
+test("apply forwards damaged envelope issues as warnings", async () => {
+  mkdirSync(join(fh, ".jspace-logs"), { recursive: true });
+  writeFileSync(join(fh, ".jspace-logs", "dead.APPLY.json"), "{not-json", "utf-8");
+  const stub: GbrainDeps = {
+    get: async () => ({ ok: false }),
+    put: async () => ({ ok: true }),
+    list: async () => ({ ok: true, rows: [] }),
+  };
+  const res = await pendingApply(wb, undefined, stub);
+  expect(res.warnings?.some((w) => w.includes("damaged"))).toBe(true);
 });
 
 test("ack only accepts terminal_failed and stops alerting", () => {

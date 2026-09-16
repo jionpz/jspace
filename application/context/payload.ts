@@ -78,8 +78,17 @@ export interface TurnOptions {
  *  512B turn budget by construction (single line, ids truncated). */
 export function renderTurn(state: WorkbenchState, opts: TurnOptions = {}): string {
   if (state.hubBroken) return `<jspace-state>hub.json 缺失或损坏（jspace doctor --dir .）</jspace-state>`;
-  if (state.pendingCount > 0) {
+  if (state.pendingCount > 0 || state.pendingDamaged > 0) {
+    if (state.pendingCount > 0 && state.pendingDamaged > 0) {
+      return `<jspace-state>pending: ${state.pendingCount} 笔暂存写待落盘；${state.pendingDamaged} 份损坏（jspace pending apply）</jspace-state>`;
+    }
+    if (state.pendingDamaged > 0) {
+      return `<jspace-state>pending: ${state.pendingDamaged} 份暂存损坏（jspace doctor --dir .）</jspace-state>`;
+    }
     return `<jspace-state>pending: ${state.pendingCount} 笔暂存写待落盘（jspace pending apply）</jspace-state>`;
+  }
+  if (state.ingestDamaged > 0) {
+    return `<jspace-state>ingest: ${state.ingestDamaged} 份 journal 损坏（jspace doctor --dir .）</jspace-state>`;
   }
   if (state.cronIncidents.length > 0) {
     const inc = state.cronIncidents[0];
@@ -162,6 +171,12 @@ function stateLines(state: WorkbenchState): string[] {
     const producers = state.pendingProducers.length > 0 ? `（${state.pendingProducers.join(", ")}）` : "";
     lines.push(`pending: ${state.pendingCount} 笔 gbrain 暂存写待落盘${producers}`);
   }
+  if (state.pendingDamaged > 0) {
+    lines.push(`告警: ${state.pendingDamaged} 份 pending 暂存损坏（jspace doctor --dir .）`);
+  }
+  if (state.ingestDamaged > 0) {
+    lines.push(`告警: ${state.ingestDamaged} 份 ingest journal 损坏（jspace doctor --dir .）`);
+  }
   const incidents = state.cronIncidents.slice(0, MAX_CRON_LINES);
   for (const inc of incidents) {
     lines.push(`cron: ${truncateId(inc.cronId)}[${inc.failureClass}] 上次失败，未确认`);
@@ -201,6 +216,9 @@ function stateLines(state: WorkbenchState): string[] {
 function nextAction(state: WorkbenchState, mode: "start" | "closing" = "start"): string {
   const actions: string[] = [];
   if (state.hubBroken) actions.push("先跑 jspace doctor --dir . 修复注册表");
+  if (state.pendingDamaged > 0 || state.ingestDamaged > 0) {
+    actions.push("先跑 jspace doctor --dir . 查看损坏的 pending/ingest 记录");
+  }
   if (state.pendingCount > 0) actions.push(`先跑 jspace pending apply 落盘 ${state.pendingCount} 笔暂存写`);
   if (state.cronIncidents.length > 0) {
     const inc = state.cronIncidents[0];

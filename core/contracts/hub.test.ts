@@ -5,6 +5,7 @@
 // Run: bun test core/contracts/hub.test.ts
 import { expect, test } from "bun:test";
 import type { DecodeResult } from "./diagnostics.ts";
+import { formatDecoderIssue, SCHEMA_VERSION_REPAIR_HINT } from "./diagnostics.ts";
 import { decodeHub, type HubV1 } from "./hub.ts";
 
 function validHub(): HubV1 {
@@ -116,6 +117,7 @@ test("schema_version other than 1 is rejected as unsupported", () => {
   if (!result.ok) {
     const v = result.issues.find((i) => i.code === "hub.version.unsupported");
     expect(v?.message).toContain("must be one of 1");
+    expect(formatDecoderIssue(v!)).toContain(SCHEMA_VERSION_REPAIR_HINT);
   }
 });
 

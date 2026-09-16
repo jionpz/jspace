@@ -104,6 +104,9 @@ jobs:
         run: |
           rm -rf /tmp/jspace-verify /tmp/jspace-fh
           bun run cli/main.ts init /tmp/jspace-verify
+          # issue #39: projections are dir symlinks to .jspace/skills, not copies
+          test -L /tmp/jspace-verify/.claude/skills/jspace-use
+          test -L /tmp/jspace-verify/.agents/skills/jspace-use
           bun run cli/main.ts doctor --dir /tmp/jspace-verify
           # issue #10 R4 regression: on a real (non-isolated) host the
           # sandbox-only downgrade must never fire — the daemon/crontab verdict

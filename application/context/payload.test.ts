@@ -69,6 +69,17 @@ test("3 domains + 2 pending + 1 incident + inbox -> all populated, next-action h
   expect(r).toContain("inbox 有 4 份待整理");
 });
 
+test("damaged pending/ingest records surface in session-start and turn (never silent)", () => {
+  const state: WorkbenchState = { ...empty, pendingDamaged: 1, ingestDamaged: 2 };
+  const r = renderSessionStart(state, "/wb");
+  expect(r).toContain("告警: 1 份 pending 暂存损坏");
+  expect(r).toContain("告警: 2 份 ingest journal 损坏");
+  expect(r).toContain("jspace doctor --dir .");
+  expect(renderTurn(state)).toBe("<jspace-state>pending: 1 份暂存损坏（jspace doctor --dir .）</jspace-state>");
+  expect(renderTurn({ ...empty, ingestDamaged: 2 })).toBe("<jspace-state>ingest: 2 份 journal 损坏（jspace doctor --dir .）</jspace-state>");
+  expect(renderTurn({ ...empty, pendingCount: 3, pendingDamaged: 1 })).toContain("3 笔暂存写待落盘；1 份损坏");
+});
+
 test("session-start skills line lists every manifest workbench skill (no hardcoded drift)", () => {
   // <available> renders only with at least one domain path to list
   const r = renderSessionStart(doms(1), "/wb");
