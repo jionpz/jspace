@@ -30,6 +30,10 @@ export interface CronsDeps {
 
 export interface SkillsDeps {
   officialSkillNames: () => string[];
+  /** Cron definitions of the workbench: the harness-range input for the claude
+   *  seed checks (issue #52) — a finding about a harness this workbench does not
+   *  schedule is info, never a warning. */
+  loadCrons: (root: string) => { crons: CronLike[] };
   /** Skill names whose materialized copy differs from the running bundle.
    *  Injected from cli for the same reason as officialSkillNames (diffBundle
    *  needs BUNDLE_MANIFEST). Omitted => the check is skipped silently. */

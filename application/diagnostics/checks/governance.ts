@@ -7,14 +7,15 @@ import { binaryOnPath } from "../../../adapters/harness/bin.ts";
 import { loadCapabilities } from "../../../adapters/harness/registry.ts";
 import type { HarnessGlobalContext } from "../../../adapters/harness/types.ts";
 import type { GovernanceDeps, HarnessCheckDeps } from "../deps.ts";
+import { activeHarnesses, harnessFindingSeverity } from "./shared.ts";
 
-type GovernanceCheckDeps = GovernanceDeps & Pick<HarnessCheckDeps, "harnessBinOnPath" | "platform">;
+type GovernanceCheckDeps = GovernanceDeps & Pick<HarnessCheckDeps, "harnessBinOnPath" | "platform" | "loadCrons">;
 type FileGlobalContext = Extract<HarnessGlobalContext, { path: string }>;
 
 /** Verify the source contract and every verified file-based harness entry point.
  *  Absent `globalGovernanceHome` means the check is opt-in and must not touch
  *  the real home directory (tests and non-workbench environments stay inert). */
-export function checkGovernance(deps: GovernanceCheckDeps): RegistryDiagnostic[] {
+export function checkGovernance(root: string, deps: GovernanceCheckDeps): RegistryDiagnostic[] {
   if (!deps.globalGovernanceHome) return [];
 
   const caps = loadCapabilities();
@@ -44,6 +45,11 @@ export function checkGovernance(deps: GovernanceCheckDeps): RegistryDiagnostic[]
   }
 
   const binOnPath = deps.harnessBinOnPath ?? ((name: string) => binaryOnPath(name, deps.platform ?? process.platform));
+  // Range rule (issue #52): "the binary is on PATH" is machine state, not
+  // evidence that this workbench uses the harness. Only a harness this workbench
+  // actually uses (cron-enabled) warns; the rest stay info so doctor never nags
+  // about harnesses the user never selected.
+  const active = activeHarnesses(root, deps);
   for (const [name, cap] of Object.entries(caps.harnesses)) {
     const context = cap.global_context;
     if (!isFileGlobalContext(context)) continue;
@@ -52,7 +58,7 @@ export function checkGovernance(deps: GovernanceCheckDeps): RegistryDiagnostic[]
     const verification = verifyHarnessContext(name, context, sourceDeclared, sourcePath, home);
     if (verification === null) continue;
     diags.push({
-      severity: "warning",
+      severity: harnessFindingSeverity(name, active),
       code: "governance.harness_unwired",
       path: `harness.${name}`,
       message: verification,
