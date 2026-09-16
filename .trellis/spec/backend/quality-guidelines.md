@@ -211,7 +211,7 @@ was already correct; only the *fact* was missing. Guarded by
 
 ## Testing Requirements
 
-- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 863 tests across 72 files).
+- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 873 tests across 73 files).
 - New function → unit test; bug fix → regression test; changed behavior → update existing tests.
 - Fault-injection via injected deps (ingest journal fs ops, pending envelope gbrain stub).
 - Contract round-trip + decode-issue tests for every decoder.

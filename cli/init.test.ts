@@ -5,9 +5,11 @@
 import { expect, test } from "bun:test";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readlinkSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -90,8 +92,13 @@ test("init materializes the Grok hook file and the .grok/.opencode skill project
   expect(hook.hooks.SessionEnd[0].hooks[0].command).toContain("jspace context session-end");
 
   // skill projections derive from capabilities.yaml workbench_projection
+  // and MUST be directory symlinks to `.jspace/skills/<name>` (issue #39).
+  // existsSync(SKILL.md) stays green on a copy fallback — lstat the dir.
   for (const proj of [".grok/skills", ".opencode/skills", ".claude/skills", ".agents/skills"]) {
-    expect(existsSync(join(root, proj, "jspace-use", "SKILL.md"))).toBe(true);
+    const skillDir = join(root, proj, "jspace-use");
+    expect(existsSync(join(skillDir, "SKILL.md"))).toBe(true);
+    expect(lstatSync(skillDir).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(skillDir)).toBe("../../.jspace/skills/jspace-use");
   }
 
   rmSync(root, { recursive: true, force: true });
