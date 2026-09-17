@@ -3,7 +3,7 @@
 import type { DistributionManifestV1 } from "../core/contracts/distribution.ts";
 export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   schema_version: 1,
-  bundle_version: "1.0.27",
+  bundle_version: "1.0.28",
   files: [
   { path: "templates/workbench/.claude/settings.json", sha256: "e58f63934ddef681f113eb50e6457447e4f1d000f1f78dbfd1fa571ac86f59fd", ownership: "seed" },
   { path: "templates/workbench/.cursor/hooks.json", sha256: "a8dbae5353c3380c0c640ae4881f6175a5578fc863516eb671ef4e13f9f2cf70", ownership: "seed" },
@@ -29,7 +29,7 @@ export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   { path: "skills/jspace-use/references/headless-ops.md", sha256: "a1aef844240e2ac0b07db93321e87026b0a9b59dd4db2e2ea8216ca1eedaaf58", ownership: "seed" },
   { path: "skills/jspace-use/references/registry.md", sha256: "130979dabb1cec54e8ec329415801ab9e7e43d3e716715f910925de7e2f71d3b", ownership: "seed" },
   { path: "skills/jspace-use/references/usage-mileage-ledger-template.md", sha256: "40dc27c4d271859f6c2c01747cbbfd9db02b2c4ddbe0e8830321fdaf9ed64783", ownership: "seed" },
-  { path: "skills/jspace-use/references/usage-mileage.md", sha256: "d39a1ae14c52cab3f263ffa08f73ed82a061c78146bb734b5dec6a318ed013aa", ownership: "seed" },
+  { path: "skills/jspace-use/references/usage-mileage.md", sha256: "a474d526ee2eaab9fec9fa78bb752527d5d9a5b56739adc8b5bd0ef9911c7614", ownership: "seed" },
   { path: "skills/asset-ingest/SKILL.md", sha256: "2720691ba04a63c3d37c8092af13f4ee808885bfaf534ccf0540f0f40a5e1bb7", ownership: "seed" },
   { path: "skills/asset-ingest/references/batch.md", sha256: "4e76f571d460e94188f1a03bbc26a36a4f73de33d1efa2319c3773fe63c6f56b", ownership: "seed" },
   { path: "skills/asset-ingest/references/deep-extract.md", sha256: "9352f58489a0ce10385670bacca4438b8a1f0b36c77e4c6acae6477d03f7c35e", ownership: "seed" },

@@ -6,7 +6,7 @@
 
 ## 红线(先读,三条)
 
-1. **禁伪造** `source:session`:不手工 `gbrain put` 灌假会话页、不给历史页补 tag、不用测试页冒充日常收工。
+1. **禁伪造** `source:session`:不手工 `gbrain put` 灌假会话页、不用测试页冒充日常收工、不给历史页补 tag **以制造该页未曾声明的出处**。（边界:页内 `source:` 本来就写明 `session <日期>` 时,把出处回填成可查询的标签属**口径归一**,不是伪造——`gbrain tag` 也不改 `updated_at`,不会污染窗口计数。2026-09-17 裁决。）
 2. **提醒 ≠ 写回**:`jspace context turn` 的收工轻提示、claude/cursor 的 session-end hook 都**不写 gbrain**。它们发了多少次和 `source:session` 计数无关;只有显式跑 `memory-writeback` 才产生分子。
 3. **无法判定 ≠ 未达标 ≠ 已关闭**:证据拿不到就记「无法判定 + 缺什么 + 怎么补」,既不猜、也不用降级 proxy 冒充精确数去关闭任何一条腿。
 

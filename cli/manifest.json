@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "bundle_version": "1.0.27",
+  "bundle_version": "1.0.28",
   "files": [
     {
       "path": "templates/workbench/.claude/settings.json",
@@ -124,7 +124,7 @@
     },
     {
       "path": "skills/jspace-use/references/usage-mileage.md",
-      "sha256": "d39a1ae14c52cab3f263ffa08f73ed82a061c78146bb734b5dec6a318ed013aa",
+      "sha256": "a474d526ee2eaab9fec9fa78bb752527d5d9a5b56739adc8b5bd0ef9911c7614",
       "ownership": "seed"
     },
     {
