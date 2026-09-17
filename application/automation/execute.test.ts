@@ -5,7 +5,7 @@
 // behavior is genuine; harnessBin routes the argv to it.
 // Run: bun test application/automation/execute.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cronRun, type ExecuteDeps } from "./execute.ts";
@@ -57,6 +57,14 @@ const deps = (over: Partial<ExecuteDeps> = {}): ExecuteDeps => ({
 
 function run(opts: { cronId: string; timeoutSec?: number; force?: boolean; dryRun?: boolean }, d = deps()) {
   return cronRun(root, { cronId: opts.cronId, timeoutSec: opts.timeoutSec ?? 10, force: opts.force ?? false, dryRun: opts.dryRun ?? false }, d);
+}
+
+/** localStamp() emits local YYYY-MM-DDTHHMMSS (no offset) — build the Date from
+ *  its parts so the parse is local-time, matching how it was produced. */
+function stampMs(stamp: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2})(\d{2})(\d{2})$/.exec(stamp);
+  if (m === null) throw new Error(`not a localStamp: ${stamp}`);
+  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
 }
 
 test("dry-run returns the would-run argv without executing", async () => {
@@ -257,4 +265,22 @@ test("cron run rejects tools on harness without tool restriction (fail loud)", a
     crons: [{ id: "probe", schedule: "0 9 * * 1", harness: "opencode", prompt: "p", tools: "Read", enabled: true }],
   }));
   await expect(run({ cronId: "probe", dryRun: true })).rejects.toThrow(/does not support --tools/);
+});
+
+test.skipIf(process.platform === "win32")("run record startedAt is the START instant, not the post-spawn END (regression)", async () => {
+  // spawnProcess resolves only at child exit, so a stamp taken after it records
+  // the END instant as the start (09-17 evidence: `server-status` recorded
+  // startedAt=09:49:56 — the timeout kill — for a run that began 09:19:56).
+  // The slow harness makes start and end ~2s apart so the two are separable.
+  const slow = join(root, "slow-harness");
+  writeFileSync(slow, "#!/bin/sh\necho slow-ran\nsleep 2\nexit 0\n");
+  chmodSync(slow, 0o755);
+  const before = Date.now();
+  await run({ cronId: "weekly" }, deps({ harnessBin: slow }));
+  const rec = lastRun(root, "weekly")!;
+  // pre-fix this was ~before+2000 (the resolve instant); must now be ~before.
+  expect(stampMs(rec.startedAt) - before).toBeLessThan(1500);
+  // the prose log still carries the elapsed time, so duration stays readable
+  expect(readFileSync(rec.outputLog, "utf-8")).toMatch(/^duration_sec: [12]$/m);
+  expect(rec.outputLog).toContain(rec.startedAt); // filename == the run's instant
 });

@@ -42,6 +42,20 @@ const LOG_KEEP = 30;
  *  starts). */
 const LOCK_STALE_MS_PER_TIMEOUT_SEC = 2000;
 
+/** Wall-clock bookends of one run.
+ *  `startedAt` is captured BEFORE spawnProcess — spawnProcess resolves only when
+ *  the child exits (or the timeout kill fires), so taking the stamp afterwards
+ *  recorded the END instant as the start. That made run records useless for
+ *  start-time / duration reading (09-17 evidence: `server-status` recorded
+ *  `startedAt=09:49:56`, the timeout-kill instant, for a run that began
+ *  09:19:56). Fix: stamp before spawn, carry it here. */
+export interface RunTiming {
+  /** local YYYY-MM-DDTHHMMSS, taken immediately before spawnProcess. */
+  startedAt: string;
+  /** whole seconds between spawn and record; 0 for sub-second runs. */
+  durationSec: number;
+}
+
 export interface ExecuteDeps {
   platform: string;
   /** filehub root via the shared effective registry, or null when unbound. */
@@ -144,6 +158,7 @@ function recordRun(
   timedOut: boolean,
   batchChanged: boolean,
   output: string,
+  timing: RunTiming,
   deps: ExecuteDeps,
 ): { runId: string; logPath: string } {
   const logDir = deps.logDir(root, opts.cronId);
@@ -151,10 +166,14 @@ function recordRun(
   const runId = crypto.randomUUID();
   // filename carries the run id so two runs in the same second (e.g. launchd
   // catch-up + a manual --force) never overwrite each other's prose log.
-  const logPath = join(logDir, `${localStamp()}-${runId.slice(0, 8)}.md`);
+  // named by the run's START stamp: the filename, the prose log and the
+  // RunRecord all report the same instant (pre-fix the filename/`startedAt`
+  // carried the END stamp — see the startedAt note on RunTiming).
+  const logPath = join(logDir, `${timing.startedAt}-${runId.slice(0, 8)}.md`);
   writeFileSync(logPath, [
     `# cron ${opts.cronId}`,
-    `time: ${localStamp()}`,
+    `time: ${timing.startedAt}`,
+    `duration_sec: ${timing.durationSec}`,
     `command: ${argv.join(" ")}`,
     `exit: ${exited}`,
     `status: ${status}`,
@@ -169,7 +188,7 @@ function recordRun(
     schema_version: 1,
     id: runId,
     cronId: opts.cronId,
-    startedAt: localStamp(),
+    startedAt: timing.startedAt,
     exit: exited,
     status,
     timedOut,
@@ -222,7 +241,12 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
     const fhRoot = deps.filehubRoot(root);
     const { isInboxTask, batchLog, batchBefore } = validateInboxGuard(cron, root, fhRoot);
 
+    // Stamp BEFORE spawn: spawnProcess resolves at child exit, so any stamp
+    // taken after it is the END instant (see RunTiming).
+    const startedAt = localStamp();
+    const startedAtMs = Date.now();
     const spawned = await spawnProcess(argv, { cwd: root, platform: deps.platform, timeoutMs: opts.timeoutSec * 1000, env: cronSpawnEnv(deps.platform, harness) });
+    const timing: RunTiming = { startedAt, durationSec: Math.max(0, Math.round((Date.now() - startedAtMs) / 1000)) };
     const exited = spawned.exit;
     const output = spawned.output;
     const timedOut = spawned.timedOut;
@@ -247,7 +271,7 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
     const batchStale = isInboxTask && !batchChanged;
     const status: "ok" | "suspect" | "failed" = !exitOk || batchStale ? "failed" : suspect ? "suspect" : "ok";
 
-    const { runId, logPath } = recordRun(root, opts, argv, exited, status, timedOut, batchChanged, output, deps);
+    const { runId, logPath } = recordRun(root, opts, argv, exited, status, timedOut, batchChanged, output, timing, deps);
 
     const failed = status !== "ok";
     if (failed) {
