@@ -54,6 +54,14 @@ Thumbs.db
 !templates/workbench/.cursor/
 !templates/workbench/.cursor/**
 
+# Cloud Agent environment config lives under the repo-root .cursor/ (repo-file
+# managed environment). Re-include the dir but keep every other .cursor/ entry
+# (local IDE/harness config) ignored — only these two files are versioned.
+!.cursor/
+.cursor/*
+!.cursor/environment.json
+!.cursor/install.sh
+
 # Trellis — spec/, workflow.md and scripts/ are versioned development
 # infrastructure; tasks/ (including archives) and workspace/ are local-only.
 # Historical task artifacts contain process logs and machine paths and must not
