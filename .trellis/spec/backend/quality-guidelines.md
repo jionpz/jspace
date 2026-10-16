@@ -223,6 +223,14 @@ was already correct; only the *fact* was missing. Guarded by
 - Dispatcher-side reconciliation (`planReconciliation`) must compare the **whole argv including
   argv[0]**. `argv` assembled from plist/crontab/schtasks that omits the binary path cannot see a
   drifted binary and will report up-to-date forever.
+- Each read-back must recover argv[0] **from the element the platform actually writes it to**, and
+  the test fixture must mirror that platform's real storage shape — not the write call's argument
+  string. darwin stores the array verbatim (`ProgramArguments[0]`), the crontab line is stored as
+  written (leading quoted token), but **schtasks does not store `/tr` verbatim**: it splits the run
+  string at the first unquoted space, putting the program in `<Command>` and the remainder in
+  `<Arguments>`. Reading argv[0] out of `<Arguments>` therefore always falls back to unprefixed and
+  re-updates on every install — a Windows-only red that a fixture handing `<Arguments>` the entire
+  `/tr` cannot catch (2026-10-16, v1.0.30 build: both Windows legs red, all others green).
 
 ### 3. Validation & Error Matrix
 
@@ -254,7 +262,7 @@ that only check the written form; the round-trip (write → read back → reconc
 
 ## Testing Requirements
 
-- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 873 tests across 73 files).
+- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 892 tests across 74 files).
 - New function → unit test; bug fix → regression test; changed behavior → update existing tests.
 - Fault-injection via injected deps (ingest journal fs ops, pending envelope gbrain stub).
 - Contract round-trip + decode-issue tests for every decoder.

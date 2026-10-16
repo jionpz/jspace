@@ -92,12 +92,27 @@ export function parseSchtasksXml(xml: string): { schedule: string; argv: string 
   const id = args.match(/--id\s+"([^"]+)"/) ?? args.match(/--id\s+(\S+)/);
   if (!root || !id) return null;
   const schedule = dow === null ? `${minute} ${hour} * * *` : `${minute} ${hour} * * ${dow}`;
-  // argv[0]: schtasksArgs writes `"<binary>" cron run …` — the leading quoted
-  // token. Absent (task installed before the quote guard, or hand-edited) falls
-  // back to no prefix → mismatches desired → update, the safe direction.
-  const bin = args.match(/^\s*"([^"]+)"/);
+  // argv[0] lives in <Command>, NOT in <Arguments>. schtasks does not store /tr
+  // verbatim: it splits the run string on the first unquoted space and routes the
+  // program to <Command> and the remainder to <Arguments>. So a written
+  // `"<bin>" cron run --dir "<root>" --id "<id>"` reads back as
+  // <Command><bin></Command><Arguments>cron run --dir … --id …</Arguments> — the
+  // binary is simply not in <Arguments>, and a regex over <Arguments> alone
+  // always fell back to the unprefixed form, which mismatched desired on every
+  // install (CI red, both Windows legs, 2026-10-16). Absent <Command> (hand-
+  // edited task) falls back to no prefix → mismatches desired → update, the safe
+  // direction.
+  const cmdEl = xml.match(/<Command[^>]*>([^<]*)<\/Command>/);
+  // Trailing/leading whitespace and ONE optional layer of surrounding quotes are
+  // stripped: the writer quotes the binary (`"<bin>" cron run …`) so a path with
+  // spaces survives schtasks' first-space split, and whether <Command> echoes
+  // that token quoted or unquoted is not pinned by any local observation.
+  // Stripping both makes the compare converge either way; a quoted-vs-unquoted
+  // mismatch here would re-update on every install — the exact bug this fixes.
+  const rawCmd = cmdEl?.[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
+  const bin = rawCmd?.replace(/^"(.*)"$/, "$1");
   const tailArgv = `cron run --id ${id[1]} --dir ${root[1]}`;
-  return { schedule, argv: bin ? `${bin[1]} ${tailArgv}` : tailArgv };
+  return { schedule, argv: bin ? `${bin} ${tailArgv}` : tailArgv };
 }
 
 /** Refuse characters that would break schtasks `/tr` quoting or inject a new

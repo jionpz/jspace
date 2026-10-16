@@ -252,14 +252,25 @@ test("parseManagedLine: extracts schedule/argv + correct tag (was split(\".\")[2
 });
 
 test("parseSchtasksXml: DAILY + WEEKLY + spaces root + unparseable", () => {
-  const daily = `<Task xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger></Triggers><Actions><Exec><Command>C:\\bin\\jspace.exe</Command><Arguments>&quot;C:\\bin\\jspace.exe&quot; cron run --dir &quot;C:\\Users\\John Doe\\wb&quot; --id inbox-tidy</Arguments></Exec></Actions></Task>`;
+  // Real schtasks shape: it splits the `/tr` run string at the first space and
+  // stores the program in <Command>, the remainder in <Arguments> — /tr is NOT
+  // stored verbatim. Every fixture below mirrors that (the older fixtures handed
+  // <Arguments> the whole /tr, which is exactly what let the 2026-10-16
+  // Windows-only reconciliation red pass unit tests).
+  const daily = `<Task xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger></Triggers><Actions><Exec><Command>C:\\bin\\jspace.exe</Command><Arguments>cron run --dir &quot;C:\\Users\\John Doe\\wb&quot; --id &quot;inbox-tidy&quot;</Arguments></Exec></Actions></Task>`;
   // argv[0] is the binary the scheduler execs — part of the reconciliation key.
   expect(parseSchtasksXml(daily)).toEqual({ schedule: "0 21 * * *", argv: "C:\\bin\\jspace.exe cron run --id inbox-tidy --dir C:\\Users\\John Doe\\wb" });
-  // pre-quote-guard task: no leading binary -> unprefixed (mismatches desired -> update, the safe direction)
+  // <Command> may echo the writer's quotes (the writer quotes the binary so a
+  // path with spaces survives schtasks' first-space split): one layer is
+  // stripped either way, so both forms read back identically and neither
+  // re-updates forever.
+  const quotedCmd = daily.replace("<Command>C:\\bin\\jspace.exe</Command>", "<Command>&quot;C:\\bin\\jspace.exe&quot;</Command>");
+  expect(parseSchtasksXml(quotedCmd)).toEqual(parseSchtasksXml(daily));
+  // pre-quote-guard task: no <Command> -> unprefixed (mismatches desired -> update, the safe direction)
   const weekly = `<Task xmlns="x"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T09:30:00</StartBoundary><ScheduleByWeek><WeeksInterval>1</WeeksInterval><DaysOfWeek><Sunday/></DaysOfWeek></ScheduleByWeek></CalendarTrigger></Triggers><Actions><Exec><Arguments>cron run --dir "C:\\wb" --id weekly</Arguments></Exec></Actions></Task>`;
   expect(parseSchtasksXml(weekly)).toEqual({ schedule: "30 9 * * 0", argv: "cron run --id weekly --dir C:\\wb" });
   // quoted --id (current writer) round-trips to the same unquoted inspect argv
-  const quotedId = `<Task xmlns="x"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger></Triggers><Actions><Exec><Arguments>&quot;C:\\bin\\jspace.exe&quot; cron run --dir "C:\\wb" --id "inbox-tidy"</Arguments></Exec></Actions></Task>`;
+  const quotedId = `<Task xmlns="x"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger></Triggers><Actions><Exec><Command>C:\\bin\\jspace.exe</Command><Arguments>cron run --dir "C:\\wb" --id "inbox-tidy"</Arguments></Exec></Actions></Task>`;
   expect(parseSchtasksXml(quotedId)).toEqual({ schedule: "0 21 * * *", argv: "C:\\bin\\jspace.exe cron run --id inbox-tidy --dir C:\\wb" });
   expect(parseSchtasksXml("<Task/>")).toBeNull();
   expect(parseSchtasksXml(`<Task><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary><ScheduleByDay/></CalendarTrigger></Triggers><Actions><Exec><Arguments>no --dir here</Arguments></Exec></Actions></Task>`)).toBeNull();
@@ -454,15 +465,31 @@ function darwinReadBack(name: string, plistBody: string): InstalledTask {
 }
 
 /** Read back a written win32 task the way inspect() does: op content (JSON argv
- *  array) -> the /tr command -> schtasks' XML -> parseSchtasksXml. */
+ *  array) -> the /tr command -> schtasks' XML -> parseSchtasksXml.
+ *
+ *  schtasks does NOT store /tr verbatim: it splits the run string at the first
+ *  space, routing the program to <Command> and the remainder to <Arguments>.
+ *  Modeling that split is the whole point of this helper — a fixture that hands
+ *  <Arguments> the entire /tr (as this one used to) cannot fail the way a real
+ *  runner does, which is how the 2026-10-16 Windows-only red shipped green. */
 function win32ReadBack(content: string): InstalledTask {
   const args = JSON.parse(content) as string[];
   const tr = args[args.indexOf("/tr") + 1];
+  // first UNQUOTED space — the writer quotes the binary so a path with spaces
+  // (the case this quoting exists for) is not split mid-path
+  let split = -1;
+  let inQuotes = false;
+  for (let i = 0; i < tr.length; i++) {
+    if (tr[i] === '"') inQuotes = !inQuotes;
+    else if (tr[i] === " " && !inQuotes) { split = i; break; }
+  }
+  const program = tr.slice(0, split);
+  const rest = tr.slice(split + 1);
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const xml =
     `<Task xmlns="x"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary>` +
     `<ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger></Triggers>` +
-    `<Actions><Exec><Command>${esc("C:\\bin\\jspace.exe")}</Command><Arguments>${esc(tr)}</Arguments></Exec></Actions></Task>`;
+    `<Actions><Exec><Command>${esc(program)}</Command><Arguments>${esc(rest)}</Arguments></Exec></Actions></Task>`;
   const parsed = parseSchtasksXml(xml)!;
   return { taskId: win32Adapter.identity(FR4_TAG, FR4_CRON.id).taskId, cronId: FR4_CRON.id, schedule: parsed.schedule, argv: parsed.argv };
 }
