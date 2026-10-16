@@ -19,13 +19,22 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 - **无界**:crontab 行有 1000 字符上限,交互 shell 的 PATH 随时可能越过它 —— 于是 `cron install`(含 `--dry-run`)会因为一段与它要做的事无关的 PATH 而失败(实测 2196 字符行)。
 - **不确定**:同一个 install 在不同 shell 下会写出**不同**的条目。
 
-合同:条目里的 PATH = **运行时按名解析的二进制所在目录** ∪ 系统惯例目录。
+合同:条目里的 PATH = **运行时按名解析的二进制所在目录(含其解释器)的传递闭包** ∪ 系统惯例目录。
 
-- 只有两个东西真的需要 PATH:harness(`harnessArgv` 经 `which`/`where` 解析)与 `gbrain`(以裸 `argv[0]` 起进程;`$GBRAIN_BIN` 可覆盖,且 `GBRAIN_*` 本就在 cron env 白名单里,所以覆盖不需要 PATH)。
+**为什么是闭包而不是「我 spawn 谁」**(issue #50 的另一面,2026-10-14 由 `inbox-tidy` 无头会话抓出):同一条 PATH 贯穿**多次**按名解析 —— 调度器起 `jspace cron run`,jspace 起 harness,harness 的 hook / 插件再起 `jspace`,而 shim 的 shebang 又要再解析一次解释器。清单漏掉任何一层,失败都只落在 harness 日志里(实测 `SessionEnd hook [jspace context session-end] failed: /bin/sh: jspace: command not found`;`gbrain` 能 `which` 命中却因 `#!/usr/bin/env bun` 找不到 Homebrew 的 `bun` 而报 `env: bun: No such file or directory`)。三层来源:
+
+- **直接目标**:harness(`harnessArgv` 经 `which`/`where` 解析)与 `gbrain`(以裸 `argv[0]` 起进程;`$GBRAIN_BIN` 可覆盖,且 `GBRAIN_*` 本就在 cron env 白名单里,所以覆盖不需要 PATH)。
+- **jspace 自身**:harness 的 hook / 插件按裸名调它(模板接线即 `jspace context session-start|turn|session-end`)。
+- **解释器**:每个已解析目标的 shebang —— `#!/usr/bin/env <name>` 是**第二次按名解析**,`#!<abs>` 是固定路径(不再查 PATH,但其目录仍要进条目,且该解释器可能又是 shim,故继续展开)。
+
 - 每个解析结果取 `dirname`,去重后放在系统目录(`/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`)**之前**,使用户自装的 harness 优先;解析不到的条目直接丢弃(裸名回退 = `which` miss)。
+- 闭包**有界**:visited 集合按已解析路径去重(自指 / 互指 shebang 立即收敛)+ 节点上限 16;只读每个候选文件首 128 字节取 shebang,绝不整读二进制。
 - 因此条目长度由**机器上二进制的位置**决定,与调用者 PATH 的长度**无关**;条目的其余部分(`cd … && jspace cron run --dir … --id …`)不变,提示词始终留在 `cron.json`。
 
-唯一装配点是 `cli/scheduler.ts::schedulerPath` —— launchd plist 与 crontab 行共用同一份值;单测 `cli/scheduler.test.ts` 锁定「超长 shell PATH 不能把行推过 1000」与「深层 harness 目录仍留在行内」两条。`crontabLine` 的 1000 字符守卫保留不变 —— 错的是输入,不是守卫。
+唯一装配点是 `cli/scheduler.ts::schedulerPath` —— launchd plist 与 crontab 行共用同一份值;单测 `cli/scheduler.test.ts` 锁定「超长 shell PATH 不能把行推过 1000」「深层 harness 目录仍留在行内」「jspace 自身在清单里」「shim 的 env 解释器进闭包」「环状 shebang 收敛」等条。`crontabLine` 的 1000 字符守卫保留不变 —— 错的是输入,不是守卫。
+
+**PATH 是调和键的一部分(2026-10-16 起)**:`DesiredTask` / `InstalledTask` 各带可选 `envPath`,darwin 从 plist 的 `EnvironmentVariables.PATH` 读回、linux 从 crontab 行的 `PATH='…'` 读回、win32 不读(schtasks 忽略 `env.path`,保持 `undefined`)。比较**仅当两侧都已定义**时进行 —— `undefined` 表示「该平台不存 PATH,或读回失败」,此时跳过该维度而非判为漂移(否则 win32 与读回失败会变成每次 install 都 update)。有此键,闭包放宽后**已装条目会被自动修复**;没有它,条目一旦写入就永远保持旧 PATH(`cron install` 报 `up to date` 而实际未闭合)。修完需跑一次 `jspace cron install` 让既有条目落地。
+
 
 ## 运行状态与 incidents（结构化，M3）
 

@@ -133,13 +133,38 @@ export function argvFromPlistStdout(stdout: string, name: string): string {
   return bin ? `${bin[1]} ${tail}` : tail;
 }
 
-function plistArgv(name: string, home: string): string {
+/** Read the PATH out of a `plutil -p` dump's EnvironmentVariables dict — the
+ *  element launchd actually reads when it starts the agent, and therefore the
+ *  one that decides whether the entry's processes can resolve their names.
+ *
+ *  Scoped to that dict (not a bare `"PATH" =>` search over the whole dump): the
+ *  managed plist is the only place a PATH belongs, and a stray key elsewhere
+ *  must not be mistaken for it.
+ *
+ *  A parseable dump with no EnvironmentVariables / no PATH returns "" — that is
+ *  a real drift from the non-empty desired value, so the entry is updated, which
+ *  is the safe direction (a hand-edited or pre-closure entry gets repaired).
+ *  Returns undefined only when there is no dump at all; the caller's argv check
+ *  already forces an update in that case, so the dimension is skipped rather
+ *  than double-counted. */
+export function envPathFromPlistStdout(stdout: string): string | undefined {
+  const start = stdout.match(/"EnvironmentVariables"\s*=>\s*\{/);
+  if (!start || start.index === undefined) return "";
+  const rest = stdout.slice(start.index + start[0].length);
+  const end = rest.search(/\n\s*\}/); // plutil -p closes the nested dict on its own line
+  const block = end === -1 ? rest : rest.slice(0, end);
+  return block.match(/"PATH"\s*=>\s*"((?:[^"\\]|\\.)*)"/)?.[1] ?? "";
+}
+
+/** One `plutil -p` dump for a plist file, or null when it is absent/unreadable.
+ *  argv and envPath read from the SAME dump so they can never disagree. */
+function readPlistDump(name: string, home: string): string | null {
   const p = join(home, "Library", "LaunchAgents", name);
-  if (!existsSync(p)) return "";
+  if (!existsSync(p)) return null;
   // plutil -extract WorkingDirectory json fails on bare strings; use -p and grep
   const res = schedulerSpawn("plutil", ["-p", p]);
-  if (res.status !== 0) return "";
-  return argvFromPlistStdout(res.stdout ?? "", name);
+  if (res.status !== 0) return null;
+  return res.stdout ?? "";
 }
 
 /** Pure-ish inspect seam: a plist file is only an installed task when launchd
@@ -156,11 +181,13 @@ export function inspectDarwin(
     if (!plistBelongsToTag(name, tag)) continue; // other workbench / legacy untagged — never touch
     const parsed = parsePlistName(name)!;
     if (!isLoaded(parsed.taskId)) continue;
+    const dump = readPlistDump(name, env.home);
     out.push({
       taskId: parsed.taskId,
       cronId: parsed.cronId,
       schedule: plistSchedule(name, env.home),
-      argv: plistArgv(name, env.home),
+      argv: dump === null ? "" : argvFromPlistStdout(dump, name),
+      envPath: dump === null ? undefined : envPathFromPlistStdout(dump),
     });
   }
   return out;

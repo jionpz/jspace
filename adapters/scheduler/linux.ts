@@ -204,6 +204,21 @@ function optionQuoted(s: string, opt: string): string | null {
   return unshq(rest.slice(0, len));
 }
 
+/** The PATH assigned in a managed crontab line (`PATH='...'`), unquoted with the
+ *  same POSIX rule as every other value so a dir containing a quote or `%`
+ *  round-trips. A line that parses but carries no PATH returns "" — a real drift
+ *  from the non-empty desired value, so reconciliation updates the entry
+ *  (repairing entries written before the closure rule). Null only when the line
+ *  itself is not a managed run line (see parseManagedLine's other guards). */
+export function envPathFromLine(line: string): string | undefined {
+  const at = line.indexOf("PATH=");
+  if (at === -1) return "";
+  const rest = line.slice(at + "PATH=".length);
+  const len = quotedTokenLen(rest);
+  if (len === -1) return ""; // unquoted/unset form — not ours to read
+  return unshq(rest.slice(0, len));
+}
+
 /** Whether the current process runs in a nested PID namespace, parsed from
  *  `/proc/self/status`. The `NSpid:` line lists the PID as seen by each
  *  namespace from outermost to innermost; ≥2 values means the process is in a
@@ -250,7 +265,7 @@ export function parseManagedLine(line: string, tag: string): InstalledTask | nul
   // falls back to no prefix → mismatches desired → update, the safe direction.
   const bin = quotedTokenBeforeRun(line, runAt);
   const tailArgv = `cron run --id ${id} --dir ${dir}`;
-  return { taskId, cronId: id, schedule, argv: bin ? `${bin} ${tailArgv}` : tailArgv };
+  return { taskId, cronId: id, schedule, argv: bin ? `${bin} ${tailArgv}` : tailArgv, envPath: envPathFromLine(line) };
 }
 
 /** The last POSIX single-quoted token in `line[0..end)`, unescaped, or null.

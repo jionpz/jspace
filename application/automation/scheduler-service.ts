@@ -34,6 +34,10 @@ export function buildDesired(crons: CronDefinition[], tag: string, root: string,
     // comparing equal forever (2026-10-13: inbox-tidy's plist pointed at a
     // months-old dev build and no install ever noticed).
     argv: invocationArgv({ cronId: c.id, workbench: root }, env.jspaceBinary).join(" "),
+    // A platform that ignores env.path declares so by not reading it back
+    // (win32's schtasks); leaving the field undefined there keeps the
+    // comparison from drifting on a value that was never written.
+    envPath: adapter.platform === "win32" ? undefined : env.path,
     content: adapter.buildContent(c, tag, root, env),
   }));
 }

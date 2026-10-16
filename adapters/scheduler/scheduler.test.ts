@@ -8,8 +8,8 @@ import { join } from "node:path";
 import { taskIdFor, workbenchTag, SCHEDULER_SPAWN_TIMEOUT_MS } from "./types.ts";
 import { makeSchedulerSpawn, type SchedulerSpawn, type SchedulerSpawnImpl, type SchedulerSpawnImplOpts } from "./spawn.ts";
 import { isWindowsInstallable } from "../../core/shared/schedule.ts";
-import { linuxAdapter, makeLinuxAdapter, crontabBlock, crontabLine, crontabUnavailable, replaceManagedBlock, parseManagedLine, extractTagBlock, pidNamespaceIsolated, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
-import { darwinAdapter, inspectDarwin, plistPath, parsePlistName, plistBelongsToTag, scheduleFromIntervalDict, argvFromPlistStdout } from "./darwin.ts";
+import { linuxAdapter, makeLinuxAdapter, crontabBlock, crontabLine, crontabUnavailable, replaceManagedBlock, parseManagedLine, extractTagBlock, pidNamespaceIsolated, envPathFromLine, CRON_BLOCK_START, CRON_BLOCK_END } from "./linux.ts";
+import { darwinAdapter, inspectDarwin, plistPath, parsePlistName, plistBelongsToTag, scheduleFromIntervalDict, argvFromPlistStdout, envPathFromPlistStdout } from "./darwin.ts";
 import { schtasksArgs, parseOpContent, parseSchtasksXml, win32Adapter, csvTaskName, cronIdFromTaskName, queryTasksFromOutput } from "./win32.ts";
 import { planReconciliation } from "../../application/automation/scheduler.ts";
 import { invocationArgv } from "../../application/automation/invocation.ts";
@@ -241,6 +241,9 @@ test("parseManagedLine: extracts schedule/argv + correct tag (was split(\".\")[2
     // argv[0] is the binary the scheduler execs — part of the reconciliation
     // key so a drifted path is repaired by install (2026-10-13).
     argv: "/bin/jspace cron run --id inbox-tidy --dir /wb/a",
+    // the line's own PATH is recovered too — a widened closure must reach
+    // entries installed before it (2026-10-16).
+    envPath: "/usr/bin:/bin",
   });
   // other workbench's tag -> null (cross-workbench isolation)
   expect(parseManagedLine(line, "xyz789")).toBeNull();
@@ -464,6 +467,19 @@ function darwinReadBack(name: string, plistBody: string): InstalledTask {
   return { taskId: parsePlistName(name)!.taskId, cronId: FR4_CRON.id, schedule: FR4_CRON.schedule, argv: argvFromPlistStdout(stdout, name) };
 }
 
+/** Read back a plist dump the way inspect() does for the env dimension:
+ *  the same `plutil -p` stdout, parsed for both argv and PATH so a test can
+ *  never pair an argv from one dump with a PATH from another. */
+function darwinEnvReadBack(name: string, stdout: string): InstalledTask {
+  return {
+    taskId: parsePlistName(name)!.taskId,
+    cronId: FR4_CRON.id,
+    schedule: FR4_CRON.schedule,
+    argv: argvFromPlistStdout(stdout, name),
+    envPath: envPathFromPlistStdout(stdout),
+  };
+}
+
 /** Read back a written win32 task the way inspect() does: op content (JSON argv
  *  array) -> the /tr command -> schtasks' XML -> parseSchtasksXml.
  *
@@ -524,6 +540,75 @@ test("FR-4 linux: crontab binary round-trips; stale binary -> update that conver
   expect(ops).toEqual([{ action: "update", taskId, content: line }]);
   const applied = (ops[0] as { content: string }).content;
   expect(planReconciliation(desired, [parseManagedLine(applied, FR4_TAG)!])).toEqual([]); // applied update converges
+});
+
+test("FR-4 darwin: plist PATH round-trips; a stale PATH -> update that converges", () => {
+  // Same shape as the binary check above, for the OTHER key the entry carries:
+  // a widened PATH closure must reach entries installed before it, or the fix
+  // never lands on an existing install (2026-10-16: 4 of 5 local plists still
+  // carried the pre-#50 PATH and `cron install` reported "up to date").
+  const id = darwinAdapter.identity(FR4_TAG, FR4_CRON.id);
+  const name = `${id.taskId}.plist`;
+  const OLD_PATH = "/usr/local/bin:/usr/bin:/bin";
+  const NEW_PATH = "/opt/homebrew/bin:/Users/u/.bun/bin:/usr/local/bin:/usr/bin:/bin";
+  const content = darwinAdapter.buildContent(FR4_CRON, FR4_TAG, FR4_ROOT, { jspaceBinary: FR4_BIN, home: "/Users/u", path: NEW_PATH });
+  const dump = `"EnvironmentVariables" => {\n    "HOME" => "/Users/u"\n    "PATH" => "${NEW_PATH}"\n  }\n"ProgramArguments" => [\n    0 => "${FR4_BIN}"\n]\n"WorkingDirectory" => "${FR4_ROOT}"\n`;
+  const desired = [{ taskId: id.taskId, cronId: FR4_CRON.id, schedule: FR4_CRON.schedule, argv: FR4_DESIRED_ARGV, envPath: NEW_PATH, content }];
+  expect(envPathFromPlistStdout(dump)).toBe(NEW_PATH);
+  expect(planReconciliation(desired, [darwinEnvReadBack(name, dump)])).toEqual([]); // write -> read -> no-op
+  // an entry carrying the older, unclosed PATH is repaired (not left comparing equal)
+  const staleDump = dump.replace(NEW_PATH, OLD_PATH);
+  const ops = planReconciliation(desired, [darwinEnvReadBack(name, staleDump)]);
+  expect(ops).toEqual([{ action: "update", taskId: id.taskId, content }]);
+  const applied = (ops[0] as { content: string }).content;
+  expect(planReconciliation(desired, [darwinEnvReadBack(name, dump)])).toEqual([]); // applied update converges
+  expect(applied).toBe(content);
+
+  // a dump with no EnvironmentVariables at all reads as "" -> drift -> update
+  expect(envPathFromPlistStdout(`"ProgramArguments" => [\n    0 => "${FR4_BIN}"\n]\n`)).toBe("");
+  // a PATH key OUTSIDE the env dict is not picked up (scoped match)
+  expect(envPathFromPlistStdout(`"PATH" => "/somewhere/else"\n"EnvironmentVariables" => {\n}\n`)).toBe("");
+});
+
+// ---- envPath: linux crontab line read-back ----
+
+test("envPathFromLine: reads the line's own PATH= assignment, POSIX-unquoted", () => {
+  const line = crontabLine(FR4_CRON, FR4_TAG, FR4_ROOT, FR4_BIN, "/opt/homebrew/bin:/Users/u/.bun/bin:/bin", "/home/u");
+  expect(envPathFromLine(line)).toBe("/opt/homebrew/bin:/Users/u/.bun/bin:/bin");
+  expect(parseManagedLine(line, FR4_TAG)!.envPath).toBe("/opt/homebrew/bin:/Users/u/.bun/bin:/bin");
+  // a line whose PATH carries a quote still round-trips (same '\'' rule as every
+  // other value in the line)
+  const quoted = crontabLine(FR4_CRON, FR4_TAG, FR4_ROOT, FR4_BIN, "/we'ird/bin:/bin", "/home/u");
+  expect(parseManagedLine(quoted, FR4_TAG)!.envPath).toBe("/we'ird/bin:/bin");
+  // a managed line with no PATH assignment reads as "" (drift -> update)
+  const noPath = `0 21 * * *  cd '/wb' && '/bin/jspace' cron run --dir '/wb' --id 'inbox' >> '/wb/log' 2>&1  # ${taskIdFor(FR4_TAG, "inbox")}`;
+  expect(parseManagedLine(noPath, FR4_TAG)!.envPath).toBe("");
+});
+
+test("FR-4 linux: crontab PATH round-trips; a stale PATH -> update that converges", () => {
+  const taskId = taskIdFor(FR4_TAG, FR4_CRON.id);
+  const OLD_PATH = "/usr/local/bin:/usr/bin:/bin";
+  const NEW_PATH = "/opt/homebrew/bin:/Users/u/.bun/bin:/usr/local/bin:/usr/bin:/bin";
+  const line = crontabLine(FR4_CRON, FR4_TAG, FR4_ROOT, FR4_BIN, NEW_PATH, "/home/u");
+  const desired = [{ taskId, cronId: FR4_CRON.id, schedule: FR4_CRON.schedule, argv: FR4_DESIRED_ARGV, envPath: NEW_PATH, content: line }];
+  expect(planReconciliation(desired, [parseManagedLine(line, FR4_TAG)!])).toEqual([]); // write -> read -> no-op
+  const stale = crontabLine(FR4_CRON, FR4_TAG, FR4_ROOT, FR4_BIN, OLD_PATH, "/home/u");
+  const ops = planReconciliation(desired, [parseManagedLine(stale, FR4_TAG)!]);
+  expect(ops).toEqual([{ action: "update", taskId, content: line }]);
+  expect(planReconciliation(desired, [parseManagedLine(line, FR4_TAG)!])).toEqual([]); // applied update converges
+});
+
+test("FR-4 win32: an entry with no envPath never drifts (schtasks stores no PATH)", () => {
+  // win32 ignores env.path, so inspect() cannot recover one; the comparison must
+  // skip the dimension rather than read the absence as drift and update forever.
+  const taskId = win32Adapter.identity(FR4_TAG, FR4_CRON.id).taskId;
+  const winRoot = "C:\\wb";
+  const env32 = { jspaceBinary: "C:\\bin\\jspace.exe", home: "C:\\Users\\u", path: "C:\\bin" };
+  const content = win32Adapter.buildContent(FR4_CRON, FR4_TAG, winRoot, env32);
+  const desired = [{ taskId, cronId: FR4_CRON.id, schedule: FR4_CRON.schedule, argv: invocationArgv({ cronId: FR4_CRON.id, workbench: winRoot }, env32.jspaceBinary).join(" "), content }];
+  const readBack = win32ReadBack(content);
+  expect(readBack.envPath).toBeUndefined();
+  expect(planReconciliation(desired, [readBack])).toEqual([]);
 });
 
 test("FR-4 win32: task binary round-trips; stale binary -> update that converges", () => {

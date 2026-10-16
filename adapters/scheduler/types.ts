@@ -20,6 +20,11 @@ export interface InstalledTask {
   cronId: string;
   schedule: string;
   argv: string;
+  /** PATH the entry actually carries, read back from the platform element that
+   *  stores it (darwin plist EnvironmentVariables / linux crontab line).
+   *  `undefined` = this platform does not consume env.path (win32) or the read
+   *  failed, so the comparison skips the dimension instead of drifting forever. */
+  envPath?: string;
 }
 
 /** Desired task for one cron (what the scheduler service wants installed). */
@@ -32,6 +37,12 @@ export interface DesiredTask {
   argv: string;
   /** adapter-specific install content (plist / crontab block / schtasks args) */
   content: string;
+  /** PATH the entry should carry. Part of the reconciliation key for the same
+   *  reason argv[0] is: an entry baked months ago keeps its old PATH forever
+   *  otherwise, so a widened closure would never reach installed entries
+   *  (2026-10-16: 4 of 5 plists still carried the pre-#50 unclosed PATH).
+   *  `undefined` on platforms that ignore env.path (win32 schtasks). */
+  envPath?: string;
 }
 
 export type SchedulerOp =
@@ -43,6 +54,11 @@ export type SchedulerOp =
 export interface SchedulerEnv {
   jspaceBinary: string;
   home: string;
+  /** PATH baked into the managed entry. It is the TRANSITIVE CLOSURE of what
+   *  the entry's processes resolve by name (see cli/scheduler.ts::schedulerPath),
+   *  not just what jspace spawns itself — a harness hook calling bare `jspace`
+   *  and a shim's `#!/usr/bin/env <interpreter>` both resolve at run time off
+   *  this same value. win32's schtasks path ignores it. */
   path: string;
 }
 

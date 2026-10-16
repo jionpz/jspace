@@ -22,8 +22,19 @@ function canonicalSchedule(s: string): string {
 }
 
 /** Pure: desired vs installed → ops. Match by taskId (already workbench-tagged);
- *  identical schedule+argv is a no-op; changed → update; desired-only → create;
- *  installed-only (disabled/deleted/stale) → delete. */
+ *  identical schedule+argv+env is a no-op; changed → update; desired-only →
+ *  create; installed-only (disabled/deleted/stale) → delete.
+ *
+ *  envPath joins the key so a widened PATH closure reaches entries that were
+ *  installed before it — without this, an entry baked months ago compares equal
+ *  forever and `cron install` reports "up to date" while its PATH stays
+ *  unclosed (2026-10-16: 4 of 5 local plists).
+ *
+ *  The dimension is compared only when BOTH sides define it: `undefined` means
+ *  "this platform does not store a PATH (win32), or it could not be read" — a
+ *  state where absence carries no information, so it must never read as drift.
+ *  Both-undefined (win32) and installed-undefined (an unreadable dump) keep the
+ *  previous no-op behaviour instead of re-updating on every install. */
 export function planReconciliation(desired: DesiredTask[], installed: InstalledTask[]): SchedulerOp[] {
   const byId = new Map(installed.map((t) => [t.taskId, t]));
   const ops: SchedulerOp[] = [];
@@ -31,7 +42,11 @@ export function planReconciliation(desired: DesiredTask[], installed: InstalledT
     const inst = byId.get(d.taskId);
     if (!inst) {
       ops.push({ action: "create", taskId: d.taskId, content: d.content });
-    } else if (canonicalSchedule(inst.schedule) !== canonicalSchedule(d.schedule) || inst.argv !== d.argv) {
+    } else if (
+      canonicalSchedule(inst.schedule) !== canonicalSchedule(d.schedule) ||
+      inst.argv !== d.argv ||
+      (inst.envPath !== undefined && d.envPath !== undefined && inst.envPath !== d.envPath)
+    ) {
       ops.push({ action: "update", taskId: d.taskId, content: d.content });
     }
     // else no-op

@@ -4,6 +4,7 @@ import { expect, test } from "bun:test";
 import { planReconciliation, workbenchTag, type DesiredTask, type InstalledTask } from "./scheduler.ts";
 import { buildDesired } from "./scheduler-service.ts";
 import { win32Adapter } from "../../adapters/scheduler/win32.ts";
+import { darwinAdapter } from "../../adapters/scheduler/darwin.ts";
 import type { SchedulerEnv } from "../../adapters/scheduler/types.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 
@@ -72,6 +73,39 @@ test("Sunday dow 7 and 0 converge (no re-update, issue #8 #11)", () => {
   // a genuinely different schedule still updates
   const changed = [d("tag.inbox", "inbox", "0 22 * * 0")];
   expect(planReconciliation(changed, installed).map((o) => o.action)).toEqual(["update"]);
+});
+
+test("envPath: compared only when both sides define it (no drift on absence)", () => {
+  // A platform that never stores a PATH (win32) must not look like drift, and a
+  // read that failed must not either — both keep the previous no-op behaviour.
+  // When both sides carry one, a difference IS drift: that is what makes a
+  // widened closure reach entries installed before it (2026-10-16).
+  const base = { taskId: "tag.a", cronId: "a", schedule: "0 21 * * *", argv: "argv" };
+  const desired = { ...base, content: "content" };
+
+  // both undefined (win32) -> no-op
+  expect(planReconciliation([desired], [base])).toEqual([]);
+  // installed undefined, desired defined (unreadable read-back) -> no-op
+  expect(planReconciliation([{ ...desired, envPath: "/new/bin" }], [base])).toEqual([]);
+  // both defined and equal -> no-op
+  expect(planReconciliation([{ ...desired, envPath: "/bin" }], [{ ...base, envPath: "/bin" }])).toEqual([]);
+  // both defined and different -> update (the pre-closure entry being repaired)
+  expect(planReconciliation([{ ...desired, envPath: "/new/bin" }], [{ ...base, envPath: "/old/bin" }]))
+    .toEqual([{ action: "update", taskId: "tag.a", content: "content" }]);
+  // installed defined, desired undefined -> no-op (the platform stopped owning it)
+  expect(planReconciliation([desired], [{ ...base, envPath: "/old/bin" }])).toEqual([]);
+});
+
+test("envPath: buildDesired sets it on POSIX and leaves win32 undefined", () => {
+  const cron: CronDefinition = { id: "inbox", schedule: "0 21 * * *", harness: "claude", prompt: "x", enabled: true };
+  const posixEnv: SchedulerEnv = { jspaceBinary: "/bin/jspace", home: "/home/u", path: "/opt/homebrew/bin:/bin" };
+  const winEnv: SchedulerEnv = { jspaceBinary: "C:\\bin\\jspace.exe", home: "C:\\Users\\u", path: "C:\\bin" };
+  // the win32 adapter declares it does not consume env.path by not reading it
+  // back — buildDesired must mirror that or every install would see drift.
+  const [posix] = buildDesired([cron], "tagA", "/wb", posixEnv, darwinAdapter);
+  const [win] = buildDesired([cron], "tagA", "C:\\wb", winEnv, win32Adapter);
+  expect(posix.envPath).toBe(posixEnv.path);
+  expect(win.envPath).toBeUndefined();
 });
 
 test("P0: win32 buildDesired content /tn === desired.taskId (service↔adapter single handle)", () => {
