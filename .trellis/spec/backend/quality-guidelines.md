@@ -231,6 +231,21 @@ was already correct; only the *fact* was missing. Guarded by
   `<Arguments>`. Reading argv[0] out of `<Arguments>` therefore always falls back to unprefixed and
   re-updates on every install — a Windows-only red that a fixture handing `<Arguments>` the entire
   `/tr` cannot catch (2026-10-16, v1.0.30 build: both Windows legs red, all others green).
+- The entry's baked `PATH` (`schedulerPath`) is the **transitive closure** of everything the
+  entry's processes resolve **by name at run time**, not just what jspace spawns: direct targets
+  (harness, `gbrain`), **jspace itself** (harness hooks/plugins call bare `jspace`), and each
+  resolved binary's **shebang interpreter** (`#!/usr/bin/env <name>` is a second name lookup;
+  `#!<abs>` needs no lookup but may itself be a shim, so the walk continues). Walking is bounded by
+  a visited set (keyed on resolved path) + `MAX_CLOSURE_NODES`, reading only the first 128 bytes of
+  each candidate — the closure must never grow unbounded or read whole binaries.
+- **Any value baked at install time that is not recomputed at run time must be part of the
+  reconciliation key** — otherwise a fix to how that value is computed can never reach an entry
+  that was already installed. `envPath` joins `taskId` / `schedule` / `argv` for exactly this
+  reason (2026-10-16: after the closure fix, `cron install` reported "up to date" while 4 of 5
+  plists still carried the pre-#50 PATH). Read it back from the element the platform stores it in
+  (darwin plist `EnvironmentVariables.PATH`, linux crontab line `PATH='…'`); compare the dimension
+  **only when both sides define it** — `undefined` means "platform stores no PATH (win32) or the
+  read failed", and treating that as drift would re-update on every install.
 
 ### 3. Validation & Error Matrix
 
@@ -241,7 +256,9 @@ was already correct; only the *fact* was missing. Guarded by
 | `model: ""` / non-string | `cron.model.invalid` decoder issue |
 | `model` set, harness declares no `argv_flags.model` | fail loud at `cron run` (before spawn) |
 | Installed task points at a different binary | `cron install` reports `[update] <taskId>` |
-| Same binary + schedule + argv | `cron install` reports nothing to do (idempotent) |
+| Installed entry carries a stale PATH (both sides define one) | `cron install` reports `[update] <taskId>` |
+| Platform stores no PATH (win32) or the read-back failed | comparison skips the dimension — no drift |
+| Same binary + schedule + argv + envPath | `cron install` reports nothing to do (idempotent) |
 
 ### 4. Evidence (why this contract exists)
 
@@ -250,6 +267,14 @@ rate-limited, and `inbox-tidy`'s plist pointed at a stale dev binary (v1.0.22) t
 could not see — the argv it compared carried no binary path. Both defects are invisible in tests
 that only check the written form; the round-trip (write → read back → reconcile) is the guard.
 `adapters/scheduler/scheduler.test.ts` pins write→read→no-op and binary-drift→update per platform.
+
+Real-usage finding, 2026-10-14 (issue #50's other face): the entry PATH resolved `gbrain` to its
+shim but not the shim's interpreter — `env: bun: No such file or directory` — and did not resolve
+`jspace` at all, so three harness hooks failed silently in the harness log
+(`/bin/sh: jspace: command not found`). 2026-10-16: adding the closure alone was not enough;
+because PATH was not in the reconciliation key, the fix did not reach installed entries. Both
+lessons are pinned by `cli/scheduler.test.ts` (closure shapes incl. cycles, default name set) and
+the per-platform PATH round-trip tests.
 
 ## Security & Red Lines (parent R8)
 
