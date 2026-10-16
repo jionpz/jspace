@@ -9,7 +9,7 @@ import { findIndex } from "../registry/helpers.ts";
 import { ackIncidents } from "./incidents.ts";
 import { loadCrons, parseSchedule, saveCrons } from "./definitions.ts";
 import { isWindowsInstallable } from "../../core/shared/schedule.ts";
-import { assertHarnessSupportsTools, cronHarnessNames } from "../../adapters/harness/registry.ts";
+import { assertHarnessSupportsTools, assertHarnessSupportsModel, cronHarnessNames } from "../../adapters/harness/registry.ts";
 
 export interface CronInstalledCheck {
   isInstalled: (cronId: string) => boolean;
@@ -25,9 +25,10 @@ export function cronAdd(
   deps: CronInstalledCheck,
   platform: NodeJS.Platform = process.platform,
   tools?: string,
+  model?: string,
 ): CmdResult {
   return withWorkbenchMutationLock(root, () =>
-    cronAddImpl(root, id, schedule, harness, prompt, disabled, deps, platform, tools),
+    cronAddImpl(root, id, schedule, harness, prompt, disabled, deps, platform, tools, model),
   );
 }
 
@@ -41,6 +42,7 @@ function cronAddImpl(
   deps: CronInstalledCheck,
   platform: NodeJS.Platform = process.platform,
   tools?: string,
+  model?: string,
 ): CmdResult {
   const data = loadCrons(root);
   if (!isId(id)) fail(`invalid cron id: ${id} (lowercase letters, digits, hyphens)`);
@@ -51,6 +53,7 @@ function cronAddImpl(
   }
   if (!prompt.trim()) fail("prompt must be non-empty");
   assertHarnessSupportsTools(harness, tools);
+  assertHarnessSupportsModel(harness, model);
   parseSchedule(schedule); // validate
   // Same boundary as `cron install`: win32 only schedules DAILY/WEEKLY (month=*).
   // Reject at add time instead of letting a non-installable cron through to a

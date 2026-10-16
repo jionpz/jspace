@@ -24,7 +24,8 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "permission": "--allowedTools",
         "tools_value": "Bash,Read,Write,Edit,mcp__gbrain__*",
         "output": "--output-format",
-        "output_value": "text"
+        "output_value": "text",
+        "model": "--model"
       },
       "supports_tool_restriction": true,
       "cron_env": {
@@ -90,7 +91,8 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "permission": "--allow",
         "tools_value": "Bash(*)",
         "output": "--output-format",
-        "output_value": "json"
+        "output_value": "json",
+        "model": "--model"
       },
       "supports_tool_restriction": true,
       "cron_env": {
@@ -156,7 +158,9 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "run",
         "--auto"
       ],
-      "argv_flags": {},
+      "argv_flags": {
+        "model": "--model"
+      },
       "supports_tool_restriction": false,
       "cron_env": {
         "allow_prefixes": [
@@ -263,7 +267,9 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "pi",
         "-p"
       ],
-      "argv_flags": {},
+      "argv_flags": {
+        "model": "--model"
+      },
       "supports_tool_restriction": false,
       "cron_env": {
         "allow_prefixes": [
@@ -318,7 +324,9 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "codex",
         "exec"
       ],
-      "argv_flags": {},
+      "argv_flags": {
+        "model": "-m"
+      },
       "supports_tool_restriction": false,
       "cron_env": {
         "allow_prefixes": [

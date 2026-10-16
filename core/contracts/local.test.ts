@@ -61,7 +61,7 @@ test("bindings must be an object with id-pattern keys and absolute values", () =
 });
 
 test("unknown fields are rejected", () => {
-  expectIssue({ ...validLocal(), provider: "cc-switch" }, "local.unknown-field");
+  expectIssue({ ...validLocal(), provider: "example-provider" }, "local.unknown-field");
 });
 
 test("independent issues are all reported at once", () => {

@@ -41,6 +41,39 @@ test("codex and pi headless argv shapes are stable", () => {
   expect(harnessArgv("pi", "do it", "darwin", "/bin/pi")).toEqual(["/bin/pi", "-p", "do it"]);
 });
 
+// ---- per-cron model: unattended runs must not inherit the interactive default
+// (2026-10-13: a rate-limited user-level model made `claude -p` hang until the
+// run was killed; all five crons failed nightly). ----
+
+test("per-cron model appends the capability's model flag after permission", () => {
+  const argv = harnessArgv("claude", "整理 inbox", "darwin", "/usr/bin/claude", undefined, "acme/turbo-4.1-flash");
+  expect(argv).toEqual([
+    "/usr/bin/claude",
+    "-p",
+    "整理 inbox",
+    "--output-format",
+    "text",
+    "--allowedTools",
+    "Bash,Read,Write,Edit,mcp__gbrain__*",
+    "--model",
+    "acme/turbo-4.1-flash",
+  ]);
+});
+
+test("model flag is per-harness (codex -m, opencode/pi --model)", () => {
+  expect(harnessArgv("codex", "do it", "darwin", "/bin/codex", undefined, "gpt-5")).toEqual(["/bin/codex", "exec", "do it", "-m", "gpt-5"]);
+  expect(harnessArgv("opencode", "do it", "darwin", "/bin/opencode", undefined, "p/m")).toEqual(["/bin/opencode", "run", "--auto", "do it", "--model", "p/m"]);
+  expect(harnessArgv("pi", "do it", "darwin", "/bin/pi", undefined, "p/m")).toEqual(["/bin/pi", "-p", "do it", "--model", "p/m"]);
+});
+
+test("absent model leaves the argv byte-identical to before (no empty flag)", () => {
+  // Regression guard: materializing an empty --model would break every cron
+  // that does not pin a model.
+  const argv = harnessArgv("claude", "p", "darwin", "/usr/bin/claude");
+  expect(argv).not.toContain("--model");
+  expect(argv).toEqual(["/usr/bin/claude", "-p", "p", "--output-format", "text", "--allowedTools", "Bash,Read,Write,Edit,mcp__gbrain__*"]);
+});
+
 test("grok headless argv shape (capability-driven flags)", () => {
   expect(harnessArgv("grok", "do it", "darwin", "/bin/grok")).toEqual([
     "/bin/grok",

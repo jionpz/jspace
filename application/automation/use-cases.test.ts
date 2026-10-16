@@ -91,7 +91,7 @@ test("cronInstall: identical installed state -> up to date, no apply", () => {
     tag,
     adapter: fakeAdapter({
       platform: "darwin",
-      inspect: () => [{ taskId: taskIdFor(tag, "a"), cronId: "a", schedule: "0 21 * * *", argv: `cron run --id a --dir ${wb}` }],
+      inspect: () => [{ taskId: taskIdFor(tag, "a"), cronId: "a", schedule: "0 21 * * *", argv: `${env.jspaceBinary} cron run --id a --dir ${wb}` }],
       onApply: (op) => { applied = op; },
     }),
     env,

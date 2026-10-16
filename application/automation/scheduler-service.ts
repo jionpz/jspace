@@ -29,7 +29,11 @@ export function buildDesired(crons: CronDefinition[], tag: string, root: string,
     taskId: adapter.identity(tag, c.id).taskId, // canonical platform handle — single source
     cronId: c.id,
     schedule: c.schedule,
-    argv: invocationArgv({ cronId: c.id, workbench: root }).join(" "),
+    // argv[0] is the jspace binary the scheduler will exec — part of the
+    // comparison key so a stale/diverged path is repaired by install instead of
+    // comparing equal forever (2026-10-13: inbox-tidy's plist pointed at a
+    // months-old dev build and no install ever noticed).
+    argv: invocationArgv({ cronId: c.id, workbench: root }, env.jspaceBinary).join(" "),
     content: adapter.buildContent(c, tag, root, env),
   }));
 }

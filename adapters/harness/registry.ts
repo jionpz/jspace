@@ -182,6 +182,17 @@ export function assertHarnessSupportsTools(harness: string, tools?: string): voi
   }
 }
 
+/** Fail loud when `model` is set but the harness declares no model flag.
+ *  Silently dropping it would leave the cron running on the harness default —
+ *  the exact failure this field exists to prevent (a rate-limited interactive
+ *  default stalling an unattended run). */
+export function assertHarnessSupportsModel(harness: string, model?: string): void {
+  if (model === undefined || model.trim() === "") return;
+  if (getCapability(harness).argv_flags.model === undefined) {
+    fail(`harness ${harness} does not support a per-cron model (no model flag is declared for this harness)`);
+  }
+}
+
 /** Workbench-relative skill projection dirs (per-harness + shared). Derives
  *  application/workspace/manifest.ts SKILL_PROJECTIONS so new projections added
  *  to capabilities.yaml flow into materialization + doctor drift checks. */

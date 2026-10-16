@@ -92,7 +92,12 @@ export function parseSchtasksXml(xml: string): { schedule: string; argv: string 
   const id = args.match(/--id\s+"([^"]+)"/) ?? args.match(/--id\s+(\S+)/);
   if (!root || !id) return null;
   const schedule = dow === null ? `${minute} ${hour} * * *` : `${minute} ${hour} * * ${dow}`;
-  return { schedule, argv: `cron run --id ${id[1]} --dir ${root[1]}` };
+  // argv[0]: schtasksArgs writes `"<binary>" cron run …` — the leading quoted
+  // token. Absent (task installed before the quote guard, or hand-edited) falls
+  // back to no prefix → mismatches desired → update, the safe direction.
+  const bin = args.match(/^\s*"([^"]+)"/);
+  const tailArgv = `cron run --id ${id[1]} --dir ${root[1]}`;
+  return { schedule, argv: bin ? `${bin[1]} ${tailArgv}` : tailArgv };
 }
 
 /** Refuse characters that would break schtasks `/tr` quoting or inject a new

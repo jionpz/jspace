@@ -245,7 +245,22 @@ export function parseManagedLine(line: string, tag: string): InstalledTask | nul
   const dir = optionQuoted(tail, "--dir");
   const id = optionQuoted(tail, "--id");
   if (dir === null || id === null) return null;
-  return { taskId, cronId: id, schedule, argv: `cron run --id ${id} --dir ${dir}` };
+  // argv[0]: the last single-quoted token before `cron run` (crontabLine emits
+  // `cd … && PATH=… HOME=… '<binary>' cron run …`). Absent (hand-edited line)
+  // falls back to no prefix → mismatches desired → update, the safe direction.
+  const bin = quotedTokenBeforeRun(line, runAt);
+  const tailArgv = `cron run --id ${id} --dir ${dir}`;
+  return { taskId, cronId: id, schedule, argv: bin ? `${bin} ${tailArgv}` : tailArgv };
+}
+
+/** The last POSIX single-quoted token in `line[0..end)`, unescaped, or null.
+ *  Uses the same `'\''` rule as optionQuoted so paths containing a quote
+ *  round-trip instead of forcing an update every install. */
+function quotedTokenBeforeRun(line: string, end: number): string | null {
+  const before = line.slice(0, end);
+  const m = before.match(/'((?:[^']|'\\'')*)'\s*$/);
+  if (!m) return null;
+  return m[1].replace(/'\\''/g, "'");
 }
 
 export function makeLinuxAdapter(deps: {

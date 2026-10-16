@@ -79,6 +79,28 @@ test("non-string tools is rejected", () => {
   expectIssue({ schema_version: 1, crons: [{ id: "x", schedule: "* * * * *", harness: "claude", tools: 42, prompt: "p", enabled: true }] }, "cron.tools.invalid");
 });
 
+test("optional per-cron model decodes; absent stays undefined (interactive default untouched)", () => {
+  const withModel = decode({
+    schema_version: 1,
+    crons: [
+      { id: "weekly-report", schedule: "0 21 * * 0", harness: "claude", model: "acme/turbo-4.1-flash", prompt: "p", enabled: true },
+    ],
+  });
+  expect(withModel.ok).toBe(true);
+  if (withModel.ok) expect(withModel.value.crons[0].model).toBe("acme/turbo-4.1-flash");
+
+  // Absent must NOT materialize an empty string — an absent model is the signal
+  // to fall through to the harness's own resolution.
+  const without = decode({ schema_version: 1, crons: [{ id: "x", schedule: "0 9 * * *", harness: "claude", prompt: "p", enabled: true }] });
+  expect(without.ok).toBe(true);
+  if (without.ok) expect(without.value.crons[0].model).toBeUndefined();
+});
+
+test("non-string / empty model is rejected", () => {
+  expectIssue({ schema_version: 1, crons: [{ id: "x", schedule: "0 9 * * *", harness: "claude", model: 42, prompt: "p", enabled: true }] }, "cron.model.invalid");
+  expectIssue({ schema_version: 1, crons: [{ id: "x", schedule: "0 9 * * *", harness: "claude", model: "   ", prompt: "p", enabled: true }] }, "cron.model.invalid");
+});
+
 test("exactly one of prompt | target is required", () => {
   const neither = { schema_version: 1, crons: [{ id: "x", schedule: "* * * * *", harness: "claude", enabled: true }] };
   expectIssue(neither, "cron.entry.prompt_or_target");

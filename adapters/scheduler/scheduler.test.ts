@@ -12,7 +12,9 @@ import { linuxAdapter, makeLinuxAdapter, crontabBlock, crontabLine, crontabUnava
 import { darwinAdapter, inspectDarwin, plistPath, parsePlistName, plistBelongsToTag, scheduleFromIntervalDict, argvFromPlistStdout } from "./darwin.ts";
 import { schtasksArgs, parseOpContent, parseSchtasksXml, win32Adapter, csvTaskName, cronIdFromTaskName, queryTasksFromOutput } from "./win32.ts";
 import { planReconciliation } from "../../application/automation/scheduler.ts";
+import { invocationArgv } from "../../application/automation/invocation.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
+import type { InstalledTask } from "./types.ts";
 
 // ---- P1-3: external scheduler commands always carry a timeout (red line) ----
 // No bare spawnSync in the scheduler layer: every crontab/schtasks/plutil/
@@ -236,25 +238,29 @@ test("parseManagedLine: extracts schedule/argv + correct tag (was split(\".\")[2
     taskId: "com.jspace.cron.abc123.inbox-tidy",
     cronId: "inbox-tidy",
     schedule: "0 21 * * *",
-    argv: "cron run --id inbox-tidy --dir /wb/a",
+    // argv[0] is the binary the scheduler execs — part of the reconciliation
+    // key so a drifted path is repaired by install (2026-10-13).
+    argv: "/bin/jspace cron run --id inbox-tidy --dir /wb/a",
   });
   // other workbench's tag -> null (cross-workbench isolation)
   expect(parseManagedLine(line, "xyz789")).toBeNull();
   // reverse arg order (--id then --dir) still parses
   const reverse = `0 9 * * 0  cd '/wb/b' && PATH='/bin' HOME='/h' '/bin/jspace' cron run --id 'weekly' --dir '/wb/b' >> '/wb/b/log' 2>&1  # com.jspace.cron.zzz.weekly`;
-  expect(parseManagedLine(reverse, "zzz")).toMatchObject({ cronId: "weekly", schedule: "0 9 * * 0", argv: "cron run --id weekly --dir /wb/b" });
+  expect(parseManagedLine(reverse, "zzz")).toMatchObject({ cronId: "weekly", schedule: "0 9 * * 0", argv: "/bin/jspace cron run --id weekly --dir /wb/b" });
   // garbage -> null
   expect(parseManagedLine("not a cron line", "abc123")).toBeNull();
 });
 
 test("parseSchtasksXml: DAILY + WEEKLY + spaces root + unparseable", () => {
   const daily = `<Task xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger></Triggers><Actions><Exec><Command>C:\\bin\\jspace.exe</Command><Arguments>&quot;C:\\bin\\jspace.exe&quot; cron run --dir &quot;C:\\Users\\John Doe\\wb&quot; --id inbox-tidy</Arguments></Exec></Actions></Task>`;
-  expect(parseSchtasksXml(daily)).toEqual({ schedule: "0 21 * * *", argv: "cron run --id inbox-tidy --dir C:\\Users\\John Doe\\wb" });
+  // argv[0] is the binary the scheduler execs — part of the reconciliation key.
+  expect(parseSchtasksXml(daily)).toEqual({ schedule: "0 21 * * *", argv: "C:\\bin\\jspace.exe cron run --id inbox-tidy --dir C:\\Users\\John Doe\\wb" });
+  // pre-quote-guard task: no leading binary -> unprefixed (mismatches desired -> update, the safe direction)
   const weekly = `<Task xmlns="x"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T09:30:00</StartBoundary><ScheduleByWeek><WeeksInterval>1</WeeksInterval><DaysOfWeek><Sunday/></DaysOfWeek></ScheduleByWeek></CalendarTrigger></Triggers><Actions><Exec><Arguments>cron run --dir "C:\\wb" --id weekly</Arguments></Exec></Actions></Task>`;
   expect(parseSchtasksXml(weekly)).toEqual({ schedule: "30 9 * * 0", argv: "cron run --id weekly --dir C:\\wb" });
   // quoted --id (current writer) round-trips to the same unquoted inspect argv
-  const quotedId = `<Task xmlns="x"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger></Triggers><Actions><Exec><Arguments>cron run --dir "C:\\wb" --id "inbox-tidy"</Arguments></Exec></Actions></Task>`;
-  expect(parseSchtasksXml(quotedId)).toEqual({ schedule: "0 21 * * *", argv: "cron run --id inbox-tidy --dir C:\\wb" });
+  const quotedId = `<Task xmlns="x"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger></Triggers><Actions><Exec><Arguments>&quot;C:\\bin\\jspace.exe&quot; cron run --dir "C:\\wb" --id "inbox-tidy"</Arguments></Exec></Actions></Task>`;
+  expect(parseSchtasksXml(quotedId)).toEqual({ schedule: "0 21 * * *", argv: "C:\\bin\\jspace.exe cron run --id inbox-tidy --dir C:\\wb" });
   expect(parseSchtasksXml("<Task/>")).toBeNull();
   expect(parseSchtasksXml(`<Task><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary><ScheduleByDay/></CalendarTrigger></Triggers><Actions><Exec><Arguments>no --dir here</Arguments></Exec></Actions></Task>`)).toBeNull();
 });
@@ -421,6 +427,94 @@ test("P0: linux full convergence — two workbenches converge independently", ()
   expect(crontab).toContain("cron run --dir '/wb/a'"); // A survives
 });
 
+// ---- FR-4: the installed binary is part of the reconciliation key ----
+// Each adapter's write path embeds env.jspaceBinary — the binary the scheduler
+// will actually exec — and each read path must recover it. Without that, a task
+// left pointing at a stale build compares equal forever and no install repairs
+// it (observed 2026-10-13: inbox-tidy's plist exec'd a months-old dev binary).
+// Per platform: write -> read is a no-op (a second install does nothing); a
+// stale installed binary -> update; and the update's own content reads back as
+// desired, so the update converges instead of re-updating on every install.
+
+const FR4_TAG = "tagA";
+const FR4_CRON = mkCron("inbox", "0 21 * * *");
+const FR4_ROOT = "/wb";
+const FR4_BIN = "/opt/jspace/bin/jspace";
+const FR4_DESIRED_ARGV = invocationArgv({ cronId: FR4_CRON.id, workbench: FR4_ROOT }, FR4_BIN).join(" ");
+
+/** Read back a written plist the way inspect() does: plutil -p stdout ->
+ *  argvFromPlistStdout. Only the fields that parser reads are rendered, and the
+ *  binary is taken from the built plist itself, so a write-side drift (buildPlist
+ *  stops emitting ProgramArguments[0]) reds instead of being papered over. */
+function darwinReadBack(name: string, plistBody: string): InstalledTask {
+  const bin = plistBody.match(/<key>ProgramArguments<\/key>\s*<array>\s*<string>([^<]*)<\/string>/);
+  expect(bin).not.toBeNull();
+  const stdout = `"ProgramArguments" => [\n    0 => "${bin![1]}"\n    1 => "cron"\n]\n"WorkingDirectory" => "${FR4_ROOT}"\n`;
+  return { taskId: parsePlistName(name)!.taskId, cronId: FR4_CRON.id, schedule: FR4_CRON.schedule, argv: argvFromPlistStdout(stdout, name) };
+}
+
+/** Read back a written win32 task the way inspect() does: op content (JSON argv
+ *  array) -> the /tr command -> schtasks' XML -> parseSchtasksXml. */
+function win32ReadBack(content: string): InstalledTask {
+  const args = JSON.parse(content) as string[];
+  const tr = args[args.indexOf("/tr") + 1];
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const xml =
+    `<Task xmlns="x"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary>` +
+    `<ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger></Triggers>` +
+    `<Actions><Exec><Command>${esc("C:\\bin\\jspace.exe")}</Command><Arguments>${esc(tr)}</Arguments></Exec></Actions></Task>`;
+  const parsed = parseSchtasksXml(xml)!;
+  return { taskId: win32Adapter.identity(FR4_TAG, FR4_CRON.id).taskId, cronId: FR4_CRON.id, schedule: parsed.schedule, argv: parsed.argv };
+}
+
+test("FR-4 darwin: plist binary round-trips; stale binary -> update that converges", () => {
+  const id = darwinAdapter.identity(FR4_TAG, FR4_CRON.id);
+  const name = `${id.taskId}.plist`;
+  const content = darwinAdapter.buildContent(FR4_CRON, FR4_TAG, FR4_ROOT, { jspaceBinary: FR4_BIN, home: "/Users/u", path: "/bin" });
+  const desired = [{ taskId: id.taskId, cronId: FR4_CRON.id, schedule: FR4_CRON.schedule, argv: FR4_DESIRED_ARGV, content }];
+  // the desired argv really does carry the binary — otherwise a read path that
+  // stopped extracting it would still "match" and this test would prove nothing
+  expect(FR4_DESIRED_ARGV.startsWith(`${FR4_BIN} cron run`)).toBe(true);
+  expect(darwinReadBack(name, content).argv).toBe(FR4_DESIRED_ARGV);
+  expect(planReconciliation(desired, [darwinReadBack(name, content)])).toEqual([]); // write -> read -> no-op
+  const staleStdout = `"ProgramArguments" => [\n    0 => "/Users/u/old/dev/jspace"\n]\n"WorkingDirectory" => "${FR4_ROOT}"\n`;
+  const stale = [{ taskId: id.taskId, cronId: FR4_CRON.id, schedule: FR4_CRON.schedule, argv: argvFromPlistStdout(staleStdout, name) }];
+  const ops = planReconciliation(desired, stale);
+  expect(ops).toEqual([{ action: "update", taskId: id.taskId, content }]);
+  const applied = (ops[0] as { content: string }).content;
+  expect(planReconciliation(desired, [darwinReadBack(name, applied)])).toEqual([]); // applied update converges
+});
+
+test("FR-4 linux: crontab binary round-trips; stale binary -> update that converges", () => {
+  const taskId = taskIdFor(FR4_TAG, FR4_CRON.id);
+  const line = crontabLine(FR4_CRON, FR4_TAG, FR4_ROOT, FR4_BIN, "/bin", "/home/u");
+  const desired = [{ taskId, cronId: FR4_CRON.id, schedule: FR4_CRON.schedule, argv: FR4_DESIRED_ARGV, content: line }];
+  expect(FR4_DESIRED_ARGV.startsWith(`${FR4_BIN} cron run`)).toBe(true);
+  expect(parseManagedLine(line, FR4_TAG)!.argv).toBe(FR4_DESIRED_ARGV);
+  expect(planReconciliation(desired, [parseManagedLine(line, FR4_TAG)!])).toEqual([]); // write -> read -> no-op
+  const staleLine = crontabLine(FR4_CRON, FR4_TAG, FR4_ROOT, "/Users/u/old/dev/jspace", "/bin", "/home/u");
+  const ops = planReconciliation(desired, [parseManagedLine(staleLine, FR4_TAG)!]);
+  expect(ops).toEqual([{ action: "update", taskId, content: line }]);
+  const applied = (ops[0] as { content: string }).content;
+  expect(planReconciliation(desired, [parseManagedLine(applied, FR4_TAG)!])).toEqual([]); // applied update converges
+});
+
+test("FR-4 win32: task binary round-trips; stale binary -> update that converges", () => {
+  const taskId = win32Adapter.identity(FR4_TAG, FR4_CRON.id).taskId;
+  const winRoot = "C:\\wb";
+  const env32 = { jspaceBinary: "C:\\bin\\jspace.exe", home: "C:\\Users\\u", path: "C:\\bin" };
+  const content = win32Adapter.buildContent(FR4_CRON, FR4_TAG, winRoot, env32);
+  const desired = [{ taskId, cronId: FR4_CRON.id, schedule: FR4_CRON.schedule, argv: invocationArgv({ cronId: FR4_CRON.id, workbench: winRoot }, env32.jspaceBinary).join(" "), content }];
+  expect(desired[0].argv).toBe(`${env32.jspaceBinary} cron run --id ${FR4_CRON.id} --dir ${winRoot}`);
+  expect(win32ReadBack(content).argv).toBe(desired[0].argv);
+  expect(planReconciliation(desired, [win32ReadBack(content)])).toEqual([]); // write -> read -> no-op
+  const staleContent = win32Adapter.buildContent(FR4_CRON, FR4_TAG, winRoot, { ...env32, jspaceBinary: "C:\\old\\dev\\jspace.exe" });
+  const ops = planReconciliation(desired, [win32ReadBack(staleContent)]);
+  expect(ops).toEqual([{ action: "update", taskId, content }]);
+  const applied = (ops[0] as { content: string }).content;
+  expect(planReconciliation(desired, [win32ReadBack(applied)])).toEqual([]); // applied update converges
+});
+
 // ---- P2-1: linux whole-block semantics live in the adapter (applyBatch) ----
 
 test("linux buildContent returns a real per-cron crontab line, not a placeholder", () => {
@@ -443,7 +537,7 @@ test("crontabLine -> parseManagedLine round-trips roots with ' % and spaces (iss
     const parsed = parseManagedLine(line, "tagA");
     expect(parsed).not.toBeNull();
     expect(parsed!.cronId).toBe("inbox");
-    expect(parsed!.argv).toBe(`cron run --id inbox --dir ${root}`); // unquoted back -> matches desired
+    expect(parsed!.argv).toBe(`/bin/jspace cron run --id inbox --dir ${root}`); // unquoted back -> matches desired
   }
 });
 

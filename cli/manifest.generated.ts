@@ -26,7 +26,7 @@ export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   { path: "skills/jspace-use/references/harness-opencode.md", sha256: "b91b1a45a849445e6fcd0fde3bbbdca8db587fd9582a603650a1f7410f7d26de", ownership: "seed" },
   { path: "skills/jspace-use/references/harness-pi.md", sha256: "044a97aefe5a770d778f4a2b451bc406f8cd4af6577bd0c9c71c80a709e3b789", ownership: "seed" },
   { path: "skills/jspace-use/references/harnesses.md", sha256: "6c10055adcf87ddbb481830f60b52effbe11aa5cdab1f636e4ce424ed75de90e", ownership: "seed" },
-  { path: "skills/jspace-use/references/headless-ops.md", sha256: "a1aef844240e2ac0b07db93321e87026b0a9b59dd4db2e2ea8216ca1eedaaf58", ownership: "seed" },
+  { path: "skills/jspace-use/references/headless-ops.md", sha256: "461f786911c289ebc8bd43470c95ea1a9c8f08a2cb3d5678b66e0fb9776c196e", ownership: "seed" },
   { path: "skills/jspace-use/references/registry.md", sha256: "130979dabb1cec54e8ec329415801ab9e7e43d3e716715f910925de7e2f71d3b", ownership: "seed" },
   { path: "skills/jspace-use/references/usage-mileage-ledger-template.md", sha256: "40dc27c4d271859f6c2c01747cbbfd9db02b2c4ddbe0e8830321fdaf9ed64783", ownership: "seed" },
   { path: "skills/jspace-use/references/usage-mileage.md", sha256: "a474d526ee2eaab9fec9fa78bb752527d5d9a5b56739adc8b5bd0ef9911c7614", ownership: "seed" },

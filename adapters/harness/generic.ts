@@ -12,7 +12,7 @@ export function createAdapter(capability: HarnessCapability): HarnessAdapter {
   const adapter: HarnessAdapter = {
     name: capability.name,
     capability,
-    headlessArgv(prompt, _platform, bin, tools) {
+    headlessArgv(prompt, _platform, bin, tools, model) {
       if (capability.headless === null) {
         fail(`${capability.name} has no headless CLI (IDE session harness); cron cannot run headlessly with ${capability.name}`);
       }
@@ -20,6 +20,7 @@ export function createAdapter(capability: HarnessCapability): HarnessAdapter {
       const argv = [bin, ...capability.headless.slice(1), prompt];
       if (flags.output !== undefined) argv.push(flags.output, flags.output_value!);
       if (flags.permission !== undefined) argv.push(flags.permission, tools ?? flags.tools_value!);
+      if (model !== undefined && flags.model !== undefined) argv.push(flags.model, model);
       return argv;
     },
   };

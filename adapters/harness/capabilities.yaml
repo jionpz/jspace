@@ -18,7 +18,12 @@
 #   headless              — headless invocation prefix, or `null` when the harness is
 #                           IDE-only (no CLI; never a cron harness).
 #   argv_flags            — extra flags for the headless argv. The generic
-#                           assembler emits output flags before permission flags.
+#                           assembler emits output flags, then permission flags,
+#                           then the model flag. `model` names the flag that
+#                           carries a per-cron model (cron.json `model`); absent
+#                           = that harness takes no model flag and a cron
+#                           setting `model` fails loud rather than being
+#                           silently dropped.
 #   sessions              — session events jspace wires (or plans to wire); `source`
 #                           distinguishes hook / plugin / extension channels.
 #   session_start         — where the session-start briefing hook is materialized:
@@ -90,6 +95,7 @@ harnesses:
       tools_value: "Bash,Read,Write,Edit,mcp__gbrain__*"
       output: "--output-format"
       output_value: "text"
+      model: "--model"
     supports_tool_restriction: true
     cron_env:
       # CLAUDE_* covers subscription/OAuth tokens (e.g. CLAUDE_CODE_OAUTH_TOKEN);
@@ -127,6 +133,7 @@ harnesses:
       tools_value: "Bash(*)"
       output: "--output-format"
       output_value: "json"
+      model: "--model"
     supports_tool_restriction: true
     cron_env:
       allow_prefixes: ["GROK_", "XAI_"]
@@ -156,7 +163,8 @@ harnesses:
     # Unattended cron needs non-interactive tool approval; scope --auto to the
     # headless argv only. Interactive `opencode` keeps its normal prompts.
     headless: ["opencode", "run", "--auto"]
-    argv_flags: {}
+    argv_flags:
+      model: "--model"
     supports_tool_restriction: false
     cron_env:
       allow_prefixes: ["OPENCODE_"]
@@ -219,7 +227,8 @@ harnesses:
 
   pi:
     headless: ["pi", "-p"]
-    argv_flags: {}
+    argv_flags:
+      model: "--model"
     supports_tool_restriction: false
     cron_env:
       allow_prefixes: ["PI_"]
@@ -245,7 +254,8 @@ harnesses:
 
   codex:
     headless: ["codex", "exec"]
-    argv_flags: {}
+    argv_flags:
+      model: "-m"
     supports_tool_restriction: false
     cron_env:
       allow_prefixes: ["OPENAI_", "CODEX_"]

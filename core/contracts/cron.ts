@@ -47,6 +47,12 @@ export interface CronDefinition {
    *  e.g. drop Bash for write-only skills so a prompt-injected run cannot shell.
    *  Absent = the harness capability default (argv_flags.tools_value). */
   tools?: string;
+  /** Optional headless model for THIS cron. Unattended runs must not inherit the
+   *  interactive default: a rate-limited user-level model makes `claude -p` hang
+   *  until killed (observed: a 5h-window quota exhausted, every cron failed
+   *  nightly), and the user's model choice for their own sessions is not
+   *  jspace's to depend on. Absent = the harness's own resolution. */
+  model?: string;
   enabled: boolean;
 }
 
@@ -82,7 +88,7 @@ export function decodeCrons(input: unknown, harnessEnum: readonly string[]): Dec
         return;
       }
       const before = issues.issues.length;
-      checkNoUnknownFields(item, ["id", "schedule", "harness", "prompt", "target", "tools", "enabled"], prefix, "cron.entry.unknown-field", issues);
+      checkNoUnknownFields(item, ["id", "schedule", "harness", "prompt", "target", "tools", "model", "enabled"], prefix, "cron.entry.unknown-field", issues);
       const id = readRequiredString(item, "id", prefix, "cron.id.invalid", issues);
       const schedule = readRequiredString(item, "schedule", prefix, "cron.schedule.invalid", issues);
       readEnum(issues, "cron.harness.invalid", `${prefix}.harness`, item.harness, harnessEnum);
@@ -116,6 +122,11 @@ export function decodeCrons(input: unknown, harnessEnum: readonly string[]): Dec
         if (typeof item.tools === "string" && item.tools.trim().length > 0) tools = item.tools;
         else issues.add("cron.tools.invalid", `${prefix}.tools`, "tools must be a non-empty string (harness tool-list syntax)");
       }
+      let model: string | undefined;
+      if (item.model !== undefined) {
+        if (typeof item.model === "string" && item.model.trim().length > 0) model = item.model;
+        else issues.add("cron.model.invalid", `${prefix}.model`, "model must be a non-empty string (harness model id)");
+      }
       if (issues.issues.length === before) {
         crons.push({
           id: id as string,
@@ -124,6 +135,7 @@ export function decodeCrons(input: unknown, harnessEnum: readonly string[]): Dec
           ...(prompt !== undefined ? { prompt } : {}),
           ...(target !== undefined ? { target } : {}),
           ...(tools !== undefined ? { tools } : {}),
+          ...(model !== undefined ? { model } : {}),
           enabled: item.enabled as boolean,
         });
       }

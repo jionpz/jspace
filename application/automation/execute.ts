@@ -24,7 +24,7 @@ import { lastRun, writeRun } from "./runs.ts";
 import { openOrUpdate, resolveIncidents } from "./incidents.ts";
 import { acquireLockWithClock } from "../lock.ts";
 import { harnessArgv } from "../../adapters/harness/argv.ts";
-import { assertHarnessSupportsTools } from "../../adapters/harness/registry.ts";
+import { assertHarnessSupportsTools, assertHarnessSupportsModel } from "../../adapters/harness/registry.ts";
 import { isFile } from "../fs.ts";
 import { localDate, localStamp } from "../time.ts";
 
@@ -216,7 +216,8 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   // missing/stale skill fails with a fix action and never reaches execution.
   const harness = opts.harnessOverride ?? cron.harness;
   assertHarnessSupportsTools(harness, cron.tools);
-  const argv = harnessArgv(harness, resolveCronPrompt(cron, root, skillCtx), deps.platform, deps.harnessBin, cron.tools);
+  assertHarnessSupportsModel(harness, cron.model);
+  const argv = harnessArgv(harness, resolveCronPrompt(cron, root, skillCtx), deps.platform, deps.harnessBin, cron.tools, cron.model);
   if (opts.dryRun) {
     return { lines: [`jspace: dry-run: would run in ${root}:`, `  $ ${argv.join(" ")}`] };
   }

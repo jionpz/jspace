@@ -28,11 +28,24 @@ export function preCompactEnvelope(context: string): string {
   });
 }
 
-/** Wrap the session-end settlement reminder in the Grok SessionEnd envelope. */
+/** Wrap the session-end settlement reminder for the SessionEnd hook.
+ *
+ *  NOT `hookSpecificOutput.hookEventName: "SessionEnd"` — Claude Code's hook
+ *  output validator rejects that value (its enum is PreToolUse |
+ *  UserPromptSubmit | UserPromptExpansion | SessionStart | Setup |
+ *  PreModelSwitch | …; SessionEnd is absent), so every session ended with a
+ *  `Hook JSON output validation failed` line on stderr. Verified with a
+ *  controlled probe: the old shape always errors, `{}` and `{"systemMessage"}`
+ *  are both accepted.
+ *
+ *  `systemMessage` keeps the reminder text. It still does not reach the session
+ *  — Claude discards SessionEnd output (docs/session-end-hooks.md) — so this
+ *  changes nothing the user sees; it only stops the false "wiring is broken"
+ *  signal. grok consumes the Claude-shaped envelope (compat.claude) and
+ *  `systemMessage` is a top-level field of that contract, but grok is NOT
+ *  installed here and this shape is UNVERIFIED for it. */
 export function sessionEndEnvelope(context: string): string {
-  return JSON.stringify({
-    hookSpecificOutput: { hookEventName: "SessionEnd", additionalContext: context },
-  });
+  return JSON.stringify({ systemMessage: context });
 }
 
 /** Cursor sessionStart envelope — Cursor expects TOP-LEVEL `additional_context`

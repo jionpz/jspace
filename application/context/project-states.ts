@@ -71,6 +71,51 @@ export function isArchivedGbrainNote(body: string): boolean {
   return parseNoteTags(body).includes("status:archived");
 }
 
+/** Max concurrent `gbrain get` spawns per batch. Every get is a process spawn
+ *  (~0.5s, almost all startup cost), so serial fetching dominated the
+ *  session-start hook (measured 4.87s / 20 calls / 6 serial waves against a 10s
+ *  cap). The bound keeps a 100-row candidate list from spawning 100 processes
+ *  at once; measured safe at 32 concurrent.
+ *
+ *  Value picked by sweep on the live workbench (9 projects + 8 profiles + 25
+ *  knowledge candidates): 4 -> 2.33s, 8 -> 2.06s, 12 -> 1.71s, 16 -> 1.82s,
+ *  24 -> 2.09s. 12 is the measured optimum — past it the extra spawns contend
+ *  more than they overlap. */
+export const GET_CONCURRENCY = 12;
+
+/** Walk `rows` in list order, yielding each with its fetched body (absent when
+ *  the get failed). Bodies are fetched in bounded-concurrency BATCHES and the
+ *  walk stops the moment the consumer breaks out — so a 25-row candidate list
+ *  against a 5-entry budget costs one batch, not 25 gets (the knowledge
+ *  collector was the session-start hot spot for exactly this reason).
+ *
+ *  Yielding in list order is what preserves the recency-order and
+ *  slot-backfill semantics the tests pin: a skipped row still gets visited,
+ *  it just does not consume a slot. */
+async function* walkPages<T extends { slug: string }>(
+  gbrain: GbrainDeps,
+  rows: T[],
+): AsyncGenerator<{ row: T; content: string | undefined }> {
+  for (let i = 0; i < rows.length; i += GET_CONCURRENCY) {
+    const batch = rows.slice(i, i + GET_CONCURRENCY);
+    const bodies = new Map<string, string>();
+    let next = 0;
+    const worker = async (): Promise<void> => {
+      while (next < batch.length) {
+        const slug = batch[next++].slug;
+        try {
+          const got = await gbrain.get(slug);
+          if (got.ok && got.content) bodies.set(slug, got.content);
+        } catch {
+          // drop this slug — absence already means "page unavailable"
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(GET_CONCURRENCY, batch.length) }, worker));
+    for (const row of batch) yield { row, content: bodies.get(row.slug) };
+  }
+}
+
 /** Collect active project state cards. Never throws; any failure (gbrain
  *  missing / timeout / lock held) resolves to an empty list. The caller renders
  *  the project line only when non-empty — no noise when gbrain is unavailable.
@@ -93,13 +138,12 @@ export async function collectActiveProjects(
   if (stateRows.length === 0) return [];
 
   const out: ProjectState[] = [];
-  for (const row of stateRows) {
+  for await (const { row, content } of walkPages(gbrain, stateRows)) {
     if (out.length >= MAX_ACTIVE_PROJECTS) break;
     const id = row.slug.slice("project/".length, -"/state".length);
     if (opts.excludeProjectIds?.has(id)) continue;
-    const got = await gbrain.get(row.slug);
-    if (got.ok && got.content && isArchivedGbrainNote(got.content)) continue;
-    const summary = got.ok && got.content ? summarizeStateCard(got.content) : "";
+    if (content !== undefined && isArchivedGbrainNote(content)) continue;
+    const summary = content !== undefined ? summarizeStateCard(content) : "";
     out.push({ id, summary, updatedAt: row.updatedAt });
   }
   return out;
@@ -119,14 +163,13 @@ export async function collectActiveProfiles(gbrain: GbrainDeps): Promise<Profile
     if (profileRows.length === 0) return [];
 
     const out: ProfileState[] = [];
-    for (const row of profileRows) {
+    for await (const { row, content } of walkPages(gbrain, profileRows)) {
       if (out.length >= MAX_ACTIVE_PROFILES) break;
-      const got = await gbrain.get(row.slug);
-      if (got.ok && got.content) {
-        if (isArchivedGbrainNote(got.content)) continue;
-        if (parseNoteTags(got.content).includes("weekly")) continue;
+      if (content !== undefined) {
+        if (isArchivedGbrainNote(content)) continue;
+        if (parseNoteTags(content).includes("weekly")) continue;
       }
-      const summary = got.ok && got.content ? summarizeProfilePage(got.content) : "";
+      const summary = content !== undefined ? summarizeProfilePage(content) : "";
       out.push({ theme: row.slug.slice("profile/".length), summary, updatedAt: row.updatedAt });
     }
     return out;
@@ -198,14 +241,13 @@ export async function collectRecentKnowledge(gbrain: GbrainDeps): Promise<Recent
     );
 
     const out: RecentKnowledgeEntry[] = [];
-    for (const row of eligible) {
+    for await (const { row, content } of walkPages(gbrain, eligible)) {
       if (out.length >= MAX_RECENT_KNOWLEDGE) break;
-      const got = await gbrain.get(row.slug);
-      if (got.ok && got.content) {
-        if (isArchivedGbrainNote(got.content)) continue;
-        if (parseNoteTags(got.content).includes("status:superseded")) continue;
+      if (content !== undefined) {
+        if (isArchivedGbrainNote(content)) continue;
+        if (parseNoteTags(content).includes("status:superseded")) continue;
       }
-      const summary = got.ok && got.content ? summarizeProfilePage(got.content) : "";
+      const summary = content !== undefined ? summarizeProfilePage(content) : "";
       out.push({ slug: row.slug, summary, updatedAt: row.updatedAt });
     }
     return out;

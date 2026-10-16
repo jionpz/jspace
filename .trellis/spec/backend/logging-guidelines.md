@@ -33,7 +33,7 @@ No leveled logger. Distinctions are by channel, not severity prefix:
 
 ## What NOT to Log
 
-- **Secrets/tokens/provider credentials** — never written to logs, state, or diagnostics output (parent R8). Credentials live only in cc-switch / env / keychain.
+- **Secrets/tokens/provider credentials** — never written to logs, state, or diagnostics output (parent R8). Credentials live only in the host's provider-config tool / env / keychain.
 - Absolute machine paths that belong in `.jspace/local.json` must not leak into portable state.
 - Probe/smoke pages must be cleaned up (no residue).
 

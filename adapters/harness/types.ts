@@ -81,8 +81,10 @@ export interface HarnessCronEnv {
 export interface HarnessCapabilityData {
   /** Headless invocation prefix; `null` for IDE-only harnesses (no CLI). */
   headless: string[] | null;
-  /** Extra flags appended by the generic adapter (output before permission). */
-  argv_flags: { permission?: string; tools_value?: string; output?: string; output_value?: string };
+  /** Extra flags appended by the generic adapter (output, then permission, then
+   *  model). `model` names the flag carrying a per-cron model; absent = the
+   *  harness takes no model flag and a cron `model` must fail loud. */
+  argv_flags: { permission?: string; tools_value?: string; output?: string; output_value?: string; model?: string };
   /** Session events jspace wires (or plans to wire); source = channel kind. */
   sessions: HarnessSession[];
   /** Where the session-start briefing hook is materialized (optional for
@@ -127,8 +129,9 @@ export interface HarnessAdapter {
   /** Assemble the headless argv. `bin` is the resolved binary (override or PATH
    *  resolution); fails for harnesses without a headless CLI. `tools` is an
    *  optional per-cron override of the capability-declared tools (absent → the
-   *  harness default). */
-  headlessArgv: (prompt: string, platform: string, bin: string, tools?: string) => string[];
+   *  harness default). `model` is an optional per-cron model; the caller must
+   *  have checked `assertHarnessSupportsModel` first. */
+  headlessArgv: (prompt: string, platform: string, bin: string, tools?: string, model?: string) => string[];
   /** Workbench-relative hook/plugin file, or null when hook_format is none. */
   hookFilePath?: (workbench: string) => string | null;
 }

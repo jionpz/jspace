@@ -200,6 +200,49 @@ was already correct; only the *fact* was missing. Guarded by
 `application/automation/definitions.test.ts` (notice leads the compiled prompt) and
 `application/automation/execute.test.ts` (skill-target argv carries it; prose argv does not).
 
+## Scenario: Per-cron headless model
+
+### 1. Scope / Trigger
+
+- Trigger: any cron whose unattended run must not inherit the user's interactive default model.
+- `CronDefinition.model` (optional) is the *only* supported way to pin a headless model. It exists
+  because the interactive default is (a) not jspace's to depend on and (b) can be swapped to a
+  rate-limited provider at any time — and a rate-limited model does **not** fail fast: `claude -p`
+  hangs until killed (exit 142, zero output) or exits 1 printing only the 429 text.
+
+### 2. Contracts
+
+- The flag lives in the harness capability (`argv_flags.model`), never hardcoded per harness:
+  claude `--model`, codex `-m`, opencode/pi `--model`; a harness without the key must **fail loud**.
+- `assertHarnessSupportsModel()` mirrors `assertHarnessSupportsTools()`: a cron setting `model` on a
+  harness that declares no model flag fails with an actionable message rather than silently falling
+  back to the harness default — the exact failure this field exists to prevent.
+- The measured concurrency constant for session-start gbrain fetches is `GET_CONCURRENCY` in
+  `application/context/project-states.ts` (measured optimum on the live workbench; serial `get` was
+  ~0.5s/spawn and blew the hook budget). Changing it invalidates the measurement — re-sweep.
+- Dispatcher-side reconciliation (`planReconciliation`) must compare the **whole argv including
+  argv[0]**. `argv` assembled from plist/crontab/schtasks that omits the binary path cannot see a
+  drifted binary and will report up-to-date forever.
+
+### 3. Validation & Error Matrix
+
+| Case | Required behavior |
+|---|---|
+| `cron.json` entry with `model` | dry-run argv contains the harness's model flag + value |
+| `cron.json` entry without `model` | argv byte-identical to pre-feature output (backward compatible) |
+| `model: ""` / non-string | `cron.model.invalid` decoder issue |
+| `model` set, harness declares no `argv_flags.model` | fail loud at `cron run` (before spawn) |
+| Installed task points at a different binary | `cron install` reports `[update] <taskId>` |
+| Same binary + schedule + argv | `cron install` reports nothing to do (idempotent) |
+
+### 4. Evidence (why this contract exists)
+
+Real-usage finding, 2026-10-13: five crons failed nightly because the user-level default model was
+rate-limited, and `inbox-tidy`'s plist pointed at a stale dev binary (v1.0.22) that reconciliation
+could not see — the argv it compared carried no binary path. Both defects are invisible in tests
+that only check the written form; the round-trip (write → read back → reconcile) is the guard.
+`adapters/scheduler/scheduler.test.ts` pins write→read→no-op and binary-drift→update per platform.
+
 ## Security & Red Lines (parent R8)
 
 - Secrets/tokens/provider credentials never appear in logs, state, or diagnostics output.

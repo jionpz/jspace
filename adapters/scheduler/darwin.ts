@@ -115,15 +115,22 @@ function plistSchedule(name: string, home: string): string {
 }
 
 /** Reconstruct the cron argv from a `plutil -p` dump + the plist file name.
- *  The id comes from the file name; the workbench root from WorkingDirectory.
+ *  The id comes from the file name; the workbench root from WorkingDirectory;
+ *  argv[0] from ProgramArguments[0] (the jspace binary launchd will exec).
  *  Same shape as buildDesired.argv so planReconciliation no-ops on identical
- *  state. Pure (exported) for the reconciliation round-trip test. */
+ *  state — and updates when the binary path drifts. Pure (exported) for the
+ *  reconciliation round-trip test. */
 export function argvFromPlistStdout(stdout: string, name: string): string {
   const m = stdout.match(/"WorkingDirectory" => "([^"]+)"/);
   const wd = m?.[1] ?? "";
   const parts = name.replace(/\.plist$/, "").split(".");
   const id = parts[parts.length - 1] ?? "";
-  return `cron run --id ${id} --dir ${wd}`;
+  // ProgramArguments is dumped as an array with index markers; index 0 is the
+  // binary. Absent/unparseable (hand-edited plist) falls back to no prefix, which
+  // mismatches desired and therefore produces an update — the safe direction.
+  const bin = stdout.match(/"ProgramArguments"\s*=>\s*\[\s*0\s*=>\s*"((?:[^"\\]|\\.)*)"/);
+  const tail = `cron run --id ${id} --dir ${wd}`;
+  return bin ? `${bin[1]} ${tail}` : tail;
 }
 
 function plistArgv(name: string, home: string): string {
