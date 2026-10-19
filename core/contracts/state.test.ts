@@ -6,8 +6,16 @@ import { expect, test } from "bun:test";
 import type { DecodeResult } from "./diagnostics.ts";
 import { decodeRunRecord, type RunRecordV1 } from "./run-record.ts";
 import { decodeIncident, type IncidentV1 } from "./incident.ts";
-import { decodeMaterializedJournal, type MaterializedJournalV2 } from "./materialized.ts";
-import { decodeUpgradeJournal, type UpgradeJournalV1 } from "./upgrade.ts";
+import {
+  decodeMaterializedJournal,
+  decodeMaterializedJournalV1,
+  type MaterializedJournalV2,
+} from "./materialized.ts";
+import {
+  decodeLegacyUpgradeJournal,
+  decodeUpgradeJournal,
+  type UpgradeJournalV1,
+} from "./upgrade.ts";
 
 function codesOf(result: DecodeResult<unknown>): string[] {
   return result.ok ? [] : result.issues.map((i) => i.code);
@@ -72,10 +80,12 @@ test("IncidentV1: invalid class/status/evidence / unknown field / version", () =
 });
 
 test("MaterializedJournalV2: valid round-trip (with links)", () => roundTrip(decodeMaterializedJournal, validMaterialized()));
-test("MaterializedJournalV2: v1 journal decodes with empty links (additive field)", () => {
-  const d = decodeMaterializedJournal({ schema_version: 1, asset_version: "v1.0.5", applied_at: "2026-08-04", files: { "AGENTS.md": { sha256: "abc" } } });
-  expect(d.ok).toBe(true);
-  if (d.ok) expect(d.value.links).toEqual({});
+test("MaterializedJournalV2: v1 is migration input only, not runtime-compatible", () => {
+  const legacy = { schema_version: 1, asset_version: "v1.0.5", applied_at: "2026-08-04", files: { "AGENTS.md": { sha256: "abc" } } };
+  expectIssue(decodeMaterializedJournal(legacy).ok, codesOf(decodeMaterializedJournal(legacy)), "materialized.version.unsupported");
+  const migrated = decodeMaterializedJournalV1(legacy);
+  expect(migrated.ok).toBe(true);
+  if (migrated.ok) expect(migrated.value.files["AGENTS.md"]?.sha256).toBe("abc");
 });
 test("MaterializedJournalV2: bad files/links entry / unknown field / version", () => {
   const f = decodeMaterializedJournal({ ...validMaterialized(), files: { "AGENTS.md": { sha256: "" } } });
@@ -92,6 +102,13 @@ test("MaterializedJournalV2: bad files/links entry / unknown field / version", (
 });
 
 test("UpgradeJournalV1: valid round-trip", () => roundTrip(decodeUpgradeJournal, validUpgrade()));
+test("UpgradeJournalV1: delete is accepted only by the explicit legacy decoder", () => {
+  const legacy = { ...validUpgrade(), plan: [{ action: "delete", rel: "old.md" }] };
+  expectIssue(decodeUpgradeJournal(legacy).ok, codesOf(decodeUpgradeJournal(legacy)), "upgrade.plan.invalid");
+  const decoded = decodeLegacyUpgradeJournal(legacy);
+  expect(decoded.ok).toBe(true);
+  if (decoded.ok) expect(decoded.value.plan[0].action).toBe("delete");
+});
 test("UpgradeJournalV1: bad status / bad plan / unknown field / version", () => {
   const s = decodeUpgradeJournal({ ...validUpgrade(), status: "done" });
   expectIssue(s.ok, codesOf(s), "upgrade.status.invalid");

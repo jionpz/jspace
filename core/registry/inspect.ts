@@ -38,8 +38,8 @@ function asErrors(issues: readonly { code: string; path: string; message: string
   return issues.map((i) => ({
     severity: "error",
     ...i,
-    // schema-version mismatch (pre-1.0.11 state file) gets the repair path
-    // appended; other decoder issues pass through unchanged.
+    // schema-version mismatch gets the repair path appended (actual vs supported
+    // version is in the message); other decoder issues pass through unchanged.
     ...(i.code.endsWith(".version.unsupported")
       ? { message: `${i.message} — ${SCHEMA_VERSION_REPAIR_HINT}` }
       : {}),

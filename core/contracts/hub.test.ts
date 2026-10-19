@@ -116,7 +116,9 @@ test("schema_version other than 1 is rejected as unsupported", () => {
   expect(result.ok).toBe(false);
   if (!result.ok) {
     const v = result.issues.find((i) => i.code === "hub.version.unsupported");
-    expect(v?.message).toContain("must be one of 1");
+    // reports the actual value AND the supported set (no era inference)
+    expect(v?.message).toContain("schema_version 3 is not supported");
+    expect(v?.message).toContain("supports 1");
     expect(formatDecoderIssue(v!)).toContain(SCHEMA_VERSION_REPAIR_HINT);
   }
 });

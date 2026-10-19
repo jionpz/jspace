@@ -134,7 +134,10 @@ export function readBool(issues: IssueCollector, code: string, path: string, val
   return value;
 }
 
-/** Read a schema version that must be one of `expected`; records an issue otherwise. */
+/** Read a schema version that must be one of `expected`; records an issue otherwise.
+ *  The message reports BOTH the actual value found and the supported set, so a
+ *  user can tell "my file is older than this CLI" from "my CLI is older than the
+ *  file" without the decoder guessing which era wrote it. */
 export function readVersion(
   issues: IssueCollector,
   code: string,
@@ -143,7 +146,8 @@ export function readVersion(
   expected: number[],
 ): number | undefined {
   if (typeof value !== "number" || !expected.includes(value)) {
-    issues.add(code, path, `must be one of ${expected.join(", ")}`);
+    const actual = typeof value === "number" ? String(value) : JSON.stringify(value) ?? String(value);
+    issues.add(code, path, `schema_version ${actual} is not supported by this jspace (supports ${expected.join(", ")})`);
     return undefined;
   }
   return value;
@@ -151,12 +155,16 @@ export function readVersion(
 
 /** Repair guidance appended to schema-version mismatch errors. Single constant so
  *  every decoder-error surface (registry inspect / cron loadCrons) shows the same
- *  fix path. There is intentionally no migration channel (no-compat-burden rule):
- *  a pre-1.0.11 state file is fixed by regeneration or a hand edit, not by
- *  silently upgrading it. */
+ *  fix path. The decoder never infers which release wrote the file: an
+ *  unsupported version is either newer than this CLI (update it) or older than
+ *  any version this CLI reads (migrate the file by hand from a backup). There is
+ *  intentionally no silent migration channel (no-compat-burden rule), and no
+ *  `jspace init --force` suggestion — init refuses an existing workbench, and
+ *  regenerating one would discard user edits. */
 export const SCHEMA_VERSION_REPAIR_HINT =
-  "state file was written by a pre-1.0.11 jspace; regenerate with `jspace init <dir> --force` " +
-  "(destructive — review first) or edit `version: ...` → `schema_version: 1` by hand";
+  "if this workbench was written by a newer jspace, run `jspace update`; " +
+  "otherwise back the file up and migrate it by hand to the supported schema_version " +
+  "(a newer jspace never silently rewrites an older file)";
 
 /** Format a decoder issue for a user-facing fail() message. Appends the shared
  *  repair hint on `*.version.unsupported` so loadHub / loadCrons / inspect never

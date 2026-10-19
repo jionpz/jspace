@@ -3,11 +3,10 @@
 // actual file hashes so workspace diff can distinguish "bundle updated" from
 // "user modified". An invalid journal must fail loud, never read as "no base".
 //
-// v2 (issue #39) adds the optional `links` section: per-skill directory
+// v2 (issue #39) adds the required `links` section: per-skill directory
 // symlinks materialized by the thin-link projection engine, recorded as
 // { target, mode } so doctor can verify structure and copy-fallback stays
-// visible. v1 journals (files only) decode with `links: {}` — additive field,
-// no data migration.
+// visible. V1 is migration input only; the runtime decoder is v2-only.
 import {
   checkNoUnknownFields,
   failure,
@@ -38,6 +37,13 @@ export interface MaterializedJournalV2 {
   links: Record<string, MaterializedLinkEntry>;
 }
 
+export interface MaterializedJournalV1 {
+  schema_version: 1;
+  asset_version: string;
+  applied_at: string;
+  files: Record<string, { sha256: string }>;
+}
+
 const LINK_MODES: readonly string[] = ["link", "junction", "copy"];
 
 export function decodeMaterializedJournal(input: unknown): DecodeResult<MaterializedJournalV2> {
@@ -48,7 +54,7 @@ export function decodeMaterializedJournal(input: unknown): DecodeResult<Material
   }
   const FIELDS = ["schema_version", "asset_version", "applied_at", "files", "links"] as const;
   checkNoUnknownFields(input, FIELDS, "materialized", "materialized.unknown-field", issues);
-  const version = readVersion(issues, "materialized.version.unsupported", "materialized.version", input.schema_version, [1, 2]);
+  readVersion(issues, "materialized.version.unsupported", "materialized.version", input.schema_version, [2]);
   readRequiredString(input, "asset_version", "materialized", "materialized.asset_version.invalid", issues);
   readRequiredString(input, "applied_at", "materialized", "materialized.applied_at.invalid", issues);
   if (!isRecord(input.files)) {
@@ -60,27 +66,24 @@ export function decodeMaterializedJournal(input: unknown): DecodeResult<Material
       }
     }
   }
-  // v1 journals predate the thin-link engine: links absent means "none recorded".
-  if (input.links !== undefined) {
-    if (!isRecord(input.links)) {
-      issues.add("materialized.links.invalid", "materialized.links", "links must be an object of {target, mode} entries");
-    } else {
-      for (const [rel, v] of Object.entries(input.links)) {
-        if (
-          !isRecord(v) ||
-          typeof v.target !== "string" ||
-          v.target.length === 0 ||
-          typeof v.mode !== "string" ||
-          !LINK_MODES.includes(v.mode)
-        ) {
-          issues.add("materialized.links.invalid", `materialized.links.${rel}`, `links[${rel}] must be { target: <non-empty string>, mode: ${LINK_MODES.join("|")} }`);
-        }
+  if (!isRecord(input.links)) {
+    issues.add("materialized.links.invalid", "materialized.links", "links must be an object of {target, mode} entries");
+  } else {
+    for (const [rel, v] of Object.entries(input.links)) {
+      if (
+        !isRecord(v) ||
+        typeof v.target !== "string" ||
+        v.target.length === 0 ||
+        typeof v.mode !== "string" ||
+        !LINK_MODES.includes(v.mode)
+      ) {
+        issues.add("materialized.links.invalid", `materialized.links.${rel}`, `links[${rel}] must be { target: <non-empty string>, mode: ${LINK_MODES.join("|")} }`);
       }
     }
   }
   if (!issues.ok) return failure(issues.issues);
   const links: Record<string, MaterializedLinkEntry> = {};
-  if (version === 2 && isRecord(input.links)) {
+  if (isRecord(input.links)) {
     for (const [rel, v] of Object.entries(input.links)) {
       links[rel] = { target: (v as { target: string }).target, mode: (v as { mode: ProjectionLinkMode }).mode };
     }
@@ -91,5 +94,36 @@ export function decodeMaterializedJournal(input: unknown): DecodeResult<Material
     applied_at: input.applied_at as string,
     files: input.files as Record<string, { sha256: string }>,
     links,
+  });
+}
+
+/** Strict decoder for the one-time v1 migration. The original hashes are kept
+ *  verbatim: recomputing current user files would fabricate a historical base. */
+export function decodeMaterializedJournalV1(input: unknown): DecodeResult<MaterializedJournalV1> {
+  const issues = new IssueCollector();
+  if (!isRecord(input)) {
+    issues.add("materialized.root.type", "materialized", "materialized journal must be an object");
+    return failure(issues.issues);
+  }
+  const FIELDS = ["schema_version", "asset_version", "applied_at", "files"] as const;
+  checkNoUnknownFields(input, FIELDS, "materialized", "materialized.unknown-field", issues);
+  readVersion(issues, "materialized.version.unsupported", "materialized.version", input.schema_version, [1]);
+  const assetVersion = readRequiredString(input, "asset_version", "materialized", "materialized.asset_version.invalid", issues);
+  const appliedAt = readRequiredString(input, "applied_at", "materialized", "materialized.applied_at.invalid", issues);
+  if (!isRecord(input.files)) {
+    issues.add("materialized.files.invalid", "materialized.files", "files must be an object of {sha256} entries");
+  } else {
+    for (const [rel, value] of Object.entries(input.files)) {
+      if (!isRecord(value) || typeof value.sha256 !== "string" || value.sha256.length === 0) {
+        issues.add("materialized.files.invalid", `materialized.files.${rel}`, `files[${rel}] must be { sha256: <non-empty string> }`);
+      }
+    }
+  }
+  if (!issues.ok) return failure(issues.issues);
+  return success({
+    schema_version: 1,
+    asset_version: assetVersion as string,
+    applied_at: appliedAt as string,
+    files: input.files as Record<string, { sha256: string }>,
   });
 }

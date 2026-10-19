@@ -11,7 +11,6 @@ function entry(name: string, scope: SkillEntry["scope"]): SkillEntry {
     name,
     version: "1",
     scope,
-    dependencies: [],
     description: `skill ${name}`,
     ...(scope === "global" ? { install_path: `~/.agents/skills/${name}` } : {}),
   };
@@ -64,17 +63,14 @@ test("scope must be workbench|global and fields required", () => {
   const bad = validManifest();
   bad.workbench = [{ ...entry("x", "workbench"), scope: "system" as SkillEntry["scope"] }];
   expectIssue(bad, "skills.entry.scope.invalid");
-  expectIssue({ ...validManifest(), workbench: [{ scope: "workbench", version: "1", dependencies: [], description: "" }] }, "skills.entry.name.invalid");
-  expectIssue({ ...validManifest(), workbench: [{ name: "x", scope: "workbench", dependencies: [], description: "" }] }, "skills.entry.version.invalid");
+  expectIssue({ ...validManifest(), workbench: [{ scope: "workbench", version: "1", description: "" }] }, "skills.entry.name.invalid");
+  expectIssue({ ...validManifest(), workbench: [{ name: "x", scope: "workbench", description: "" }] }, "skills.entry.version.invalid");
 });
 
-test("dependencies must be an array of valid ids", () => {
+test("removed dependencies field is rejected as unknown", () => {
   const bad = validManifest();
-  bad.workbench = [{ ...entry("x", "workbench"), dependencies: "asset-ingest" as unknown as string[] }];
-  expectIssue(bad, "skills.entry.dependencies.type");
-  const badId = validManifest();
-  badId.workbench = [{ ...entry("x", "workbench"), dependencies: ["Bad Id"] }];
-  expectIssue(badId, "skills.entry.dependencies.invalid");
+  bad.workbench = [{ ...entry("x", "workbench"), dependencies: [] } as unknown as SkillEntry];
+  expectIssue(bad, "skills.entry.unknown-field");
 });
 
 test("install_path constrained by scope", () => {

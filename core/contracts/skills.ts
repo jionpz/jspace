@@ -24,7 +24,6 @@ export interface SkillEntry {
   name: string; // ID_PATTERN; unique across workbench+global
   version: string; // declarative version; staleness is detected by content diff at runtime
   scope: SkillScope; // workbench = bundled + materialized; global = machine-level, not bundled
-  dependencies: string[]; // cross-skill references (e.g. memory-recall -> asset-ingest)
   entrypoints?: string[]; // semantic entries a cron skill target may invoke (e.g. asset-ingest: batch)
   install_path?: string; // global only: machine-level install target (e.g. ~/.agents/skills/harness-config; tilde expands per machine)
   description?: string; // optional; single source for descriptions is SKILL.md frontmatter (gen-assets renders from it)
@@ -36,7 +35,7 @@ export interface SkillsManifestV1 {
   global: SkillEntry[]; // machine-global optional skills (harness-config)
 }
 
-const ENTRY_FIELDS = ["name", "version", "scope", "dependencies", "entrypoints", "install_path", "description"] as const;
+const ENTRY_FIELDS = ["name", "version", "scope", "entrypoints", "install_path", "description"] as const;
 
 export function decodeSkillsManifest(input: unknown): DecodeResult<SkillsManifestV1> {
   const issues = new IssueCollector();
@@ -85,17 +84,6 @@ function decodeEntries(raw: unknown, group: string, issues: IssueCollector, seen
     if (scope !== undefined && !(SKILL_SCOPES as readonly string[]).includes(scope)) {
       issues.add("skills.entry.scope.invalid", `${prefix}.scope`, `scope must be one of ${SKILL_SCOPES.join(", ")}`);
     }
-    if (item.dependencies !== undefined) {
-      if (!Array.isArray(item.dependencies)) {
-        issues.add("skills.entry.dependencies.type", `${prefix}.dependencies`, "dependencies must be an array");
-      } else {
-        item.dependencies.forEach((d, j) => {
-          if (typeof d !== "string" || !isId(d)) {
-            issues.add("skills.entry.dependencies.invalid", `${prefix}.dependencies[${j}]`, `dependency must match ${ID_PATTERN}`);
-          }
-        });
-      }
-    }
     let entrypoints: string[] | undefined;
     if (item.entrypoints !== undefined) {
       if (!Array.isArray(item.entrypoints)) {
@@ -122,7 +110,6 @@ function decodeEntries(raw: unknown, group: string, issues: IssueCollector, seen
         name: name as string,
         version: version as string,
         scope: scope as SkillScope,
-        dependencies: Array.isArray(item.dependencies) ? (item.dependencies as string[]) : [],
         ...(entrypoints !== undefined ? { entrypoints } : {}),
         ...(hasInstall ? { install_path: item.install_path as string } : {}),
         ...(description !== undefined ? { description } : {}),

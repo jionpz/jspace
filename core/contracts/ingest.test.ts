@@ -1,27 +1,63 @@
 // core/contracts/ingest.test.ts — pure decode tests for the ingest journal.
-// Run: bun test core/contracts/ingest.test.ts
 import { expect, test } from "bun:test";
 import type { DecodeResult } from "./diagnostics.ts";
-import { decodeIngestJournal, type IngestJournalV1 } from "./ingest.ts";
+import {
+  decodeIngestJournal,
+  type IngestGbrainEvidence,
+  type IngestIndexEvidence,
+  type IngestJournalV2,
+} from "./ingest.ts";
 
-function valid(): IngestJournalV1 {
+const HASH = "a".repeat(64);
+const INDEX_HASH = "b".repeat(64);
+
+function gbrainEvidence(over: Partial<IngestGbrainEvidence> = {}): IngestGbrainEvidence {
   return {
-    schema_version: 1,
-    id: "6f3c5a20-0000-4000-8000-000000000001",
-    source: "/tmp/inbox/doc.txt",
-    target: "/tmp/filehub/projects/foo/2026-08-04-doc.txt",
-    relPath: "projects/foo/2026-08-04-doc.txt",
+    verifiedAt: "2026-10-18T120000",
+    revision: "revision-3",
+    contentHash: "c".repeat(64),
     slug: "assets/foo/doc",
-    projectId: "foo",
-    contentHash: "a".repeat(64),
+    ownerKind: "project",
+    ownerId: "foo",
+    relPath: "projects/foo/2026-10-18-doc.md",
+    tags: ["asset", "source:session"],
+    ...over,
+  };
+}
+
+function indexEvidence(over: Partial<IngestIndexEvidence> = {}): IngestIndexEvidence {
+  return {
+    verifiedAt: "2026-10-18T120100",
+    path: "projects/foo/index.md",
+    contentHash: INDEX_HASH,
+    line: "2026-10-18 | doc | assets/foo/doc",
+    ...over,
+  };
+}
+
+function valid(over: Partial<IngestJournalV2> = {}): IngestJournalV2 {
+  return {
+    schema_version: 2,
+    id: "6f3c5a20-0000-4000-8000-000000000001",
+    source: "/tmp/filehub/_inbox/doc.md",
+    target: "/tmp/filehub/projects/foo/2026-10-18-doc.md",
+    relPath: "projects/foo/2026-10-18-doc.md",
+    ownerKind: "project",
+    ownerId: "foo",
+    slug: "assets/foo/doc",
+    indexPath: "projects/foo/index.md",
+    indexEntry: "2026-10-18 | doc | assets/foo/doc",
+    sourceHash: HASH,
+    targetHash: HASH,
     status: "staged",
-    createdAt: "2026-08-04T100000",
-    updatedAt: "2026-08-04T100000",
+    createdAt: "2026-10-18T120000",
+    updatedAt: "2026-10-18T120000",
+    ...over,
   };
 }
 
 function codesOf(result: DecodeResult<unknown>): string[] {
-  return result.ok ? [] : result.issues.map((i) => i.code);
+  return result.ok ? [] : result.issues.map((issue) => issue.code);
 }
 
 function expectIssue(input: unknown, code: string): void {
@@ -30,59 +66,91 @@ function expectIssue(input: unknown, code: string): void {
   if (!result.ok) expect(codesOf(result)).toContain(code);
 }
 
-test("valid journal decodes ok and round-trips", () => {
-  const result = decodeIngestJournal(JSON.parse(JSON.stringify(valid())));
+test("staged schema-2 journal decodes and round-trips", () => {
+  const input = valid();
+  const result = decodeIngestJournal(JSON.parse(JSON.stringify(input)));
   expect(result.ok).toBe(true);
-  if (result.ok) expect(result.value).toEqual(valid());
+  if (result.ok) expect(result.value).toEqual(input);
 });
 
-test("version must be 1 and required fields present", () => {
-  expectIssue({ ...valid(), schema_version: 2 }, "ingest.version.unsupported");
+test("schema 1 is not accepted by the runtime decoder", () => {
+  expectIssue({ ...valid(), schema_version: 1 }, "ingest.version.unsupported");
+});
+
+test("unknown fields and missing core fields are rejected", () => {
+  expectIssue({ ...valid(), extra: true }, "ingest.unknown-field");
   expectIssue({ ...valid(), source: undefined }, "ingest.source.invalid");
-  expectIssue({ ...valid(), status: undefined }, "ingest.status.invalid");
+  expectIssue({ ...valid(), indexEntry: undefined }, "ingest.indexEntry.invalid");
 });
 
-test("status must be a valid step or failed", () => {
-  expectIssue({ ...valid(), status: "bogus" }, "ingest.status.invalid");
-  expectIssue({ ...valid(), status: "failed", failedStep: "bogus" }, "ingest.failedStep.invalid");
+test("source/target must be absolute without traversal; portable paths stay relative", () => {
+  expectIssue({ ...valid(), source: "relative/doc.md" }, "ingest.source.invalid");
+  expectIssue({ ...valid(), target: "relative/doc.md" }, "ingest.target.invalid");
+  expectIssue({ ...valid(), source: "/tmp/../etc/passwd" }, "ingest.source.invalid");
+  expectIssue({ ...valid(), target: "/tmp/filehub/../escape" }, "ingest.target.invalid");
+  expectIssue({ ...valid(), relPath: "../escape" }, "ingest.relPath.invalid");
+  expectIssue({ ...valid(), indexPath: "/projects/foo/index.md" }, "ingest.indexPath.invalid");
+  expectIssue({ ...valid(), indexPath: "projects//foo/index.md" }, "ingest.indexPath.invalid");
 });
 
-test("unknown fields are rejected", () => {
-  expectIssue({ ...valid(), extra: 1 }, "ingest.unknown-field");
+test("owner id is one segment and slug belongs to that owner", () => {
+  expectIssue({ ...valid(), ownerId: "foo/bar" }, "ingest.ownerId.invalid");
+  expectIssue({ ...valid(), ownerId: ".." }, "ingest.ownerId.invalid");
+  expectIssue({ ...valid(), slug: "assets/other/doc" }, "ingest.slug.invalid");
+  expectIssue({ ...valid(), slug: "assets/foo" }, "ingest.slug.invalid");
 });
 
-test("issue #8 #4: source/target must be absolute, no traversal in source/target/relPath", () => {
-  expectIssue({ ...valid(), source: "relative/inbox/doc.txt" }, "ingest.source.absolute");
-  expectIssue({ ...valid(), target: "relative/target.txt" }, "ingest.target.absolute");
-  expectIssue({ ...valid(), source: "/inbox/../etc/passwd" }, "ingest.source.traversal");
-  expectIssue({ ...valid(), target: "/filehub/../.ssh/id_rsa" }, "ingest.target.traversal");
-  expectIssue({ ...valid(), relPath: "projects/../../.ssh/id_rsa" }, "ingest.relPath.traversal");
-  expectIssue({ ...valid(), relPath: "./projects/foo/x.txt" }, "ingest.relPath.traversal");
+test("hashes must be lowercase 64-character sha256 digests", () => {
+  expectIssue({ ...valid(), sourceHash: "A".repeat(64) }, "ingest.sourceHash.invalid");
+  expectIssue({ ...valid(), targetHash: "short" }, "ingest.targetHash.invalid");
+  expectIssue({ ...valid(), targetHash: "d".repeat(64) }, "ingest.hashes.mismatch");
 });
 
-test("failed journal with optional fields decodes", () => {
-  const j: IngestJournalV1 = {
-    ...valid(),
-    status: "failed",
-    failedStep: "gbrain",
-    failureReason: "gbrain put failed",
-    indexEntry: "doc.txt | 2026-08-04 | assets/foo/doc",
-  };
-  const result = decodeIngestJournal(JSON.parse(JSON.stringify(j)));
+test("gbrain checkpoint requires matching verified evidence", () => {
+  const journal = valid({ status: "gbrain", gbrainEvidence: gbrainEvidence() });
+  const result = decodeIngestJournal(journal);
   expect(result.ok).toBe(true);
-  if (result.ok) expect(result.value).toEqual(j);
+  expectIssue(valid({ status: "gbrain" }), "ingest.gbrainEvidence.required");
+  expectIssue(
+    valid({ status: "gbrain", gbrainEvidence: gbrainEvidence({ relPath: "projects/other/doc.md" }) }),
+    "ingest.gbrainEvidence.relPath.mismatch",
+  );
+  expectIssue(
+    valid({ status: "gbrain", gbrainEvidence: gbrainEvidence({ tags: ["source:session"] }) }),
+    "ingest.gbrainEvidence.tags.asset",
+  );
 });
 
-test("cleanup-pending v1 journal (failed + failedStep=committed) decodes unchanged", () => {
-  // the legal combination used for source-cleanup recovery; must remain a v1
-  // journal (no new field/status) so journals written by older releases decode.
-  const j: IngestJournalV1 = {
-    ...valid(),
-    status: "failed",
-    failedStep: "committed",
-    failureReason: "source cleanup pending",
-  };
-  const result = decodeIngestJournal(JSON.parse(JSON.stringify(j)));
+test("index and committed checkpoints require both evidence objects", () => {
+  const atIndex = valid({
+    status: "index",
+    gbrainEvidence: gbrainEvidence(),
+    indexEvidence: indexEvidence(),
+  });
+  const result = decodeIngestJournal(atIndex);
   expect(result.ok).toBe(true);
-  if (result.ok) expect(result.value).toEqual(j);
+  expectIssue(
+    valid({ status: "index", gbrainEvidence: gbrainEvidence() }),
+    "ingest.indexEvidence.required",
+  );
+  expectIssue(
+    valid({
+      status: "committed",
+      gbrainEvidence: gbrainEvidence(),
+      indexEvidence: indexEvidence({ line: "different" }),
+    }),
+    "ingest.indexEvidence.line.mismatch",
+  );
+});
+
+test("failed journal requires failedStep and a reason, while non-failed states reject them", () => {
+  const failed = valid({ status: "failed", failedStep: "index", failureReason: "source changed" });
+  expect(decodeIngestJournal(failed).ok).toBe(true);
+  expectIssue(valid({ status: "failed", failureReason: "x" }), "ingest.failedStep.required");
+  expectIssue(valid({ status: "failed", failedStep: "staged" }), "ingest.failureReason.required");
+  expectIssue(valid({ failedStep: "staged" }), "ingest.failedStep.unexpected");
+});
+
+test("staged journal cannot claim gbrain evidence", () => {
+  expectIssue(valid({ gbrainEvidence: gbrainEvidence() }), "ingest.gbrainEvidence.unexpected");
 });
