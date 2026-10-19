@@ -101,7 +101,7 @@ MVP 只支持能映射到 Task Scheduler 的 **DAILY / WEEKLY**:
 bun run build            # -> bin/jspace (win: bin/jspace.exe)
 
 # 1. 生成 + 校验工作台
-bin/jspace init ~/ws-test
+bin/jspace init --dir ~/ws-test
 bin/jspace doctor --dir ~/ws-test      # 期望:0 error;cron 相关 warning 见断言表
 
 # 2. 文件中心

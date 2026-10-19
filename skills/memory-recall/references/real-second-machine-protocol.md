@@ -68,7 +68,7 @@ gbrain export --dir <export>
 ## P2 · B 建台(控制面 + 资产根)
 
 ```bash
-jspace init <wbB>                                  # 或复用 B 上既有工作台
+jspace init --dir <wbB>                            # 或复用 B 上既有工作台
 jspace filehub init <filehubB> --register --dir <wbB>
 jspace doctor --dir <wbB>
 ```

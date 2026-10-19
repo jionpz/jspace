@@ -53,7 +53,7 @@
 4. `hub.json` schema 见 `templates/workbench/.jspace/hub.json` 和 `skills/jspace-use/references/registry.md`：资源主路径经 `local.bindings` 绑定（hub.json 存 binding 引用，绝对路径是本机 `local.json` 真理，恰好一个 `primary: true`）。
 5. 命名统一：项目、CLI、技能、模板、文档、domain 统一使用 `jspace`。
 6. 已上线分发（v1.0.14，M6+）：schema/CLI/模板演进走迁移与升级通道，不静默破坏；`jspace update` 一键安装/自更新。
-7. 真实工作台升级约定（未分发、本地自用）：模板/CLI 更新后，既有工作台优先 `jspace workspace upgrade`（非破坏——未修改的 seed/skill 随升级刷新、本地编辑保留为 `skip`）；仅在需要完全重建时才清空重 init（`rm -rf <workbench>` 再 `jspace init <workbench>`，或清掉旧残留 `hub.json`/`.jspace.json` 后 `init --force`）。`init` 对已有工作台会拒绝（用 upgrade）；遇旧布局残留 init 会 fail 提示清除。
+7. 真实工作台升级约定（未分发、本地自用）：模板/CLI 更新后，既有工作台优先 `jspace workspace upgrade`（非破坏——未修改的 seed/skill 随升级刷新、本地编辑保留为 `skip`）；仅在需要完全重建时才清空重 init（`rm -rf <workbench>` 再 `jspace init --dir <workbench>`，或清掉旧残留 `hub.json`/`.jspace.json` 后 `init --force`）。`init` 对已有工作台会拒绝（用 upgrade）；遇旧布局残留 init 会 fail 提示清除。
 8. Trellis 的 `.trellis/tasks/`（含 archive）与 `.trellis/workspace/`（开发者 journal、会话记录，含个人路径）都是**本地-only**（gitignored），由 trellis 命令按需生成；任务历史不随 clone 分发。仍具长期约束力的决策必须进入 `GOAL.md`、本文件或 `.trellis/spec/`。`.trellis/spec/`、`.trellis/workflow.md`、`.trellis/scripts/` 继续版本化。
 
 ## Confirmation Rules
