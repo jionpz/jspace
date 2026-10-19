@@ -517,6 +517,12 @@ test("failed apply leaves a journal that --rollback restores", () => {
   expect(readFileSync(join(root, "AGENTS.md"), "utf-8")).toBe(before);
   const journal = JSON.parse(readFileSync(join(dir, ids[0], "journal.json"), "utf-8"));
   expect(journal.status).toBe("rolled_back");
+  // Windows regression: journal plan rels are portable POSIX paths. A `join`-built
+  // rel (".jspace\\state\\materialized.json") made validateRollbackRels reject the
+  // very journal the upgrade had just written, breaking rollback on Windows.
+  for (const step of journal.plan as { rel: string }[]) {
+    expect(step.rel).not.toContain("\\");
+  }
   rmSync(root, { recursive: true, force: true });
 });
 

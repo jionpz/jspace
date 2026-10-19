@@ -67,7 +67,7 @@ powershell -ExecutionPolicy Bypass -File $env:TEMP\jspace-install.ps1 -Uninstall
 
 ```bash
 # 在另一个目录初始化真实工作台（源码运行；或先 `bun run build` 后用编译产物）
-bun run cli/main.ts init ~/jworkspace
+bun run cli/main.ts init --dir ~/jworkspace
 
 # 校验工作台
 bun run cli/main.ts doctor --dir ~/jworkspace

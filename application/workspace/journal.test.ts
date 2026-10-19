@@ -164,3 +164,11 @@ test("upgrade dry-run previews projection ops on a thin-linked workbench: nothin
   expect(r.lines).toEqual(["jspace: ok: would upgrade: nothing to do"]);
   rmSync(root, { recursive: true, force: true });
 });
+
+test("MATERIALIZED_FILE is a portable POSIX workbench rel, not an OS-joined path", () => {
+  // Regression (Windows CI): `join(CONFIG_DIR, ...)` produced ".jspace\\state\\..."
+  // on win32, and the upgrade journal validator rejects `\` — so every Windows
+  // upgrade wrote a journal its own rollback refused. Mirrors HUB_FILE/LOCAL_FILE.
+  expect(MATERIALIZED_FILE).toBe(".jspace/state/materialized.json");
+  expect(MATERIALIZED_FILE).not.toContain("\\");
+});

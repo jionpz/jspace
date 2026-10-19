@@ -26,7 +26,7 @@ bun run scripts/check-harness-consistency.ts
 改 CLI 后建议额外做一次临时工作台冒烟：
 
 ```bash
-bun run cli/main.ts init /tmp/jspace-smoke
+bun run cli/main.ts init --dir /tmp/jspace-smoke
 bun run cli/main.ts doctor --dir /tmp/jspace-smoke
 ```
 

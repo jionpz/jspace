@@ -14,7 +14,7 @@
 
 ## Harness 接线（单一事实源）
 
-支持集与接线在 `adapters/harness/capabilities.yaml`（Claude Code / Grok Build / OpenCode / Pi / Cursor + codex cron 兼容）——headless argv、session 事件、生命周期分级、skill 投影均由它驱动；`scripts/gen-assets.ts` 渲染成 `capabilities.generated.ts` 嵌入二进制。防漂移：`scripts/check-harness-consistency.ts`（capabilities ↔ 代码/文档/模板）、`scripts/check-manifest-integrity.ts`（manifest 源文件存在 + 被跟踪 + 不被忽略）。**改 harness 接线只改 capabilities.yaml + 对应 seed 模板，不散改 adapter。**
+支持集与接线在 `adapters/harness/capabilities.yaml`（Claude Code / Grok Build / OpenCode / Pi / Cursor + Codex（headless cron 条目，无会话 hook、JSpace 不代写其 MCP 配置））——headless argv、session 事件、生命周期分级、skill 投影均由它驱动；`scripts/gen-assets.ts` 渲染成 `capabilities.generated.ts` 嵌入二进制。防漂移：`scripts/check-harness-consistency.ts`（capabilities ↔ 代码/文档/模板，要求每个条目都有 `harness-<name>.md`）、`scripts/check-manifest-integrity.ts`（manifest 源文件存在 + 被跟踪 + 不被忽略）。**改 harness 接线只改 capabilities.yaml + 对应 seed 模板，不散改 adapter。**
 
 ## Product Vision
 
@@ -47,7 +47,7 @@
 2. 模板和技能是生成物来源：改 `templates/workbench/` 和 `skills/jspace-use/`，不要通过修改已生成的工作台来反推模板。
 3. CLI 每次改动后验证：
    - `bunx tsc --noEmit`
-   - `bun run cli/main.ts init /tmp/jspace-smoke`
+   - `bun run cli/main.ts init --dir /tmp/jspace-smoke`
    - `bun run cli/main.ts doctor --dir /tmp/jspace-smoke`
    - 在 `/tmp/jspace-smoke` 内演练 domain/resource 分组命令（`domain`/`resource` 的 list/add/remove）
 4. `hub.json` schema 见 `templates/workbench/.jspace/hub.json` 和 `skills/jspace-use/references/registry.md`：资源主路径经 `local.bindings` 绑定（hub.json 存 binding 引用，绝对路径是本机 `local.json` 真理，恰好一个 `primary: true`）。

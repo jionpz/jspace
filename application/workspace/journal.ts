@@ -25,7 +25,12 @@ import { safeReadFile } from "./fs-helpers.ts";
 import { localDate } from "../time.ts";
 import { fail } from "../../core/shared/errors.ts";
 
-export const MATERIALIZED_FILE = join(CONFIG_DIR, "state", "materialized.json");
+/** Workbench-relative journal path — POSIX separators by contract, NOT `join`:
+ *  a journal plan rel is written into the upgrade journal and re-validated on
+ *  rollback (`validateRollbackRels` rejects `\`), so an OS-specific join would
+ *  make every Windows upgrade unrecoverable. Mirrors the HUB_FILE/LOCAL_FILE
+ *  literals in core/contracts/files.ts. */
+export const MATERIALIZED_FILE = `${CONFIG_DIR}/state/materialized.json`;
 
 export type MaterializedJournal = MaterializedJournalV2;
 export type { MaterializedLinkEntry };
