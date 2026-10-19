@@ -1,10 +1,12 @@
 # JSpace
 
-本地工作控制平面（JWorkspace）的**开发仓库**。日常使用的 JWorkspace 由 CLI 生成到其他目录；本仓库只负责开发、验证和发布工作台模板。
+JSpace 是**用户拥有的、可移植的个人 AI 工作底座**，目标是让同一项工作跨会话、跨工具持续推进，减少重复交代背景、资料查找与交接成本。当前通过 CLI 生成工作台（JWorkspace），提供路由、gbrain 记忆接线、文件资产协议和定时任务；跨工具任务接续与业务成果验收仍需逐项验证。
+
+这里是产品的**开发仓库**；日常使用的 JWorkspace 生成在其他目录。现行目标见 [GOAL.md](./GOAL.md)，本轮方向判断与官方依据见 [2026-10 目标复审](./docs/GOAL-REVIEW-2026-10.md)。
 
 ## 两个概念：JSpace 与 JWorkspace
 
-- **JSpace** —— 本仓库，设计/开发层。只维护 CLI（`cli/` TypeScript/bun 源码，`bun run build` 产出 `bin/jspace` 编译二进制）、模板（`templates/workbench/`）、skills 的源码；不安装、不作为日常使用环境，只用它生成和校验 JWorkspace。
+- **JSpace** —— 产品及其 CLI，本仓库是设计/开发与发行目录，维护 CLI（`cli/` TypeScript/bun 源码，`bun run build` 产出 `bin/jspace` 编译二进制）、模板（`templates/workbench/`）与 skills 源码；开发仓库本身不作为日常使用环境。
 - **JWorkspace** —— 实际使用的工作目录，由 `jspace init --dir <目录>` 生成（编译二进制在 PATH；源码检出在仓库内 `bun run cli/main.ts`），**目录可由每个用户各自配置**（如 `~/jworkspace`、`~/ws` 等），不同用户互不干扰。产物含 `.jspace/hub.json`（注册表）、`AGENTS.md`（路由）、`workspace/<domain>/`、`.jspace/skills/`（官方打包技能；根 `skills/` 留给用户自建）。日常工作和 AI 会话从这里开始。
 
 > 术语：下文「工作台 / workbench」即 JWorkspace 的正式命名。
@@ -73,16 +75,18 @@ bun run cli/main.ts doctor --dir ~/jworkspace
 
 ## 常用运维命令
 
-- `jspace cron` — 定时任务:`cron run <id> --dry-run`(rehearsal)、`cron install --dry-run`(reconciliation 计划)、`cron check`(会话开始失败/暂存聚合)、`cron ack`。
-- `jspace ingest` — 资料入库 journal:`ingest begin`(暂存副本+journal)→ `advance --gbrain` → `advance --index` → `advance --complete`(移除 source);任一步失败 `ingest fail <id> --reason <原因>`(补偿,source 留 inbox 无孤儿);中断 `ingest list` 续跑。commit 的 source 移除未证明完成时 journal 保持 `failed/failedStep=committed`(`list` 标注 `failed/cleanup-pending`)——用同一 `advance <id> --complete` 幂等收尾,不虚报 source 已删。
-- `jspace pending` — gbrain 写暂存:`pending stage`(锁冲突)、`pending apply`(锁空闲落 live,幂等)、`pending ack`(terminal_failed 确认)。锁冲突写不失败。
+- `jspace cron` — 定时任务:`cron run --id <id> --dry-run`(rehearsal)、`cron install --dry-run`(reconciliation 计划)、`cron failures`(会话开始失败/暂存聚合)、`cron ack`。
+- `jspace ingest` — 资料入库 journal:`ingest begin`(暂存副本+journal)→ `advance --gbrain` → `advance --index` → `advance --complete`(移除 source);gbrain/index 由写侧完成后报告 checkpoint。已记录步骤失败时用 `ingest fail <id> --reason <原因>` 按状态补偿,中断后用 `ingest list` 查看续跑入口。commit 的 source 移除未证明完成时 journal 保持 `failed/failedStep=committed`(`list` 标注 `failed/cleanup-pending`)——用同一 `advance <id> --complete` 幂等收尾,不虚报 source 已删。
+- `jspace pending` — gbrain 写暂存:`pending stage` 保存锁冲突时的待写正文、`pending apply` 幂等应用、`pending ack` 确认 terminal_failed。暂存成功不等于已落库;已有不同正文的冲突和重试耗尽会显式报告。
+- `jspace memory` — 统一周期时钟与只读审计:`memory period --json`(本地周一、半开窗口、observed_through;补跑 `--week`,固定取证 `--now`)、`memory check --json`(结构、来源、生命周期、指针与 coverage)。
 - `jspace workspace diff / upgrade` — 工作台升级计划与执行(managed 内容刷新、本地修改保冲突)。
 - `jspace context` — harness hook 上下文注入:`context session-start|turn|pre-compact|session-end`(默认 hook JSON envelope;`--plain` 纯文本;session-start 另支持 `--envelope cursor`)。被 `.claude/settings.json` / `.grok/hooks/` / `.cursor/hooks.json` 等消费。
-- `jspace domain / resource / project / filehub` — 域与资源注册表操作;`jspace skills install` 物化用户级官方技能;`jspace gbrain wire` 注入 gbrain MCP env;`jspace harness wire --harness <x>` 写各 harness 配置（支持 Claude Code / Grok Build / OpenCode / Pi / Cursor；Codex 仅 cron 兼容）。`jspace gbrain wire` 为 Claude Code 别名（向后兼容）。
+- `jspace domain / resource / project / filehub` — 域与资源注册表操作;`jspace skills install` 物化用户级官方技能;`jspace harness wire --harness <x> --dir <wb>` 写各 harness 配置并注入 gbrain MCP env（支持 Claude Code / Grok Build / OpenCode / Pi / Cursor；Codex 是 headless cron 条目，JSpace 不代写它的 MCP 配置）。
 
 ## 目录结构
 
-- `GOAL.md` - 最终目标（North Star），所有迭代的对齐物
+- `GOAL.md` - 现行目标（North Star），所有迭代的对齐物
+- `docs/GOAL-REVIEW-2026-10.md` / `docs/GOAL-HISTORY.md` - 方向复审与修改前的历史证据
 - `cli/` - CLI 源码与命令（TypeScript/bun；`bin/jspace` 为 `bun run build` 编译产物）
 - `core/` - 契约层（cron/skills/manifest 等 schema + decode）
 - `application/` - 领域用例（automation/context/ingest/pending/workspace/registry…）

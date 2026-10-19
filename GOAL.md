@@ -1,124 +1,126 @@
-# JSpace 最终目标（North Star）
+# JSpace 目标（North Star）
 
-> 本文件是整个项目的**最高对齐物**：所有 PRD、任务拆分、范围取舍、暂缓决策都向它对齐。
-> 根 `AGENTS.md` 的 Product Vision 是它的操作摘要；两者冲突时以本文件为准，并同步修订。
-> 最后更新：2026-09-12。决策留痕见当期任务 PRD 的 Key Decisions；本文件内的里程碑条目按「证据落条目」逐条回写。
+> 本文件是项目的最高对齐物：任务范围、实现取舍和验收向它对齐；根 `AGENTS.md` 的 Product Vision 是操作摘要。
+> 更新：2026-10-18。本轮调整的是产品目标，不代表新增能力已经交付。
+> 调整依据见 [2026-10 目标复审](docs/GOAL-REVIEW-2026-10.md)；修改前的完整原文与验收证据见 [历史快照](docs/GOAL-HISTORY.md)。
 
-## 一句话终局
+## 一句话目标
 
-在我的电脑上，从一个总控文件夹启动任何 AI harness（Claude Code / Grok Build / OpenCode / Pi / Cursor，codex 兼容 cron），就能带着准确的记忆开展任何工作；工作产生的重资产（pdf / ppt / excel / md …）被自动整理进文件管理中心；日积月累后，记忆可精准召回、资料整整齐齐；定期 AI 任务自动运行，不需要任何常驻程序。
+**成为用户拥有的、可移植的个人 AI 工作底座，让同一项真实工作跨会话、跨工具持续推进：带对上下文，找到可信资料，在授权范围内执行，留下可验证的成果，并把有用经验带到下一次工作。**
 
-## 使用画面（终局的一天）
+JSpace 服务于同时跟进多个项目、使用不同 AI 工具、积累本地资料且重视数据控制权的个人。首先证明它能减少重复交代背景、查找资料、交接和收尾的成本；不以支持多少 harness、安装多少 skill 或运行多少 agent 证明价值。
 
-1. **上午进入工作**：在工作台目录启动 `claude`（或 pi / codex）。会话读 AGENTS.md → 识别我在跟进「X 项目」→ 从 gbrain 注入 X 项目的最新事实（上次进展、待办、关键决策）→ 直接接着干，不需要我复述背景。
-2. **收到一份客户 PPT**：丢进文件管理中心的 `_inbox/`。说一句"整理一下 inbox"，AI 把它改名为 `2026-08-01-acme-kickoff-v1.pptx`，按项目 `layout` 归档到项目根或稳定工作流目录（如 `projects/acme/kickoff/`），在项目 `index.md` 的“类型”列登记为 deck，并往 gbrain 写一条事实（这份 deck 是什么 + 文件指针）。
-3. **随口一问**："上季度 Acme 报价单里的单价是多少？" → gbrain 召回事实与文件指针 → 会话打开那份 excel 核对 → 给出答案并引用出处。
-4. **收工**：会话结束时被提醒一次，说一句"收工"，本次的持久事实（带项目/域归属）写回 gbrain，产出文件归位到文件中心。**提醒自动，写入显式**——这是设计红线，不是待补的自动化（见「记忆协议」）。
-5. **夜里**：cron 触发无头 harness（`claude -p` / `codex exec` / `pi -p`）：清理 inbox 残留、生成本周项目周报 md 存进文件中心、把摘要写进 gbrain。
-6. **换一台机器**：git 拉取工作台，资产由网盘/Obsidian Sync 同步，记忆层同步其文本源后重建索引——继续工作。
+“AI 工作中心”是用户看见的完整体验，可以由桌面应用、IDE、终端、移动入口与云端服务共同提供。JSpace 在其中负责用户可掌握的上下文、持久知识、资产与执行衔接；无需承包所有界面和执行能力，也不假设行业存在已经确定的唯一终局。
 
-## 架构：一个控制平面 + 两个持久层
+## 用户需要的连续性
 
-| 层 | 载体 | 内容 | 优化目标 |
-|---|---|---|---|
-| 控制平面 | 工作台（`jspace init` 生成） | 路由规则、注册表、域上下文、cron 定义 | AI 会话入口：轻、纯文本、git 同步 |
-| 记忆层 | gbrain | 事实、知识图谱、embedding、**资产指针**；自带资料摄入/文件登记能力（兼作检索层） | 机器精准召回 |
-| 资产层 | 文件管理中心（独立目录） | pdf/ppt/excel/md 等重资产 + 项目索引 | 人类可读可浏览（Obsidian 可打开）、整整齐齐 |
+一项工作不会因为聊天结束而结束。它需要在下次开始时回答：
 
-四大支柱：**路由**（任何 harness 从同一入口进对的域）、**记忆**（会话起点注入、终点写回、精准召回）、**资产**（自动归档、长期整齐）、**定时**（系统调度 + 无头 harness）。
+- **为什么做**：目标、约束和完成标准是什么。
+- **现在怎样**：哪些结果已确认、哪些判断尚待核实、哪里受阻。
+- **凭什么继续**：规范来源、关键决策和最新产物在哪里。
+- **下一步是什么**：谁或哪个工具接手，需要什么输入、权限和检查。
 
-**第五条:自省**（2026-08-10 补）——前四条负责"把事做成"，但纪律会无声腐化：该写回的没写、新项目没挂接、指针悄悄断掉、模糊项每周被跳过，这些都不报错。因此每周一次取证式自省（`workbench-retro` skill + 周日 cron），审计纪律执行、流程卡点与规则修订候选，产出分级建议清单（只提议不改）。**"越用越强"需要三个飞轮同时转:记忆、资产、以及工作流自身的进化。**
+这些信息首先留在项目已有的规范文档、任务系统与产物中；gbrain 的 state 是项目认知卡片，只保存“项目是什么 / 现在到哪了 / 下一步”及来源指针。**不把任务细节复制进记忆，不预先增加一套统一任务数据库。** 没有现成载体时，先用最小的普通文档验证交接。
 
-**粘合原则：记忆存"事实与指针"，资产存"文件本体"。** AI 消化一份文件的产出是两笔：文件归位（资产层）+ 事实与指针入脑（记忆层）。不做重资产的全量二进制 embedding——召回靠"事实命中 → 指针取件 → 现场打开"，而不是把 PPT 塞进向量库。
+共享持久上下文不等于复制私有聊天、同步模型内部状态或保证不同 harness 行为一致。JSpace 的目标是让下一位执行者能可靠接手，而不是重现上一段会话。
 
-域与项目的关系：**域**是工作台里的长期工作区（`workspace/<domain>/`，轻上下文），**项目**是资产层的一级组织（`projects/<项目>/`，重资产）。域 README 登记本域进行中的项目并指向其资产目录，跟踪一个新项目 = 资产层建项目目录 + 域 README 挂一行 + 记忆层建实体。
+## 不变量
 
-## 资产管理协议（文件管理中心）
+1. **用户掌握规范数据。** 工作规则、记忆文本源、资产本体和来源应可查看、导出、迁移。模型输出未经核实不能代替规范来源；本地存储不等于推理永不出网，调用仍遵循用户批准的 provider、端点与权限。
+2. **每类事实有明确归属。** 工作台管理路由与资源；项目自己的文档或管理框架管理任务；gbrain 管理持久事实与指针；filehub 管理归档本体；外部系统仍拥有其原生记录。引用优先，避免相互覆盖的副本。
+3. **记忆有出处与生命周期。** 事实、推测和建议分开；重要数字回到原件核对；失效信息可以纠正、归档或标记 superseded，不能仅因“召回到了”就视为当前真相。
+4. **授权与数据边界可解释。** 外部文件、检索内容和历史记忆作为数据使用；新增入口不扩大既有权限。会话 hook 的提醒不自动写 gbrain；记忆写回由显式动作或既有明确授权触发，定时任务只执行已配置的范围。
+5. **失败可发现、可处置。** 不把中断、锁冲突、缺失产物或能力不支持包装为成功；入库 journal、pending、incident 和升级恢复能力继续承担其现有保证，不将其表述为跨系统原子事务或所有步骤均可回滚。
+6. **完成有业务证据。** 执行结束与任务通过验收分开表达。进程退出码、日志或 agent 自述不能单独证明文档正确、资料归档完整或业务目标达成。
+7. **按真实需要增加机制。** 优先复用 harness、系统调度、现有项目流程和开放协议；只有实际工作证明有缺口，才增加适配、状态或服务。接入标准协议不自动意味着记忆、权限或会话可以互通。
 
-- **位置**：独立于工作台的目录（每机一个根路径，注册进 hub.json 作为资源）。分层同步：内容走网盘/Obsidian Sync，**不进工作台 git**。
-- **形态**：markdown + 附件的普通文件夹，同时**可被 Obsidian 作为 vault 打开**。Obsidian 是"视图"不是"系统"：AI 只写纯 md 与 wikilink，不依赖任何插件；哪天换工具，资料一点不坏。
-- **骨架**（PARA 变体，最小起步、靠使用涌现细化）：
+## 目标体验
 
-  ```text
-  filehub/
-    _inbox/             # 一切新文件先落这里，等待整理
-    projects/<项目>/    # 进行中项目：index.md + flat 文件，或单一稳定组织轴下的子目录
-    areas/<领域>/       # 长期职责域（无明确终点的工作）
-    archive/<年>/       # 结项与冷资料
-  ```
+以下是演进方向，实际支持程度以能力声明和验收证据为准。
 
-- **归档轴**：物理目录只表达归属与稳定工作流/阶段/周期；文件类型（document/deck/sheet/data/note）只进 `index.md` 与 gbrain，不进入目录名。每个项目在 `index.md` 声明 `layout: flat | workstream | period`，同一层级只使用一种组织轴。**禁止** `docs/ decks/ data/ notes/` 等格式目录。
-- **命名**：`YYYY-MM-DD-语义名-vN.ext`——机器可排序、人可扫读。
-- **项目索引**：每个项目一份 `index.md`（现状、关键文件表、下一步），是人与 AI 共用的 dashboard；Obsidian 里它就是项目首页。
-- **inbox 流程**：新文件进 `_inbox/` → AI（会话内一句话触发，或 cron 定时）分类、改名、归位、登记索引、写记忆。这是"自动整理"的具体机制——整齐不靠自觉，靠这条流水线。
+1. **开始或恢复工作。** 从自己惯用的入口进入，识别目标项目，取得必要的项目概况、决策、来源和阻塞项。已有 `AGENTS.md` / registry / context 注入继续作为本地入口；其他入口通过经过验证的接线或显式交接访问这些信息。
+2. **选择合适的执行者。** 使用现有 harness 完成编码、研究、Office 或浏览器工作。切换工具时，交接目标、进度、产物、待核实项与下一步；不要求用户重述已经可靠保存的事实。
+3. **查询有出处。** 问“报价单里的那个数”，先召回事实与指针，再打开相应版本的文件核对，给出能定位到页、表或段落的出处；找不到或版本不确定就明确说明。
+4. **产出可接手。** 工作留下可打开的文档、代码或其他产物，并按该任务的完成标准检查。资产需要长期保留时，完成归位、索引和记忆指针；执行细节仍留在项目自己的任务系统。
+5. **自动化可监督。** 已授权的周期工作可以在用户不持续盯守时运行。能看到发生了什么、产物在哪里、什么检查通过、什么需要人工处理；先验证定时执行，再按真实需求评估外部事件入口。
+6. **收尾与迁移。** 显式保存值得长期保留的事实，避免积累会话噪音。换工具仍可读取规范资料；换机器按分层同步与本机绑定恢复，并明确尚未验证的限制。
 
-## 记忆协议（精准召回从哪来）
+## 当前实现与责任边界
 
-- 会话开始：按域/项目检索注入；会话结束：把持久事实带归属（domain/project 标签、统一的实体 slug、来源 tag `source:session`）写回。
-- **写回是显式动作，永不自动**：hook / 每会话一次轻提示只提醒（点名触发词「收工」+ skill `memory-writeback` + 该带的 tag），从不代写 gbrain。所以"写回率"量的是真的写了几次，不是被提醒了几次；取证命令见 `workbench-retro` 检查 1。
-- 资产入脑只入三样：**这是什么、关键事实、指针**；原文件永远留在资产层。指针 = `Pointer`（绝对路径，本机真理）+ `rel_path`（相对 filehub 根，机器无关，M5 起）；换机按「目标机 filehub 根 + rel_path」重解析。
-- 精准 = 一致的实体命名 + 归属标签 + 写回纪律。三者由工作台规则与 jspace-use 指南保障，不靠人自觉。
-- 各 harness 的会话能力分级（session-start / session-end / 显式 fallback / crash recovery 的 automated/best-effort/manual/unsupported）见工作台 `.jspace/skills/jspace-use/references/harnesses.md`「Lifecycle 能力矩阵」；本段为愿景措辞，实际能力以矩阵为准（不虚报自动化）。
+JSpace 的当前产品形态是 CLI、工作台模板、官方 skills 和 harness 适配；本开发仓库不作为日常工作入口。
 
-## 定时自动化（cron）
+- **路由与上下文**：`hub.json`、域文档、项目注册与 `jspace context`。已有项目卡片、偏好与近期知识的有限摘要注入；不是完整任务恢复，也不保证自动识别当前意图。harness 生命周期能力以 [capabilities.yaml](adapters/harness/capabilities.yaml) 与 [能力矩阵](skills/jspace-use/references/harnesses.md) 为准。
+- **持久记忆**：gbrain 承载事实、知识关系、检索索引与资产指针，文本源可导出；JSpace 提供接线与写回纪律，不自研记忆数据库。更换后端需要实际迁移证据，本次不增加通用后端抽象。
+- **资产**：独立 filehub 保存文件本体、项目索引与必要的文本抽取。资产入库、pending 写入已有 journal、幂等与补偿机制；仍需写侧报告部分 checkpoint，既有不同内容也可能产生冲突，不能保证跨系统原子提交或任意业务工作自动续跑。
+- **执行与定时**：外部 harness 执行，系统调度触发，JSpace 记录 run 与 incident。目前通用成功判定主要来自进程状态、输出及 inbox 批次变化，**尚不是通用业务验收器**。
+- **接入与治理**：按声明的 harness 能力适配，`doctor` 检查本机绑定和接线。CLI 全局配置、会话客户端、模型网关与远程执行服务各有自己的责任，JSpace 不接管它们。
 
-- cron 定义存在工作台目录（声明式：调度 + 提示词 + harness + 目标域），`jspace cron install` 装进系统调度（crontab / launchd），无头执行，不引入常驻进程。
-- 机械恢复层:`jspace ingest`(资料入库 journal,任一步失败补偿无孤儿、中断可续跑)与 `jspace pending`(gbrain 锁冲突写暂存,锁空闲幂等落 live)是失败可见性的代码保证;会话开始 `jspace cron check` 聚合未确认 incident 与 actionable pending。
-- 首批任务画像：inbox 整理、项目周报、记忆巩固（归纳近一周事实）。它们都作用于资产层与记忆层——所以资产协议先于 cron 落地（见里程碑）。
+“路由、记忆、资产、定时”是当前四类机制；工作流自省负责审视它们是否有用。它们共同服务于工作连续性，不能用机制齐全替代实际有效。
 
-## 同步与可移植（分层同步）
+## 资产与记忆协议
 
-- 控制平面：git。
-- 资产层：网盘 / Obsidian Sync（重文件不进 git）。
-- 记忆层：gbrain 以文本页为规范源（DB/embedding 为派生、每机可重建）——**该假设已于 M5 本机模拟双机验证成立**（见 M5 与开放问题 #1 关闭结论）；退路"单机为主、按机重建记忆"暂不需要。
-- registry 里的绝对路径是"本机真理"，按机器各自维护；资产指针经 `rel_path` 承载机器无关部分（M5 落地）；模板去个人化已在分发前完成。
+本轮目标调整保留既有协议，具体操作以官方 skills 为准：
+
+- **资产存本体、记忆存事实与指针。** filehub 独立于工作台，采用 `_inbox/`、`projects/`、`areas/`、`archive/`。普通文件与 Markdown 可由 Obsidian 浏览，不依赖其插件或私有格式。
+- **按归属与稳定工作流组织文件。** 项目 `layout: flat | workstream | period`，同层只用一种组织轴；禁止按 `docs/decks/data/notes` 这些格式名建目录。文件类型放索引，命名沿用 `YYYY-MM-DD-语义名-vN.ext`。外部原生文档保留原系统的权威地位，需要归档时保存注明来源与版本的副本。
+- **入库留可核验的两笔。** 本体归位并登记 `index.md`；必要事实与指针进入 gbrain。本机 `Pointer` 与机器无关的 `rel_path` 保持现有契约；换机按目标机 filehub 根重解析。
+- **写回显式、来源可查。** 会话 hook 只提醒；会话写入带 `source:session`，定时写入带 `source:cron`。state 固定 slug 更新，决策与经验按现有纪律追加，避免把完整会话或任务清单倒入记忆。
+- **检索按需深入。** 不做重资产全量二进制 embedding；可以保留有来源的文本抽取，召回后打开原件验证。是否增加多模态索引由真实召回失败证明，不预先建设。
+
+操作契约见 [文件归位](skills/asset-ingest/references/filing.md)、[gbrain 纪律](skills/jspace-use/references/gbrain.md)、[记忆写回](skills/memory-writeback/SKILL.md) 与 [召回验收](skills/memory-recall/references/memory-acceptance.md)。
+
+## 可移植与运行方式
+
+- 控制平面与轻量域内容走 git；资产内容走用户选定的网盘或同步工具；gbrain 记忆通过文本源导出、导入与本机索引重建恢复。不自行开发同步引擎。
+- 资源的机器路径由本机 `local.json` bindings 管理；不把某台机器的绝对路径当作跨机规范。
+- **当前不引入 JSpace 自有常驻运行时。** CLI 按需运行、系统调度触发、既有 harness 执行，是低运维成本的当前选择；不承诺整个 AI 工具链不存在常驻组件，也不把“绝无常驻程序”当作用户价值或永恒终局。
+- 未来如遇到定时无法解决的高频事件工作，先评估现有客户端、连接器或执行服务能否接入同一套资料与授权。自建服务必须由真实收益、权限边界、失败恢复与维护成本共同证明必要，另行立项；本次未开放事件网关或后台服务实现。
+
+## 演进与验收
+
+### 已有基础：保留历史效力
+
+M0–M6 与 H1 的工程交付、M4 示例召回、M5 本机模拟双机、已观测的 macOS 定时执行均保留记录；不因重写目标宣称它们在本轮重新通过。完整证据在 [历史快照](docs/GOAL-HISTORY.md)。
+
+尚未完成的事项继续开放：
+
+- **M7 记忆腿**：2026-10-16 的仓库记录认定旧窗口中断，按既定协议以 2026-10-05 为新 W0；新 W1 为 10-12 至 10-18、新 W2 为 10-19 至 10-25。截止本次复审未取得两个完整窗口的新计数，不能关闭。已记录的自省腿与资产腿结论保持各自效力边界。
+- **真实第二机**：M5 仅证明本机模拟；真实第二机 `eco.verdict` / `eco.date` 仍待按 [协议](skills/memory-recall/references/real-second-machine-protocol.md) 填证据。
+- **Linux / Windows 真机调度与环境边界**：按 [平台验证台账](docs/PLATFORMS.md) 保留真机挂账；CI CRUD、手工 `cron run` 不替代自然触发证据。
+
+M7 的原关闭标准与记忆分类学冻结继续有效，详见 [使用里程协议](skills/jspace-use/references/usage-mileage.md)。记忆腿沿用历史 GOAL 更严格的**业务写入**口径：窗口内带 `source:session` 的更新页，排除 `project/jspace*` 与 `knowledge/{agent-harness,ai-infra,tools}*`；工具写入单独记录，不参与关闭。该页数不是不可变的写入操作次数，须保留当周取证。新增目标不改写旧验收，不制造来源 tag、计数或关闭结论。
+
+### 第一优先级：用真实工作验证价值
+
+先继续 M7，并在原有台账或项目记录中附上真实工作案例，观察：
+
+- 下次会话是否少复述了背景，依据是什么，节省了哪些具体步骤。
+- 找到的是不是正确项目、正确版本、正确数字，能否回到原件。
+- 一项工作是否留下可打开、通过其完成标准的产物；人工修正与失败恢复花了多少成本。
+- 用户是否持续使用，工具维护是否反而挤占业务时间。
+
+先记录基线和失败案例，不以写入量、agent 数量或 token 消耗代替收益。不为采数新建分析平台。既有发布 provenance、gbrain 兼容、质量门禁与文档拆分等 backlog 继续按真实故障、协作或使用阻塞触发，历史触发条件不因本轮目标调整失效。
+
+### 下一项候选实验：跨会话与工具接续
+
+在真实使用需要时，从两个进行中的非 JSpace 业务项目，采集五次自然发生的交接，其中至少两次切换 harness。优先使用已有 state、项目任务文档、产物与来源指针，不先写调度器或统一工作项 schema。
+
+首轮实验的通过标准为：至少四次能依据已有材料开始正确的下一步，无需用户重述已经记录的关键背景；涉及关键事实、版本或权限时，零次把缺失或矛盾当作已确认。每次失败都记录缺了哪条信息、应该由哪个现有载体负责。该样本和门槛是本项目的实验设计，不是行业统计或已取得的成绩；这是候选实验，尚未交付或验收。
+
+### 缺口被证明后：只补必要的一步
+
+- 如果交接反复缺信息，先修项目记录与最小交接约定；只有现有载体无法承担时才考虑新契约。
+- 如果自动化“运行成功但结果不对”，为那个具体工作增加产物检查，先验证后讨论是否抽象成通用能力。
+- 如果多入口成为真实需要，再验证对应客户端或远程执行适配；只有收益成立才推广。
+
+每项扩展都应说明：它解决了哪个真实失败、复用了什么、增加了多少维护成本，以及怎样证明值得保留。能力清单不预排成待建平台。
 
 ## 非目标
 
-- 不做常驻运行时、事件驱动/入站多端网关、自主代理（定时 ≠ 事件）。
-- 不自研执行器、不封装 gbrain、不自研文件同步引擎。
-- 不做重资产的全量二进制 embedding、不做"文件数据库"。
-- 不强依赖 Obsidian 的任何插件或私有格式。
-
-## 演进里程碑
-
-- **M0 ✅** 工作台可生成、可校验（`init` / `doctor`）。
-- **M1 ✅** 注册表可维护（R3 domain/resource 增删查 + R8 模板修正）——M2 的地基：文件管理中心经 `jspace resource add` / `filehub init --register` 注册。
-- **M2 ✅** 资产层最小协议：`filehub init` 骨架 + `type: filehub` 注册 + inbox 批量整理 skill（两遍式 / 人工调整 / cron 可驱动）+ 域↔项目挂接规则 + 首次启用(first-use)文件中心引导。先定协议，历史才会整齐。
-  - 待真实环境验证：① 示例资料「入库→gbrain 页→中文召回」端到端（live gbrain）——**已于 M4 验证通过**（2026-08-03，见 M4）；② 双机重建冒烟——**已于 M5 本机模拟验证通过**（2026-08-03，见 M5）。
-- **M3 ✅** cron MVP（R4）：`.jspace/cron.json` 声明式定义 + `jspace cron install` + `cron run` 无头执行（argv 安全 + 权限白名单 + flock 互斥）+ 失败可见性（cron-failed + doctor 摘要 + status）。**跨平台调度后端**：macOS launchd / Linux crontab / Windows schtasks（一 cron 一任务，`--dir` 显式传 root，win 进程树杀）。首批任务：inbox-tidy（旗舰，驱动 M2 无头批量，每日 21:00）。纯函数单测 + 验证矩阵见 `docs/PLATFORMS.md`。
-  - 待真实环境验证：`jspace cron run inbox-tidy` 端到端跑通后再依赖；Linux/Windows 真机验证待 CI 解锁。
-- **M4 ✅** 记忆精度打磨：校准召回 + 端到端验收（"问一句，找到那个文件里的那个数"；不重设 M2 已锁 slug 骨架）。示例环境验收通过（2026-08-03：2 份示例资料经 asset-ingest 入库→gbrain reference 页→四条中文语义查询含语义变体/负对照/×3 重跑/search·query 双路径全 top-1 + 指针定位「12800 / 示例值」）。weekly-report / memory-consolidate 契约解锁（模板 `enabled: true`，契约内联 prompt；gbrain.md 新增 dated memory record 周快照纪律）。可复跑验收协议见 `skills/memory-recall/references/memory-acceptance.md`。
-  - 待真实使用验证：机器端 `jspace cron install` 与首次 `cron run`（install 前 rehearsal gate）；语料增长后按 `skills/memory-recall/references/memory-acceptance.md` 复跑协议。
-- **M5 ✅** 分发（R7）：模板去个人化、打包安装已提前落地（v1.0.1/一键安装/update/CI 6 平台全绿）。本机模拟双机演练通过（2026-08-03）：A `gbrain export` → B 独立 brain `import`+embedding 重建 → B 侧四条中文查询 top-1 与 A 一致 → **指针换机解析成立**（`rel_path` 相对 filehub 根，换机按「目标机根 + rel_path」重解析）→「问一句」闭环引用机器 B 路径。记忆层可移植假设验证成立；**开放问题 #1 关闭**（结论基于本机模拟）。**真实第二机演练协议已发行**（2026-08-28，FEBEL-Eco）：`skills/memory-recall/references/real-second-machine-protocol.md` 定义 P0–P7、指针腿/召回腿分级记分与 `eco.*` 回写槽；真机跑完把 `eco.verdict` / `eco.date` 填进开放问题 #1，**未跑完不写 verdict**。指针纪律落 `rel_path`（asset-ingest 写页 + memory-recall 换机解析 + MEMORY-ACCEPTANCE 扩展节）。
-- **M6 ✅** 飞轮补全与漂移硬化（2026-08-10）：审查发现「建造质量远超使用里程」——记忆与资产有机制但转速近零，**工作流自省完全缺失**，且已建好的厚度没到使用现场（分发链过时、受管块外躺着 205 行旧模板全文）。交付：① `workbench-retro` skill（六条取证式检查 + 分级建议 + 只提议不改红线）+ 周日 cron，补上第三个飞轮；② weekly-report / memory-consolidate 契约从 `cron.json` 内联 prompt **升格为 upgrade 受管 skill**（user 数据冻结死角消除），新 init 的四个 cron 全为 `kind: skill`；③ jspace-use §8.7 项目生命周期 checklist（含「project id 用 ascii、资产目录保留中文、经 `--asset-rel-path` 绑定」的命名约定）；④ doctor 三个静默漂移检查（`agentsmd.stale_outside_block` / `skills.bundle_stale` / `registry.project_unlinked`）。官方 workbench skill 4 → 7（另有 global 段的 `harness-config` 机器级治理 skill，manifest 合计 8 个）。**开放问题 #3 全部闭合**（真实定时触发观察确认）。
-  - 待真实使用验证：首次无头 `workbench-retro` cron（2026-08-16 周日 23:00）；写回腿的习惯养成（当前 gbrain 写入仍全部来自 cron，0 条来自日常会话）。
-  - **写回腿工程侧已就位（2026-08-26，B4）**——注意这只是「接线 + 可观测」，**不是指标达标**：① claude `SessionEnd` / cursor `sessionEnd` 有官方事件证据，seed 接线 `jspace context session-end` 并升 best_effort；opencode/pi/codex 无语义匹配事件，**保持 manual 不虚报**（逐 harness 证据见开发仓库 `docs/session-end-hooks.md`）。② 两个已接线的 harness 其 session-end 输出都是 fire-and-forget（注不回会话），所以真实提醒面是 `jspace context turn` 的**每会话一次**收工轻提示（去重锚点 `.jspace/state/briefing.json`）。③ 写侧新增来源 tag（`source:session` / `source:cron`），`workbench-retro` 检查 1 由此能**数**出写回率而不是凭感觉。④ 提醒与 hook **都不写 gbrain**，写回仍是显式动作。
-  - **待真实使用验证（不伪造数据）**：连续两周 `gbrain list --tag source:session` 落窗口计数 > 0。当前为 0 且**属预期**——来源 tag 是新约定，此前的页都没有这个 tag（retro 会把它们单独记成「无来源 tag」桶，不折算进任何一条腿）。到期把真实数字与结论回写本条目与对应 retro 页。**取证口径、两周窗口与回写纪律已形式化**（2026-08-27，FEBEL-L）：见 M7 与 `skills/jspace-use/references/usage-mileage.md` R2；本条的关闭与 M7 记忆腿是同一件事，数字填在两处保持一致。
-  - **纪律面补强（2026-08-26 架构复审后）**：接线就位但"靠自觉"的两处缺口收掉——① 提醒文案从"请显式触发收工"改成可执行三件套（触发词「收工」+ skill `memory-writeback` + `tags: source:session`），closing 事件的 next-action 不再回落成"按 AGENTS.md 路由"；② 定时层"从没启用过"这个静默默认值有了可见性：`jspace doctor --verbose` 报 `cron.all_disabled`（info），first-use 第 4.5 步必须问用户并给 enable → rehearsal → install 序列，retro 检查 4 每周复核。**模板 cron 仍出厂 `enabled: false`**（未接线机器上不该有东西被拉起），开启始终是用户的显式选择。
-- **H1 ✅ 安全与韧性硬化轮（2026-08-25）**：M6 之后 main 再收七笔（v1.0.14 之上）——① 无头 cron 降权：env 白名单 + per-cron headless tools 覆盖（write-only crons 去 Bash）+ inbox 不可信数据提示；② low-security 硬化：https-only 下载、expandTilde 规范化、plist Label 校验、cmdEscapeArg % 转义；③ symlink 逃逸收容（realpath 前缀门禁 confinedWithin）；④ 测试可靠性：darwin 调和假绿修复、import-boundary 强化、漂移门禁硬化（lifecycle 表校验 + cron target 静态校验 + CI 补齐）。命名沿用提交自标「H1 完成」（f23e7b2）。
-  - 待真实使用验证：Linux/Windows 真机调度复核（同 M3 开放项）。
-- **M7（使用里程）⏳ 开放** — 建造→使用的拐点验收槽（起草于 FEBEL-L，2026-08-27 入 GOAL）：机制已齐（M6 + B4 写回接线 + 来源 tag + H1 硬化）之后，用**真实使用**证明三个飞轮在转，而不是再用工程厚度代替转速。**协议已发行**：`skills/jspace-use/references/usage-mileage.md`（随 init/upgrade 物化，含三腿关闭条件、取证口径、禁伪造红线）；可复制台账 **`usage-mileage-ledger-template.md`** → 本机 `<wb>/.jspace/usage-mileage-ledger.md`（gitignore，填真实证据后不回填仓库）。
-  - **自省腿**：真实工作台完成无头 `workbench-retro` 首跑（rehearsal `jspace cron run workbench-retro` → `records/retro/<YYYY-MM-DD>` 含写回率一节与逐条证据行、`tags` 含 `source:cron`、doctor 未因 retro 变坏）。可选加强：周日 23:00 自然触发一次并记账（**已于 2026-09-13 完成，见下「R1 自省腿 ✅ 关闭」**）。**这里的 `cron run` 只支撑「skill 无头跑通」这一 claim，不用于关闭开放问题 #5 的「真实触发」**（后者要真机被调度器到点拉起）——两者回写时分开表述。
-  - **记忆腿（写回习惯）**：连续两周 `gbrain list --tag source:session` 落窗口计数 > 0（口径同 `workbench-retro` 检查 1）。**禁止伪造**；当前为 0 且属预期（来源 tag 是新约定，此前的页都没有）时保持开放。到期把真实 `session_writes` / 窗口日期 / 对应 retro 页 slug 回写本条。**进度（2026-09-17，未完结）**：W1（09-14~09-20，截至 09-17）业务写入 **42**（`project/<示例项目>` 33 + 非该项目 9）/ 工具 5 / `source:cron` 窗口内 0 → 首周信号 **> 0 成立**；W2（09-21~09-27）未到，本腿保持开放。**同时暴露一条口径问题（已裁决 2026-09-17）**：红线 1 字面「不给历史页补 tag」与 09-17 对该项目历史页补全出处标签的动作冲突；取证表明那 33 条页中 31 条的**页内 frontmatter `source:` 在写入当时就写明 `session <日期>`**（`updated_at` 与之一致），故属「把已声明的出处变可查询」而非制造出处；且首周达标**不依赖该子集**（非该项目 9 条独立支撑）。**已按此改**：红线 1 现为「不给历史页补 tag **以制造该页未曾声明的出处**」（`skills/jspace-use/references/usage-mileage.md`，随 v1.0.28 生效）。明细见台账 §3「W1 标签完整性复核」。
-  - **记忆腿重新计起点（2026-10-16 回写，**中断成立**）**：按 R2「中断则重新计起点，不允许挑两个不相邻的好周拼起来」，逐周复算窗口内**业务写入**（排除 `project/jspace*` 与 `knowledge/{agent-harness,ai-infra,tools}*`）：W1（09-14~09-20）**62**；**W2（09-21~09-27）0**、W3（09-28~10-04）**0** → 连续两周不成立，中断；W4（10-05~10-11）**3**、W5（10-12~，进行中）**15**。**故以 2026-10-05 为新 W0**：新 W1 = 10-12~10-18、新 W2 = 10-19~10-25，两者均 > 0 方可关闭本腿（新 W1 已在进行中且 > 0，待 10-18 完结后读全周数；**W4=3 已 > 0 但按协议不参与拼接**）。台账 §3 同步按此改写；W0~W3 的旧读数保留为「中断前证据」不改写。**与上述 09-17 读数（W1 截至 09-17 = 42）的差异属正常**：那是周中截数（09-17），本行是整周复算（62）。
-  - **资产腿**：近两周至少一次「inbox 或会话入库 → 本体归位 → gbrain asset 指针」闭环可指认；或显式 deferred 且在 retro / doctor 可见。**✅ 已于 2026-09-15 闭环（09-17 取证）**：会话入库 → 本体落在 filehub 的 `areas/<域>/<日期>-<名称>.md`（birth 09-15 07:05:12）→ gbrain 指针页（`tags` = `asset`,`source:session`；页内 `**Source:**` 与本 M5 起要求的 `rel_path` **均解析到真实文件**）。同日指针健康抽样 **0/7 断链**（全量 asset/reference 指针页逐条 `test -e`）。**真实路径 / 文件名只留本机证据台账**（`<wb>/.jspace/usage-mileage-ledger.md` §4a 行 2 / §4c）；此处按 PUBLIC 分发面的中性化约定不落机器标识。
-  - **非目标**：不自动 session-end 写 gbrain；不用 CI 假数据关闭本里程碑；工程可观测（`memory.writeback_habit_unverified` 等 info 级门禁——doctor 不查 gbrain、量不到写回率）只提示自查，**不替代**本条要求的真实计数。
-  - **FEBEL 工程落点（2026-08-28，PR [#28](https://github.com/jionpz/jspace/pull/28)）**：E → doctor info `memory.writeback_habit_unverified`（只提示自查，不量写回率）；B → `docs/PLATFORMS.md` 真机验证台账（#5 四条 E/A 闭合，H 型挂账）；Eco → `skills/memory-recall/references/real-second-machine-protocol.md` + GOAL #1 `eco.*` 回写槽；L → 本条协议与证据台账（`usage-mileage.md` R2/R3）。
-  - **记忆分类学冻结（2026-08-29，PR [#32](https://github.com/jionpz/jspace/pull/32) + [#33](https://github.com/jionpz/jspace/pull/33)）**：五轴模型 + 命名空间/tag 词表 + archived 注入过滤 + recall 路由修正已发行；**M7 关闭前不再扩 taxonomy**（见 `gbrain.md`「Taxonomy freeze」）。下一阶段的 ROI 在真实使用（写回习惯 / retro 裁决 / 资产闭环），不在新类型设计。
-  - **待真实使用验证（尚未填数，不写假数字）**：① retro 无头首跑证据 **已采（2026-09-12 rehearsal + 09-13 自然触发，见下）**；② 两周 `source:session`：首轮 W1 已 > 0 但 **W2 = 0（中断，见上「重新计起点」）**，已按协议改以 2026-10-05 为新 W0，新 W1/W2 待计；③ 资产闭环 **已采（2026-09-15，见上「资产腿」）**。本里程碑仍因 ② 未完成而保持开放。
-  - **R1 无头首跑已采（2026-09-12，本机工作台）**：`jspace cron run workbench-retro --force --timeout 900` → exit 0，log `.jspace/logs/cron/workbench-retro/<ts>-<id>.md`（1058 行），retro 页 `records/retro/<date>` 含「写回率」一节；doctor 跑后 0 error / 0 warning / 1 info、未改工作台文件。首跑来源 tag 由人工纠正后才合规；修复后复跑已自动合规（见下）。**「自然触发」已于 2026-09-13 23:11 实证发生 → 自省腿关闭，见下条**。台账 §2a / §2a-1。
-  - **R1 自省腿 ✅ 关闭（2026-09-17 回写）**：**自然触发已实证**——`<wb>/.jspace/logs/cron/launchd-workbench-retro.log`（plist 的 `StandardOutPath`，仅 launchd 拉起任务时写入）末行为 `jspace: ok: cron workbench-retro (exit 0); log …/<ts>-<id>.md`，文件 mtime `2026-09-13 23:11`；plist `StartCalendarInterval` = 周日 23:00（2026-09-13 为周日）、`RunAtLoad = false`。**对照组**：同一 plist 下 09-12 19:40 / 20:01 两次**手工** `cron run` 在该 launchd 日志中**无**记录，故该文件可作为「调度器到点拉起」的判别证据（非 `cron run` 直跑）。产物 `records/retro/2026-09-13` 含「写回率」一节，tags `[retro, source:cron, weekly]` **未经人工纠正**即合规；`jspace cron check` needs_attention=0、5 个 cron 全 ok。台账 §2b。**效力边界**：只关闭自省腿；开放问题 #5 的「真实触发」仍按真机（Linux/Windows）复核挂账，两者不互相顶替。
-  - **本次回写时抓出的证据质量缺陷（记录待裁决，未擅改）**：`application/automation/execute.ts` 的 `recordRun()` 在 `spawnProcess` **返回后**才取 `localStamp()`，故 run 记录的 `startedAt` 实为**结束时刻**。实例：09-17 `server-status` 失败记录 `startedAt=09:49:56`，实际是跑满 1800s 被 SIGTERM 的结束时刻，真实起跑 09:19:56。影响面：run 记录的「起跑时刻 / 时长」不可用（retro 与使用里程台账目前只用「发生日 + exit」，判读未受影响）。最小修法：spawn 前取时间戳 + 契约单测；**触发条件**：下一次需要按 run 时长做判读时立刻做。
-  - **本次实证抓出的真实缺陷（能力缺口，非纪律问题）**：无头跑把 retro 页打成 `source:session`，而 skill 规定无头必经 `source:cron`。根因在 `adapters/process/spawn.ts` 的 `cronSpawnEnv()` —— 它只复制既有 env 白名单，**不注入任何「我是 cron 跑」的标记**，无头进程没有机器可读信号可自证身份，只能猜。后果：`source:cron` 结构性恒为 0，**「定时腿在转」永远无法被证明**。修复已落地（2026-09-12，PR [#47](https://github.com/jionpz/jspace/pull/47)，merge `48f733b`）：`compileSkillTarget()` 在 skill-target prompt 首行注入 `CRON_RUN_MODE_NOTICE`，把运行模式事实交给写侧 skill；未选 env 方案——write-only cron 无 Bash，读 env 对它们无效，而 prompt 是每个 cron 必收的通道；prose prompt 逃生口逐字不变。端到端复核：先刻意把 `records/retro/2026-09-12` 重置为 `source:session`，再由无头 cron 复跑，exit 0、log `.jspace/logs/cron/workbench-retro/2026-09-12T200153-17a63cdf.md`，产出页 tags 自动含 `source:cron` 且无人工纠正。
-  - **记忆腿计数口径补丁（2026-09-12 起生效）**：`source:session` 原始计数会被「agent 给工具自身记账」喂饱（本机 24 页中约 18 页属 `project/jspace*` 与工具知识），**写回率涨 ≠ 使用里程涨**。故记忆腿判读拆两行：**业务写入** = `source:session` 中排除 `project/jspace*` 与 `knowledge/{agent-harness,ai-infra,tools}*`（工具自证）；**工具写入** = 其余，单独记数不参与关闭判定。关闭条件仍是「连续两周**业务写入** > 0」，且两行都要进台账。理由：用工程厚度代替转速正是本里程碑要防的失效模式。
-  - **后续工程 backlog 的触发围栏（2026-09-12 起生效）**：父 PRD 登记的 R3 发布 provenance / R4 gbrain 版本兼容契约 / R5 lint+coverage 门禁 / R6 文档结构拆分，**从「未排期」改为「有触发条件才做」**，避免用工程厚度代替转速（M6 教训）：R3 → 出现一次产物完整性/来源存疑，或开始给第三方分发二进制；R4 → 出现一次 gbrain 版本差异导致的真实故障，或 gbrain 上游 breaking change；R5 → 出现一次因类型/风格/`catch {}` 漂移导致的真实回归，或协作方介入开发；R6 → `GOAL.md` 单文件长度或查找成本开始实际妨碍判断。**未命中触发条件时，正确的动作是用（M7），不是写 R3–R6。**唯一例外：真实使用暴露阻塞时立刻做被那件事证明必需的那一条。
-- 顺序理由：cron 的第一批任务操作资产层，故 M2 在 M3 前；里程碑随真实使用可重排，重排时更新本文件。
-
-## 开放问题
-
-1. **gbrain 多机**："同一份记忆"依赖文本规范源假设——**已于 M5 关闭（2026-08-03，本机模拟双机）**：A export → B import 重建 + embedding 重建 + 中文召回 top-1 与 A 一致 + 指针换机解析成立（`rel_path` 相对 filehub 根）。结论：假设成立、双字段指针采用；**真实第二机：协议已发行，待真机（`eco.verdict` 待填）**——可复跑协议见 `skills/memory-recall/references/real-second-machine-protocol.md`（P0–P7 步骤与断言 + 降级分级 + `eco.*` 证据台账），真机跑完按其「GOAL 回写形态」把 `eco.verdict` / `eco.date` 填回本条。**协议已发行 ≠ 真机已验证**：同机第二目录、`GBRAIN_HOME` 旁路、容器、CI/Cloud 均不得用于关闭本条（本机模拟效力有限：同机/同 OS/同 embedding 可达；新机 setup 教训=init 即配 embedding）。图谱边/backlink 保留未验证（本语料无互链，边以正文 wikilink 承载）。
-2. **文件管理中心选址与存量迁移**——**已闭合（2026-08-03）**：根=本机 filehub 目录（如 `~/filehub`，每机一个根，注册进 hub.json 的 `type: filehub` resource primary path）；同步策略=内容走网盘/Obsidian Sync（重资产不进 git），根目录本身可由网盘同步或暂不同步，换机按「目标机根 + rel_path」重解析（M5 已验证）；存量收编=增量（新走 inbox，旧按项目/领域按需），runbook 见 `skills/asset-ingest/references/migration.md`；真实使用时代入 runbook 验证。
-3. **无头执行的运维**——**已闭合（2026-08-03）**：失败可见性硬化——`jspace cron failures`（alias `check`，聚合 cron-failed + pending 暂存写 + 各 cron 状态，需关注退出码 1）+ 工作台 SessionStart hook 自动检查（其他 harness 手动）+ doctor 摘要；账号/配额模型沉淀于 `skills/jspace-use/references/headless-ops.md`（provider 代理 + failover、耗尽处置、敏感边界）；真实运行验证通过（成功路径 3 任务 real run ok；失败路径真实诱导 → cron-failed → check/doctor 闭环）。**真实定时触发已于 2026-08-10 观察确认**：launchd 自 08-07 起每日自然触发（08-07 21:14 inbox-tidy 失败 API 520 → incident 开 → 08-08 21:01 成功并 ack → 08-09 21:06 weekly-report / 22:11 memory-consolidate → 08-10 21:02 inbox-tidy 成功），证据在 `.jspace/logs/cron/` 与 `.jspace/state/runs|incidents/`，`jspace cron check` 汇总一致。本条**全部闭合**。
-4. **office 文件解析深度**——**已闭合（2026-08-03，#4 深度抽取交付）**：零依赖抽取器 `skills/asset-ingest/scripts/office-extract.py`（xlsx 逐表 / pptx 逐页，幻影行过滤 + 每 sheet 行数上限），深度路径=伴生 `.extract.md` 落 asset 层 + 页内 Key Facts 策展（含关键数字 + 引文）；示例验收 top-1（关键数字命中）。细则 `references/deep-extract.md`；可复跑协议 `skills/memory-recall/references/memory-acceptance.md`「office 深度抽取扩展(#4)」。
-5. **Linux/Windows 真机调度复核**——**部分关闭（2026-08-26）→ 残余四条工程闭合、真机复核挂账（2026-08-27）**：**调度 CRUD 侧已关闭**——CI cron 冒烟解锁（`if: false` 占位 → 按 `runner.os` 分派的真实断言）：Linux 走 crontab、Windows 走 schtasks，跑 `add → install → 调度器读回 → status → 二次 install no-op → remove → stale 检测 → uninstall` 全链 + doctor 断言（含「真机绝不报 `*_unverifiable`」的非降级侧）；macOS 只做 plan（launchd agent 绑定真实用户 GUI 会话，hosted runner 上 bootstrap 只会 flaky）。Linux 全链另在本机按 CI 脚本原样复核通过，并顺带修掉了「无 crontab 命令时 `cron install` 报 `status undefined`」这条无信息量文案。**B3 冒烟首跑（2026-08-26 dispatch 32969257020）即抓出 win32 读回真实 bug 并修复（#23）**：`schtasks /query /fo csv /nh` 输出任务路径形式（前导 `\`，如 `\JSpaceCron_<tag>_<id>`），裸名前缀过滤全丢 → install 成功后 doctor 仍报 `cron.not_installed`；修复后 inspect 的 `taskId` 又与 create 侧裸名不一致 → 二次 install 非 no-op（永远重建），一并统一为裸名（`/query /tn`、`/delete /tn` 同形）。修复轮复跑（32971530049）6 平台 + test 全绿；真实 runner 样本已固化为 win32 CSV 契约单测。**AVX-less 那条按替代关闭条件关闭**：`jspace update` 与 `install.ps1` 都在替换前把产物落暂存跑一次 `--version`，失败即丢弃、绝不触碰现有二进制（防变砖），文案点名 AVX2 边界，加文档明示。**四条残余于 2026-08-27 逐条工程闭合（E/A，无真机声称）**：① **真实触发**——**工程已闭合 / 真机待使用**：`docs/PLATFORMS.md` 新增「真实触发 runbook」（Linux 临时「当前 +2 分钟」cron / Windows DAILY 近时点 + 证据模板 + 明文排除项），runbook 的 CRUD 命令形态已在开发容器实跑校验。*效力边界*：只证明「任务已按正确 argv 注册」，**未**证明 crond / Task Scheduler 会在烘焙的 `PATH`/`HOME`（Linux）或 `/it` 交互令牌（Windows）下把二进制拉起并跑完；CI Cron CRUD smoke、`jspace cron run` 直跑、`schtasks /Run` 单独执行**都不算**真实触发。② **Linux 错过即跳过**——**替代关闭（A）**：代码审计（`crontabLine` 只发标准五字段行，无 `@reboot`/anacron/`run-parts`/missed-run 扫描；整仓生产代码 grep 零命中；`execute.ts` 的 `todaySuccess` 是去重闸门而非补跑产生器）+ 新增合同单测锁定「不得出现 anacron/@reboot 包装」+ PLATFORMS 新增「补跑语义合同」节。*效力边界*：这是 Vixie/cronie 用户 crontab 的平台固有语义、非 jspace 实现分支；未做「停 daemon 跨槽」真机实验；改用 anacron 或 systemd timer 承载的环境不在本 MVP 合同内。③ **Windows 登出边界**——**替代关闭（A）**：新增 argv 合同单测（DAILY/WEEKLY 及真实写路径 `buildContent` **必须**含 `/it`，**禁止** `/ru`/`/rp` 这两个「无人登录也运行」开关）+ PLATFORMS 登出边界升级为可勾选 runbook（含「锁屏/休眠 ≠ 登出」判读）。*效力边界*：未观察真实登出会话，结论依赖 Task Scheduler「仅当用户登录时运行」的默认语义 + 上述 argv 合同。④ **沙盒 / PID+UID namespace 降级**——**工程已闭合 / 真机待使用**：降级侧 `pidNamespaceIsolated` + `health()` 三态单测，映射侧 doctor 单测断言两个 `*_unverifiable` severity 为 **info**、不误报 `not_installed`、exit 0；非降级侧（真机绝不得报 `*_unverifiable`）由 `verify.yml` + CI cron 冒烟断言。*效力边界*：GH runner 禁止非特权 user namespace、本仓库开发环境 `NSpid:` 单值，两边都构造不出真实嵌套 namespace，降级路径只有单测证据。**真机复核待**：Linux 常驻机 + Windows 真机执行触发 runbook（①）、Linux 停 daemon 跨槽实验（②）、Windows 登出 runbook 第 3 步（③）、WSL2 + Codex sandbox（或 `bwrap --unshare-pid`）复核降级（④）——四条都只等真机使用，不等新工程。逐行状态、证据与状态词表见 `docs/PLATFORMS.md`「真机验证台账」。
+- 不建设通用聊天客户端、模型平台、浏览器或 Office 套件；不以替代现有 AI 产品为目标。
+- 不自研通用 agent 执行器、多 agent 编排平台、事件/消息网关或文件同步引擎；需要执行能力时优先调用用户已选用的工具。
+- 不承诺所有 harness 的 hook、权限、记忆、私有会话或工具行为完全一致；支持程度必须实测并披露。
+- 不把 gbrain 的当前 API、某一客户端、某个目录入口或“无常驻”方案当作不可改变的终局；也不因此预先构建插件平台或可插拔后端。
+- 不做无人负责、无限授权的自主运行；有范围、可监督的委托执行可以交给现有 harness，责任与验收不外包给 agent 自述。
+- 不以全量收集用户聊天、企业应用数据或重资产 embedding 获得所谓“全知记忆”；只接入完成已授权工作需要的数据。

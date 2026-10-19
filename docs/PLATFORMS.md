@@ -21,7 +21,7 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 
 合同:条目里的 PATH = **运行时按名解析的二进制所在目录(含其解释器)的传递闭包** ∪ 系统惯例目录。
 
-**为什么是闭包而不是「我 spawn 谁」**(issue #50 的另一面,2026-10-14 由 `inbox-tidy` 无头会话抓出):同一条 PATH 贯穿**多次**按名解析 —— 调度器起 `jspace cron run`,jspace 起 harness,harness 的 hook / 插件再起 `jspace`,而 shim 的 shebang 又要再解析一次解释器。清单漏掉任何一层,失败都只落在 harness 日志里(实测 `SessionEnd hook [jspace context session-end] failed: /bin/sh: jspace: command not found`;`gbrain` 能 `which` 命中却因 `#!/usr/bin/env bun` 找不到 Homebrew 的 `bun` 而报 `env: bun: No such file or directory`)。三层来源:
+**为什么是闭包而不是「我 spawn 谁」**(issue #50 的另一面,2026-10-14 由 `inbox-tidy` 无头会话抓出):同一条 PATH 贯穿**多次**按名解析 —— 调度器起 `jspace cron run --id <id>`,jspace 起 harness,harness 的 hook / 插件再起 `jspace`,而 shim 的 shebang 又要再解析一次解释器。清单漏掉任何一层,失败都只落在 harness 日志里(实测 `SessionEnd hook [jspace context session-end] failed: /bin/sh: jspace: command not found`;`gbrain` 能 `which` 命中却因 `#!/usr/bin/env bun` 找不到 Homebrew 的 `bun` 而报 `env: bun: No such file or directory`)。三层来源:
 
 - **直接目标**:harness(`harnessArgv` 经 `which`/`where` 解析)与 `gbrain`(以裸 `argv[0]` 起进程;`$GBRAIN_BIN` 可覆盖,且 `GBRAIN_*` 本就在 cron env 白名单里,所以覆盖不需要 PATH)。
 - **jspace 自身**:harness 的 hook / 插件按裸名调它(模板接线即 `jspace context session-start|turn|session-end`)。
@@ -29,7 +29,7 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 
 - 每个解析结果取 `dirname`,去重后放在系统目录(`/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`)**之前**,使用户自装的 harness 优先;解析不到的条目直接丢弃(裸名回退 = `which` miss)。
 - 闭包**有界**:visited 集合按已解析路径去重(自指 / 互指 shebang 立即收敛)+ 节点上限 16;只读每个候选文件首 128 字节取 shebang,绝不整读二进制。
-- 因此条目长度由**机器上二进制的位置**决定,与调用者 PATH 的长度**无关**;条目的其余部分(`cd … && jspace cron run --dir … --id …`)不变,提示词始终留在 `cron.json`。
+- 因此条目长度由**机器上二进制的位置**决定,与调用者 PATH 的长度**无关**;条目的其余部分(`cd … && jspace cron run --id … --dir …`)不变,提示词始终留在 `cron.json`。
 
 唯一装配点是 `cli/scheduler.ts::schedulerPath` —— launchd plist 与 crontab 行共用同一份值;单测 `cli/scheduler.test.ts` 锁定「超长 shell PATH 不能把行推过 1000」「深层 harness 目录仍留在行内」「jspace 自身在清单里」「shim 的 env 解释器进闭包」「环状 shebang 收敛」等条。`crontabLine` 的 1000 字符守卫保留不变 —— 错的是输入,不是守卫。
 
@@ -41,11 +41,11 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 - 每次 run 写 `.jspace/state/runs/<cron>/<run-id>.json`（`exit` = harness 子进程退出码；`status` = jspace 判定 ok/suspect/failed；另含 timedOut/outputLog/batchChanged）；prose 日志保留在 `.jspace/logs/cron/<id>/` 作为人类 payload。
 - failed/suspect/batch-stale run 打开或更新 incident（keyed by cron + failure class）；成功 retry 自动 resolve。
 - **fail-closed**：inbox 类 cron 无法验证批次变化（无 filehub / batch 日志未出现 / 未变）时，记 `batchChanged: false` 且 `status: "failed"`，incident class 为 `batch-stale`，CLI 退出码 1 —— 此时 harness 自身 `exit` 可能为 0，两者不矛盾（判定 vs 子进程事实）。同日成功判定要求 `status: "ok"`，并额外要求 `batchChanged`，所以 stale 会被下一个触发点重跑，不会静默跳过一天。
-- `cron ack [id]`：open → acknowledged（证据保留，不再告警）；`cron check` 仅对 open（未 ack）incident 或 actionable pending write 返回非 0。
+- `cron ack [id]`：open → acknowledged（证据保留，不再告警）；`cron failures` 仅对 open（未 ack）incident、actionable pending write 或 damaged machine-state 返回非 0。
 
 ## Harness 能力矩阵（M4，cron argv）
 
-`jspace cron run` 调 headless harness。各 harness 的 argv 由 `adapters/harness/`（capabilities.yaml 驱动，P1 数据化）组装；能力分级（automated = 有 `adapters/harness/*.test.ts` 单测证据）：
+`jspace cron run --id <id>` 调 headless harness。各 harness 的 argv 由 `adapters/harness/`（capabilities.yaml 驱动，P1 数据化）组装；能力分级（automated = 有 `adapters/harness/*.test.ts` 单测证据）：
 
 | harness | argv | 状态 | 备注 |
 |---|---|---|---|
@@ -61,7 +61,7 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 >
 > **无头子进程 env（B6）**：`cronSpawnEnv(platform, harness)` 按 capabilities 声明的 per-harness 白名单放行（如 claude 仅 `ANTHROPIC_*` + `GBRAIN_*` + 基础 env）；默认**不含**跨厂商 API key 与 `NODE_OPTIONS`。claude 代理需保留 `ANTHROPIC_BASE_URL` 等——已在 `ANTHROPIC_*` 前缀内。
 >
-> **支持集** = 五个会话 harness（Claude Code / Grok Build / OpenCode / Pi / Cursor）+ Codex（cron 兼容）。
+> **支持集** = 五个会话 harness（Claude Code / Grok Build / OpenCode / Pi / Cursor）+ Codex（headless cron；无会话 hook，JSpace 不代写其 MCP 配置）。
 
 ## Harness lifecycle 能力矩阵（M4，会话生命周期）
 
@@ -110,7 +110,7 @@ bin/jspace inbox status                # 期望:empty
 
 # 3. cron 全链
 bin/jspace cron list                   # 期望:4 默认任务,全部默认 disabled(模板默认;需 jspace cron enable <id> 后 cron install;启用后 doctor 才报未安装)
-bin/jspace cron run inbox-tidy --dry-run   # 期望:打印将执行的命令
+bin/jspace cron run --id inbox-tidy --dry-run   # 期望:打印将执行的命令
 bin/jspace cron install                # 期望:调度器可见对应任务(见各平台)
 bin/jspace cron status inbox-tidy      # 期望:never run
 bin/jspace cron uninstall              # 期望:任务移除
@@ -133,12 +133,12 @@ bin/jspace cron uninstall              # 期望:任务移除
 
 ## 真实触发 runbook(Linux crond / Windows Task Scheduler)
 
-> **真实触发的定义**:系统调度器**自行**在约定时刻把 `jspace cron run …` 拉起,并在 `.jspace/state/runs/<cron>/` 留下新 run JSON、`.jspace/logs/cron/<id>/` 留下 prose 日志。macOS launchd 的自然触发已在 GOAL 开放问题 #3 用真实日志闭合;本 runbook 补 Linux + Windows 两侧,执行后按下方证据模板回写台账。
+> **真实触发的定义**:系统调度器**自行**在约定时刻把 `jspace cron run --id <id> …` 拉起,并在 `.jspace/state/runs/<cron>/` 留下新 run JSON、`.jspace/logs/cron/<id>/` 留下 prose 日志。macOS launchd 的自然触发已在 GOAL 开放问题 #3 用真实日志闭合;本 runbook 补 Linux + Windows 两侧,执行后按下方证据模板回写台账。
 
 **以下都不算真实触发**(台账/GOAL 均不得据此写「真实触发已验证」):
 
 - CI 的「Cron CRUD smoke」——只证明**任务已注册且 argv 正确**(CRUD ≠ fire);hosted runner 的 crond/launchd 触发时机不是可信信号,也没有真实 harness CLI。
-- `jspace cron run <id>`(人工或脚本直跑)——绕过调度器。
+- `jspace cron run --id <id>`(人工或脚本直跑)——绕过调度器。
 - `schtasks /Run /tn <task>`——经 Task Scheduler 执行,但**非钟点触发**;最多记为「调度器可执行入口冒烟」。
 
 ### Linux:临时「下一分钟」cron(实取 +2 分钟余量)
@@ -216,7 +216,7 @@ run 证据: .jspace/state/runs/trigger-probe/<run-id>.json(status=<ok|failed>)
 
 代码审计结论(`adapters/scheduler/linux.ts`,2026-08-27):
 
-- `crontabLine` 只发标准五字段 crontab 行(`分 时 日 月 周` + `cd … && jspace cron run …`);无 `@reboot` / `@daily` 特殊调度,无 anacron / `run-parts` 间接层,无「missed run」扫描或启动时补跑包装。整仓 grep `anacron|@reboot|StartWhenAvailable|catch-up` 在生产代码中零命中。
+- `crontabLine` 只发标准五字段 crontab 行(`分 时 日 月 周` + `cd … && jspace cron run --id <id> …`);无 `@reboot` / `@daily` 特殊调度,无 anacron / `run-parts` 间接层,无「missed run」扫描或启动时补跑包装。整仓 grep `anacron|@reboot|StartWhenAvailable|catch-up` 在生产代码中零命中。
 - `applyBatch` / `uninstallAll` 只重写本工作台的受管块,不注册任何附加单元(无 systemd timer、无 `@reboot` 引导项)。
 - 唯一与「补跑」沾边的代码是 `application/automation/execute.ts` 的**当日成功去重**(`todaySuccess` → 已成功则 skip,`--force` 绕过)。它是为 macOS launchd 唤醒补跑做的**去重闸门**,只会**抑制重复运行**,永远不会**产生**一次错过的运行 —— 因此不构成 Linux 侧的补跑路径。
 - 该合同由单测锁定:`adapters/scheduler/scheduler.test.ts`「linux install writes plain 5-field crontab entries — no anacron/@reboot catch-up wrapper」。
@@ -258,17 +258,17 @@ run 证据: .jspace/state/runs/trigger-probe/<run-id>.json(status=<ok|failed>)
 > | **替代关闭** | 显式替代关闭条件 + 效力边界句，条目可关，脚注留「真机复核待…」 | 弱于真机 |
 > | **真机已验证** | 真机执行 runbook 并回写证据模板全字段 | 最强 |
 >
-> **红线**：CI 的 Cron CRUD smoke、`jspace cron run <id>` 直跑、`schtasks /Run` 单独执行 **都不得**在本台账或 `GOAL.md` 写成「真实触发已验证」。CRUD ≠ fire；CLI 直跑 ≠ 调度器拉起。
+> **红线**：CI 的 Cron CRUD smoke、`jspace cron run --id <id>` 直跑、`schtasks /Run` 单独执行 **都不得**在本台账或 `GOAL.md` 写成「真实触发已验证」。CRUD ≠ fire；CLI 直跑 ≠ 调度器拉起。
 
 | 平台 | 用例（见验证矩阵） | 状态 | 证据 |
 |---|---|---|---|
 | Linux | crontab `install → status → uninstall` 全链（CRUD） | **CRUD 已验证**（2026-08-26） | ① 合入前本机（Ubuntu 24.04 + cron，`NSpid:` 单值）按 `build.yml` 脚本原样通过（`bun-linux-x64-baseline`）。② **main @ `13bf260`（#21 合入后）再次原样通过**（`bin/jspace-smoke`）：doctor 报 `cron.not_installed` → install → `crontab -l` 含受管块与 smoke-test → status `never run` → 二次 install no-op → remove 后 `cron.stale_task` → uninstall 后受管块消失。同一脚本已进 CI（linux 两格）。真实触发与补跑语义见下面两行（本行**不**覆盖） |
-| Linux | **① 真实触发**：crond 到点自行拉起 `jspace cron run`，`.jspace/state/runs/` 出现新 run | **工程已闭合 / 真机待使用**（2026-08-27） | 已交付（E）：本文档「真实触发 runbook」§Linux——临时「当前 +2 分钟」cron → install → `crontab -l` 摘录 → 等 150s → 断言 runs 目录 + `cron status` + crontab 重定向日志 → uninstall/remove 清理；含明文排除项（CI smoke / `cron run` 直跑 / `schtasks /Run`）与证据模板。runbook 的 CRUD 命令形态已在本仓库开发容器实跑校验（装 cron 包后 add → install → `crontab -l` 见受管块 → status → uninstall → 块消失）。**效力边界**：本容器**无 cron 守护进程**（`pgrep -x cron` 空），只证明「任务已按正确 argv 注册」，**未**证明 crond 能在烘焙的 `PATH`/`HOME` 下成功 spawn 该二进制并跑完。真机复核待有 Linux 常驻机执行 runbook 并回写证据模板 |
+| Linux | **① 真实触发**：crond 到点自行拉起 `jspace cron run --id <id>`，`.jspace/state/runs/` 出现新 run | **工程已闭合 / 真机待使用**（2026-08-27） | 已交付（E）：本文档「真实触发 runbook」§Linux——临时「当前 +2 分钟」cron → install → `crontab -l` 摘录 → 等 150s → 断言 runs 目录 + `cron status` + crontab 重定向日志 → uninstall/remove 清理；含明文排除项（CI smoke / `cron run` 直跑 / `schtasks /Run`）与证据模板。runbook 的 CRUD 命令形态已在本仓库开发容器实跑校验（装 cron 包后 add → install → `crontab -l` 见受管块 → status → uninstall → 块消失）。**效力边界**：本容器**无 cron 守护进程**（`pgrep -x cron` 空），只证明「任务已按正确 argv 注册」，**未**证明 crond 能在烘焙的 `PATH`/`HOME` 下成功 spawn 该二进制并跑完。真机复核待有 Linux 常驻机执行 runbook 并回写证据模板 |
 | Linux | **② 补跑语义**：错过槽位即跳过，不产生 run（无 anacron / 无 catch-up） | **替代关闭**（A，2026-08-27） | 替代关闭条件：① 代码审计（本文档「补跑语义合同」节）——`crontabLine` 只发标准五字段 crontab 行，无 `@reboot`/anacron/`run-parts`/missed-run 扫描，`applyBatch`/`uninstallAll` 不注册附加单元；整仓生产代码 grep `anacron|@reboot|StartWhenAvailable|catch-up` 零命中；② 合同单测 `adapters/scheduler/scheduler.test.ts`「linux install writes plain 5-field crontab entries — no anacron/@reboot catch-up wrapper」；③ 澄清 `execute.ts` 的 `todaySuccess` 是**去重闸门**（抑制重复），永不**产生**错过的运行。**效力边界**：错过行为是 Vixie/cronie 用户 crontab 的平台固有语义、非 jspace 实现分支；未在目标发行版上真机做「停 daemon 跨槽」实验；若某环境改用 anacron 驱动或 systemd timer 承载，不在本 MVP 合同内。真机复核待执行「补跑语义合同」节末的错过实验协议 |
 | Linux | 无 crontab 命令 / 无 crond → `cron install` fail-fast + doctor warning | **已验证**（2026-08-26） | 本机临时移除 `/usr/bin/crontab`：`doctor` 报 warning `crontab command not found on this system` 且 **exit 0**（健康检查不抛）；`cron install` **exit 1**，文案 `crontab command not available (…ENOENT); install the cron package first (…)`（本次复核发现原文案是无信息量的 `crontab -l failed (status undefined)`，已硬化为 `adapters/scheduler/linux.ts` 的 `crontabUnavailable`）。无 crond：cron 已安装但守护进程未启动 → doctor 报 warning `cron daemon not running…` |
 | Linux | **④ 沙盒 / PID+UID namespace 隔离** → doctor info 降级（`cron.daemon_unverifiable` 等，不报 warning） | **工程已闭合 / 真机待使用**（2026-08-27） | 降级侧（E）单测齐全：`adapters/scheduler/scheduler.test.ts` 的 `pidNamespaceIsolated` 解析 + `health()` 三态（ok / stopped / unverifiable）+ missing-cmd 分支；映射侧 `application/diagnostics/doctor.test.ts` 断言两个 `*_unverifiable` 的 severity **是 `info`**、不报 `cron.daemon_stopped` / `cron.crontab_missing` / `cron.not_installed`，且 doctor **exit 0**。**非降级侧**（真机绝不得报 `*_unverifiable`）由 `verify.yml` 与 CI cron 冒烟断言，并有「可核实宿主 → 两个 warning 都保留」的反向单测。**效力边界**：构造不出真实嵌套 namespace——本仓库开发环境 `NSpid:` 单值（非嵌套），GitHub runner 禁止非特权 user namespace（`verify.yml` 尾注实测）；因此降级路径只有单测证据，无真机观察。真机复核建议 WSL2 + Codex sandbox（或 `bwrap --unshare-pid`）内跑 `jspace doctor` 期望 info 降级、宿主上再跑确认非降级[^ns-wsl2] |
 | Windows | schtasks `install` → `/query` 读回 → `uninstall`（CRUD） | **注册/读回已进 CI 断言**（2026-08-26） | `build.yml`「Cron CRUD smoke (Windows schtasks)」：install → `schtasks /query /fo csv /nh` 出现 `JSpaceCron_*` → `cron status` 为 `never run` → `cron remove` 后 doctor 报 `cron.stale_task` → uninstall 后任务消失。真实触发与登出边界见下面两行（本行**不**覆盖） |
-| Windows | **① 真实触发**：Task Scheduler 到点自行拉起 `jspace cron run` | **工程已闭合 / 真机待使用**（2026-08-27） | 已交付（E）：本文档「真实触发 runbook」§Windows——`/st` 设近时点 → install → `schtasks /query /v /fo list` 看 `Next Run Time` → 等过时点 → 断言 runs 目录新增 + `Last Run Time` 已推进 → 清理；含明文排除项（`schtasks /Run` 只是「调度器可执行入口冒烟」，**不能**关闭本行）。**效力边界**：CI 只证明任务已注册且 `/tr`/`/st`/`/it` argv 正确（CRUD ≠ fire），未证明 Task Scheduler 在 `/it` 交互令牌下能 spawn 该二进制并跑完；hosted runner 的触发时机不是可信信号。真机复核待有 Windows 真机执行 runbook 并回写证据模板 |
+| Windows | **① 真实触发**：Task Scheduler 到点自行拉起 `jspace cron run --id <id>` | **工程已闭合 / 真机待使用**（2026-08-27） | 已交付（E）：本文档「真实触发 runbook」§Windows——`/st` 设近时点 → install → `schtasks /query /v /fo list` 看 `Next Run Time` → 等过时点 → 断言 runs 目录新增 + `Last Run Time` 已推进 → 清理；含明文排除项（`schtasks /Run` 只是「调度器可执行入口冒烟」，**不能**关闭本行）。**效力边界**：CI 只证明任务已注册且 `/tr`/`/st`/`/it` argv 正确（CRUD ≠ fire），未证明 Task Scheduler 在 `/it` 交互令牌下能 spawn 该二进制并跑完；hosted runner 的触发时机不是可信信号。真机复核待有 Windows 真机执行 runbook 并回写证据模板 |
 | Windows | **③ 登出不触发**（产品边界，文档明示非 bug） | **替代关闭**（A，2026-08-27） | 替代关闭条件：① argv 合同单测 `adapters/scheduler/scheduler.test.ts`「win32 create argv always carries /it and never a logged-out escalation switch」——DAILY/WEEKLY 两种及真实写路径 `win32Adapter.buildContent` 都必须含 `/it`，且**禁止** `/ru`（run-as，如 SYSTEM）与 `/rp`（存储密码）这两个会让任务在无人登录时也运行的开关；② 产品边界文档化 + 可勾选协议（本文档「Windows 登录/登出边界 runbook」，含「锁屏/休眠 ≠ 登出」判读）。**效力边界**：未观察真实登出会话；结论依赖 Microsoft Task Scheduler「仅当用户登录时运行」的默认语义 + 上述 argv 合同；CI 的 schtasks CRUD **不**构成登出已验证（hosted runner 无登出语义）。真机复核待执行登出 runbook 第 3 步 |
 | Windows | 非法 schedule（MONTHLY / dom / month 定值）→ 显式报错 | **已进 CI 断言**（2026-08-26） | 同上 Windows 步骤末尾的负向断言：`cron add --schedule "0 21 1 * *"` 必须非零退出且文案含 `not supported on Windows`（`cronAdd` 在 win32 上 add 期即拒绝）。纯函数侧另有 `isWindowsInstallable` 单测 |
 | Windows | schtasks `/tr` 超长（>260 字符）→ build 阶段 fail loud | 未验证 | — |
@@ -295,7 +295,7 @@ run 证据: .jspace/state/runs/trigger-probe/<run-id>.json(status=<ok|failed>)
 
 ## 纯函数单测(本机可跑,无需真机)
 
-`bun test` 覆盖:`adapters/scheduler/scheduler.test.ts`（planReconciliation create/update/delete、两 workbench tag 隔离、crontabBlock 单引号/`%` 转义/1000 字符、replaceManagedBlock、schtasksArgs、isWindowsInstallable、buildPlist）、`application/automation/status.test.ts`（cron status/failures/check 结构化 incidents）、`application/automation/use-cases.test.ts`（cronInstall 端到端）。对抗用例:路径含空格/单引号/`%`、dow=7、month 定值。
+`bun test` 覆盖:`adapters/scheduler/scheduler.test.ts`（planReconciliation create/update/delete、两 workbench tag 隔离、crontabBlock 单引号/`%` 转义/1000 字符、replaceManagedBlock、schtasksArgs、isWindowsInstallable、buildPlist）、`application/automation/status.test.ts`（cron status/failures 结构化 incidents）、`application/automation/use-cases.test.ts`（cronInstall 端到端）。对抗用例:路径含空格/单引号/`%`、dow=7、month 定值。
 
 ## 一键安装验证矩阵
 

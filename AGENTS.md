@@ -6,7 +6,7 @@
 
 本仓库只维护以下内容：
 
-- `cli/`：JSpace CLI（TypeScript/bun 源码，`bun run cli/main.ts` 运行；`bun run build` 产出 `bin/jspace` 编译二进制）。命令面：`init` / `doctor` / `domain` / `resource` / `project` / `filehub` / `inbox` / `cron` / `ingest` / `pending` / `update` / `workspace diff|upgrade` / `context session-start|turn|pre-compact|session-end` / `gbrain wire` / `harness init|wire` / `skills install`。核心实现分层：`core/`（契约）→ `application/`（领域用例）→ `adapters/`（harness/scheduler/process/fs 适配）→ `scripts/`（生成与校验）。
+- `cli/`：JSpace CLI（TypeScript/bun 源码，`bun run cli/main.ts` 运行；`bun run build` 产出 `bin/jspace` 编译二进制）。命令面：`init` / `doctor` / `domain` / `resource` / `project` / `filehub` / `inbox` / `cron` / `ingest` / `pending` / `memory period|check` / `update` / `workspace diff|upgrade` / `context session-start|turn|pre-compact|session-end` / `harness init|wire` / `skills install`。核心实现分层：`core/`（契约）→ `application/`（领域用例）→ `adapters/`（harness/scheduler/process/fs 适配）→ `scripts/`（生成与校验）。
 - `templates/workbench/`：工作台模板，包含 `.jspace/hub.json`、工作台 `AGENTS.md`、各 harness 接线 seed（`.claude/settings.json` / `.grok/hooks/jspace.json` / `.opencode/plugins/jspace.ts` / `.cursor/hooks.json`）。
 - `skills/`：官方技能源码，经 `scripts/gen-assets.ts` 嵌入二进制。当前 7 个 workbench 技能——`jspace-use`（使用指南）、`asset-ingest`（资料转知识资产）、`memory-recall`（精准召回）、`memory-writeback`（收工写回）、`workbench-retro`（每周纪律自省）、`weekly-report`（周报）、`memory-consolidate`（周记忆巩固），均物化进工作台 `.jspace/skills/<name>/`（唯一物理副本），各投影目录 `.claude/skills/` `.grok/skills/` `.opencode/skills/` `.agents/skills/` 以目录软链指向它（薄链化，issue #39；多 harness 共享，见 `adapters/harness/capabilities.yaml`）；另有 2 个 `scope: global` 的机器级技能——`harness-config`（多 harness 全局治理）与 `jspace-adopt`（旧项目非破坏收编）（由 `jspace skills install` 安装到 `~/.agents/skills/`，不随工作台 init 物化，缺失由 doctor `skills.global_missing` 提示）。manifest 合计 9 个。周期任务的输出契约归 skill 层（`cron.json` 用 `target: {kind: "skill"}`，不写内联长 prompt——cron.json 是 user 数据，升级不覆盖，内联契约会被冻结）。
 
@@ -18,15 +18,15 @@
 
 ## Product Vision
 
-完整愿景见根目录 **`GOAL.md`**（North Star，最高对齐物；冲突时以它为准）。摘要：JSpace 是**可移植的本地 AI 工作底座：路由 + 记忆 + 资产 + 定时**——在任意机器上安装 `jspace` CLI 初始化工作台，任何 AI harness（Claude Code / Grok Build / OpenCode / Pi / Cursor，codex 兼容 cron）从同一入口路由进正确的域、读写同一份持久记忆（gbrain）；工作产生的重资产（pdf/ppt/excel/md）被自动整理进独立的文件管理中心（Obsidian 可作为视图打开）；定时任务经系统调度 + harness 无头执行自动运行。对比基线是 hermes / OpenClaw 等常驻运行时方案：用静态组合覆盖其主要能力，而不引入常驻运行时与全家桶。
+完整愿景见根目录 **`GOAL.md`**（North Star，最高对齐物；冲突时以它为准）。摘要：JSpace 是**用户拥有的、可移植的个人 AI 工作底座，让同一项真实工作跨会话、跨工具持续推进**。路由、记忆、资产与定时是当前机制；长期价值是减少重复交代背景和交接损耗，保留可信来源，交付可验证的成果。完整工作中心可以有多个入口，JSpace 负责其中的持久上下文与执行衔接，优先复用现有客户端和 harness。新目标不代表跨工具任务恢复、远程接续或通用业务验收已经实现。
 
 - 本仓库是**开发/发行目录**；产品形态是 CLI，目标机上的工作台才是日常入口。
-- 能力分工：静态规则层（AGENTS.md + hub.json + 域）负责路由，gbrain 负责记忆（事实 + 资产指针）并兼作资料检索层（自带资料摄入/文件登记能力），文件管理中心负责重资产本体（人类可读），惯用 harness 负责执行，系统调度负责定时。**记忆存指针、资产存本体**。不封装 gbrain、不自研执行器、不自研文件同步。
-- **非目标（显式不做）**：常驻运行时、事件驱动/入站多端网关（如消息触发代理）、自主代理、重资产全量二进制 embedding。系统调度覆盖"定时"，不承诺覆盖"事件"。
+- 能力分工：静态规则层（AGENTS.md + hub.json + 域）负责路由，项目自己的文档/任务系统负责执行细节，gbrain 负责持久事实与资产指针，文件管理中心负责归档本体，惯用 harness 负责执行，系统调度负责定时。**记忆存事实与指针、资产存本体；共享上下文不等于同步私有会话。** 显式写回、来源标签与恢复机制保持有效；不自研记忆数据库、执行器或文件同步。
+- **当前边界与非目标**：不引入 JSpace 自有常驻运行时，不自研通用聊天客户端、多 agent 编排或事件/消息网关，不做重资产全量二进制 embedding。低运维是约束，是否增加运行机制由真实工作需求另行证明。系统调度当前只覆盖定时；有边界、可监督的委托执行优先复用现有 harness。
 - **多机与分发采用分层同步**：git 同步规则与域内容；资产层走网盘/Obsidian Sync；registry 资源绝对路径属"本机真理"，按机器各自维护（doctor 对缺失路径仅告警即为此设计）。模板去个人化与路径占位符机制是分发（R7）的前置任务。
 - 风险备忘：gbrain 为外部开源项目，选择不封装；数据本地（PGLite），上游停滞时数据仍可迁移。
-- 成熟靠真实使用迭代涌现，不预先设计；当前迭代任务只是演进路径上的一步（里程碑 M0-M5 见 GOAL.md）。
-- 所有迭代决策（范围、拆任务、暂缓项）都应向 `GOAL.md` 对齐；决策留痕见任务 PRD 的 Key Decisions。
+- 成熟靠真实使用迭代涌现，不预先设计；先继续 M7，保留真实第二机与跨平台真机验收的开放状态。历史交付与证据见 `docs/GOAL-HISTORY.md`，现行演进与候选接续实验见 `GOAL.md`。
+- 所有迭代决策（范围、拆任务、暂缓项）都应向 `GOAL.md` 对齐；以真实工作接续、来源正确、产物验收与维护成本衡量价值，不以接线数量或写回数量替代业务收益。决策留痕见任务 PRD 的 Key Decisions。
 
 ## Modes
 

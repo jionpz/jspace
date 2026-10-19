@@ -13,7 +13,7 @@
 | cursor | `sessionEnd`（`reason` = `completed`/`aborted`/`error`/`window_close`/`user_close`） | Cursor hooks 官方文档 | ❌ fire-and-forget（「响应被记录但不使用」） | ✅ `.cursor/hooks.json` → `jspace context session-end` | **best_effort**（本轮升级） |
 | opencode | 无对应事件（`session.deleted` / `server.instance.disposed` 语义不符） | OpenCode plugin 事件表 | — | ❌ 不接 | **manual**（保持） |
 | pi | 扩展事件只有 `session_start` / `before_agent_start` | 现有 harness-pi.md 接线面 | — | ❌ 不接 | **manual**（保持） |
-| codex | 无 hook 通道（`hook_format: none`，仅 cron 兼容） | capabilities.yaml | — | ❌ 不接 | **manual**（保持） |
+| codex | 无 hook 通道（`hook_format: none`，headless cron 条目） | capabilities.yaml | — | ❌ 不接 | **manual**（保持） |
 
 **一句话**：claude / cursor 有官方 session-end 事件、本轮接线并升级为 best_effort；opencode / pi / codex **没有语义匹配的事件，保持 manual**，靠 `jspace context turn` 的每会话一次轻提示补偿（见下方「manual + turn 提示补偿」）。
 
@@ -49,7 +49,7 @@
 
 OpenCode 的事件总线里最接近的三个都不是「会话收工」：
 
-- `session.idle`（已 deprecated，官方建议改用 `session.status`）：**每个 agent turn 结束都会触发**。拿它当 session-end 会变成逐 turn 噪声，而且现有 seed 已经把它用在 `jspace cron check`（失败面可见）上。
+- `session.idle`（已 deprecated，官方建议改用 `session.status`）：**每个 agent turn 结束都会触发**。拿它当 session-end 会变成逐 turn 噪声，而且现有 seed 已经把它用在 `jspace cron failures`（失败面可见）上。
 - `session.deleted`：会话被**删除**时触发。会话被删之后再往里注入提醒没有意义。
 - `server.instance.disposed` / `global.disposed`：进程/实例级关停，不是某个会话的收工点。
 
@@ -61,7 +61,7 @@ Pi 的扩展接口在本工作台已接的事件是 `session_start` / `before_ag
 
 ## codex — 无 hook 通道（保持 manual）
 
-`hook_format: none`，仅作为 cron 兼容项存在（`documented: false`）。→ 保持 `manual`。
+`hook_format: none`，作为正式受检条目存在（有 `harness-codex.md`），只覆盖 headless cron，无会话事件。→ 保持 `manual`。
 
 ---
 

@@ -4,9 +4,9 @@
 
 ## Overview
 
-- Machine state lives in `.jspace/state/` (gitignored, structured JSON): `runs/`, `incidents/`, `ingest/`, `upgrades/`, `materialized.json`.
+- Machine state lives in `.jspace/state/` (gitignored, structured JSON): `runs/`, `incidents/`, `ingest/`, `pending/`, `locks/`, `upgrades/`, `materialized.json`.
 - Human-readable payloads live in `.jspace/logs/cron/<id>/` (prose markdown). Note this directory also holds operational files (locks like `cron.<id>.lock`, backups) — only `state/` is the sole home of machine truth.
-- Filehub-side logs: `<filehub>/.jspace-logs/inbox-batch.md` (batch execution log — the asset-ingest skill writes it and cron/doctor read the same path) and `<filehub>/.jspace-logs/<id>.APPLY.json` (pending gbrain write envelopes).
+- Filehub-side logs: `<filehub>/.jspace-logs/inbox-batch.md` (batch execution log — the asset-ingest skill writes it and cron/doctor read the same path). Pending gbrain envelopes live in `<workbench>/.jspace/state/pending/<id>.APPLY.json`.
 - Recovery / idempotency / compensation decisions are made from the structured state, never from prose.
 
 ## Log Levels

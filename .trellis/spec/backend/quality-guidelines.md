@@ -33,46 +33,48 @@
 - **Mixed DI**: selected ports are injected (generated manifests, journal, readFile, skill context, clock) by the cli layer; filesystem goes through `adapters/fs` directly. `application` stays free of `cli` imports.
 - **External-process ports**: any production dep backed by an external CLI (gbrain) lives in `adapters/` and routes through `adapters/process/spawn.ts` (timeout + output cap + stdin) — a bare `spawnSync` in application is a hang risk for harness hooks. The port is async so a stalled process resolves `{ok:false}` after the timeout instead of blocking (issue #8 #8). The scheduler layer has the same red line via `adapters/scheduler/spawn.ts` (crontab/schtasks/plutil/launchctl always get `SCHEDULER_SPAWN_TIMEOUT_MS`; issue #9 #9-04).
 - **Generator bootstrap hygiene**: a generator script must not import modules that load its own generated output (gen-assets → registry → capabilities.generated.ts was a bootstrap loop; fixed by moving `ownershipFor` to a pure module, issue #8 #17). Generated assets stay committed + freshness-checked.
-- **Harness machine-config paths are SSOT data**: gbrain MCP config paths (path/format/server_key) and verified global-context entrypoints live in capabilities.yaml `mcp_config` / `global_context`, consumed by `harness wire` / `gbrain wire` / doctor — never hardcoded in wiring code (issue #8 #16). `manual` / `unverified` are explicit non-check states, not wiring paths.
+- **Harness machine-config paths are SSOT data**: gbrain MCP config paths (path/format/server_key) and verified global-context entrypoints live in capabilities.yaml `mcp_config` / `global_context`, consumed by `harness wire` / doctor — never hardcoded in wiring code (issue #8 #16). `manual` / `unverified` are explicit non-check states, not wiring paths.
 - **Structured diagnostics**: `doctor`/`inspect` classify invalid / unbound / missing / drift with distinct codes and severities — never collapsed.
 
 
-## Scenario: Workbench mutation lock
+## Scenario: State-root mutation locks
 
 ### 1. Scope / Trigger
 
 - Trigger: any cross-process read-modify-write of persistent state under a **state root**.
-- Two roots exist, each with its own lock file:
-  - workbench root: `hub.json`, `local.json`, `cron.json`, `state/ingest/*.json`, `state/briefing.json`, workspace seeds/skills/upgrade journal.
-  - filehub root: `.jspace-logs/*.APPLY.json` pending envelopes.
+- All mutable CLI state is workbench-owned: `hub.json`, `local.json`, `cron.json`, `state/ingest/*.json`, `state/pending/*.APPLY.json`, `state/briefing.json`, workspace seeds/skills/upgrade journal.
+- The filehub owns asset bodies and the inbox batch log; pending envelopes never live there.
 - Goal: never silently lose a user-visible mutation. A competing writer must either run after the first completes or fail loudly.
 
 ### 2. Signatures
 
 ```ts
-export const MUTATION_LOCK_STALE_MS = 30_000;        // workbench budget
-export const FILEHUB_MUTATION_LOCK_STALE_MS = 120_000; // > one gbrain call
+export const MUTATION_LOCK_STALE_MS = 30_000;
+export const PENDING_MUTATION_LOCK_STALE_MS = 120_000; // > one gbrain call
+export const INGEST_MUTATION_LOCK_STALE_MS = 120_000;  // > one gbrain call
 
 export function mutationLockPath(root: string): string;        // <root>/.jspace/state/locks/mutation.lock
-export function filehubMutationLockPath(fhRoot: string): string; // <fhRoot>/.jspace-logs/mutation.lock
+export function pendingMutationLockPath(root: string): string; // <root>/.jspace/state/locks/pending.lock
+export function ingestMutationLockPath(root: string): string;  // <root>/.jspace/state/locks/ingest.lock
 
 export function withWorkbenchMutationLock<T>(root, fn: () => T, deps?): T;
-export function withFilehubMutationLock<T>(fhRoot, fn: () => T, deps?): T;
-export function withFilehubMutationLockAsync<T>(fhRoot, fn: () => Promise<T>, deps?): Promise<T>;
+export function withPendingMutationLock<T>(root, fn: () => T, deps?): T;
+export function withPendingMutationLockAsync<T>(root, fn: () => Promise<T>, deps?): Promise<T>;
+export function withIngestMutationLock<T>(root, fn: () => T, deps?): T;
 ```
 
 - Public mutators keep their existing signatures; internally they delegate to a `*Impl` function wrapped by the matching lock.
 - Covered paths: `domain add/remove(--purge)`, `project add`, `resource add/remove`, `filehub init --register`, `cron add/remove/enable/disable`, `ingest begin/advance/complete/fail/rollback`, `pending apply/ack`, `context session-start`/`turn` briefing writes, `workspace upgrade/rollback`.
 - Read-only commands and `--dry-run` call the `*Impl` directly and never acquire the lock.
-- Pending envelopes are locked at the **filehub** root: several workbenches can bind one filehub, so a workbench-scoped lock would not serialize envelope writers at all.
+- Pending and ingest use dedicated workbench locks instead of the ordinary registry lock so a slow backend does not block unrelated registry edits.
 
 ### 3. Contracts
 
-- Lock file: `<workbench>/.jspace/state/locks/mutation.lock` (or `<filehub>/.jspace-logs/mutation.lock`).
-- One workbench-level lock protects every workbench state file; do not introduce per-file locks or lock ordering.
+- Lock files: `<workbench>/.jspace/state/locks/{mutation,pending,ingest}.lock`.
+- One ordinary workbench lock protects registry/seed state; pending and ingest get dedicated locks for external-call budgets.
 - **Critical-section budget**: a lock is held at most `staleMs`. Anything whose duration is unbounded (recursive deletion of a directory tree) or that can block for longer than the budget (an external call) must run OUTSIDE the lock, or the next process will treat a live holder as crash residue and steal the lock. Expensive-but-bounded steps (single-file copy) may stay if the design names the boundary and the follow-up trigger.
 - A heartbeat/lease renewal is NOT a valid way to exceed the budget here: this codebase's fs work is synchronous, so a timer cannot fire while a blocking call runs.
-- The workbench budget (30s) is shorter than `GBRAIN_TIMEOUT_MS`; any lock held across a gbrain call MUST use the filehub budget (120s = 4x) and MUST hold for a single unit of work, never an unbounded batch.
+- The ordinary budget (30s) is shorter than `GBRAIN_TIMEOUT_MS`; pending/ingest locks held across a gbrain call use the 120s budget and MUST hold for a single unit of work, never an unbounded batch.
 - The callback MUST span the full `read → validate → mutate → write` section. Locking only the final write leaves duplicate-id/singleton checks racing on stale snapshots.
 - Acquisition is `O_EXCL`; the file contains a process-unique ownership token. Release unlinks only when the token still matches.
 - A fresh foreign lock fails fast. A lock older than 30 seconds is treated as a crash residue and reclaimed once.
@@ -88,10 +90,10 @@ export function withFilehubMutationLockAsync<T>(fhRoot, fn: () => Promise<T>, de
 | `EPERM` / `EACCES` / `ENOSPC` / `EIO` while creating/writing the lock | Propagate; never report it as "another process is running" |
 | Post-create token write fails | Remove our 0-byte poison lock, then propagate |
 | Callback throws | Release in `finally`; never leave our own fresh lock behind |
-| Same root nested in one process | Throw `internal: nested workbench mutation lock for <root>` (filehub: `... nested filehub mutation lock for <fhRoot>`) |
+| Same root nested in one process | Throw `internal: nested <noun> mutation lock for <root>` |
 | Dry-run / read-only command | Do not create or inspect the lock file |
 | Lock held across a > budget step | Forbidden — restructure so the lock spans only the O(1) handoff (e.g. `rename`), and do the slow part after release |
-| Crashed pending applier | Its filehub lock is reclaimed after 120s; the envelope stays `staged` and the next apply is idempotent |
+| Crashed pending applier | Its workbench pending lock is reclaimed after 120s; the envelope stays `staged` and the next apply is idempotent |
 
 ### 5. Good/Base/Bad Cases
 
@@ -102,7 +104,7 @@ export function withFilehubMutationLockAsync<T>(fhRoot, fn: () => Promise<T>, de
 ### 6. Tests Required
 
 - Unit lock tests: fresh contention, stale takeover, release-if-ours, same-root reentry, distinct-root holding, non-contention error propagation.
-- Filehub lock tests: envelope-adjacent path, `FILEHUB_MUTATION_LOCK_STALE_MS > GBRAIN_TIMEOUT_MS`, per-root nesting, async release-on-reject.
+- Pending/ingest lock tests: workbench-local paths, `*_MUTATION_LOCK_STALE_MS > GBRAIN_TIMEOUT_MS`, per-root nesting, async release-on-reject.
 - Long-operation tests: `domain remove --purge` leaves no trash residue on the happy path, reclaims only stale residue, and is covered by a `--dry-run` no-lock assertion.
 - Best-effort hook paths (briefing) assert the lock conflict THROWS; the call site owns the degrade-to-no-op catch.
 - Deterministic lost-update control: an unlocked interleave drops a writer; the same locked sections preserve both updates.
