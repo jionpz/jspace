@@ -9,6 +9,7 @@ import { resolvePath } from "../paths.ts";
 import { b, s } from "./helpers.ts";
 import { realGbrain } from "../../adapters/gbrain/gbrain.ts";
 import { PROJECT_COLLECT_TIMEOUT_MS } from "../../application/context/project-states.ts";
+import { filehubCheckSpec } from "./filehub.ts";
 
 const projectListSpec: CommandSpec = {
   name: "list",
@@ -100,7 +101,7 @@ export const filehubSpec: CommandSpec = {
   name: "filehub",
   summary: "manage the file management center (asset layer)",
   commandArgName: "filehub_command",
-  children: [filehubInitSpec, filehubUpgradeSpec],
+  children: [filehubInitSpec, filehubUpgradeSpec, filehubCheckSpec],
 };
 
 const inboxStatusSpec: CommandSpec = {

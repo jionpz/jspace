@@ -40,23 +40,26 @@ test("no unqualified harness 'automatically' claims in the materialized tree", (
 });
 
 test("first-use pipe installs are guarded, never default-executed", () => {
-  const skill = ASSETS["skills/jspace-use/SKILL.md"];
-  const lines = skill.split("\n");
   let checked = 0;
-  for (let i = 0; i < lines.length; i++) {
-    if (!/\|\s*bash|\|\s*iex/i.test(lines[i])) continue;
-    checked++;
-    const window = lines.slice(Math.max(0, i - 8), i + 8).join("\n");
-    const guarded = /不默认执行|显式确认|下载到临时文件|核验/.test(window);
-    expect(guarded, `first-use line ${i + 1} pipe install not guarded:\n${lines[i]}`).toBe(true);
+  for (const [key, body] of workbenchMds()) {
+    if (!key.startsWith("skills/jspace-use/")) continue;
+    const lines = body.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      if (!/\|\s*bash|\|\s*iex/i.test(lines[i])) continue;
+      checked++;
+      const window = lines.slice(Math.max(0, i - 8), i + 8).join("\n");
+      const guarded = /不默认执行|显式确认|下载到临时文件|核验/.test(window);
+      expect(guarded, `${key} line ${i + 1} pipe install not guarded:\n${lines[i]}`).toBe(true);
+    }
   }
   expect(checked, "expected at least one pipe install line to guard").toBeGreaterThan(0);
 });
 
-test("gbrain version range + upgrade health check are declared", () => {
+test("gbrain verified contract version + upgrade health check are declared", () => {
   const gbrain = ASSETS["skills/jspace-use/references/gbrain.md"];
   expect(gbrain, "gbrain reference must be bundled").toBeDefined();
-  expect(gbrain).toContain("版本兼容");
+  expect(gbrain).toContain("当前结构化契约已用 gbrain `0.60.294.0` 隔离验证");
+  expect(gbrain).toContain("更高版本必须重新跑");
   expect(gbrain).toContain("gbrain doctor --json");
-  expect(gbrain).toContain("升级前健康检查");
+  expect(gbrain).toContain("升级前运行");
 });

@@ -16,7 +16,6 @@ import { BUNDLE_MANIFEST } from "./manifest.generated.ts";
 import { parse, type CmdContext, type CmdResult, type CommandSpec } from "../application/commands/command.ts";
 import { COMMANDS } from "./commands/registry.ts";
 import { invocationArgv } from "../application/automation/invocation.ts";
-import { CliError } from "../core/shared/errors.ts";
 import { loadHub } from "../application/workspace/state.ts";
 
 const initDeps = { resolvePath, expandTilde, isCompiled, devRoot, materialize: materializeTree, manifest: BUNDLE_MANIFEST };
@@ -72,6 +71,29 @@ test("ingest list --json on a fresh workbench is a stable empty shape", () => {
   expect(shape.journals).toHaveLength(0);
 });
 
+test("memory period --json is the parser-wired reporting clock", () => {
+  const { data, exitCode } = run([
+    "memory",
+    "period",
+    "--json",
+    "--week",
+    "2026-10-05",
+    "--timezone",
+    "Asia/Shanghai",
+    "--now",
+    "2026-10-19T10:00:00Z",
+  ]);
+  expect(exitCode).toBeUndefined();
+  expect(data).toMatchObject({
+    week_start: "2026-10-05",
+    week_end_exclusive: "2026-10-12",
+    observed_through: "2026-10-12T00:00:00+08:00",
+    status: "complete",
+    is_current_week: false,
+  });
+  expect(run(["memory", "period", "--json", "--week", "2026-10-20", "--now", "2026-10-19T10:00:00Z"]).exitCode).toBe(2);
+});
+
 test("cron failures via the parser: needs attention -> exitCode 1 + data", () => {
   seedCrons(true);
   mkdirSync(join(wb, ".jspace", "state", "incidents"), { recursive: true });
@@ -85,9 +107,10 @@ test("cron failures via the parser: needs attention -> exitCode 1 + data", () =>
   expect(summary.needs_attention).toBe(1);
 });
 
-test("cron check (alias) mirrors failures; clean -> no exitCode", () => {
+test("removed cron check alias is rejected; failures remains canonical", () => {
   seedCrons(true);
-  const { exitCode } = run(["cron", "check"]);
+  expect(() => parse(["cron", "check"], ROOT)).toThrow();
+  const { exitCode } = run(["cron", "failures"]);
   expect(exitCode).toBeUndefined();
 });
 
@@ -114,31 +137,18 @@ test("invocationArgv round-trips through the real cron run parser (batch-identit
   }
 });
 
-test("init --dir wires --dir into ctx and the positional target stays legacy-compatible", () => {
+test("init uses --dir only", () => {
   const viaDir = parse(["init", "--dir", "/some/dir"], ROOT);
   if (viaDir.kind !== "run") throw new Error("expected run");
   expect(viaDir.dir).toBe("/some/dir");
   expect((viaDir.args as { target?: unknown }).target).toBeUndefined();
 
-  const viaPos = parse(["init", "/legacy"], ROOT);
-  if (viaPos.kind !== "run") throw new Error("expected run");
-  expect((viaPos.args as { target: unknown }).target).toBe("/legacy");
-  expect(viaPos.dir).toBeUndefined();
+  expect(() => parse(["init", "/legacy"], ROOT)).toThrow(/unrecognized arguments/);
 });
 
-test("init --dir and positional together -> CliError exit 2 (ambiguous)", () => {
-  const out = parse(["init", "--dir", "/x", "/y"], ROOT);
-  if (out.kind !== "run") throw new Error("expected run");
-  const ctx: CmdContext = { root: "/x", json: false, dryRun: false, dir: "/x", cwd: "/" };
-  let caught: CliError | undefined;
-  try {
-    (out.spec.handler as (c: CmdContext, a: Record<string, unknown>) => CmdResult)(ctx, out.args);
-  } catch (e) {
-    caught = e instanceof CliError ? e : undefined;
-  }
-  expect(caught).toBeDefined();
-  expect(caught!.message).toContain("not allowed with argument --dir");
-  expect(caught!.exitCode).toBe(2);
+test("cron run uses --id only", () => {
+  expect(() => parse(["cron", "run", "nightly"], ROOT)).toThrow();
+  expect(parse(["cron", "run", "--id", "nightly"], ROOT).kind).toBe("run");
 });
 
 test("init --dir creates a real workbench (marker present)", () => {

@@ -50,7 +50,6 @@ function seedCron(id = "test-cron", harness = "claude"): void {
 
 const stubCronDeps = (): CronHealthDeps => ({
   loadCrons: () => ({ crons: [] }),
-  parseSchedule: () => ({}),
   installedCronIds: () => [],
   linuxCronHealth: () => ({ crontab: "ok", service: "ok" }),
   officialSkillNames: () => [],
@@ -75,6 +74,7 @@ test("workspace upgrade success appends refresh + doctor lines", () => {
     assets: {},
     readFile: () => null,
     writeFile: () => {},
+    filehubRoot: () => null,
   });
   expect(refreshCalled).toBe(true);
   expect(doctorCalled).toBe(true);
@@ -101,6 +101,7 @@ test("workspace upgrade dry-run does not append refresh or doctor", () => {
     assets: {},
     readFile: () => null,
     writeFile: () => {},
+    filehubRoot: () => null,
   });
   expect(refreshCalled).toBe(false);
   expect(doctorCalled).toBe(false);
@@ -126,6 +127,7 @@ test("workspace upgrade rollback does not append refresh or doctor", () => {
     assets: {},
     readFile: () => null,
     writeFile: () => {},
+    filehubRoot: () => null,
   });
   expect(refreshCalled).toBe(false);
   expect(doctorCalled).toBe(false);
@@ -147,13 +149,14 @@ test("workspace upgrade failure exitCode skips refresh and doctor", () => {
     assets: {},
     readFile: () => null,
     writeFile: () => {},
+    filehubRoot: () => null,
   });
   expect(refreshCalled).toBe(false);
 });
 
 test("cron run --dry-run prints argv contract without executing", async () => {
   seedCron("nightly", "claude");
-  const { lines } = await run(["cron", "run", "nightly", "--dry-run"]);
+  const { lines } = await run(["cron", "run", "--id", "nightly", "--dry-run"]);
   const text = lines.join("\n");
   expect(text).toContain("jspace: dry-run: would run in");
   expect(text).toContain("claude");
@@ -162,7 +165,7 @@ test("cron run --dry-run prints argv contract without executing", async () => {
 
 test("cron run --harness override uses the override in dry-run argv", async () => {
   seedCron("nightly", "claude");
-  const { lines } = await run(["cron", "run", "nightly", "--dry-run", "--harness", "pi"]);
+  const { lines } = await run(["cron", "run", "--id", "nightly", "--dry-run", "--harness", "pi"]);
   const text = lines.join("\n");
   expect(text).toContain("jspace: dry-run: would run in");
   expect(text).toContain("pi");

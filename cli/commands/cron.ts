@@ -116,9 +116,8 @@ const cronUninstallSpec: CommandSpec = {
 const cronRunSpec: CommandSpec = {
   name: "run",
   summary: "run a cron headlessly now",
-  positionals: [{ name: "id", help: "cron id (alternative to --id)" }],
   options: [
-    { name: "--id", dest: "id", takesValue: true, help: "cron id (canonical scheduler form)" },
+    { name: "--id", dest: "id", takesValue: true, required: true, help: "cron id" },
     { name: "--force", dest: "force", takesValue: false, help: "run even if the cron already succeeded today" },
     { name: "--dry-run", dest: "dryRun", takesValue: false, help: "print the command that would run, without executing" },
     {
@@ -137,7 +136,6 @@ const cronRunSpec: CommandSpec = {
     },
   ],
   handler: async (ctx, args) => {
-    if (s(args.id) === "") fail("the following arguments are required: id");
     return cronRun(
       ctx.root,
       {
@@ -172,8 +170,7 @@ const cronStatusSpec: CommandSpec = {
 
 const cronFailuresSpec: CommandSpec = {
   name: "failures",
-  aliases: ["check"],
-  summary: "show recent failures + pending staged writes (alias: check)",
+  summary: "show recent failures + pending staged writes",
   description:
     "One-place session-start surface: recent failures + pending staged gbrain writes (APPLY.json) + per-cron status. Exit 1 when anything needs attention.",
   features: { dir: true, json: true },

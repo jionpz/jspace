@@ -82,11 +82,17 @@ export function installHandler(
     const lines = summarizeInstall(r, root, ctx.dryRun);
     // Official skills are fully managed: a renamed/deleted skill must not linger
     // in ~/.agents/skills and keep being discovered by harnesses.
-    for (const name of removeRetiredUserSkills(root, names, ctx.dryRun)) {
+    const retired = removeRetiredUserSkills(root, names, ctx.dryRun);
+    for (const name of retired.removed) {
       lines.push(
         ctx.dryRun
           ? `jspace: info: (dry-run) would remove retired official skill ${join(root, name)}`
           : `jspace: info: removed retired official skill ${join(root, name)} (no longer shipped by jspace)`,
+      );
+    }
+    for (const item of retired.preserved) {
+      lines.push(
+        `jspace: warning: preserved ${join(root, item.name)} because it is not a proven historical official copy: ${item.reason}`,
       );
     }
     return { lines };

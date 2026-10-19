@@ -5,7 +5,7 @@
 import { readFileSync, readlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { loadCrons, parseSchedule } from "../../application/automation/definitions.ts";
+import { loadCrons } from "../../application/automation/definitions.ts";
 import { schedulerAdapter } from "../../adapters/scheduler/index.ts";
 import { installedCronIdsForRoot, schedulerEnv } from "../scheduler.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
@@ -38,16 +38,6 @@ export const readFileOrNull = (p: string): string | null => {
   }
 };
 
-/** Parse ~/.claude.json for doctor's gbrain skills-dir wiring check; null on
- *  missing/malformed (not a workbench health problem — the wire cmd handles it). */
-export function readUserClaudeJson(): unknown | null {
-  try {
-    return JSON.parse(readFileSync(`${homedir()}/.claude.json`, "utf-8"));
-  } catch {
-    return null;
-  }
-}
-
 /** Official skills whose materialized copy no longer matches the running
  *  bundle. Lives here (not in doctor) because it needs BUNDLE_MANIFEST — doctor
  *  stays free of the generated modules and takes this as an injected dep. */
@@ -72,7 +62,6 @@ export function bundleStaleSkills(root: string): string[] {
 
 export const cronDeps = {
   loadCrons,
-  parseSchedule,
   installedCronIds: installedCronIdsForRoot,
   linuxCronHealth: () => schedulerAdapter(process.platform)?.health?.(schedulerEnv()) ?? { crontab: "missing", service: "stopped" },
   officialSkillNames: () => SKILLS_MANIFEST.workbench.map((s) => s.name),
@@ -82,7 +71,6 @@ export const cronDeps = {
     SKILLS_MANIFEST.global
       .filter((s) => s.install_path !== undefined)
       .map((s) => ({ name: s.name, installPath: expandTilde(s.install_path!) })), // install_path is contract-required for global; ! is filter-guaranteed
-  readUserClaudeJson,
   readHarnessConfig: readFileOrNull,
   harnessBinOnPath: (name: string) => binaryOnPath(name, process.platform),
   globalGovernanceHome: () => homedir(),

@@ -135,7 +135,7 @@ jobs:
           bun run cli/main.ts cron run opencode-argv-probe --dir /tmp/jspace-verify --dry-run | grep -- "opencode run"
           # reconciliation plan preview (no real scheduler apply)
           bun run cli/main.ts cron install --dir /tmp/jspace-verify --dry-run | grep "would apply"
-          bun run cli/main.ts cron check --dir /tmp/jspace-verify
+          bun run cli/main.ts cron failures --dir /tmp/jspace-verify
           bun run cli/main.ts cron status --dir /tmp/jspace-verify
           bun run cli/main.ts workspace diff --dir /tmp/jspace-verify
           bun run cli/main.ts workspace upgrade --dir /tmp/jspace-verify --dry-run

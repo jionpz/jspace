@@ -6,6 +6,7 @@ import { workspaceDiff, workspaceUpgrade } from "../../application/workspace/wor
 import { doctorWorkbench, type CronHealthDeps } from "../../application/diagnostics/doctor.ts";
 import { installSkills, type InstallDeps } from "../../application/skills/install.ts";
 import { ensureUserSkillLink, removeRetiredUserSkills } from "../../application/workspace/projections.ts";
+import { resolveFilehubRoot } from "../../application/registry/filehub-lookup.ts";
 import { cmdUpdate } from "../update.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { BUNDLE_MANIFEST } from "../manifest.generated.ts";
@@ -62,8 +63,14 @@ function refreshExternalSkills(wbRoot: string): string[] {
   }
   // A renamed/deleted official skill must not linger in ~/.agents/skills where
   // harnesses still discover it (that is how a stale contract survives an upgrade).
-  for (const name of removeRetiredUserSkills(userSkillsRoot(), names)) {
+  const retired = removeRetiredUserSkills(userSkillsRoot(), names);
+  for (const name of retired.removed) {
     lines.push(`jspace: info: removed retired official skill ~/.agents/skills/${name} (no longer shipped by jspace)`);
+  }
+  for (const item of retired.preserved) {
+    lines.push(
+      `jspace: warning: preserved ~/.agents/skills/${item.name} because it is not a proven historical official copy: ${item.reason}`,
+    );
   }
   return lines;
 }
@@ -99,6 +106,7 @@ export interface WorkspaceUpgradeHandlerDeps {
   assets: typeof ASSETS;
   readFile: typeof readFileOrNull;
   writeFile: (p: string, c: string) => void;
+  filehubRoot: (root: string) => string | null;
 }
 
 const defaultUpgradeDeps = (): WorkspaceUpgradeHandlerDeps => ({
@@ -110,6 +118,7 @@ const defaultUpgradeDeps = (): WorkspaceUpgradeHandlerDeps => ({
   assets: ASSETS,
   readFile: readFileOrNull,
   writeFile: (p, c) => writeBytesAtomic(p, c),
+  filehubRoot: resolveFilehubRoot,
 });
 
 /** `workspace upgrade` handler — exported for CLI combo tests with injected deps. */
@@ -125,7 +134,13 @@ export function workspaceUpgradeHandler(
       acceptConflicts: b(args.acceptConflicts),
       rollbackId: optS(args.rollback),
     },
-    { manifest: deps.manifest, assets: deps.assets, readFile: deps.readFile, writeFile: deps.writeFile },
+    {
+      manifest: deps.manifest,
+      assets: deps.assets,
+      readFile: deps.readFile,
+      writeFile: deps.writeFile,
+      filehubRoot: deps.filehubRoot(ctx.root),
+    },
   );
   // dry-run is a preview, rollback restores a historical state: neither
   // should run the follow-up doctor or skill refresh (both can report

@@ -7,14 +7,12 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
     {
       "name": "jspace-use",
       "version": "1",
-      "scope": "workbench",
-      "dependencies": []
+      "scope": "workbench"
     },
     {
       "name": "asset-ingest",
       "version": "1",
       "scope": "workbench",
-      "dependencies": [],
       "entrypoints": [
         "batch"
       ]
@@ -22,29 +20,17 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
     {
       "name": "memory-recall",
       "version": "1",
-      "scope": "workbench",
-      "dependencies": [
-        "asset-ingest"
-      ]
+      "scope": "workbench"
     },
     {
       "name": "memory-writeback",
       "version": "1",
-      "scope": "workbench",
-      "dependencies": [
-        "asset-ingest",
-        "jspace-use"
-      ]
+      "scope": "workbench"
     },
     {
       "name": "workbench-retro",
       "version": "1",
       "scope": "workbench",
-      "dependencies": [
-        "jspace-use",
-        "memory-writeback",
-        "asset-ingest"
-      ],
       "entrypoints": [
         "weekly"
       ]
@@ -53,11 +39,6 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
       "name": "weekly-report",
       "version": "1",
       "scope": "workbench",
-      "dependencies": [
-        "jspace-use",
-        "asset-ingest",
-        "memory-consolidate"
-      ],
       "entrypoints": [
         "weekly"
       ]
@@ -66,10 +47,6 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
       "name": "memory-consolidate",
       "version": "1",
       "scope": "workbench",
-      "dependencies": [
-        "jspace-use",
-        "memory-writeback"
-      ],
       "entrypoints": [
         "weekly"
       ]
@@ -80,14 +57,12 @@ export const SKILLS_MANIFEST: SkillsManifestV1 = {
       "name": "harness-config",
       "version": "1",
       "scope": "global",
-      "dependencies": [],
       "install_path": "~/.agents/skills/harness-config"
     },
     {
       "name": "jspace-adopt",
       "version": "1",
       "scope": "global",
-      "dependencies": [],
       "install_path": "~/.agents/skills/jspace-adopt"
     }
   ]

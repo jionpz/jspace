@@ -148,7 +148,7 @@ test("docs/ references are external-only (explicit owner marker)", () => {
     for (const ref of refsOf(body)) {
       if (!ref.startsWith("docs/")) continue;
       const line = body.split("\n").find((l) => l.includes(ref)) ?? "";
-      if (!/来源:|external|外部|官方|http/i.test(line)) {
+      if (!/来源:|external|外部|官方|http|开发仓库|dev repo/i.test(line)) {
         bad.push(`${key}: non-external docs ref \`${ref}\``);
       }
     }

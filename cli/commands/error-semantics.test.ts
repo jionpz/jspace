@@ -11,7 +11,6 @@ import type { HarnessWireDeps } from "../../application/harness/wire.ts";
 import { COMMANDS } from "./registry.ts";
 import { installHandler } from "./skills.ts";
 import { runHarnessWire } from "./harness.ts";
-import { wireHandler } from "./gbrain.ts";
 
 const ROOT: CommandSpec = { name: "", summary: "", children: COMMANDS };
 const tmp = "/tmp/jspace-error-semantics"; // never written to — deps are stubbed
@@ -88,7 +87,7 @@ test("skills install: covers machine-global skills (manifest.global, issue #37)"
   expect(r.lines.join("\n")).toContain("jspace-adopt@");
 });
 
-test("gbrain wire: write failure -> errors + exit 1, not a silent warning", () => {
+test("harness wire claude: write failure -> errors + exit 1, not a silent warning", () => {
   const deps: HarnessWireDeps = {
     readFile: () => JSON.stringify({ mcpServers: { gbrain: { command: "gbrain", env: {} } } }),
     writeFile: () => {
@@ -101,14 +100,14 @@ test("gbrain wire: write failure -> errors + exit 1, not a silent warning", () =
     resolveGbrainBin: () => "/usr/local/bin/gbrain",
     dryRun: false,
   };
-  const r = wireHandler(ctx(), deps);
+  const r = runHarnessWire(ctx(), "claude", { deps });
   expect(r.exitCode).toBe(1);
-  expect(r.errors?.[0]).toContain("gbrain wire: EACCES");
+  expect(r.errors?.[0]).toContain("harness wire claude: EACCES");
   expect(r.warnings ?? []).toHaveLength(0);
   expect(r.lines).toHaveLength(0);
 });
 
-test("gbrain wire: no-claude-json status -> errors (not stdout lines) + exit 1", () => {
+test("harness wire claude: no-claude-json status -> errors (not stdout lines) + exit 1", () => {
   const deps: HarnessWireDeps = {
     readFile: () => null,
     writeFile: () => {
@@ -121,7 +120,7 @@ test("gbrain wire: no-claude-json status -> errors (not stdout lines) + exit 1",
     resolveGbrainBin: () => "/usr/local/bin/gbrain",
     dryRun: false,
   };
-  const r = wireHandler(ctx(), deps);
+  const r = runHarnessWire(ctx(), "claude", { deps });
   expect(r.exitCode).toBe(1);
   expect(r.errors?.length).toBeGreaterThan(0);
   expect(r.lines).toHaveLength(0); // error text never on stdout
@@ -194,7 +193,7 @@ test("harness wire: unsupported --harness value is an argument error (ArgError e
     caught = e instanceof ArgError ? e : undefined;
   }
   expect(caught).toBeDefined();
-  expect(caught!.message).toContain("codex is a cron-compat entry, not a session harness");
+  expect(caught!.message).toContain("codex has no JSpace-managed MCP config");
   // main.ts maps ArgError to process.exitCode = 2 (see cli/main.ts catch)
 });
 

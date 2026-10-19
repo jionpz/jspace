@@ -42,19 +42,14 @@ export function expandTilde(p: string): string {
   if (p === "~") return homedir();
   if (p.startsWith("~/") || p.startsWith("~\\")) return join(homedir(), p.slice(2));
   if (p.startsWith("~")) {
-    // ~user → that user's home (best-effort; Python uses the OS user database)
-    const name = p.slice(1).split(/[\\/]/)[0];
-    // A `~name` whose name is `.`/`..`/empty is a traversal (e.g. `~../etc`),
-    // not a username — leave it literal so it can't normalize outside $HOME.
-    if (!name || name === "." || name === "..") return p;
-    const rest = p.slice(1 + name.length);
-    const base =
-      process.platform === "win32"
-        ? homedir()
-        : process.platform === "darwin"
-          ? `/Users/${name}`
-          : `/home/${name}`;
-    return join(base, rest);
+    // No `~user` support: resolving another user's home would mean guessing
+    // /Users/<name> or /home/<name> (wrong on Windows, NFS, and any host whose
+    // home layout differs). Refuse loudly instead of resolving to a path that
+    // silently does not exist; the caller must pass an absolute path.
+    fail(
+      `unsupported path "${p}": only "~", "~/" and "~\\" expand to this user's home; ` +
+        `use an absolute path for another user's home`,
+    );
   }
   return p;
 }

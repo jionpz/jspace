@@ -3,7 +3,7 @@
 // equivalent: five session harnesses (claude/grok/opencode/cursor/pi) go through
 // the SAME pair of commands — `harness init` (ensure workbench seed/projection
 // exists) and `harness wire` (idempotent machine-level gbrain MCP + skills
-// wiring). `gbrain wire` is kept as the claude alias (backward compat).
+// wiring).
 //
 // Wire targets come from capabilities.yaml `mcp_config` (single source of truth).
 // The declared `mcp_config.writer` selects a strategy (existing-server-env-json,
@@ -15,13 +15,14 @@ import { basename, dirname, join } from "node:path";
 import type { CommandSpec, OptionSpec, CmdContext, CmdResult } from "../../application/commands/command.ts";
 import { wireHarness, describeCapability, defaultGbrainBin, type BackupResult, type HarnessWireDeps } from "../../application/harness/wire.ts";
 import { loadCapabilities, wireHarnessNames } from "../../adapters/harness/registry.ts";
-import { resolveHarnessBin } from "../../adapters/harness/bin.ts";
+import { resolveHarnessBin, isExecutableFile } from "../../adapters/harness/bin.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
 import { s } from "./helpers.ts";
 
-/** Session harnesses with a declared machine MCP config. Codex is a cron-only
- *  compatibility entry and is intentionally absent. */
+/** Session harnesses with a declared machine MCP config (`capabilities.mcp_config`).
+ *  Codex declares `mcp_config: null` — Codex supports MCP natively, but JSpace has
+ *  no writer for its `~/.codex/config.toml`, so this command cannot wire it. */
 const WIRE_HARNESSES = wireHarnessNames();
 
 function readFileOrNull(p: string): string | null {
@@ -72,7 +73,11 @@ function ensureResolverFile(skillsDir: string): boolean {
 }
 
 function gbrainBin(): string | null {
-  return defaultGbrainBin(homedir(), process.platform, process.env.GBRAIN_BIN, (name) => resolveHarnessBin(name, process.platform));
+  return defaultGbrainBin(
+    process.env.GBRAIN_BIN,
+    (name) => resolveHarnessBin(name, process.platform),
+    (p) => isExecutableFile(p, process.platform),
+  );
 }
 
 /** Write a harness MCP/config file atomically. writeBytesAtomic rename-replaces
@@ -109,16 +114,11 @@ function harnessWireDeps(dryRun: boolean): HarnessWireDeps {
 export interface RunHarnessWireOptions {
   /** Injected deps (tests). Defaults to the real fs/homedir factory. */
   deps?: HarnessWireDeps;
-  /** Error-line prefix; defaults to `harness wire <harness>`. The `gbrain wire`
-   *  alias passes its own so its historical error text is preserved. */
-  label?: string;
 }
 
-/** The single wire entry point. Both `harness wire --harness <h>` and the
- *  `gbrain wire` alias (claude) funnel through here — one code path, one set of
- *  write/backup/idempotency semantics. */
+/** The single wire entry point: one set of write/backup/idempotency semantics. */
 export function runHarnessWire(ctx: CmdContext, harness: string, opts: RunHarnessWireOptions = {}): CmdResult {
-  const label = opts.label ?? `harness wire ${harness}`;
+  const label = `harness wire ${harness}`;
   const deps = opts.deps ?? harnessWireDeps(ctx.dryRun);
   let r: ReturnType<typeof wireHarness>;
   try {
@@ -262,7 +262,7 @@ function initHandler(ctx: CmdContext, args: Record<string, unknown>): CmdResult 
 }
 
 function harnessChoice(h: string): string {
-  return `unsupported harness for harness wire: ${h} (supported: ${WIRE_HARNESSES.join(", ")}; codex is a cron-compat entry, not a session harness)`;
+  return `unsupported harness for harness wire: ${h} (supported: ${WIRE_HARNESSES.join(", ")}; codex has no JSpace-managed MCP config — see skills/jspace-use/references/harness-codex.md)`;
 }
 
 function validateHarness(v: string): string | null {
@@ -288,7 +288,7 @@ export const harnessSpec: CommandSpec = {
     "Per-harness init + wire (Trellis init --<platform> equivalent). `init` ensures the selected harness's " +
     "skill projections are materialized in the workbench; `wire` idempotently points its gbrain MCP server's " +
     "GBRAIN_SKILLS_DIR at this workbench's .jspace/skills. Five session harnesses: claude/grok/opencode/cursor/pi. " +
-    "`gbrain wire` remains as the claude alias. Machine-level configs are merged + backed up, never rewritten.",
+    "Machine-level configs are merged + backed up, never rewritten.",
   features: { dir: true },
   children: [
     {

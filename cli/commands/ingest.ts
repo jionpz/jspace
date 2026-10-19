@@ -8,7 +8,7 @@ import {
   ingestRollback,
   ingestStatus,
 } from "../../application/ingest/use-cases.ts";
-import type { IngestStep } from "../../core/contracts/ingest.ts";
+import type { IngestOwnerKind, IngestStep } from "../../core/contracts/ingest.ts";
 import { b, s } from "./helpers.ts";
 
 const ingestBeginSpec: CommandSpec = {
@@ -17,18 +17,27 @@ const ingestBeginSpec: CommandSpec = {
   features: { dir: true },
   positionals: [{ name: "file", required: true, help: "inbox file to ingest" }],
   options: [
-    { name: "--target", takesValue: true, required: true, metavar: "PATH", help: "staged target path (absolute or filehub-relative)" },
-    { name: "--slug", takesValue: true, required: true, metavar: "SLUG", help: "gbrain slug assets/<project>/<semantic>" },
-    { name: "--project", takesValue: true, required: true, metavar: "ID", help: "project id or name (registered id preferred)" },
-    { name: "--index", takesValue: true, metavar: "LINE", help: "planned project index.md line" },
+    { name: "--target", takesValue: true, required: true, metavar: "PATH", help: "staged target path under the declared owner" },
+    { name: "--slug", takesValue: true, required: true, metavar: "SLUG", help: "gbrain slug assets/<owner-id>/<semantic>" },
+    {
+      name: "--owner-kind",
+      takesValue: true,
+      required: true,
+      metavar: "KIND",
+      validate: (value) => (value === "project" || value === "area" ? null : "must be project or area"),
+      help: "asset owner kind",
+    },
+    { name: "--owner-id", takesValue: true, required: true, metavar: "ID", help: "registered project id or existing area id" },
+    { name: "--index-line", takesValue: true, required: true, metavar: "LINE", help: "exact line that must appear in the owner index" },
   ],
   handler: (ctx, args) =>
     ingestBegin(ctx.root, {
       file: s(args.file),
       target: s(args.target),
       slug: s(args.slug),
-      project: s(args.project),
-      indexLine: args.index === undefined ? undefined : s(args.index),
+      ownerKind: s(args.owner_kind) as IngestOwnerKind,
+      ownerId: s(args.owner_id),
+      indexLine: s(args.index_line),
     }),
 };
 

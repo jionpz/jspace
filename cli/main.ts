@@ -17,7 +17,7 @@ const ROOT: CommandSpec = {
   name: "",
   summary: "",
   description:
-    "JSpace - create and validate local workbenches.\n\nExit codes: 0 success; 1 business failure / unhealthy check (doctor, cron check); 2 argument error.",
+    "JSpace - create and validate local workbenches.\n\nExit codes: 0 success; 1 business failure / unhealthy check (doctor, cron failures); 2 argument error.",
   children: COMMANDS,
 };
 
