@@ -1,6 +1,6 @@
 ---
 name: jspace-use
-description: "工作台使用入门 + 首次配置 + 路由/记忆/资产/诊断日常操作。当用户问如何使用工作台、如何首次配置、如何诊断维护时触发。"
+description: "JSpace 工作台使用入口:首次配置、域/资源路由、记忆与资产日常操作、cron、诊断、升级和退役。Use when 工作台怎么用/首次启用/jspace doctor/维护工作台。Do NOT use for 机器级 harness 治理(→harness-config)或旧目录收编(→jspace-adopt)。"
 triggers:
   - "initialize jspace"
   - "setup jspace"
@@ -12,7 +12,7 @@ triggers:
   - "维护工作台"
   - "workspace upgrade"
   - "jspace doctor"
-  - "cron check"
+  - "cron failures"
   - "故障排查"
   - "workbench broken"
   - "registry broken"
@@ -21,266 +21,155 @@ triggers:
   - "fresh environment"
 ---
 
-# jspace-use — JSpace 工作台使用指南
+# jspace-use - 工作台使用入口
 
-工作台内**长期使用指南**:从首次启用到日常路由、记忆与资产、维护与诊断,按需读对应章节。**不是一次性安装脚本** —— 首次启用只是其中一章(第 2 章)。首次启用时按第 2 章顺序执行、不跳验证步,末尾报 checklist。
+工作台是用户拥有的本地工作控制平面:规则在 `AGENTS.md`,域/资源在 `.jspace/hub.json`,持久事实在 gbrain,文件本体在 filehub,执行交给惯用 harness,定时交给系统调度。本指南负责使用与维护,不复制其他 skill 的写入契约。
 
-## 何时用 / 何时不用
-- ✅ 用:新工作台首次启用 / 日常「怎么用工作台 / 怎么路由 / 怎么维护诊断」/ registry 坏 / gbrain 缺失或未接线 / 故障排查。
-- ❌ 不用:配置**机器级**多-harness 全局治理文档(`~/.agents/AGENTS.md` 单源接线)→ `harness-config`;日常把资料入库 → `asset-ingest`;用户问句召回 → `memory-recall`;会话收工写回 → `memory-writeback`;每周纪律自省 → `workbench-retro`。
-- **前提**:至少一个 harness(Pi/Claude Code/Codex/Cursor)已装且可用;本指南不装 harness。
+## 触发 / 非目标
 
-## 1. 工作台模型
+- 用:首次启用、日常路由、registry/filehub 配置、harness 项目级接线、cron 运维、诊断、升级和退役。
+- 不用:单份资料入库 → `asset-ingest`;问句召回 → `memory-recall`;收工写回 → `memory-writeback`;周期任务 → `memory-consolidate` / `weekly-report` / `workbench-retro`;机器级 `~/.agents/AGENTS.md` 治理 → `harness-config`;旧目录整体收编 → `jspace-adopt`。
+- 不新增常驻服务、任务影子库、通用编排器或 JSpace 自有聊天客户端。
 
-JSpace 工作台 = 本地工作控制平面:根 `AGENTS.md` 是入口面,其余官方资产一律在 `.jspace/`。三层:
+## 输入与前置
 
-- **控制平面**:`AGENTS.md` JSPACE 块(域/资源路由规则)+ `.jspace/hub.json`(域/资源索引)+ `.jspace/cron.json`(定时任务声明)。
-- **记忆层**:gbrain 统一记忆库(PGLite + 知识图谱 + 本地 embedding)。会话开始检索式注入(hook,best_effort);**收工写回始终显式**——hook 与轻提示只提醒、从不写 gbrain,写入由你说「收工」触发 `memory-writeback`(能力分级见 `~/.agents/skills/jspace-use/references/harnesses.md`)。
-- **资产层**:filehub 文件中心,重资产归位 `filehub/`,要点写进 gbrain reference 页。
+- 工作台根、已装 harness、可用的 bun/git 和明确的 filehub 选择。
+- gbrain 二进制按 `$GBRAIN_BIN` → PATH 解析;缺失时停在安装/诊断步骤。
+- 首次配置、升级、删除域/资源、移动项目目录或修改 cron 前,先按工作台 `Confirmation Rules` 取得所需确认。
 
-**位置即所有权**:`AGENTS.md` 块内 = managed、块外 = user;`.jspace/skills/` = seed(未改随升级刷新,本地改动保留);`.jspace/hub.json` / `cron.json` = user 数据(永不覆盖);`.jspace/marker.json` / `local.json` / `state/` = machine 状态。升级边界与所有权详情见 `README.md`「目录边界与升级范围」;域/资源/skill 创建规则与 cron 运维等治理细节 → 第 8 章。
+## 权威引用
 
-## 2. 首次启用(first-use)
+- gbrain 安装、页契约、生命周期、周期和 pending:`~/.agents/skills/jspace-use/references/gbrain.md`
+- registry schema、binding 和 drift:`~/.agents/skills/jspace-use/references/registry.md`
+- harness 能力与接线:`~/.agents/skills/jspace-use/references/harnesses.md`
+- 各 harness 接线细节:`~/.agents/skills/jspace-use/references/harness-{claude,grok,opencode,cursor,pi,codex}.md`
+- 无头运维:`~/.agents/skills/jspace-use/references/headless-ops.md`
+- 首次启用、使用里程和台账:`~/.agents/skills/jspace-use/references/example-first-use.md`、`~/.agents/skills/jspace-use/references/usage-mileage.md`、`~/.agents/skills/jspace-use/references/usage-mileage-ledger-template.md`
 
-全新工作台 `jspace init` 后,按步骤启用(细节指向 references;golden run 见 `~/.agents/skills/jspace-use/references/example-first-use.md`):
+## 写集
 
-0. **Prerequisites**:检测 bun/git;缺失按决策表给官方安装命令,**默认不执行**(治理红线:下载临时文件→展示核验→用户确认后跑)。
-   - bun 缺失(装 gbrain 需要):官方脚本 `curl -fsSL https://bun.sh/install | bash`(macOS/Linux)或 `powershell -c "irm bun.sh/install.ps1 | iex"`(Windows)——**默认不执行**(`curl | bash` 一类,治理红线)。
-   - 确需安装:① 下载临时文件、不直接管道执行(`curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh`);② 展示来源(bun.sh 官方)+ 抽查脚本核验;③ **用户显式确认后**才 `bash /tmp/bun-install.sh`。
-1. **gbrain**(first core):解析二进制 → `bun install -g gbrain` → `gbrain init` → `gbrain doctor --json` 修所报 → embedding(默认本地 Ollama bge-m3;不可达 `embed_skip: true` 保底,不失败)。细则 `~/.agents/skills/jspace-use/references/gbrain.md`。
-2. **Registry health**:`jspace doctor --dir .`;`hub.json` 合法 JSON;域文件夹/id 一致;每资源恰一 primary。细则 `~/.agents/skills/jspace-use/references/registry.md`。
-3. **File center**:问用户选 filehub 根 → `jspace filehub init <根> --register`;暂不配则告知降级暂存区。**首启验收**:放一份示例文件进 `_inbox/` 跑一次「整理一下 inbox」,确认入库→gbrain 页→中文召回闭环。
-4. **Harness wiring**:问用户用哪个 harness,选一个跑同一条命令 `jspace harness wire --harness <claude|grok|opencode|cursor|pi> --dir .`(幂等写该端 gbrain MCP + session-start briefing + 打印能力边界;Cursor 还链官方 skills 到 `~/.cursor/skills/`;claude 的旧入口 `jspace gbrain wire` 仍是等价别名)。细则 `~/.agents/skills/jspace-use/references/harnesses.md`。
-4.5. **Scheduled tasks(默认推荐启用;**必须问用户一次**,不许默默跳过)**:出厂 `.jspace/cron.json` 四个任务全是 `enabled: false`(未接线的机器上不该有东西被拉起),所以**不动它 = 定时层永久空转**。给用户念清代价再问:
+- 首次启用:`.jspace/hub.json`、`.jspace/cron.json`、`.jspace/local.json`、工作台 seed 和各 harness 接线。
+- 日常治理:用户确认后的 domain/resource/project 注册、README/domain 文档和 filehub 注册。
+- 升级:`jspace workspace upgrade` 管理的 seed、skill 投影和迁移 journal。
+- 不写:gbrain 事实页、资产本体、owner index、机器级全局治理文档、项目任务系统。
 
-   | 不开的后果 | 谁停转 |
-   |---|---|
-   | `_inbox/` 只在你想起来时才整理 | 资产飞轮(inbox-tidy) |
-   | 没有周报、没有周记忆巩固页 | 记忆飞轮(weekly-report / memory-consolidate) |
-   | 纪律腐化没人取证(写回率/断指针/僵尸域) | 自省飞轮(workbench-retro) |
+## 输出
 
-   一键开启(最短序列,逐条 rehearsal 后再装调度):
-   ```bash
-   for id in inbox-tidy weekly-report memory-consolidate workbench-retro; do jspace cron enable "$id" --dir .; done
-   jspace cron run inbox-tidy --dir .        # rehearsal gate:先手跑一次验证契约(逐个跑一遍最稳)
-   jspace cron install --dir .               # 装进系统调度(launchd / crontab / schtasks)
-   jspace cron status --dir .                # 确认已安装
-   ```
-   - **只想开一部分**:`jspace cron enable <id> --dir .` 逐条开(推荐至少开 `inbox-tidy` + `workbench-retro`——一条转资产、一条转纪律)。
-   - **第 4 步选的不是 Claude Code?先改 harness 字段**:出厂 `.jspace/cron.json` 四个任务都是 `"harness": "claude"`;选了其他 harness 就把各任务的 `harness` 改成对应值(`grok`/`opencode`/`pi`/`codex`;Cursor 无 headless CLI 不进 cron enum,cron 改用其中一个无头 harness),否则 rehearsal 会因本机没有 claude 可执行文件而失败。cron.json 是 user 数据,改后升级不覆盖。
-   - **harness 未接线/配额未配就先别装调度**:先做第 4 步,再 rehearsal。`cron run` 失败是安全失败(记 incident + `jspace cron check` 可见,不改任何数据);`cron install` 只登记调度、不代跑。
-   - **用户确认要跳过**:标 `deferred` 并告知 `jspace doctor --verbose`(或 `--json`)会持续报 `cron.all_disabled`(info,不是错误——info 默认只计数不打印),想开时回到本步。
-5. **Final smoke + sign-off**:`jspace doctor` + `jq hub.json` + `gbrain doctor --fast`;报 configured/already-OK/missing-deferred。若有启用的 cron,再确认 `jspace cron status --dir .` 显示已安装/可运行;选择跳过 cron 的标 `deferred`(`jspace doctor --verbose` 只报 `cron.all_disabled` info,不失败)。
-5.5. **M7 证据台账(推荐,非阻塞)**:复制模板到本机实例,供真实使用后的三飞轮取证:
-   ```bash
-   cp .jspace/skills/jspace-use/references/usage-mileage-ledger-template.md .jspace/usage-mileage-ledger.md
-   ```
-   填「机器元数据」节(工作台根 / filehub / harness / M7 起点日);勾选 taxonomy freeze 已读。**不伪造** `source:session`。未复制时 `jspace doctor --verbose` 报 `usage.mileage_ledger_missing`(info,不失败)。协议全文 → `~/.agents/skills/jspace-use/references/usage-mileage.md`——不是首启必跑项,而是真实使用后的验收清单;启用 cron 后按台账 R1 rehearsal 起步。
-
-## 3. 日常会话路由
-
-进工作台后,会话 hook 已注入工作台状态(见下);`AGENTS.md` 是路由规则常驻源,本指南只给动线、不复制规则。四个高频场景:
-
-### 进入工作台(每天第一件事)
-SessionStart hook(`.claude/settings.json`)注入 `<current-state>`(域/pending/cron 失败/inbox)与 `<next-action>`(求值后的下一步)。**直接按 `<next-action>` 走**;要看全貌读 `.jspace/hub.json`。状态没出现 → `jspace doctor --verbose --dir .` 查 `hooks.not_wired` / `claude.pointer_missing`(harness 接线类诊断只在**本工作台 cron 启用了该 harness** 时才是 warning,否则为 info,默认输出不显示)。
-
-### 进入某个域
-读 `workspace/<domain>/README.md` + `domain.json`(域入口与细节);该域有 `AGENTS.md` / `runbook.md` 则一并读。域该不该建/怎么建 → 第 8 章。
-
-### 收工
-有持久事实(进展/决策/教训)→ 说一句「收工」跑 `memory-writeback`,**写回页带 `tags: source:session`**(写回率取证的唯一依据);有产出文件 → `asset-ingest`(先归位本体,再写 gbrain 指针)。都没有则静默结束。
-
-会话里最多出现**一次**收工轻提示(`jspace context turn`,无更高优先级状态时才出;去重锚点 `.jspace/state/briefing.json`),claude/cursor 另有 session-end hook。**提醒 ≠ 写入**:三者都不写 gbrain,不触发 `memory-writeback` 就等于本次没沉淀。
-
-### 每周体检
-`jspace doctor --dir .` 看 `info` 级体检项(僵尸域 / 待归档项目 / 失效指针,见第 8 章「退役与回收」);`jspace workspace diff` 看升级差异。想确认三个飞轮**在转**(而不只是机制在)→ 走使用里程清单 `~/.agents/skills/jspace-use/references/usage-mileage.md`。
-
-## 4. gbrain 记忆
-
-记忆层用法(写回纪律 / 召回 / 指针 / 周快照):**深入章节 → `~/.agents/skills/jspace-use/references/gbrain.md`**。要点:状态写固定 slug 覆盖、知识 append-only 新页、每页带 `project` + `tags` + `source`、embedding 不可达 `embed_skip: true` 保底、promotion 记忆→知识。写回走 `memory-writeback`、召回走 `memory-recall`(各自 SKILL.md),本指南不重复其纪律。
-
-**写回率自查(随手可跑;正式取证在 `workbench-retro` 检查 1)**:
-
-```bash
-gbrain list --tag source:session -n 20   # 会话沉淀的写入(分子)
-gbrain list --tag source:cron -n 20      # 定时归纳的写入(另一半)
-```
-两边一比就知道「记忆在长,长的是 cron 归纳的还是会话沉淀的」。`source:session` 长期为 0 = 收工写回这条腿没在转(提醒发了但没人触发写回),按第 3 章「收工」补上;来源 tag 语义 → `~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」。
-
-要把这条腿**验成达标**(连续两周落窗口计数 > 0)而不只是随手看一眼,用取证协议 `~/.agents/skills/jspace-use/references/usage-mileage.md`(含窗口口径、禁伪造红线、retro 无头首跑与三飞轮清单)。
-
-## 5. 资源与资产
-
-- **hub.json 增删查**:`jspace domain add` / `jspace resource add` / `jspace domain list` / `jspace resource list`;schema(hub schema_version 1 / local / marker)与 drift 规则 → `~/.agents/skills/jspace-use/references/registry.md`。
-- **filehub 协议**:`jspace filehub init <根> --register`;跟踪新项目三步(资产层 index → 域 README 挂接 → 记忆层实体)见 `README.md`「资产管理」+ `~/.agents/skills/jspace-use/references/registry.md` + `asset-ingest`。
-- 重资产归位与入库 → `asset-ingest` skill(本指南不重复其流程)。
-
-## 6. CLI 维护与诊断
-
-```bash
-jspace doctor --dir .                  # 注册表 + 工作台健康(含 orphan skill 诊断)
-jspace workspace diff                  # 与当前 bundle 的差异预览
-jspace workspace upgrade --dry-run     # 只预览不执行
-jspace workspace upgrade               # 应用差异(seed 未改刷新 / 用户改动保留 / 可 --rollback)
-jspace cron check                      # cron 失败 + pending 暂存写聚合
-jspace ingest list                     # 入库 journal 续跑(fail/cleanup-pending 收尾)
-```
-命令细节以 `jspace <cmd> --help` 为准;跨平台权威矩阵(外部稳定依赖,不随工作台物化)见 `docs/PLATFORMS.md`。
-
-- **`memory.writeback_habit_unverified`(info,`jspace doctor --verbose` / `--json` 可见)**:会话已有一定里程且收工轻提示发出过,但 **doctor 不查 gbrain**——它只提示「提醒面在转,请自己核对写回腿」,不是「写回率 = 0」的证明。处置:跑第 4 章的 `gbrain list --tag source:session -n 20` 自查(精确计数走 `workbench-retro` 检查 1);真有事实要留,说一句「收工」跑 `memory-writeback`(带 `tags: source:session`)。这条永远是 info,不影响 exit;全手动写回是合法选择,当已知状态即可。接线是否坏了看 `briefing.stale` / `harness.session_start_not_wired`,不看这条。
-- **`usage.mileage_ledger_missing`(info,`jspace doctor --verbose` / `--json` 可见)**:M7 证据台账模板已物化但本机 `.jspace/usage-mileage-ledger.md` 尚未创建。处置:按第 2 章 5.5 复制模板并填机器元数据;协议 → `usage-mileage.md`。info 不失败;暂不做 M7 跟踪时可忽略。
-
-## 7. 边界与故障排查
-
-- **本指南 vs 其它事实源**:本指南是「怎么用」的入口;`AGENTS.md` 是常驻路由与红线(每会话注入;域/skill/cron 治理细节 → 第 8 章);CLI `--help` 是命令细节;`docs/PLATFORMS.md` 是跨平台能力矩阵;各 skill `SKILL.md` 是能力边界。**不复制、只指引**。
-- **何时用别的 skill**(路由表):
-
-| 场景 | 用 |
+| 阶段 | 必须报告 |
 |---|---|
-| 机器级全局治理接线 | `harness-config` |
-| 日常资料入库 / 整理 inbox | `asset-ingest` |
-| 用户问句精准召回 | `memory-recall` |
-| 会话结束收工写回 | `memory-writeback` |
-| 每周自省(纪律审计 / 规则修订提议) | `workbench-retro` |
-| 本周项目周报(人读汇总) | `weekly-report` |
-| 周记忆巩固(周快照 + state 回写) | `memory-consolidate` |
+| 首次启用 | configured / already-ok / deferred / blocked |
+| 日常路由 | 读取的域/资源/状态和下一步 |
+| 诊断 | 命令、exit code、具体 finding 和修复入口 |
+| 升级 | diff、应用项、skip/conflict、备份和回滚入口 |
+| cron | enabled、installed、最近运行、failures/pending |
 
-- **registry broken / gbrain missing / upgrade 异常 / 自检命令**:先跑 `jspace doctor --dir .` 看诊断;`jspace workspace diff --dry-run` 看差异;`jspace workspace upgrade --rollback <id>` 回退已应用升级。无头运维(账号/配额/failover/失败可见性)→ `~/.agents/skills/jspace-use/references/headless-ops.md`;命令级排障 → CLI `--help`。
+## 主流程
 
-## 8. 治理细节
+### 1. 工作台模型
 
-治理细节(建域 / 建 skill / cron 运维)按需读;常驻路由与红线在 `AGENTS.md` JSPACE 块,本章只承接细节。
+- `AGENTS.md` JSPACE 块内由 upgrade 管理,块外归用户。
+- `.jspace/skills/` 是官方 skill 唯一物理副本;`.agents/skills/`、`.claude/skills/` 等是投影。
+- `.jspace/hub.json` / `cron.json` 是用户数据;`.jspace/state/` 是机器状态。
+- 记忆存事实与指针,资产存本体;共享上下文不等于同步私有会话。
 
-### 8.1 域
+### 2. 首次启用
 
-- **创建信号**(满足 ≥2 条):跨天/项目/会话复现;有值得跟踪的外部资源;有独立入口/流程/安全规则;需要 AI 专属边界;作为无关资源标签会变吵;用户显式要求从本工作台管理。
-- **禁止创建**:一次性操作、单一代码仓库、模糊主题、无管理面的重内容。
-- **确定度分级**:高置信 → 直接建并简要说明;中置信 → 问一句;低置信 → 保持一次性或挂已有域。
-- **最小形态**:`workspace/<domain>/{README.md, domain.json}`。
-- **何时加 `workspace/<domain>/AGENTS.md` 或 `runbook.md`**:重复流程或安全边界需要时。
-- **建域同步**:在 `.jspace/hub.json` 加索引;细节进 `workspace/<domain>/domain.json` 与 markdown 文件,不塞进 hub.json。
+1. **环境**:确认 bun/git;安装命令先展示来源,未经确认不执行远程管道脚本。
+2. **gbrain**:解析二进制 → 初始化/诊断 → 配置 embedding;不可达时使用 `embed_skip: true`,不把降级写成成功。
+3. **registry**:`jspace doctor --dir .`;检查 `hub.json`、域文件夹/id、资源 binding 和恰好一个 primary。
+4. **filehub**:按用户选择运行 `jspace filehub init <root> --register`;未配置时明确降级。
+5. **harness**:按用户选择的 harness 运行 `jspace harness wire --harness <name> --dir .`;不新增未验证的生命周期能力。
+6. **cron**:先问用户是否启用;按 `enable → rehearsal → install → status` 执行。模板任务默认全禁用。
+7. **验收**:用一份真实 inbox 文件走通 `asset-ingest`,再跑 `memory-recall`;工程命令成功不能替代业务闭环。
 
-### 8.2 资源
+### 3. 日常路由
 
-- 资源是域内可发现的入口(项目/仓库/URL/provider/容器/笔记等值得再次找到的对象)。
-- schema(entrypoints/binding/primary)与 drift 规则 → `~/.agents/skills/jspace-use/references/registry.md`,不在此复制。
+- 进入工作台:先看 session-start 状态和 `<next-action>`,再读 `.jspace/hub.json` 获取路由。
+- 进入域:读 `workspace/<domain>/README.md` 与 `domain.json`。
+- 收工:有持久事实 → `memory-writeback`;有文件 → `asset-ingest`;只读问题 → `memory-recall`。
+- 周期:周报、巩固和 retro 都先运行 `jspace memory period --json`,只消费其 `week_start`、窗口和 `observed_through`。
 
-### 8.3 skill
-
-- **提议信号**(满足 ≥2 条):代理反复需要同一非显然流程;流程跨多文件/工具/域;需要清晰自动触发规则;没有可复用检查清单代价高;太过程式化不适合根 `AGENTS.md`、又太横切不适合单一域 README;用户显式要可复用 AI 能力。
-- **禁区**:一次性笔记、简单域元数据、应进 `AGENTS.md` 的编码约定、大段内容 dump、能清楚放进 `AGENTS.md` 或域 README 的规则。
-- **用户确认前置**:根 `skills/` 只放用户自建 skill,创建前必须用户确认。
-- **官方 skill 完全受 JSpace 托管**:`.jspace/skills/<name>/` 是唯一物理副本,`~/.agents/skills/<name>` 与各工作台投影目录都是链接。同名真实目录不算"本地改动要保留",而是**过期机器状态** —— `jspace workspace upgrade` / `jspace skills install --refresh` 会把它收敛成链接并如实报告(本地改动不被保留)。官方 skill 被改名或删除时,旧名字由 `application/skills/retired.ts` 的退役名单接管,在 SSOT、投影目录、`~/.agents/skills/` 三处**直接删除**(含非空目录与悬挂链接):被删的 skill 不能靠"用户可能改过"活下来,那正是旧契约升级后继续被注入的路径。
-- **`jspace update` 只换二进制,不动 skill 层**。所以升级后每个工作台还要跑一次 `jspace workspace upgrade`(它才会刷新/收敛/清理 skill)。doctor 的 `skills.retired_present`(warning)就是"只 update 过、还没 upgrade"的信号 —— 处置:`jspace workspace upgrade --dir <workbench>`。
-
-### 8.4 cron
-
-- **session start 契约**:跑 `jspace cron check`,把失败与 pending 暂存写(`<filehub>/.jspace-logs/*.APPLY.json`)上报用户。
-- **定义即代码**:定义在 `.jspace/cron.json`(声明式:schedule + harness + prompt),git 同步、应用前 review。
-- **契约归 skill,不写内联 prompt**:官方周期任务用 `target: {kind: "skill", skill: <名>, entrypoint: "weekly"}`,`input` 只留一句薄引导——契约正文在 SKILL.md(随 `workspace upgrade` 刷新)。**内联长 prompt 会被永久冻结**:`cron.json` 是 user 数据,升级永不覆盖。
-- **存量迁移**:老工作台的 `weekly-report` / `memory-consolidate` 若仍是内联 prompt,`jspace doctor` 会报 `cron.inline_prompt_legacy`(info)。改法:把该 cron 的 `prompt` 字段换成上面的 `target` 结构(自定义 cron 不受影响,内联 prompt 是它们的正常形态)。
-- **出厂全禁用,开启是显式动作**:模板四个任务都是 `enabled: false`(未接线机器上不该有东西被拉起)。开启序列 = `jspace cron enable <id>` → `jspace cron run <id>`(rehearsal)→ `jspace cron install` → `jspace cron status`,首启版本见第 2 章 4.5。**全禁用时 `jspace doctor --verbose` 报 `cron.all_disabled`(info,不是错误;info 默认只计数)**——它就是"定时层从没启用过"的提示;真要全手动,把这条当已知状态即可。
-- **rehearsal gate**:机器侧 `jspace cron install` 前,先 `jspace cron run` 各任务一次验证契约。
-- **运维细节** → `~/.agents/skills/jspace-use/references/headless-ops.md`(无头代理/账号/配额/失败可见性)。
-
-### 8.5 知识路由纪律
-
-只写**有助于未来会话**的持久记录。根 `AGENTS.md` 应含**长期运行规则**,而非临时偏好或一次性任务笔记。
-
-### 8.6 退役与回收
-
-用久了会变脏:僵尸域、失效指针、结项项目、陈旧 state。**所有处置动作必须先问用户**——删域/移文件是破坏性操作,未经确认不执行。每周体检入口 → 第 3 章「每周体检」。
-
-| 对象 | 退役信号 | 处置 | 确认 |
-|---|---|---|---|
-| 域 | `workspace/<d>/` 长期未更新(≥90 天)且 hub 无活跃资源 | 归档或合并进邻近域;同步从 `.jspace/hub.json` 移除索引 | **必须问** |
-| 资源 | primary 路径不存在,且非"任务本就关于缺失路径" | 修正指针,或从 hub 移除 | **必须问** |
-| 项目(filehub) | `projects/<x>/` 长期未动(≥120 天)、`index.md` 标记结项 | 移入 `filehub/archive/<年>/`,更新域 README 挂接 | **必须问** |
-| gbrain state 页 | 项目结项后 `project/<x>/state` 不再更新 | 保留(历史记录);不自动删 | — |
-
-**`jspace doctor` 的体检诊断**:`domain.dormant` / `filehub.project_stale` 按上表阈值报 `info` 级(非 error——它只是提示"看一眼",mtime 会被 git clone / 网盘同步重写,阈值取保守值防误报)。
-
-大 filehub(项目/文件很多)时 doctor 会**限流保可读**:每类问题只列前 5 个具体项,再多就折成一行带总数的汇总(小工作台形态不变);mtime 新鲜度扫描有总预算,预算用尽时不再猜"是否过期",而是报一条 `filehub.scan_truncated` 说明"实际覆盖了 N/M 个项目"。看到它就把 `filehub.project_stale` 的计数读作**下界**,按上一节批量归档,下次再跑。
-
-### 8.7 项目生命周期(立项 / 结项)
-
-项目横跨三层(资产层本体 / 控制平面挂接 / 记忆层实体),漏一层就会漂移——**最常见的坏味是「filehub 里有项目,域 README 和 registry 都不知道」**,后果是 `weekly-report` 的项目发现源失效。按下面两张清单走,别凭记忆。
-
-#### 命名约定(先定这个,否则第 ④ 步会卡)
-
-| 面 | 取值 | 例 |
-|---|---|---|
-| **project id**(机器标识) | ascii slug,`[a-z0-9-]`;用于 gbrain slug、`ingest --project`、registry | `tiyanying-52` |
-| **资产目录名**(人读) | 自由,可中文;经 `--asset-rel-path` 绑到 id | `projects/52期体验营/` |
-
-两者由 `jspace project add <id> --asset-rel-path projects/<中文名>` 绑定 —— **不必为了注册把目录改成英文**。
-
-> **存量项目的中文 slug 不迁移**:在本约定确立前建的 gbrain 页(如 `project/<中文名>/state`、`assets/<中文名>/<语义名>`)**保留原样,不要重命名**。理由有二:① 记忆层是 append-only 的历史,重命名的代价大于收益;② `memory-recall` 的可复跑验收基线正是建立在这些 slug 上,迁移会让基线失效。**新项目一律用 ascii id**,新旧并存是可接受的过渡态。
-
-#### 立项(四步,缺一不可)
+### 4. 诊断与日常检查
 
 ```bash
-# ① 资产层:建项目目录与 dashboard
-mkdir -p <filehub>/projects/<项目名> && $EDITOR <filehub>/projects/<项目名>/index.md   # 现状 / 关键文件表 / 下一步
-# ② 控制平面:域 README 项目表挂一行
-$EDITOR workspace/<domain>/README.md      # | <项目名> | filehub/projects/<项目名>/ | 进行中 |
-# ③ 记忆层:建实体(起始 state 页)
-gbrain put project/<id>/state < <正文>    # 固定 slug,后续覆盖更新
-# ④ registry 注册(稳定 slug、消除 ingest warning)
-jspace project add <id> --asset-rel-path projects/<项目名>
+jspace doctor --dir . --verbose
+jspace workspace diff --json
+jspace memory period --json
+jspace memory check --json
+jspace filehub check --json
+jspace cron failures --json
+jspace ingest list --json
+jspace pending list --json
 ```
 
-- ④ 可延后但别忘:不注册时 `jspace ingest begin --project <x>` 会报 `warn: project ... is not registered`(不阻塞,slug 稳定性略降)。
-- ③ 的正文起手只需三行:这个项目是什么 / 现在到哪了 / 下一步。别等"想清楚"再写。
+- `memory check` / `filehub check` 是显式只读审计,不放进每次 hook。
+- `memory period` 是只读周期时钟;补跑用 `--week <Monday>`,固定取证用 `--now <ISO-8601>`。
+- `cron failures` 聚合未 ack incident、actionable pending 和各 cron 状态;非 0 表示需要关注,不表示命令本身坏了。
+- pending 位于 `.jspace/state/pending/*.APPLY.json`;`staged`、journal checkpoint、exit 0 和提醒次数都不等于业务完成。
+- gbrain 查询、读页和写页主路径使用结构化 `gbrain call`;来源计数见 `gbrain.md`。
 
-#### 结项(三步)
+### 5. 升级与回滚
 
 ```bash
-# ① 资产层:移入年度归档
-mv <filehub>/projects/<项目名> <filehub>/archive/<年>/
-# ② 控制平面:域 README 项目表改状态或删行(指向新路径)
-# ③ 记忆层:state 页写结项终态(保留不删——历史记录)
-gbrain put project/<id>/state < <终态正文>
+jspace workspace diff
+jspace workspace upgrade --dry-run
+jspace workspace upgrade
+jspace workspace upgrade --rollback <id> --dry-run
+jspace workspace upgrade --rollback <id>
 ```
 
-**移动/删除是破坏性操作,执行前必须问用户**(§8.6 确认列同款)。
+- 先保存 diff、受影响清单和恢复材料,再应用。
+- 未修改 seed 随升级刷新;用户数据和本地编辑保留或报告 conflict。
+- 模板中的旧命令、旧 pending 根和旧 schema 只在显式 upgrade 迁移边界识别。
+- 官方 skill 被改名/删除时,只清理可证明属于 JSpace 的旧用户级副本;同名用户自建目录保留并报告 conflict。
 
-#### 与 doctor 体检项的对应
+### 6. 域、资源与项目
 
-| doctor 诊断 | 含义 | 处置 |
-|---|---|---|
-| `filehub.project_stale`(info) | `projects/<x>/` ≥120 天未动 | 若已结项 → 走上面「结项」三步 |
-| `filehub.inbox_unfiled`(warning) | `_inbox/` 有未归位文件 | → `asset-ingest`(「整理一下 inbox」) |
-| `domain.dormant`(info) | 域 ≥90 天未更新且无活跃资源 | → §8.6 退役表 |
+- 域:跨天/项目/会话复现,且有独立入口、资源或规则时才创建;最小形态 `README.md + domain.json`。
+- 资源:注册可再次发现的仓库、URL、provider 或容器;主路径经 `local.bindings`,每项恰好一个 `primary: true`。
+- 项目:资产目录、域挂接、registry 和 state 四层保持一致。新 project id 使用 ascii slug;存量中文 slug 不因整理而改名。
+- 创建、删除、移动或覆盖这些对象前按工作台确认规则执行。
 
+### 7. cron
 
-## 按需深入(条件读指针)
+- 官方 cron 使用 `target: {kind:"skill", skill, entrypoint}`,契约留在 skill,不写内联长 prompt。
+- `cron run --id <id>` 是人工 rehearsal,不证明系统调度自然触发。
+- `cron install` 只登记平台调度,不代替首跑。
+- 启用状态、模型、harness 和用户自建任务不得被升级静默覆盖。
 
-- 治理细节(域/资源/skill 创建规则、cron 运维)→ 第 8 章
-- gbrain 安装/embedding 三方案/frontmatter schema/离线策略 → `~/.agents/skills/jspace-use/references/gbrain.md`
-- registry schema(schema_version=1 / local / marker)/drift 规则 → `~/.agents/skills/jspace-use/references/registry.md`
-- 逐 harness 接线(Claude Code / Grok Build / OpenCode / Pi / Cursor 各自 `harness-<name>.md` + capabilities 全景)→ `~/.agents/skills/jspace-use/references/harnesses.md`
-- 无头执行运维(账号/配额/失败可见性)→ `~/.agents/skills/jspace-use/references/headless-ops.md`
-- 首次启用 golden run → `~/.agents/skills/jspace-use/references/example-first-use.md`
-- 使用里程验证(retro 无头首跑 / 两周写回取证 / 三飞轮清单)→ `~/.agents/skills/jspace-use/references/usage-mileage.md`
-- 证据台账可复制模板 → `~/.agents/skills/jspace-use/references/usage-mileage-ledger-template.md`（复制到 `<wb>/.jspace/usage-mileage-ledger.md` 填写,勿提交 git）
+## 完成证据
 
-## 自检(做完跑这条)
+- 首次启用:doctor 通过;registry、filehub、harness、gbrain 和选定 cron 状态均有实际输出;一次真实入库与召回闭环成立。
+- 日常操作:读到的域/资源与用户任务匹配,没有跨域误写。
+- 诊断:每个 finding 有命令输出与下一步,partial/unknown 未被写成成功。
+- 升级:dry-run 零写入、应用结果可读回、rollback 预览零写入、备份位置明确。
+- cron:安装、启用、最近运行和 failures 的证据彼此一致;自然触发证据与人工 rehearsal 分开记账。
+
+## 失败与恢复
+
+- gbrain 缺失/损坏:停止写入,保留现有待写;先修复二进制或数据库,再重放同一 request id/意图。
+- registry 冲突:保留冲突文件和原文,不覆盖 `hub.json`;给出具体 add/remove 命令等待确认。
+- filehub 未注册/路径失效:报告 unknown,不猜根目录,不批量移动文件。
+- upgrade 冲突或中断:读取 journal,按 id 继续;不使用清空重建解决局部冲突。
+- cron 失败:保留 incident 与日志;修正前置后 `jspace cron run --id <id>`;自然触发需另外取证。
+- 旧 skill 同名目录无法证明归属:保留并报告,不按名字删除用户内容。
+
+## 转交
+
+- 资料入库/整理 inbox → `asset-ingest`
+- 用户问句 → `memory-recall`
+- 会话写回 → `memory-writeback`
+- 周任务 → `memory-consolidate` / `weekly-report` / `workbench-retro`
+- 机器级全局接线 → `harness-config`
+- 旧项目结构收编 → `jspace-adopt`
+
+## 自检
 
 ```bash
-jspace doctor --dir .        # 注册表通过
-gbrain doctor --fast          # brain 健康
-jq .jspace/hub.json           # 合法 JSON
+jspace doctor --dir .
+jspace memory check --json
+jspace filehub check --json
+jspace cron failures --json
 ```
-(首次启用真正验收 = 第 2 章第 3 步的「放一份文件跑 inbox 整理」闭环成立)
 
-## 参考
-- `~/.agents/skills/jspace-use/references/gbrain.md` — gbrain 安装/embedding/schema/离线策略
-- `~/.agents/skills/jspace-use/references/registry.md` — 注册表 schema + drift
-- `~/.agents/skills/jspace-use/references/harnesses.md` — harness 支持全景(capabilities render)+ 逐 harness 接线 `harness-{claude,grok,opencode,pi,cursor}.md`
-- `~/.agents/skills/jspace-use/references/headless-ops.md` — 无头运维(账号/配额/失败可见性)
-- `~/.agents/skills/jspace-use/references/example-first-use.md` — 首次启用 golden run(S5 产出)
-- `~/.agents/skills/jspace-use/references/usage-mileage.md` — 使用里程协议(三飞轮关闭条件 + 取证台账 + 禁伪造红线)
-- `~/.agents/skills/jspace-use/references/usage-mileage-ledger-template.md` — M7 证据台账可复制模板(本机实例勿回填仓库)
-
-> **Note**:官方 skill 只随 `jspace init` 物化;既有工作台经 `jspace workspace upgrade` 刷新(未修改的模板/skill 随升级更新,本地改动保留为 `skip`);`jspace init --force .` 对已有工作台会拒绝(用 upgrade,不用 init)。
+首次启用的最终验收必须包含一次真实资料归档和一次带出处召回;没有该证据只能报 `configured`,不能报 `business-verified`。

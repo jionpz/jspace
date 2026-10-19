@@ -46,6 +46,8 @@
 
 ```bash
 jspace doctor --dir .
+jspace memory period --json
+jspace memory check --json
 ```
 
 ## 与开发仓库的关系

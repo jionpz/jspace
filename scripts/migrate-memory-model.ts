@@ -19,6 +19,7 @@
 
 import { realGbrain } from "../adapters/gbrain/gbrain.ts";
 import { spawnProcess } from "../adapters/process/spawn.ts";
+import type { GbrainDeps } from "../core/contracts/gbrain.ts";
 
 interface MigrationRow {
   from: string;
@@ -26,13 +27,9 @@ interface MigrationRow {
   reason: string;
 }
 
-/** gbrain list + get/put/delete subset the migration needs; realGbrain satisfies
- *  it, and tests inject a fake. */
-export interface MigrateGbrain {
-  list: (opts?: { limit?: number }) => Promise<{ ok: boolean; rows?: { slug: string }[]; error?: string }>;
-  get: (slug: string) => Promise<{ ok: boolean; content?: string }>;
-  put: (slug: string, content: string) => Promise<{ ok: boolean; error?: string }>;
-}
+/** Structured gbrain subset the migration needs; realGbrain satisfies it and
+ *  tests inject a fake. Deletion remains a one-shot script-only operation. */
+export type MigrateGbrain = Pick<GbrainDeps, "listPages" | "getPage" | "putPage">;
 
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
@@ -67,9 +64,9 @@ const ID_MAP: Record<string, string> = {
 
 export async function buildPlan(g: MigrateGbrain = realG): Promise<MigrationRow[]> {
   const rows: MigrationRow[] = [];
-  const listed = await g.list({ limit: 200 });
-  if (!listed.ok || !listed.rows) {
-    throw new Error(`gbrain list failed: ${listed.error ?? "unavailable"}`);
+  const listed = await g.listPages({ limit: 200 });
+  if (!listed.ok) {
+    throw new Error(`gbrain list failed: ${listed.message}`);
   }
   for (const row of listed.rows) {
     const slug = row.slug;
@@ -142,19 +139,25 @@ export function rewriteBody(content: string, to: string): string {
 }
 
 async function migrateOne(row: MigrationRow, g: MigrateGbrain = realG): Promise<void> {
-  const existing = await g.get(row.to);
+  const existing = await g.getPage(row.to);
   if (existing.ok) {
     console.log(`skip  ${row.from} -> ${row.to} (目标已存在)`);
     return;
   }
-  const got = await g.get(row.from);
-  if (!got.ok || got.content === undefined) {
+  const got = await g.getPage(row.from);
+  if (!got.ok) {
     console.error(`skip  ${row.from} -> ${row.to} (旧页不可读)`);
     return;
   }
-  const put = await g.put(row.to, rewriteBody(got.content, row.to));
+  const put = await g.putPage({
+    slug: row.to,
+    content: rewriteBody(got.page.content, row.to),
+    requestId: crypto.randomUUID(),
+    contentOrigin: "inferred",
+    sourceId: `jspace:migrate-memory:${row.from}`,
+  });
   if (!put.ok) {
-    console.error(`fail  ${row.from} -> ${row.to}: ${put.error ?? "put failed"}`);
+    console.error(`fail  ${row.from} -> ${row.to}: ${put.message}`);
     return;
   }
   // Soft-delete the source (recoverable) only after the target is in place.

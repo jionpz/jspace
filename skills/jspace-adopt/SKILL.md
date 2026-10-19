@@ -1,6 +1,6 @@
 ---
 name: jspace-adopt
-description: "**非破坏收编旧项目**为 JSpace 工作台:只读盘点已有 skills、harness 投影、filehub、registry 与 gbrain 痕迹,生成映射并经用户批准后调用现有 jspace CLI 执行。Use when 老项目迁移成 JSpace、legacy adoption、已有 skill/filehub 迁移、把旧目录 init --force。Do NOT use for 单纯资料入库(→asset-ingest)、已是 JSpace 的工作台升级(→workspace upgrade)或机器级 harness 治理(→harness-config)。"
+description: "把已有 skills、harness 投影、filehub 或 registry 痕迹的旧项目非破坏收编为 JSpace 工作台:只读盘点、映射、批准后调用现有 CLI、验证与恢复。Use when 老项目迁移/legacy adoption/旧目录 init --force。Do NOT use for 单份资料入库(→asset-ingest)、已是工作台的升级(→workspace upgrade)或机器级 harness 治理(→harness-config)。"
 triggers:
   - "legacy adoption"
   - "adopt legacy project"
@@ -13,92 +13,94 @@ triggers:
   - "init --force"
 ---
 
-# jspace-adopt — 旧项目收编为 JSpace
+# jspace-adopt - 旧项目收编
 
-把已经有 skills、harness 配置、filehub 目录或旧 registry 痕迹的项目收编为标准 JSpace 工作台。**先盘点、再映射、批准后执行、最后验证**;迁移是多个可回滚动作,不是“清空重建”。
+把已有项目接入 JSpace,同时保留用户内容、原 filehub 和已有记忆。先盘点,再映射,批准后执行,最后用证据验收。
 
-## 何时用 / 何时不用
+## 触发 / 非目标
 
-- ✅ 用:旧项目还没有 `.jspace/marker.json`,但已有用户 skills / 各 harness 投影 / filehub / 根 `hub.json` / gbrain 页面 / cron 痕迹,需要纳入 JSpace。
-- ❌ 不用:只是把文件资料归位 → `asset-ingest`;工作台已经初始化,只需升级 → `jspace workspace upgrade`;配置机器级全局治理 → `harness-config`;日常工作台操作 → `jspace-use`。
-- **边界**:本 skill 负责“结构 adoption”;资料本体迁移交给 `asset-ingest`,全局 harness 单源治理交给 `harness-config`。不要在这里重写 ingest、registry、scheduler 或 harness merge 逻辑。
+- 用:项目没有 `.jspace/marker.json`,但已有用户 skills、各 harness 投影、filehub、旧 `hub.json`、gbrain 页或 cron 痕迹。
+- 不用:已是 JSpace 的普通升级 → `jspace workspace upgrade`;单份资料归位 → `asset-ingest`;机器级全局治理 → `harness-config`。
+- 本 skill 不重写 ingest、registry、scheduler 或 harness merge;只编排现有 CLI。
 
-## 硬门禁
+## 输入与前置
 
-1. **盘点/dry-run 只读**:Phase 1-2 不写文件、不移动、不删除、不改配置、不跑 scheduler。
-2. **先批准后执行**:Phase 4 的每个 `adopt` / `translate` / `archive` 动作都要有用户明确批准;`preserve` / `register` 也先展示将写路径。没有批准就停在计划。
-3. **默认不搬家且保留用户内容**:已有 filehub 原地注册;用户 root `skills/`、AGENTS/CLAUDE 块外内容、harness 自有配置与 gbrain slug 不改名不覆盖。`init --force` 产生的每个 `.jspace-bak` 都要在继续前归并或列入 `manual`,备份未核对前不得说迁移完成。
-4. **只调现有 CLI**:优先 `jspace init --force` / `filehub init --register` / `domain|resource|project add` / `skills install` / `harness wire` / `workspace upgrade`。CLI 已实现的备份、合并、journal、rollback 不在 skill 里重做。
-5. **失败可续**:任何失败都停在该阶段,报上一条成功命令、备份位置和下一步;不假装成功,不进入更危险动作。
+- 明确项目根、目标工作台根和用户希望保留的配置。
+- 旧项目 `AGENTS.md` / `CLAUDE.md`、skills、harness 投影、hub/registry、filehub 和 gbrain 痕迹可只读访问。
+- 每个破坏性动作都有用户批准;未提供批准时停在计划。
 
-## 五阶段
+## 权威引用
 
-### 1. Guardrails + 只读盘点
+- 只读盘点矩阵:`~/.agents/skills/jspace-adopt/references/inventory.md`
+- 映射、冲突与所有权:`~/.agents/skills/jspace-adopt/references/migration-map.md`
+- 执行、验证与恢复:`~/.agents/skills/jspace-adopt/references/apply-and-verify.md`
+- 临时 fixture golden run:`~/.agents/skills/jspace-adopt/references/example-legacy-adoption.md`
 
-先确认目标根、用户意图和 dry-run 边界,再按 `~/.agents/skills/jspace-adopt/references/inventory.md` 盘点:
+## 写集
 
-- 项目根形态与既有 `AGENTS.md` / `CLAUDE.md` 指令;
-- 用户 skills、官方同名 skills、各 harness 投影及 symlink 可达性;
-- 旧 `hub.json` / `.jspace.json` / `.jspace/` marker / `local` / cron;
-- filehub 候选根、嵌套关系、`README.md` / `index.md`;
-- gbrain 已有 slug 与可召回入口;
-- harness 项目级与用户级配置。
+- 目标工作台 `.jspace/`、根入口、备份和 adoption journal。
+- `jspace init --force` 产生或合并的受管文件与 `.jspace-bak`。
+- 用户批准后的 registry、filehub 注册、harness 项目级接线和 cron 迁移。
+- 不写:用户根治理文档、旧 filehub 本体、未批准的用户 skill、旧 gbrain slug 重命名。
 
-区分“文件存在”和“实际可用”;不跟随未知 symlink,不回显密钥。把盘点结果写成事实表,不要边看边改。
+## 输出
 
-### 2. 映射与冲突清单
+| 项 | 内容 |
+|---|---|
+| 盘点 | 源路径、类型、可用性、所有权、证据 |
+| 映射 | preserve / adopt / register / link / translate / archive / manual / blocked |
+| 批准 | 每个动作的写路径、备份、回滚、确认 |
+| 执行 | 命令、退出码、实际变化、冲突 |
+| 验收 | doctor、registry、filehub、skills、harness、gbrain 召回 |
 
-按 `~/.agents/skills/jspace-adopt/references/migration-map.md` 给每一项分类:
+## 主流程
 
-`preserve` / `adopt` / `register` / `link` / `translate` / `archive` / `manual` / `blocked`
+1. **只读盘点**:记录项目根、指令文件、skills、harness 投影、hub/marker/local/cron、filehub 候选和 gbrain 入口。区分“存在”和“可用”。
+2. **生成映射**:每项给出动作、命令、冲突、批准级别和回滚。同名不同内容、根歧义、重命名、覆盖和删除一律 manual/blocked。
+3. **展示并批准**:列出将创建、覆盖、备份、移动和删除的对象;用户只批准清单中的动作。
+4. **执行**:先 dry-run,再调用现有 CLI:
+   - 备份/翻译旧 registry;
+   - `jspace init --force` 并归并碰撞;
+   - `jspace skills install`;
+   - 原地 `jspace filehub init <root> --register`;
+   - domain/resource/project 迁移;
+   - 用户选定 harness 接线;
+   - 已验证的 cron 映射;
+   - `jspace workspace upgrade --dry-run` → 应用。
+5. **验证**:`jspace doctor`、registry binding、filehub/index/指针、skill 投影、harness 接线和一次真实召回。
+6. **交接**:资料归位、日常操作、全局治理和后续升级分别转交,不在 adoption 内继续扩张。
 
-输出至少包含:源路径、目标位置、动作、命令、冲突、批准级别、回滚。同名不同内容、filehub 根歧义、旧 slug 重命名、移动/删除/覆盖一律 `manual` 或 `blocked`,不要猜。
+## 完成证据
 
-### 3. 用户批准
+- 盘点项逐项有去向,没有未解释的覆盖/删除;
+- 所有用户批准动作与执行日志一一对应;未批准项保持原样;
+- `jspace doctor` 通过,registry/filehub 路径可解析;
+- 官方 skill 投影指向工作台 SSOT,用户自建 skill 未被改名或删除;
+- 至少一次真实 gbrain 召回仍命中原 slug 或明确记录未迁移原因;
+- 备份、冲突、manual/blocked 项和恢复命令完整。
 
-先展示只读盘点、迁移表和 dry-run 结果,再逐组请求批准。明确列出:
+## 失败与恢复
 
-- 将创建/覆盖/备份/移动/删除的文件;
-- 已有 filehub 是否原地注册;
-- 哪些 skills 保持用户所有权,哪些由 JSpace 管理;
-- 哪些旧 cron/harness 项需要手工处理;
-- 失败时的恢复入口。
+- 盘点阶段失败:停止,不写任何文件。
+- `init --force` 产生碰撞:先核对每个 `.jspace-bak`,逐项归并或标 manual;未核对前不得继续。
+- filehub 根歧义:保留原目录,禁止自动移动;让用户确定 owner 和根。
+- skill 同名冲突:官方 managed 名可收敛到 SSOT;非官方同名目录保留并报告 conflict。
+- cron/harness 配置不兼容:保留原配置,标 manual,不用模板覆盖。
+- gbrain slug 旧命名:默认不改名;只补 rel_path/owner 证据。
 
-用户只说“批准”时,只执行清单中明确列出的动作;新增破坏性动作必须再次确认。
+## 转交
 
-### 4. 批准后执行
+- 文件本体归位 → `asset-ingest`
+- 工作台日常配置与诊断 → `jspace-use`
+- 机器级 harness 单源治理 → `harness-config`
+- 已是 JSpace 后的升级 → `jspace workspace upgrade`
 
-按 `~/.agents/skills/jspace-adopt/references/apply-and-verify.md` 的顺序执行,每步先 dry-run、再执行、再核对:
+## 自检
 
-1. 备份并翻译旧根 registry(如有);
-2. `jspace init --force` 初始化工作台,并归并 `.jspace-bak` 碰撞内容;
-3. `jspace skills install` 安装全局/官方 skills;
-4. 原地 `jspace filehub init <root> --register`;
-5. 用 registry CLI 迁移 domain/resource/project;
-6. 只对接用户选定的 harness;
-7. 处理 cron 仅限已有稳定映射;
-8. `workspace upgrade --dry-run` 后再升级。
+```bash
+jspace doctor --dir <workbench>
+jspace workspace diff --dir <workbench>
+jspace filehub check --dir <workbench> --json
+```
 
-不要用 `mv` / `rm` 批量搬资产;不要手工拼 `hub.json` 绝对路径;不要覆盖用户文件。
-
-### 5. 验证与交接
-
-调用 `jspace doctor`,并验证 registry binding、filehub 内容、skill 投影、harness wire、gbrain 召回。完整矩阵与失败恢复见 `~/.agents/skills/jspace-adopt/references/apply-and-verify.md`。
-
-验证完成后明确交接:
-
-- 资料本体继续归位 → `asset-ingest`;
-- 工作台日常操作/诊断 → `jspace-use`;
-- 机器级多 harness 单源治理 → `harness-config`;
-- 已是 JSpace 后的模板升级 → `jspace workspace upgrade`。
-
-## Golden run
-
-用 `/tmp` 下的去敏 fixture 演练“盘点 → 计划 → 批准 → 执行 → 验证”,不触碰真实 HOME、scheduler、gbrain store 或 filehub:见 `~/.agents/skills/jspace-adopt/references/example-legacy-adoption.md`。
-
-## 参考
-
-- `~/.agents/skills/jspace-adopt/references/inventory.md` — 只读盘点矩阵与证据格式
-- `~/.agents/skills/jspace-adopt/references/migration-map.md` — 旧结构到 JSpace 的映射、冲突与所有权规则
-- `~/.agents/skills/jspace-adopt/references/apply-and-verify.md` — 批准后执行顺序、验证矩阵与恢复
-- `~/.agents/skills/jspace-adopt/references/example-legacy-adoption.md` — 临时 fixture golden run
+没有逐项去向、批准记录和真实召回证据时,只能报 `partial-adoption`,不能宣称迁移完成。

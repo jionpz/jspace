@@ -1,147 +1,259 @@
-# workbench-retro — golden run(端到端范例)
+# workbench-retro - Golden Run(当前契约)
 
-场景:周日 23:00 cron 触发(或用户说「周自省」)。窗口 2026-08-04 ~ 2026-08-10。
-下面是一次**合格**的自省全过程——注意每条结论都挂着证据行,以及最后那条「无法判定」没有被粉饰。
+本文件分两部分:
 
----
+1. 保留 2026-08 既有示例的**历史证据数字**,但明确标注其采集口径已退役;
+2. 用当前结构化 gbrain 契约演示一次可复跑的 retro。
 
-## 第 1 步 · 定窗口
-
-> 窗口:2026-08-04(周一)~ 2026-08-10(周日)。以下判读均相对该窗口。
-
-## 第 2 步 · 取证(留实际输出)
-
-```bash
-$ gbrain list --tag source:session -n 50
-No pages found.
-
-$ gbrain list --tag source:cron -n 50
-records/consolidate/2026-08-09    updated 2026-08-09
-project/jspace/state              updated 2026-08-09
-project/tiyanying-52/state        updated 2026-08-09
-project/baobiao-module/state      updated 2026-08-09
-
-$ jq '.session_count, .writeback_nudge_for_session' .jspace/state/briefing.json
-9
-9
-
-$ gbrain list --tag project -n 50
-project/jspace/state          updated 2026-08-09
-project/tiyanying-52/state    updated 2026-08-09
-project/baobiao-module/state  updated 2026-08-09
-
-$ gbrain list --tag knowledge -n 20
-(空)
-
-$ gbrain list --tag asset -n 20
-assets/tiyanying-52/回访登记   updated 2026-08-08
-assets/baobiao-module/验收记录  updated 2026-08-09
-assets/jspace/roadmap          updated 2026-08-09
-
-$ gbrain list --type reference -n 20
-No pages found.
-
-$ ls <filehub>/projects/
-52期体验营/  报表模块/
-
-$ jspace project list
-jspace: ok: no projects
-
-$ jspace cron check
-open incidents: (0) / pending gbrain writes: (0) / needs_attention: 0
-
-$ find <filehub>/_inbox -type f -mtime +7 -not -name '.*'
-(空)
-
-$ ls .jspace/logs/cron/inbox-tidy/
-2026-08-07T211454-...md  2026-08-08T210158-...md  2026-08-10T210225-...md
-```
-
-## 第 3 步 · 判读分级
-
-**检查 1(写回执行率)**:来源计数 —— `--tag source:session` 落窗口 **0 条**,`--tag source:cron` 落窗口 **4 条**;两组都没覆盖到的无 tag 页 0 条。写回率 = 0/(0+4) = **0%**。state 页最近更新全部是 `2026-08-09`(memory-consolidate cron 的运行日),与来源计数互相印证。
-提醒面:`session_count = 9` 且 `writeback_nudge_for_session = 9` —— session-start hook 在跑、轻提示也发到了最近这个会话,所以**不是接线断了,是习惯没养成**。
-→ 结论:**会话写回腿停摆**——记忆在长,但长的是 cron 归纳的,不是会话沉淀的;根因在习惯不在接线。归 `需你决策`。
-
-**检查 2(挂接一致性)**:`projects/` 有 2 个项目,`jspace project list` 返回 no projects。
-→ 结论:registry 未注册(域 README 已挂接,故非完全漂移)。归 `立即可做`,附:`jspace project add <ascii-id> --asset-rel-path projects/<中文名>`。
-
-**检查 3(指针有效性)**:抽样 3 条 asset 指针页(`type: note` + `tags: [asset]`),`test -f` 全部 OK,均含 `rel_path`;另抽 `--type reference` 无残留(迁移已干净)。
-→ 结论:无断指针。基线记 0。
-
-**检查 4(流程卡点)**:`needs_attention: 0`;cron 日志显示 08-07 失败(API 520)已于 08-08 ack 并成功。
-→ 结论:偶发失败已闭环,非重复失败。无卡点。
-
-**检查 5(inbox 停滞)**:`_inbox/` 为空,三次 inbox-tidy 均「无事可做」。
-→ 结论:无停滞;但**连续 3 次空跑**——不是流程问题,是没往里放东西。归 `观察中`(下周若仍空,说明资产腿缺输入)。
-
-**检查 6(规则进化候选)**:本周新增 knowledge 页 0 条(`gbrain list --tag knowledge`);cron 日志里出现过 `skill asset-ingest is out of date` 的过时告警。
-→ 结论:skill 过时在 cron 路径能被发现、在 `jspace doctor` 路径发现不了——**规则/工具缺口**,提议给 doctor 补同类检查。归 `需你决策`。
-
-## 第 4 步 · 复现升级
-
-```bash
-$ gbrain get records/retro/2026-08-03
-(不存在 —— 首次自省,无上周页可对比)
-```
-→ 本次所有「观察中」项均为首次出现,不升级。
-
-## 第 5 步 · 产出
-
-```bash
-$ gbrain put records/retro/2026-08-10 < /tmp/retro.md
-$ gbrain get records/retro/2026-08-10        # 验证读回
-```
-
-页正文即下面这份报告;会话模式下同时呈给用户。
+历史数字不能被当成今天的实时查询结果,也不能用旧文本 CLI 原样重放。
 
 ---
 
-## 产出报告(实际写进 gbrain 的内容)
+## 历史证据锚点(2026-08)
+
+2026-08 的既有示例记录过一次周日 23:00 的 retro:
+
+- 当时窗口被描述为 `2026-08-04 ~ 2026-08-10`;
+- 会话来源写回 0 页,cron 来源 4 页,无来源 tag 页 0 页;
+- 页面更新时间集中在 `2026-08-09`,`session_count = 9`,`writeback_nudge_for_session = 9`;
+- `_inbox/` 为空;一次 API 520 失败在 `08-08` 成功并 ack;
+- 历史产物曾写成 `records/retro/2026-08-10`。
+
+这些是旧文本 CLI 时期的**历史证据,不能按当前 CLI 原样重放**。按当前周期契约:
+
+- 2026-08-04 不是周一;
+- 包含该历史观测的周窗口应为 `[2026-08-03 00:00, 2026-08-10 00:00)` 本地时间;
+- canonical slug 应使用周一 `records/retro/2026-08-03`;
+- `records/retro/2026-08-10` 只能作为历史迁移对象,不能作为本周重跑目标。
+
+不要为了对齐新契约而改写旧页正文或伪造新的历史来源。若要迁移,按完整页 + revision 的显式维护流程处理。
+
+---
+
+## 当前 Golden Run
+
+场景:本周周日 23:00 由 cron 触发,或用户在会话内说“周自省”。
+
+```text
+timezone: Asia/Shanghai
+Monday: <目标周周一 YYYY-MM-DD>
+window: [<Monday> 00:00, <下周一> 00:00)
+observed_through: <ISO-8601 with offset>
+canonical_slug: records/retro/<Monday>
+```
+
+### 第 1 步 - 定周期
+
+先运行 `jspace memory period --json`,记录 `week_start`、窗口和 `observed_through`。
+
+周中运行时只审到 cutoff,不能把尚未发生的日子写成已覆盖。
+
+### 第 2 步 - 来源与写回候选
+
+先列 session/cron 候选,再逐页读取:
+
+```bash
+gbrain call list_pages '{"tag":"source:session","limit":100,"sort":"updated_asc"}'
+gbrain call list_pages '{"tag":"source:cron","limit":100,"sort":"updated_asc"}'
+```
+
+示意输出(仅示意形状,不代表本次真实数据):
+
+```json
+[
+  {
+    "slug": "records/consolidate/<Monday>",
+    "updated_at_iso": "<window-timestamp>"
+  },
+  {
+    "slug": "project/<id>/state",
+    "updated_at_iso": "<window-timestamp>"
+  }
+]
+```
+
+列表行不能证明 tags/正文。对窗口内每个候选执行:
+
+```bash
+gbrain call get_page '{"slug":"records/consolidate/<Monday>","include_content":true}'
+gbrain call get_page '{"slug":"project/<id>/state","include_content":true}'
+```
+
+示意读回:
+
+```json
+{
+  "slug": "records/consolidate/<Monday>",
+  "revision": "<opaque-revision>",
+  "tags": ["consolidate", "weekly", "source:cron"],
+  "content": "..."
+}
+```
+
+为得到“无来源 tag”分母,还要用 `list_pages` 的 keyset 全量扫描窗口候选,不能只从两个 tagged 查询相减。
+
+```bash
+gbrain call list_pages '{"limit":100,"sort":"updated_asc"}'
+gbrain call list_pages '{"limit":100,"sort":"updated_asc","updated_after":"<last.updated_at_iso>","updated_after_slug":"<last.slug>"}'
+```
+
+### 第 3 步 - 活动与流程证据
+
+```bash
+find <filehub>/projects -type f -newermt '<window-start>' ! -newermt '<observed-through>'
+find .jspace/logs/cron -type f -newermt '<window-start>' ! -newermt '<observed-through>'
+jq '.session_count, .writeback_nudge_for_session' .jspace/state/briefing.json
+```
+
+示意输出:
+
+```text
+session_count = 9
+writeback_nudge_for_session = 9
+```
+
+这只能说明提醒面在跑,不能证明 gbrain 写入。
+
+```bash
+jspace cron failures --json
+jspace cron list --json
+jspace ingest list --json
+jspace pending list --json
+```
+
+示意输出:
+
+```json
+{
+  "needs_attention": 0,
+  "pending": [],
+  "open_incidents": []
+}
+```
+
+若存在历史 incident,要读取事件时间和 ack/成功时间,判断是偶发还是重复失败;不得把“命令 exit 0”当成流程健康。
+
+### 第 4 步 - 指针与取代链
+
+抽样 asset:
+
+```bash
+gbrain call list_pages '{"tag":"asset","limit":100,"sort":"updated_asc"}'
+gbrain call get_page '{"slug":"assets/<owner>/<semantic>","include_content":true}'
+jspace filehub check --json
+```
+
+对 asset 页:
+
+- 先按 `<filehub>/<rel_path>` 解析;
+- `Pointer` 只作本机提示;
+- 缺 `rel_path` 或 owner 字段记待修,不补造历史来源;
+- `filehub.asset.duplicate_content` 只报告重复,不自动移动/删除。
+
+对本期 decisions/lessons/knowledge 候选,逐个读取 full page。若页为 `status:superseded`,从旧页查询反向边:
+
+```bash
+gbrain call get_backlinks '{"slug":"<old-slug>","group":"page","limit":100}'
+gbrain call get_backlinks '{"slug":"<old-slug>","group":"page","limit":100,"cursor":"<cursor>"}'
+gbrain call get_page '{"slug":"<candidate-new-slug>","include_content":true}'
+```
+
+只接受新页正文明确写出:
+
+```text
+Supersedes: [[<old-slug>]]
+```
+
+如果 coverage degraded、分页未完成、零候选、多候选、环或缺页,记 `partial/unknown/conflict`;不要从旧页正文反向跟随。
+
+### 第 5 步 - 判读与分级
+
+示意判读(数字用于演示口径,不是本轮真实观测):
+
+- 会话业务写入 0 页,cron 业务写入 4 页,维护改写排除 0 页,无来源 tag 页 0 页;
+- 写回率为 `0/(0+4) = 0%`,分母非零;
+- 提醒面已消费,所以归为“提醒了但没写”的会话腿停摆,而不是 hook 未接线;
+- 历史旧页 `records/retro/2026-08-10` 不参与本周周期身份;
+- 若来源 keyset 只完成一部分,以上数字必须标 `partial`,不能报精确比例。
+
+### 第 6 步 - 写 retro 页
+
+先读同周页:
+
+```bash
+gbrain call get_page '{"slug":"records/retro/<Monday>","include_content":true}'
+```
+
+不存在则创建;存在则用读到的 `revision` 作为 `expected_revision` 做 CAS:
+
+```bash
+cat > /tmp/retro-request.json <<'JSON'
+{
+  "slug": "records/retro/<Monday>",
+  "content": "<full-retro-markdown>",
+  "request_id": "<fresh-uuid>",
+  "source_id": "jspace:workbench-retro:<Monday>",
+  "content_origin": "inferred"
+}
+JSON
+
+gbrain call put_page "$(cat /tmp/retro-request.json)"
+gbrain call get_page '{"slug":"records/retro/<Monday>","include_content":true}'
+```
+
+替换时在请求中加入:
+
+```json
+{"expected_revision": "<opaque-revision>"}
+```
+
+响应丢失先 `get_write_request`,不得换新 request id 重写。`put_page` 返回 committed、读回 revision 一致且结构/tags 通过,才算完成。
+
+---
+
+## 合格报告骨架
 
 ```markdown
-# 周自省 2026-08-10(窗口 2026-08-04 ~ 2026-08-10)
+# 周自省 <Monday>(窗口 [<Monday 00:00>, <下周一 00:00>);observed_through <ISO-8601>)
+
+coverage: complete | partial | unknown
 
 ## 一句话
-cron 腿稳定在转、资产腿无输入、**会话写回腿停摆**——本周 gbrain 的增长全部来自定时归纳,没有一条来自日常会话沉淀。
+cron 腿在转,资产腿无输入,会话写回腿停摆;这是本周纪律状态,不是“习惯已养成”的结论。
 
-## 写回率(检查 1)
-- 会话写入 0 条 / 定时写入 4 条 → 写回率 **0%**
-- 无来源 tag 的页:0 条
-- 取证方式:`gbrain list --tag source:session|source:cron` 精确计数(非 proxy)
-- 提醒面:session_count 本周 6→9(在涨)/ 轻提示已发到第 9 个会话 → 接线正常,缺的是习惯
+## 写回率
+- 会话业务写入 0 页 / cron 业务写入 4 页 -> 0%
+- 维护改写排除 0 页;无来源 tag 页 0 页
+- 取证:list_pages keyset + 逐页 get_page,complete/partial 明确写出
+- 提醒面:session_count 在涨,轻提示已消费
 
-## 立即可做(1)
-- [挂接] 证据:`ls projects/` = 2 个;`jspace project list` = no projects → registry 未注册
-  修复:`jspace project add <ascii-id> --asset-rel-path projects/<中文名>`(需先定中文名↔ascii id 映射)
+## 立即可做
+- [流程] 证据:... -> 结论:...
+  修复:...
 
-## 需你决策(2)
-- [写回停摆] 证据:`--tag source:session` 落窗口 0 条 vs `--tag source:cron` 4 条;state 页最近更新均为 08-09(consolidate cron 当日)
-  选项:A 养成收工说「收工」的习惯(触发 memory-writeback)/ B 换一个 session_end 是 best_effort 的 harness / C 接受现状,靠 cron 归纳
-  推荐 A —— B 没有想象中管用:claude/cursor 的 session-end hook 输出是 fire-and-forget(注不回会话),opencode/pi 压根没有结束事件;而轻提示已经发到位了(session_count 9 / nudge 9),缺的是「被提醒之后真的写」这一步
-- [工具缺口] 证据:cron 日志有 `skill asset-ingest is out of date` 告警,而 `jspace doctor` 无此检查
-  选项:A 给 doctor 补 skill 过时检查(复用 cron 路径已有机制)/ B 维持现状
-  推荐 A
+## 需你决策
+- [写回停摆] 证据:... -> 结论:...
+  选项:A ... / B ...;推荐 A,因为 ...
 
-## 观察中(1)
-- [资产腿空转] 证据:连续 3 次 inbox-tidy 均「无事可做」→ 出现 1 次(按周计),下周复核
+## 观察中
+- [资产输入] 证据:... -> 出现 1 次,下周复核
 
-## 无法判定(1)
-- [检查 6 语义面] 缺:`gbrain query` 在小语料(12 页)下无法区分「重复主题」与「唯一主题」
-  补法:语料增长到 ~50 页后此条才有判别力;本周仅用日志面证据
+## 无法判定
+- [检查 6 语义面] 缺:... -> 补法:...
 
 ## 基线数据
-- 会话写入:0 | 定时写入:4 | 写回率:0% | 无来源 tag 页:0
-- state 页本周更新数:4(全部来自 cron)| 未挂接项目:0(域表)/ 2(registry)
-- 断指针:0 | inbox 停滞:0 | cron 失败:1(已闭环)
+- 会话/cron/维护/无 tag/覆盖状态
+- state 更新/未挂接项目/断指针/重复内容/inbox 停滞/cron 失败/取代冲突
 ```
 
 ---
 
 ## 这份 run 为什么合格
 
-- 每条结论前面都有一行**实际命令输出**,不是「据观察」。
-- 写回率是**数出来的**(两条 `--tag` 计数),不是「感觉这周写得少」;而且顺手判了提醒面(`briefing.json`),把「没被提醒」和「提醒了没做」分开——推荐项才立得住。
-- 「连续 3 次空跑」没有被写成「资产流水线运行良好」——**空跑不等于健康**,它被诚实地记为观察项。
-- 小语料导致检查 6 的语义面失效,被明确记为「无法判定 + 补法」,而不是硬编一个结论。
-- 全程**没有修改任何文件**:两条「需你决策」给的是选项与推荐,落地要等用户点头。
+- 所有结论都有命令或字段证据,并区分列表行与逐页读回。
+- 周 id、窗口和 `observed_through` 使用工作台本地周一,没有用执行当天冒充目标周。
+- 来源计数是页数,维护改写单独排除,提醒次数不当写入次数。
+- 指针以 `rel_path` 为主,Pointer 只作本机回退提示。
+- 旧页找现行页只走反向边,候选正文方向必须核对。
+- 历史旧产物被明确标注为历史证据,没有伪造新的历史来源,也没有把旧 slug 当当前目标。
+- 没有在 retro 过程中修改规则、hub、skills 或资产本体。

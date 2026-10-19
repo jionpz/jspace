@@ -1,15 +1,15 @@
 # Harness wiring reference(接线与推荐配置)
 
-> 面向 **5 个 AI harness**:Pi / Claude Code / Grok Build / OpenCode / Cursor（codex cron 兼容）。单一事实源 = **用户根目录** `~/.agents/AGENTS.md`(治理文档,内容分层与安全红线见 `governance.md`)。
+> 面向 **5 个会话 harness**:Pi / Claude Code / Grok Build / OpenCode / Cursor(另有 **Codex**:headless cron 条目,无会话 hook,JSpace 不代写其 `~/.codex/config.toml`;支持声明见 `jspace-use` 的 `harness-codex.md`)。单一事实源 = **用户根目录** `~/.agents/AGENTS.md`(治理文档,内容分层与安全红线见 `governance.md`)。
 > 本文所有配置规则均以 **官方当前文档查证为准**(核查日期 2026-08-02,官方来源见各节末尾);与既有假设不一致处以官方文档为准并注明差异。
-> 符号:`<gbrain>` = gbrain 二进制路径,按 `$GBRAIN_BIN` → `command -v gbrain`(Windows `where gbrain`) → `~/.bun/bin/gbrain` 解析(Windows:`%USERPROFILE%\.bun\bin\gbrain.exe`);**MCP command 建议用绝对路径**(非登录 shell 可能找不到 PATH;Windows 下必须全路径)。
+> 符号:`<gbrain>` = gbrain 二进制路径,按 `$GBRAIN_BIN` → `command -v gbrain`(Windows `where gbrain`) 解析;**两者都拿不到时接线显式失败并提示安装**,不猜测 `~/.bun/bin/gbrain` 一类安装目录;**MCP command 建议用绝对路径**(非登录 shell 可能找不到 PATH;Windows 下必须全路径)。
 > 接线目标由 `scripts/detect.sh` 检测决定(installed 接线 / not_found 跳过)。会话级配置(gbrain MCP、session 注入)只核对报告,不修改既有配置。
 
 ## 跨平台(Windows)路径速查
 
 | 项 | macOS / Linux | Windows |
 |---|---|---|
-| gbrain 解析 | `$GBRAIN_BIN` → `which gbrain` → `~/.bun/bin/gbrain` | `$GBRAIN_BIN` → `where gbrain` → `%USERPROFILE%\.bun\bin\gbrain.exe` |
+| gbrain 解析 | `$GBRAIN_BIN` → `which gbrain`(无则接线失败) | `$GBRAIN_BIN` → `where gbrain`(无则接线失败) |
 | Claude Code 用户 MCP | `~/.claude.json` | `%USERPROFILE%\.claude.json` |
 | Claude Code 用户 settings | `~/.claude/settings.json` | `%USERPROFILE%\.claude\settings.json` |
 | Codex 用户配置 | `~/.codex/config.toml` | `%USERPROFILE%\.codex\config.toml` |
@@ -67,7 +67,7 @@
 
 - **Pi 核心无内置 MCP**(README 原文:"**No MCP.** Build CLI tools with READMEs… or build an extension that adds MCP support.");settings.json **没有** `mcp`/`mcpServers` 键。
 - gbrain 接入两条路:
-  1. **CLI**(最简):会话中直接调用 `gbrain put / get / query / list`(`<gbrain>` 按上文解析)。
+  1. **CLI**(最简):检索用 `gbrain query` / `gbrain search`;页读写、列表、回执和 backlinks 一律用结构化 `gbrain call get_page|list_pages|put_page|get_write_request|get_backlinks '<json>'`(`<gbrain>` 按上文解析)。
   2. **扩展 `pi-mcp-adapter`**(第三方,社区标准):`pi install npm:pi-mcp-adapter`,配置 `mcpServers`(stdio `command`+`args`)。配置优先级:`~/.config/mcp/mcp.json` > `~/.agents/mcp.json` > `~/.agents/mcp/mcp.json` > `~/.pi/agent/mcp.json` > `.mcp.json` > `.pi/mcp.json`。
   - **供应链注意**:`npm:pi-mcp-adapter` 安装即执行包代码;安装前核对包来源 / README。
 - 核对:报告 `wired(CLI 可用) / missing(CLI 不可用)`;不修改既有配置。

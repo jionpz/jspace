@@ -1,6 +1,6 @@
 ---
 name: memory-consolidate
-description: "**周期性记忆巩固**:归纳近一周 gbrain 事实成周快照页,并回写各项目 state。由 memory-consolidate cron 驱动(周日 22:00),也可会话内触发。Use when 记忆巩固/巩固记忆/周快照/consolidate。Do NOT use for 单次收工写回(→memory-writeback)、人读周报(→weekly-report)、纪律自省(→workbench-retro)。"
+description: "按工作台本地周窗口归纳 gbrain 原始事实,写一份同周幂等的机器快照并刷新涉项项目 state。Use when 记忆巩固/周快照/consolidate。Do NOT use for 单次收工写回(→memory-writeback)、人读周报(→weekly-report)或纪律自省(→workbench-retro)。"
 triggers:
   - "记忆巩固"
   - "巩固记忆"
@@ -8,75 +8,90 @@ triggers:
   - "consolidate"
 ---
 
-# memory-consolidate — 周记忆巩固(周期性写侧)
+# memory-consolidate - 周记忆巩固
 
-把近一周散落的 gbrain 事实**归纳成一页周快照**,并把每个涉项项目的「当前状态」刷新到其 state 页。对应 GOAL「夜里 cron 把摘要写进 gbrain」。
+把目标周内已经落库的事实归纳成一份机器可读快照,并只在有实质变化时刷新项目 state。它不制造新事实,不替用户做决策,也不修改规则或技能。
 
-**分工**:`memory-writeback` = 单次会话收工写回(事件驱动);本 skill = 周期性归纳(时间驱动);`weekly-report` = 面向人的汇总(读本 skill 的产出);`workbench-retro` = 审计纪律与流程(读本 skill 的产出做交叉信号)。writeback 的纪律里明写「周快照转本 skill」,本 skill 是那条转出的落点。
+## 触发 / 非目标
 
-## 何时用 / 何时不用
-- ✅ 用:cron 定时触发;会话内说「巩固一下记忆」。
-- ❌ 不用:本次会话的进展/决策 → `memory-writeback`(单次写回);生成人读周报 → `weekly-report`;审计纪律 → `workbench-retro`;资料入库 → `asset-ingest`。
+- 用:cron 每周触发、补跑指定周、会话内请求“巩固记忆”。
+- 不用:单次会话收工 → `memory-writeback`;人读周报 → `weekly-report`;纪律审计 → `workbench-retro`;资料入库 → `asset-ingest`。
 
-## 输出契约(自包含,勿改路径)
+## 输入与前置
 
-1. **周快照页** → gbrain note 页 `records/consolidate/<YYYY-MM-DD>`
-   - **dated memory record**(gbrain.md 授权的固定-slug 例外):每周**新页**,不是覆盖某个固定 slug。
-   - frontmatter:`type: note`、`project: jspace`、`tags: [consolidate, weekly, <来源 tag>]`、`source: <harness>`
-   - **来源 tag 按运行模式选**:无头(cron)运行 → `source:cron`;会话内触发 → `source:session`。state 回写(契约 2)同样带这条 tag。它是 `workbench-retro` 检查 1 量化写回率的取证基础,纪律源见 `~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」。
-   - 正文:按域/项目归纳近一周关键事实 + 指针;末尾两节(无候选则写「无」):
-     - **晋升候选**:跨项目重复出现的 lessons、可升 knowledge 的条目(只列不动手)
-     - **衰减候选**:state N 周未更新、被新事实矛盾的 knowledge、长 superseded 链(只列不动手,retro 消费)
-2. **state 回写** → 对每个涉项项目 `project/<id>/state`(**固定 slug 覆盖**,更新当前状态)。
-3. **同周幂等**:同一周内重跑覆盖**同一页**,绝不新建第二页。
+- 工作台根和 `jspace` CLI。
+- 周期参数统一由 `jspace memory period --json` 给出;补跑时给 `--week <Monday>`,需要固定取证时给 `--now <ISO-8601>`。
+- 可完整分页读取 gbrain 的能力;不能证明覆盖完整时输出 `partial`。
+- 已注册 filehub(若快照要包含资产证据);无法读取时明确未知。
 
-### 日期取法(重跑幂等的关键)
+## 权威引用
 
-`<YYYY-MM-DD>` = **运行日**(与既有页 `records/consolidate/2026-08-03` / `2026-08-09` 一致)。但运行日命名与「同周覆盖」天然冲突——周日跑完、周二再跑会算出不同日期。所以**重跑前必须先查当周是否已有页**:
+- 周期、页 envelope、来源和状态规则:`~/.agents/skills/jspace-use/references/gbrain.md`
+- 写回分类与晋升纪律:`~/.agents/skills/memory-writeback/references/writeback.md`
+- 人读汇总边界:`~/.agents/skills/weekly-report/SKILL.md`
 
-```bash
-gbrain list -n 30 | grep 'records/consolidate/'   # 找本周(周一~周日)内的已有页
+## 写集
+
+- `records/consolidate/<Monday>`:本周机器快照,创建或 CAS 覆盖。
+- `project/<id>/state`:仅对本周有实质变化的项目做 CAS 覆盖。
+- 不写:周报文件、retro 页、decision/lesson/knowledge 的晋升正文、规则、skills、cron 配置。
+
+## 输出
+
+```yaml
+snapshot_slug: records/consolidate/<Monday>
+week_start: <period.week_start>
+window: "[<window_start>, <window_end_exclusive>)"
+observed_through: <ISO-8601 with offset>
+period_status: complete | in_progress
+coverage: complete | partial | unknown
+projects_updated: []
+promotion_candidates: []
+decay_candidates: []
+gaps: []
 ```
-- 本周已有 → **覆盖那一页的 slug**(不用今天的日期)。
-- 本周没有 → 用运行日建页。
 
-## 命令速查
+## 主流程
 
-```bash
-gbrain list -n 50                                    # 近一周页面盘点
-gbrain list -n 30                        # state 页 + 既有 consolidate 页
-gbrain get project/<id>/state                        # 读当前状态(回写前)
-gbrain put records/consolidate/<日期> < <正文文件>      # 周快照(同周复用同 slug)
-gbrain put project/<id>/state < <正文文件>            # state 覆盖
-gbrain get records/consolidate/<日期>                  # 验证读回
-```
+1. **定周期**:先运行 `jspace memory period --json`。slug 只用 `week_start`,窗口与截止时刻只消费输出;`period.status=in_progress` 时只能描述截至 `observed_through` 的内容。
+2. **盘点**:用 `list_pages` keyset 分页读取目标窗口内更新或创建的页,至少覆盖 state、decisions、lessons、knowledge、assets、records 和同周 consolidate。达到预算或游标异常时停止并标记 `partial`。
+3. **逐页取证**:列表行不能替代页正文;对候选逐个 `get_page(include_content:true)`,按项目/领域归组。
+4. **归纳**:只写可由页或原件支持的事实,附 slug/文件指针。不得把上一周快照、上一轮 retro 或 agent 推断当成本周事实。
+5. **处理候选**:晋升候选必须写明“第二项目已实际复用”的证据;没有证据只列为需要核实,不自动写 knowledge。衰减候选同样只提议。
+6. **写快照**:若同周页存在,读取完整正文和 revision,CAS 覆盖同一 slug;不存在则创建。创建/覆盖后都读回；tags 是合并语义，若同时出现两个来源 tag，用 `remove_tag` CAS 清理后再次读回。
+7. **刷新 state**:只更新有实质变化的项目;读取旧 state,保留三段认知卡,历史信息先落到 decision/record,再 CAS 覆盖。
+8. **空周处理**:没有新事实时不建空页,报告“本周无新事实”;若已有同周页,也不制造空覆盖。
 
-## 步骤
+## 完成证据
 
-1. **定期页**:算本周区间(周一~周日);按上节规则确定要写的 slug(复用当周已有页 or 运行日新建)。
-2. **盘点**:列近一周有更新的页(state / reference / decision / lesson),按域与项目归组。
-3. **归纳**:每组写「本周关键事实 + 指针」;**只归纳已写下的事实**,不推断、不补想象中的进展。
-4. **写快照页**:按契约 1 写入。
-5. **回写 state**:对每个涉项项目,把「当前状态」刷到 `project/<id>/state`(固定 slug 覆盖);无实质变化的项目**跳过**,不做无意义覆盖。
-6. **验证**:`gbrain get` 读回快照页;确认本周页数未增加第二个。
+- `records/consolidate/<Monday>` 可读回,tags 含 `consolidate`、`weekly` 和恰好一个来源 tag;
+- frontmatter `project: jspace`,正文含窗口和 `observed_through`;
+- 同一周只有这一页 consolidate;
+- 每个涉项 state 的更新都有读回 revision,无实质变化项目未被无意义覆盖;
+- gbrain 覆盖完整时 `coverage=complete`,否则为 `partial`/`unknown` 并列出缺口。
 
-**近一周无任何新事实时**:不建空页,报告「本周无新事实,跳过」——空快照页会污染 recent-injection。
+## 失败与恢复
 
-## 与 embedding / 锁的降级
+- 列表分页/页读取失败:已有事实可写入,但状态必须为 `partial`,不得宣称整周全量。
+- 同周 CAS 冲突:重读合并;不得覆盖他人更新。
+- gbrain 锁或响应丢失:用 `jspace pending stage` 的 `create/replace` intent 和真实 origin 暂存;应用并读回前不完成。
+- embedding 不可达:页加 `embed_skip: true` 并提示检索降级,不影响提交证据。
+- 目标周已有错误的执行日期页:报告历史映射需求,不创建第二套双轨;迁移由显式维护处理。
 
-- embedding 不可达 → `embed_skip: true` 写入仍成功 + 固定提示,不失败。
-- `gbrain serve` 持锁 → `jspace pending stage <slug> --content <文件> --producer memory-consolidate`,锁空闲后 `jspace pending apply`(幂等)。
+## 转交
 
-## 按需深入
-- dated memory record 纪律 / state 覆盖 vs 知识追加 / 晋升 → `~/.agents/skills/jspace-use/references/gbrain.md`
-- 单次写回的分类表与 slug 派生 → `~/.agents/skills/memory-writeback/references/writeback.md`
-- 人读周报侧 → `~/.agents/skills/weekly-report/SKILL.md`
+- 人读汇总 → `weekly-report`
+- 纪律与流程审计 → `workbench-retro`
+- 新决策/教训尚未落库 → `memory-writeback`
+- 资产本体或指针 → `asset-ingest`
 
 ## 自检
 
 ```bash
-gbrain get records/consolidate/<日期>                          # 页在;tags 含 consolidate+weekly+来源 tag
-gbrain tags records/consolidate/<日期>                         # 逐页断言来源 tag(source:session / source:cron)——漏打即补
-gbrain list -n 30 | grep -c 'records/consolidate'  # 本周只有一页
-gbrain get project/<id>/state                                 # 涉项项目状态已刷新
+PERIOD="$(jspace memory period --json)"
+MONDAY="$(printf '%s' "$PERIOD" | jq -r '.week_start')"
+gbrain call get_page "{\"slug\":\"records/consolidate/$MONDAY\",\"include_content\":true}"
+jspace memory check --json
 ```
+
+拿执行当天代替目标周、使用上一轮快照或空页填补缺失数据,均视为不合格。

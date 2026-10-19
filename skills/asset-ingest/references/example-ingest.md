@@ -11,13 +11,13 @@
 
 ### 1. 识别 + 查重
 ```bash
-gbrain get assets/acme/供应商报价明细
+gbrain call get_page '{"slug":"assets/acme/供应商报价明细","include_content":true}'
 ```
 预期(未建页):
 ```
-Error: page not found: assets/acme/供应商报价明细
+{"error":{"code":"page_not_found"}}
 ```
-→ 无冲突,继续(若已存在 → 按决策表:跳过/修复/升版本)。
+→ `page_not_found` 才继续；已存在同内容 → 报告并跳过；不同内容且无新版依据 → conflict。
 
 ### 2. 暂存(begin)
 ```bash
@@ -44,10 +44,11 @@ python3 .jspace/skills/asset-ingest/scripts/extract.py \
 写页正文(模板见 `~/.agents/skills/asset-ingest/references/gbrain-write.md`):
 ```markdown
 ---
-type: note
+type: spreadsheet-summary
 source: claude
 project: acme
-tags: [asset, 报价]
+owner_kind: project
+tags: [asset, 报价, source:session]
 rel_path: projects/acme/2026-08-03-供应商报价明细-v1.xlsx
 ---
 # 供应商报价明细
@@ -67,12 +68,23 @@ acme 项目供应商报价,3 张表,含单价与报价项。
 抽取: projects/acme/2026-08-03-供应商报价明细.extract.md
 ```
 ```bash
-gbrain put assets/acme/供应商报价明细 < 页正文文件
+gbrain call put_page "$(jq -n \
+  --arg slug "assets/acme/供应商报价明细" \
+  --rawfile content 页正文文件 \
+  --arg request_id "<fresh-uuid>" \
+  --arg source_id "jspace:asset-ingest:acme/供应商报价明细" \
+  --arg content_origin inferred \
+  '{slug:$slug,content:$content,request_id:$request_id,source_id:$source_id,content_origin:$content_origin}')"
+gbrain call get_page '{"slug":"assets/acme/供应商报价明细","include_content":true}'
 jspace ingest advance <journal-id> --gbrain
 ```
 **gbrain serve 持锁** → 改走暂存(不失败):
 ```bash
-jspace pending stage assets/acme/供应商报价明细 --content 页正文文件 --producer asset-ingest
+jspace pending stage assets/acme/供应商报价明细 \
+  --content 页正文文件 \
+  --producer asset-ingest \
+  --intent create \
+  --origin inferred
 # 锁空闲后:jspace pending apply
 ```
 
@@ -110,6 +122,6 @@ jspace ingest advance <journal-id> --complete    # 同一命令幂等收尾
 
 ## 断言清单(照此判"做完没")
 - [ ] `jspace ingest list` 无该 id 的 in-progress(committed 或已 fail)
-- [ ] `gbrain get assets/acme/供应商报价明细` 页在,frontmatter project/tags/rel_path 齐
+- [ ] `gbrain call get_page '{"slug":"assets/acme/供应商报价明细","include_content":true}'` 页在，frontmatter project/owner_kind/tags/rel_path 齐
 - [ ] `gbrain query "<关键数字措辞>"` top-1 == 目标页
 - [ ] `_inbox/` 该文件已移除(committed 后)

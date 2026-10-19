@@ -2,7 +2,7 @@
 
 > Pi 是 JSpace 支持集里的**最低能力 tier**（T3）：cron 无头 `pi -p` 可用，但**无 Claude 风格 hooks**（`hook_format: none`）。gbrain 接入靠 CLI 或第三方扩展 `pi-mcp-adapter`。本文档诚实标注「能做什么 / 怎么做 / 边界在哪」，不假装有自动接线。
 > 与 `harness-config` skill 的机器级接线分工：本文档是 JSpace 工作台对 Pi 的支持声明；`~/.agents/AGENTS.md` 全局治理的逐 harness 差异见 harness-config。
-> `<gbrain>` = gbrain 二进制绝对路径（`$GBRAIN_BIN` → `command -v gbrain` → `~/.bun/bin/gbrain`）。
+> `<gbrain>` = gbrain 二进制绝对路径（`$GBRAIN_BIN` → `command -v gbrain`；两者都解析不到时 `jspace harness wire` 显式失败并提示安装，不猜测 `~/.bun/bin/gbrain` 一类安装目录）。
 
 ## 支持面（capsules：capabilities.pi）
 
@@ -18,7 +18,7 @@
 
 ## gbrain 接入：两条路
 
-1. **CLI（最简，推荐起步）**：会话中直接调用 `gbrain put / get / query / list`。零配置，Pi 会话能读写同一 gbrain 库。
+1. **CLI（最简，推荐起步）**：检索用 `gbrain query` / `gbrain search`；页读写、列表、回执和 backlinks 用 `gbrain call get_page|list_pages|put_page|get_write_request|get_backlinks '<json>'`。零配置，Pi 会话能读写同一 gbrain 库。
 2. **扩展 `pi-mcp-adapter`（第三方，社区标准）**：给 Pi 会话提供 gbrain stdio MCP。
 
 ### 安装 `pi-mcp-adapter`（手动，非自动）
@@ -65,5 +65,5 @@ pi-mcp-adapter 的配置搜索优先级（高→低，wire 固定落 `~/.pi/agen
 ```bash
 jspace harness wire --harness pi --dir . --dry-run   # 预览 MCP + session-start extension 写入
 jspace doctor --dir .          # 应无 harness.pi 的 session_start_not_wired（wire 后）
-jspace cron run <cron> --harness pi --dry-run --dir .   # argv = pi -p <prompt>
+jspace cron run --id <id> --harness pi --dry-run --dir .   # argv = pi -p <prompt>
 ```

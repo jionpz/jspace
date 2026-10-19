@@ -89,7 +89,7 @@ jspace harness wire --harness <claude|grok|opencode|cursor|pi> --dir <target> --
 jspace harness wire --harness <claude|grok|opencode|cursor|pi> --dir <target>
 ```
 
-该命令负责 merge + backup 与 `GBRAIN_SKILLS_DIR` 注入;不丢弃非 gbrain 项,不手改用户 MCP 配置。Codex 的 cron 兼容项不传给 `harness wire`。机器级统一治理/全 harness 接线交给 `harness-config`。
+该命令负责 merge + backup 与 `GBRAIN_SKILLS_DIR` 注入;不丢弃非 gbrain 项,不手改用户 MCP 配置。Codex(无 JSpace 管理的 MCP 配置,属于 headless cron 条目)不传给 `harness wire`。机器级统一治理/全 harness 接线交给 `harness-config`。
 
 ## 7. Cron
 
@@ -120,7 +120,7 @@ dry-run 必须显示所有冲突;不要为省事直接 `--accept-conflicts`。�
 | filehub | 原 root 与 `index.md`/README 仍在 | 内容未丢;`type=filehub` 可解析 |
 | skills | `jspace skills install --dry-run`;检查 `.jspace/skills` 与投影 | 官方 skill 可达;用户 skill 保留 |
 | harness | `jspace harness init --harness <名> --dir <target>`;dry-run wire | 投影存在;配置 merge/backup 正确 |
-| gbrain | `gbrain get <old-slug>` 或 `gbrain query <关键词>` | 旧 slug 仍命中;未重命名 |
+| gbrain | `gbrain call get_page '{"slug":"<old-slug>","include_content":true}'` 或 `gbrain query <关键词>` | 旧 slug 仍命中;未重命名 |
 | 只读阶段 | 迁移前/盘点后 hash 对比 | Phase 1-2 无副作用 |
 | 用户内容 | 逐项对比批准账本 | 自定义 skill、AGENTS/CLAUDE 块外、filehub 文件均在 |
 

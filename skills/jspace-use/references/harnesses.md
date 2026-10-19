@@ -2,9 +2,9 @@
 
 > 完整推荐配置、全局治理文档(`~/.agents/AGENTS.md`)接线与逐 harness 差异见 **`harness-config` skill**;本文件是 JSpace 工作台对 harness 支持集的**权威声明**(单一来源,与 `adapters/harness/capabilities.yaml` 保持一致)。
 > **`harness-config` 是机器级全局 skill**,**不随本工作台物化**(不在 `skills/` 下);由 `jspace skills install` 安装/刷新到 `~/.agents/skills/harness-config`(fill-gaps,不覆盖本地编辑),缺失时 `jspace doctor` 会以 `skills.global_missing` 提示。
-> `<gbrain>` = gbrain 二进制绝对路径,按 `$GBRAIN_BIN` → `command -v gbrain`(Windows `where gbrain`) → `~/.bun/bin/gbrain` 解析(Windows:`%USERPROFILE%\.bun\bin\gbrain.exe`)。
+> `<gbrain>` = gbrain 二进制绝对路径,按 `$GBRAIN_BIN` → `command -v gbrain`(Windows `where gbrain`) 解析;**两者都拿不到时 `jspace harness wire` 显式失败并提示安装**,不猜测 `~/.bun/bin/gbrain` 一类安装目录。
 
-支持集 = **五个会话 harness（Claude Code / Grok Build / OpenCode / Pi / Cursor）+ codex cron 兼容**。用户选其一会话 harness 使用,wire 那一个;hermes 可选(提及即可,不主动推广)。所有 harness 经 MCP/CLI 读写同一 gbrain 库。
+支持集 = **五个会话 harness（Claude Code / Grok Build / OpenCode / Pi / Cursor）+ Codex（headless cron；无会话 hook）**。六个条目都是正式受检条目：每个都有一份 `harness-<name>.md`，由 `check-harness-consistency` 强制。用户选其一会话 harness 使用,wire 那一个;hermes 可选(提及即可,不主动推广)。所有 harness 共享同一个 gbrain 库（Codex 目前只能经 CLI 或手工 MCP 配置访问，JSpace 不代为写入 `~/.codex/config.toml`）。
 
 ## Harness 支持全景（rendered from capabilities.yaml，由 check-harness-consistency #10 校验）
 
@@ -34,14 +34,14 @@
 > **机器级接线命令统一**(issue #12):选一个会话 harness,跑同一条命令——
 > `jspace harness wire --harness <claude|grok|opencode|cursor|pi> --dir .`(幂等写该端 gbrain MCP 配置并打印能力边界)。
 > `--dry-run` 预览将写的路径/内容;`jspace harness init --harness <端>` 按端核对工作台 skill 投影(init/upgrade 已全量物化,通常 no-op)。
-> claude 的旧入口 `jspace gbrain wire` 保留为等价别名。配置目标单一来源 = `adapters/harness/capabilities.yaml` 的 `mcp_config`。
+> 现行入口只有 `jspace harness wire`;旧的 gbrain wire 别名已移除,也不得再作为兼容入口。配置目标单一来源 = `adapters/harness/capabilities.yaml` 的 `mcp_config`。
 
-- [`harness-claude.md`](harness-claude.md) — 参考实现：hooks + `.claude/skills/` + MCP + `jspace harness wire --harness claude`（旧入口 `gbrain wire` 等价）
+- [`harness-claude.md`](harness-claude.md) — 参考实现：hooks + `.claude/skills/` + MCP + `jspace harness wire --harness claude`
 - [`harness-grok.md`](harness-grok.md) — T1 桥接：`.grok/hooks/` 四事件 + `.grok/skills/` + `jspace harness wire --harness grok`
 - [`harness-opencode.md`](harness-opencode.md) — T2.5 plugin：`.opencode/plugins/jspace.ts` + 细粒度事件 + compacting context 注入；MCP 用 `jspace harness wire --harness opencode`（写 `~/.config/opencode/opencode.json` 的 `mcp.gbrain`）
 - [`harness-pi.md`](harness-pi.md) — T3 honest boundary：cron `pi -p` + `jspace harness wire --harness pi`（写 `~/.pi/agent/mcp.json`）
 - [`harness-cursor.md`](harness-cursor.md) — 会话 harness（D6 保留）：无 headless，`jspace harness wire --harness cursor`（写 `~/.cursor/mcp.json` + 官方 skills 薄链到 `~/.cursor/skills/`）
-- codex：cron 兼容条目（`documented: false`，无独立 doc——现有 cron 契约继续可用；`harness wire` 不接受 codex）
+- [`harness-codex.md`](harness-codex.md) — 正式条目（headless cron）：`codex exec` 可被 cron 调用；**无会话 hook**；`mcp_config: null` 所以 `jspace harness wire` 不接受 codex（Codex 原生支持 MCP，但 JSpace 不写 `~/.codex/config.toml`）
 
 ## harness 接线诊断的范围与「已改 seed」(issue #52)
 
@@ -53,7 +53,7 @@
 
 | 项 | macOS / Linux | Windows |
 |---|---|---|
-| gbrain 解析 | `$GBRAIN_BIN` → `which gbrain` → `~/.bun/bin/gbrain` | `$GBRAIN_BIN` → `where gbrain` → `%USERPROFILE%\.bun\bin\gbrain.exe` |
+| gbrain 解析 | `$GBRAIN_BIN` → `which gbrain`(无则接线失败) | `$GBRAIN_BIN` → `where gbrain`(无则接线失败) |
 | Claude Code MCP | `~/.claude.json`(`mcpServers.gbrain`) | `%USERPROFILE%\.claude.json` |
 | Codex 配置 | `~/.codex/config.toml`(`[mcp_servers.gbrain]`) | `%USERPROFILE%\.codex\config.toml` |
 | Grok 配置 | `~/.grok/config.toml`(`[mcp_servers.gbrain]`) | `%USERPROFILE%\.grok\config.toml` |

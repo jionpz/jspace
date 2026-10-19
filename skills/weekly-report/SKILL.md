@@ -1,6 +1,6 @@
 ---
 name: weekly-report
-description: "**周期性周报**:汇总本周各项目进展,产出 filehub markdown + gbrain 指针页。由 weekly-report cron 驱动(周日 21:00),也可会话内触发。Use when 生成周报/本周汇总/weekly report。Do NOT use for 归纳记忆事实(→memory-consolidate)、纪律自省(→workbench-retro)、单份资料入库(→asset-ingest)。"
+description: "按工作台本地周窗口汇总本期原始事实,生成人读周报文件与 gbrain 指针页。Use when 生成周报/本周汇总/weekly report。Do NOT use for 机器周快照(→memory-consolidate)、纪律自省(→workbench-retro)、资料入库(→asset-ingest)或会话收工(→memory-writeback)。"
 triggers:
   - "生成周报"
   - "本周周报"
@@ -8,65 +8,91 @@ triggers:
   - "weekly report"
 ---
 
-# weekly-report — 本周项目周报(周期性产出)
+# weekly-report - 本期项目周报
 
-把本周各项目的进展汇成**一份人读的周报**放进文件中心,并在 gbrain 留一个薄指针页。对应 GOAL「夜里 cron 生成本周项目周报存进文件中心」。
+面向人阅读的周报。事实来自目标窗口内的原始页、项目 state 和资产证据;同窗口 consolidate 只是可选索引。
 
-**事实以 memory-consolidate 页为准** —— 本 skill 不重新归纳事实,只做汇总排版 + 指针。两者同为周日 cron:weekly-report 21:00 在前(面向人),memory-consolidate 22:00 在后(面向机器);因此周报引用的是**上一轮**巩固页,这是设计如此,不是时序错误。
+## 触发 / 非目标
 
-## 何时用 / 何时不用
-- ✅ 用:cron 定时触发;会话内说「生成本周周报」。
-- ❌ 不用:归纳/巩固记忆事实 → `memory-consolidate`;审计纪律与流程 → `workbench-retro`;单份资料入库 → `asset-ingest`;会话收工写回 → `memory-writeback`。
+- 用:cron 每周生成、会话内生成或补跑指定周。
+- 不用:机器归纳 → `memory-consolidate`;纪律审计 → `workbench-retro`;单份资料入库 → `asset-ingest`。
 
-## 输出契约(自包含,勿改路径)
+## 输入与前置
 
-1. **markdown 本体** → `<filehub>/areas/周报/<YYYY-MM-DD>-周报.md`
-   - `<YYYY-MM-DD>` = **本周起始日(周一)**,不是运行日。周日运行 → 用本周一的日期。
-   - `<filehub>` = `.jspace/hub.json` 中 `type: filehub` 资源 `primary: true` path(经 `local.json` 绑定解析);解析不到 → 停止并报告,不猜路径。
-2. **gbrain 指针页** → `assets/周报/<YYYY-MM-DD>`(同一日期)
-   - frontmatter:`type: note`、`project: jspace`、`tags: [asset, weekly, <来源 tag>]`、`source: <harness>`
-   - **来源 tag 按运行模式选**:无头(cron)运行 → `source:cron`;会话内触发 → `source:session`(纪律源:`~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」)。
-   - 正文以 **Pointer + 极薄 Summary** 为主;详细事实不在这里展开(在 md 本体与 consolidate 页里)。
-3. **同周重跑 = 周快照**:固定 slug 覆盖更新,**不重复建页、不建 `-v2`**。
+- 工作台根、可解析的 filehub 根、`jspace` CLI。
+- 周期参数统一由 `jspace memory period --json` 给出;补跑时给 `--week <Monday>`,需要固定取证时给 `--now <ISO-8601>`。
+- 可读取项目 state、原始事实页和资产证据;无法完整读取时输出 `partial`。
 
-## 活跃项目发现(不臆造项目)
+## 权威引用
 
-按顺序取并集,取不到就少写,不编:
-1. `workspace/<domain>/README.md` 的「本域进行中的项目」表;
-2. gbrain `project/<id>/state` 页(`gbrain list --tag project`,看本周有更新的);
-3. `<filehub>/projects/` 下本周有文件变动的目录。
+- 周期、来源 tag、asset `rel_path` 和完成证据:`~/.agents/skills/jspace-use/references/gbrain.md`
+- 项目发现、文件命名和布局:`~/.agents/skills/asset-ingest/references/filing.md`
+- 机器快照边界:`~/.agents/skills/memory-consolidate/SKILL.md`
 
-## 命令速查
+## 写集
 
-```bash
-gbrain list --tag project -n 50      # state 页 → 活跃项目
-gbrain get records/consolidate/<最近一期>          # 事实来源(不重新归纳)
-find <filehub>/projects -type f -mtime -7        # 本周资产变动
-gbrain put assets/周报/<YYYY-MM-DD> < <正文文件>   # 指针页(同周覆盖)
-gbrain get assets/周报/<YYYY-MM-DD>               # 验证读回
-```
+- `<filehub>/areas/周报/<Monday>-周报.md`:人读周报正文。
+- `assets/周报/<Monday>`:指向该文件的 asset 指针页。
+- 不写:项目 state、consolidate 页、retro 页、规则、skills 或 cron 配置。
 
-## 步骤
+## 输出
 
-1. **定日期**:算本周一日期(周报文件名与 slug 都用它);解析 `<filehub>` 根。
-2. **发现项目**:按上节三个来源取并集。
-3. **取事实**:读最近一期 `records/consolidate/<date>` 页 + 各 `project/<id>/state`;**不重新推断事实**。
-4. **写本体**:`<filehub>/areas/周报/<日期>-周报.md`——每项目一节(本周进展 / 当前状态 / 下一步),末尾列关键文件指针。
-5. **写指针页**:`assets/周报/<日期>`,Pointer 指向第 4 步的 md 绝对路径,Summary 三五行。
-6. **验证**:`gbrain get` 读回;确认同周未产生第二个页/文件。
+| 字段 | 内容 |
+|---|---|
+| 周期 | `week_start` |
+| 文件 | `<filehub>/areas/周报/<Monday>-周报.md` |
+| 指针 | `assets/周报/<Monday>` |
+| 窗口 | `[window_start, window_end_exclusive)` |
+| cutoff | `observed_through` |
+| 周期状态 | `period.status` = complete / in_progress |
+| 取证覆盖 | complete / partial / unknown |
+| 来源 | 原始页 slug、项目 state、资产路径 |
+| 缺口 | 无法确认的项目/事实 |
 
-**无活跃项目时**:仍写一份「本周无活跃项目」的极短周报(保持周序列不断档),不静默跳过。
+## 主流程
 
-## 按需深入
-- 写页 frontmatter / type 语义 / embedding 降级 → `~/.agents/skills/jspace-use/references/gbrain.md`
-- filehub 归位与命名约定 → `~/.agents/skills/asset-ingest/references/filing.md`
-- 事实归纳侧 → `~/.agents/skills/memory-consolidate/SKILL.md`
+1. **定周期**:先运行 `jspace memory period --json`。文件名和 slug 只用 `week_start`;窗口、时区和截止时刻只消费命令输出。`period.status=in_progress` 时明确“截至 observed_through”,不冒充整周。
+2. **发现项目**:合并域 README、registry、`project/<id>/state` 和本周资产证据;发现不了就少写,不臆造。
+3. **收集本期事实**:读取目标窗口内的原始页和项目 state。不得把上一周期周报改标题、把上一轮 consolidate 当成本期权威,或在缺输入时复制旧内容。
+4. **使用可选索引**:同窗口 consolidate 只能用于定位其明确引用的源页;源页不可读时标 `partial`。
+5. **生成正文**:每项目写“本期进展 / 当前状态 / 下一步”,末尾列关键文件和 slug。事实不足时明确标记未知。
+6. **写文件**:目标存在时先确认是同一周生成物并保留恢复副本,再原子更新;若发现用户改写的非同源内容,报告 conflict,不覆盖。
+7. **写指针**:按 asset 页契约写 `rel_path`、Pointer、Summary、tags;已有同周页则读取 revision 后 CAS 覆盖。
+8. **核对**:读取文件、指针页和索引;若 `put_page` 合并了旧的另一来源 tag,用 `remove_tag` CAS 清理并再次读回;`jspace filehub check --json` 对本资产无新增 error/unknown。
+
+## 完成证据
+
+- 周报文件名与周期 id 同为目标周一;
+- 文件存在且正文可打开,内容明确窗口与 `observed_through`;
+- `assets/周报/<Monday>` 可读回,`rel_path` 与文件一致,Pointer 指向同一文件;
+- tags 含 `asset`、`weekly`,且恰好一个来源 tag;
+- 同周重跑不增加第二个文件或页;
+- 来源页可追溯;不完整覆盖明确写 `partial`。
+
+## 失败与恢复
+
+- filehub 未注册或无法解析:停止写入并报告,不猜路径。
+- 原始事实不足:生成最小可信周报并标 `partial`,不拿旧快照补足。
+- 文件写入失败:保留指针缺失状态,下一轮从第 6 步重试;不得只写 gbrain 指针。
+- gbrain 写入失败:保留周报文件,使用 pending `create/replace` 暂存并读回后再完成。
+- 同周已有用户改写:保留双方,报告 conflict,由用户确认是否合并。
+- embedding 不可达:页内 `embed_skip: true` 并提示检索降级。
+
+## 转交
+
+- 需要机器归纳 → `memory-consolidate`
+- 需要纪律审计 → `workbench-retro`
+- 项目状态缺失 → `memory-writeback`
+- 资产本体/index 修复 → `asset-ingest`
 
 ## 自检
 
 ```bash
-ls <filehub>/areas/周报/<YYYY-MM-DD>-周报.md    # 本体在,日期=本周一
-gbrain get assets/周报/<YYYY-MM-DD>             # 指针页在;Pointer 指向该 md
-gbrain tags assets/周报/<YYYY-MM-DD>            # 必含 source:session(会话)或 source:cron(无头)——漏打即补
+PERIOD="$(jspace memory period --json)"
+MONDAY="$(printf '%s' "$PERIOD" | jq -r '.week_start')"
+test -f "<filehub>/areas/周报/$MONDAY-周报.md"
+gbrain call get_page "{\"slug\":\"assets/周报/$MONDAY\",\"include_content\":true}"
+jspace filehub check --json
 ```
-(同周重跑后文件数与页数**不增加** = 幂等成立)
+
+文件名、slug、窗口或 `observed_through` 任一不是本期,视为未完成。

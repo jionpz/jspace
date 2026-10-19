@@ -6,7 +6,8 @@
 // turns red so the doc gets fixed, not silently ignored.
 //
 // Assertions:
-//   1. harness-*.md files in skills/jspace-use/references = documented:true keys
+//   1. harness-*.md files in skills/jspace-use/references = every capabilities key
+//      (one doc per harness; there is no compatibility-only exemption)
 //   2. registry.cronHarnessNames() == capabilities cron_harness_enum_value set
 //      (bidirectional); production cron consumers use that derived helper;
 //      templates/workbench/.jspace/cron.json values ⊆ keys
@@ -26,7 +27,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAdapter } from "../adapters/harness/index.ts";
 import { harnessArgv } from "../adapters/harness/argv.ts";
-import { cronHarnessNames, documentedHarnessNames } from "../adapters/harness/registry.ts";
+import { cronHarnessNames, harnessNames } from "../adapters/harness/registry.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const REF_DIR = join(ROOT, "skills/jspace-use/references");
@@ -35,7 +36,6 @@ const caps = Bun.YAML.parse(readFileSync(join(ROOT, "adapters/harness/capabiliti
   harnesses: Record<
     string,
     {
-      documented?: boolean;
       cron_harness_enum_value?: string | null;
       headless?: string[] | null;
       mcp?: { via?: string };
@@ -59,18 +59,20 @@ function check(name: string, ok: boolean, detail: string): void {
   else console.log(`  ok: ${name} — ${detail}`);
 }
 
-// ---- 1. harness-*.md files = documented:true keys --------------------------
+// ---- 1. harness-*.md files = every capabilities key ------------------------
+// One human-facing doc per harness entry (codex included): a harness without a
+// doc is an undocumented surface, not a compatibility-only exemption.
 const docFiles = readdirSync(REF_DIR).filter((f) => f.startsWith("harness-") && f.endsWith(".md"));
-const documentedKeys = documentedHarnessNames();
+const harnessKeys = harnessNames();
 const docKeys = docFiles.map((f) => f.replace(/^harness-/, "").replace(/\.md$/, ""));
-const missingDocs = documentedKeys.filter((k) => !docKeys.includes(k));
+const missingDocs = harnessKeys.filter((k) => !docKeys.includes(k));
 const extraDocs = docKeys.filter((k) => !caps.harnesses[k]);
 check(
   "1.harness-docs",
   missingDocs.length === 0 && extraDocs.length === 0,
   missingDocs.length || extraDocs.length
-    ? `docs set mismatch — missing ${missingDocs.join(",") || "-"}, extra ${extraDocs.join(",") || "-"}; capabilities documented keys = ${documentedKeys.join(",")}`
-    : `${docFiles.length} harness-*.md for ${documentedKeys.join(",")}`,
+    ? `docs set mismatch — missing ${missingDocs.join(",") || "-"}, extra ${extraDocs.join(",") || "-"}; capabilities keys = ${harnessKeys.join(",")}`
+    : `${docFiles.length} harness-*.md for ${harnessKeys.join(",")}`,
 );
 
 // ---- 2. cron enum is capability-derived at every production call site ------
@@ -195,20 +197,21 @@ for (const [h, cap] of Object.entries(caps.harnesses)) {
 
 // ---- 5. SKILL.md reference area covers every harness-*.md ------------------
 const skillMd = readFileSync(join(ROOT, "skills/jspace-use/SKILL.md"), "utf-8");
-const refArea = skillMd.slice(skillMd.indexOf("## 参考"));
+const refHeading = skillMd.includes("## 权威引用") ? "## 权威引用" : "## 参考";
+const refArea = skillMd.slice(skillMd.indexOf(refHeading));
 // Accept both a literal `harness-x.md` mention and a brace-group shorthand
-// `harness-{x,y,z}.md` whose keys cover all documented harnesses.
+// `harness-{x,y,z}.md` whose keys cover every harness in the support set.
 function braceGroupCovers(doc: string): boolean {
   const groups = [...doc.matchAll(/harness-\{([^}]+)\}\.md/g)];
   for (const g of groups) {
     const keys = g[1].split(",").map((k) => k.trim());
-    if (documentedKeys.every((k) => keys.includes(k))) return true;
+    if (harnessKeys.every((k) => keys.includes(k))) return true;
   }
   return false;
 }
 const uncovered = docFiles.filter((f) => !refArea.includes(f));
 const uncoveredByGroup = !braceGroupCovers(refArea) && uncovered.length > 0;
-check("5.skill-refs", uncoveredByGroup === false, uncoveredByGroup ? `SKILL.md 参考区 missing ${uncovered.join(",")} (add literal filenames or a harness-{...}.md brace group covering all)` : `SKILL.md 参考区 covers all ${documentedKeys.length} harness-*.md`);
+check("5.skill-refs", uncoveredByGroup === false, uncoveredByGroup ? `SKILL.md 参考区 missing ${uncovered.join(",")} (add literal filenames or a harness-{...}.md brace group covering all)` : `SKILL.md 参考区 covers all ${docFiles.length} harness-*.md`);
 
 // ---- 6. hand-written harness lists contain the full support set ------------
 // jspace-domain surfaces only (NOT skills/harness-config — machine-level wiring

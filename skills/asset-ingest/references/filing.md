@@ -27,7 +27,7 @@
 | 明确服务某个项目(进行中或已交付) | `projects/<项目>/` | 读该项目 `index.md` 的 `layout`,决定放项目根还是稳定工作流/周期子目录 |
 | 多个项目共用、或长期不随项目结项(书籍 / 行业资料 / 领域参考) | `areas/<领域>/<稳定主题>/` | 按稳定主题组织;不用格式词做主题名 |
 | 已结项 / 不再活跃的冷资料 | `archive/<年>/` | |
-| 拿不准 | — | **问用户,不猜** |
+| 拿不准 | — | 先补查 owner index、项目规范与相关资产；仍无唯一归属则留原件，报告缺什么，不猜 |
 
 同一份资料只有一个规范位置;跨项目引用用链接,不复制。
 
@@ -117,14 +117,15 @@ projects/acme/
 AI 归位文件被用户纠正时,**必须**把纠正写成 gbrain `profile/filing-prefs` 页(覆盖),下次归位前先读这一页:
 
 ```bash
-gbrain get profile/filing-prefs   # 归位前先读(如存在)
+gbrain call get_page '{"slug":"profile/filing-prefs","include_content":true}'
 ```
 
 写页内容示例:
 ```markdown
 ---
-type: note
+type: filing-preferences
 tags: [profile]
+source: claude
 ---
 # 归位偏好
 
@@ -153,11 +154,23 @@ tags: [profile]
 
 ## 查重
 
-- 入库前检查:目标目录同名/同语义文件、`gbrain get assets/<项目|领域>/<语义名>` 是否已存在。
-- 已存在 → 询问用户:跳过 / **修复**(同名同内容重入,允许覆盖错页)/ 升版本(`-vN`,写新页、旧页保留并注 supersedes)。
+- 入库前检查目标目录同名/同语义文件，并用 `gbrain call get_page '{"slug":"assets/<owner>/<语义名>","include_content":true}'` 查页。
+- 同内容已存在 → 报告已有位置并跳过，不创建第二份物理副本；`jspace filehub check --json` 的 `filehub.asset.duplicate_content` 可提示跨路径同内容，但它不自动移动或删除文件。
+- 同名/同语义但内容不同 → 默认 conflict，不覆盖。只有明确“修订/新版/替代”证据时才写 `-vN` 新 slug / 新页，新页正文声明 `Supersedes: [[old]]`，旧页另做完整页 + revision 的 CAS 生命周期更新。
+- 旧页被标记 `status:superseded|deprecated|archived` 后是历史指针，不再参与当前 owner、`rel_path`、index 或重复指针校验；owner index 必须改指现行页，继续指向旧页会被 `filehub check` 报 `filehub.index.page_inactive`。
+- 没有覆盖错页这种修复路径；错误页需要新页取代并保留历史。
 
 ## 项目 index.md
 
 - `projects/<项目>/index.md` 必须在 frontmatter 声明 `layout: flat | workstream | period`。
 - 每份归位文件必须登记一行:文件 + 类型 + 日期 + gbrain slug(人机共用的 dashboard)。
+- 随项目保存的 Agent 治理、构建配置、运行骨架和模板不是独立资产;在该 index 的
+  `support_paths` 中按 owner 相对路径显式声明(文件或稳定目录),例如:
+  ```yaml
+  support_paths:
+    - project-context.md
+    - mcp-server/
+  ```
+  路径必须位于 owner 根内且真实存在;不能把普通资料登记为 support 来绕过 asset 指针,
+  也不能用 support 路径隐藏 cross-owner 文件。
 - `areas/` 是否维护 index 由真实使用涌现,但同样禁止按文件格式分目录。

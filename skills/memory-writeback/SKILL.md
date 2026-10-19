@@ -1,6 +1,6 @@
 ---
 name: memory-writeback
-description: "**会话结束收工**时把本次持久事实按纪律写回 gbrain:扫描 → 分类(状态/知识/周快照) → 归属(project+slug) → 写回 → 验证读回。Use when 收工/写回记忆/记一下本次进展/session end/writeback。Do NOT use for 资料文件入库(→asset-ingest)、用户问句召回(→memory-recall)、周快照(→memory-consolidate cron)。"
+description: "会话结束或阶段收口时,把持久事实分类写入 gbrain:状态卡 CAS 覆盖,决策/经验/知识追加,并在写后读回验证。Use when 收工/写回记忆/记一下本次进展。Do NOT use for 文件本体归位(→asset-ingest)、用户问句召回(→memory-recall)或周快照(→memory-consolidate)。"
 triggers:
   - "收工"
   - "写回记忆"
@@ -11,87 +11,113 @@ triggers:
   - "writeback"
 ---
 
-# memory-writeback — 收工记忆写回(写侧·会话事实)
+# memory-writeback - 会话事实写回
 
-会话结束时把本次**持久事实**按纪律写回 gbrain(对应 GOAL「收工」)。**无持久事实 → 静默结束**(对齐 End-of-Work Capture)。
+把本次会话产生的持久事实写进 gbrain。目标是让下一次会话少走弯路,不是复制聊天记录。没有持久事实时静默结束。
 
-**分工**:asset-ingest = 资产写侧(asset 指针页);本 skill = 会话事实写侧(state/决策/经验/跨项目知识);memory-recall = 读侧;memory-consolidate = 周快照(cron,本 skill 不写)。
+## 触发 / 非目标
 
-## 何时用 / 何时不用
-- ✅ 用:收工时把进展/决策/教训/规则写回 gbrain。**也可以在会话中段用**——一个重要决策刚定下来、一个教训刚总结出来、一个项目阶段刚完成时，不必等到收工。
-- ✅ 用:用户纠正了文件归位后,把纠正写成 `profile/filing-prefs` 页(归位偏好学习)。
-- ❌ 不用:文件本体归位 → `asset-ingest`(本 skill 有产出文件时转它,不重复文件移动);读侧召回 → `memory-recall`;周快照 → memory-consolidate cron 任务。
+- 用:收工、阶段完成、重要决策已定、教训已提炼、用户纠正归位偏好。
+- 不用:资料本体移动和资产指针 → `asset-ingest`;读侧召回 → `memory-recall`;周期快照 → `memory-consolidate`;项目任务、bug、迭代详情 → 项目原生载体。
+- 可写不代表必须写:只对未来会话有复用价值的持久事实才写。
 
-## 决策表
+## 输入与前置
 
-| 事实类别 | 目标 slug | 写语义 |
-|---|---|---|
-| 状态记忆(进展/待办/开放问题) | `project/<id>/state` | 固定 slug **覆盖**,`tags: [project]` |
-| 项目决策(决定+理由) | `project/<id>/decisions/<主题>` | **append-only 新页**(绝不覆盖) |
-| 项目专属经验(踩坑/可复用要点) | `project/<id>/lessons/<主题>` | **append-only 新页**(绝不覆盖) |
-| 跨项目可复用认识 | `knowledge/<域>/<主题>` | **append-only 新页**(绝不覆盖),域=通用知识域(不含项目名) |
-| 工作台偏好/协作约定 | `profile/<主题>` | 固定 slug **覆盖**,`tags: [profile]` |
-| 归位偏好(文件放哪的纠正) | `profile/filing-prefs` | 固定 slug **覆盖**,`tags: [profile]` |
-| 稀疏项目事件(里程碑/事故) | `records/project/<id>/<date>-<主题>` | **append-only 新页** |
-| 周快照 | — | **转 memory-consolidate**,本 skill 不写 |
+- 本次会话可确认的事实、证据、时间范围和归属项目。
+- 写入前读取相关工作台状态、项目规范、现有 state、相关 decision/lesson 和 `profile/filing-prefs`。
+- 运行模式必须明确:交互会话写 `source:session`;`source` frontmatter 写实际 harness;内容出处显式选择 `user_said|tool_output|inferred`。
 
-| 判断 | 取值 | 动作 |
-|---|---|---|
-| 有无持久事实 | 无 / 有 | **静默结束** / 简述将写什么·写哪·为何,再写 |
-| 来源 tag | 恒定 | 每页 `tags` 追加 **`source:session`**(写回率取证;frontmatter `source:` 仍是 harness 出处,不挪用) |
-| 晋升信号(跨会话重复/决策已定/提炼成教训) | 命中 | 写 `project/<id>/decisions/` 或 `project/<id>/lessons/` 新页,state 只留现状(不压 state) |
-| serve 持锁 / 写失败 | 是 / 否 | `jspace pending stage`(暂存不失败) / 直接写 |
-| embedding 不可达 | 是 / 否 | `embed_skip: true`(写仍成功)+固定提示 / 正常写 |
+## 权威引用
 
-## 命令速查
+- 唯一记忆契约、页 envelope、生命周期、`Supersedes` 和 pending:`~/.agents/skills/jspace-use/references/gbrain.md`
+- 分类树、slug 派生、晋升和取代细则:`~/.agents/skills/memory-writeback/references/writeback.md`
+- Golden run:`~/.agents/skills/memory-writeback/references/example-writeback.md`
 
-```bash
-gbrain put project/<id>/state < <正文文件>                # 状态:固定 slug 覆盖
-gbrain put project/<id>/decisions/<主题> < <文件>         # 项目决策:append-only
-gbrain put project/<id>/lessons/<主题> < <文件>           # 项目经验:append-only
-gbrain put knowledge/<域>/<主题> < <文件>                 # 跨项目知识:append-only
-gbrain put profile/<主题> < <正文文件>                          # 工作台偏好:固定 slug 覆盖
-gbrain put records/project/<id>/<date>-<主题> < <文件>       # 稀疏项目事件:append-only
-gbrain get <slug>                                # 验证读回
-jspace pending stage <slug> --content <正文文件> --producer memory-writeback
-jspace pending apply                             # 锁空闲落 live(幂等)
-```
+## 写集
 
-## 步骤(主流程骨架)
+- `project/<id>/state`:项目认知卡,CAS 覆盖。
+- `project/<id>/decisions/<topic>`:决策,追加。
+- `project/<id>/lessons/<topic>`:项目经验,追加。
+- `knowledge/<domain>/<topic>`:有第二项目真实复用证据的跨项目知识,追加。
+- `profile/<topic>` / `profile/filing-prefs`:工作台偏好,CAS 覆盖。
+- `records/project/<id>/<date>-<topic>`:稀疏事件,追加。
+- `.jspace/state/pending/*.APPLY.json`:仅在安全写入暂不可用时暂存。
+- 不写:资产本体、owner index、项目任务系统、周快照/周报/retro、历史来源 tag。
 
-1. **扫描**:本会话有无持久事实(进展/决策/教训/资产指针/规则/工作流)。**无 → 静默结束**。
-2. **分类**:按决策表(状态/知识/决策/周快照)。
-3. **归属**:定 domain/project id(活跃项目发现:`hub.json`+域 README+既有 state 页);slug 从项目+主题派生,**不发明**。
-4. **写回**:按分类写语义;晋升 → 新知识页;每页带 `project`+`tags`(路由 tag + **`source:session`**)+`source`;锁冲突 `jspace pending stage`。
-5. **验证(逐页断言来源 tag,不只是「能列到」)**:`gbrain get <slug>` 读回;`gbrain tags <slug>` 输出**必须含 `source:session`**——漏打就是写回率取证失真,当场补;state 覆盖不新增、知识不重复。
-6. **文件归位**(有产出文件)→ 转 `asset-ingest` 步骤 2-4,本 skill 不重复。
+## 输出
 
-## 按需深入(条件读指针)
+每次写回报告:
 
-- 分类表/slug 派生/晋升信号/降级细则 → `~/.agents/skills/memory-writeback/references/writeback.md`
-- state 覆盖 vs 知识追加 / 晋升 纪律源 → `~/.agents/skills/jspace-use/references/gbrain.md`
-- 文件归位(转引用)→ `~/.agents/skills/asset-ingest/SKILL.md`
+| 字段 | 内容 |
+|---|---|
+| 决策 | 写 / 不写,以及理由 |
+| 页面 | slug、创建/替换、intent |
+| 证据 | request id、committed receipt、revision |
+| 验证 | 读回后的 slug、tags、source、owner |
+| 未决 | pending、冲突、失败或无需写入 |
 
-## Golden run
+## 主流程
 
-端到端范例(扫描 → 分类 → 写回 → 读回验证)见 `~/.agents/skills/memory-writeback/references/example-writeback.md`。
+1. **扫描**:列出本次持久事实;无关闲聊、一次性命令和可从原件直接恢复的细节不写。
+2. **分类与归属**:按 `writeback.md` 分类,确定 project/area 和稳定 slug;归属不明先查 registry、域 README 和既有 state。
+3. **先保全再覆盖**:state 中将被移除、但仍能解释历史的决定或事件,先写 decision/record;随后生成新的三段式认知卡。
+4. **读取现状**:替换前 `get_page(include_content:true)` 取得最新 `revision`;追加页先检查 slug 是否已存在,避免重复。
+5. **构造完整页**:frontmatter 必须含实际 `source`、owner 字段、路由 tag,且恰好一个 `source:session`/`source:cron`;描述性 `type` 保持真实值,路由只用 slug + tags。
+6. **结构化写入**:用新的稳定 request id 调用 `gbrain call put_page`;替换时携带读到的完整页正文和 `expected_revision`。
+7. **处理响应丢失**:先 `get_write_request` 找 committed 回执,再读目标页;不得换新 request id 重发不同正文。
+8. **读回验证**:核对 receipt、revision、完整正文、tags、owner 和 `Supersedes` 方向。`put_page` 的 tags 是合并语义;若读回同时含 `source:session` 与 `source:cron`,用 `remove_tag`(带 `expected_revision` + 新 request id)删除不属于本次运行模式的 tag,再读回确认只剩一个。
+9. **有产出文件**:不在此移动;转 `asset-ingest`。
 
-## 自检(做完跑这条)
+### 写页最小请求
 
 ```bash
-gbrain get <slug>                       # project/tags/source 齐;state 覆盖未新增、知识未重复
-gbrain tags <slug>                      # 必含 source:session —— 逐页断言,漏打即补
-gbrain list --tag source:session -n 5   # 再确认列表能列到(写回率取证的基础)
+request_id="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+jq -n \
+  --arg slug "<slug>" \
+  --rawfile content page.md \
+  --arg request_id "$request_id" \
+  --arg source_id "jspace:memory-writeback:<stable-topic>" \
+  --arg content_origin user_said \
+  '{slug:$slug,content:$content,request_id:$request_id,source_id:$source_id,content_origin:$content_origin}' \
+  > request.json
+gbrain call put_page "$(cat request.json)"
+gbrain call get_page "$(jq -cn --arg slug "<slug>" '{slug:$slug,include_content:true}')"
 ```
 
-> `gbrain list --tag source:session` 能列到**不等于**每页都打了 tag——它只证明「至少有一页打了」。
-> 逐页断言的判据是 `gbrain tags <slug>`;2026-09-12 retro 发现 21/30 页漏打,正是只做了前者。
-(无持久事实时本 skill 应静默结束,不写页、不提示)
+替换请求在 JSON 中加 `"expected_revision": "<opaque-revision>"`；revision 是不透明字符串（当前为 UUID），不得转成数字。
 
-> **提醒 ≠ 写入**:`jspace context session-end` 与 `jspace context turn` 的每会话一次轻提示都只提醒、从不写 gbrain,也不打 `source:session`。所以「本周 `source:session` 计数」量的是**真的写回了几次**,不是被提醒了几次。各 harness 的 session-end 能力边界见 `~/.agents/skills/jspace-use/references/harnesses.md`。
+## 完成证据
 
-## 参考
-- `~/.agents/skills/memory-writeback/references/writeback.md` — 分类表/slug/晋升信号/降级
-- `~/.agents/skills/jspace-use/references/gbrain.md` — 纪律源(state 覆盖 vs 知识追加/晋升)
-- `~/.agents/skills/memory-writeback/references/example-writeback.md` — golden run(S5 产出)
-- `~/.agents/skills/asset-ingest/SKILL.md` — 文件归位(转引用)
+- 写侧返回 committed receipt,或响应丢失后由 `get_write_request` 证明已提交;
+- 目标页可读回,revision 与 receipt 一致;
+- 页面的 `source`、owner、tags、正文和 slug 均符合契约;
+- 状态覆盖没有创建重复页,追加页没有覆盖旧正文,`Supersedes` 是由新页指向旧页;
+- 每个结论都能指出对应 slug 和验证输出。
+
+进程 exit 0、只写 pending、只改 journal、列表中出现结果或 agent 自述,都不等于完成。
+
+## 失败与恢复
+
+- 锁冲突、超时或响应不确定:先生成完整页,再 `jspace pending stage`;`create` 不允许 target 已存在,`replace` 必须带 stage 时的 revision。
+- pending staged / terminal_failed 不等于成功;只有 apply 后读回通过才继续下游。
+- revision conflict:重新读取并合并新事实;不得用旧正文覆盖,也不得伪造“最新”时间。
+- 写入后发现内容错误:写新页并声明 `Supersedes`,再用 CAS 更新旧页生命周期;历史正文不改。
+- embedding 不可达:写仍可成功,页内 `embed_skip: true`,并提示检索降级;写入证据仍以回执和读回为准。
+
+## 转交
+
+- 文件本体或 asset 指针 → `asset-ingest`
+- 周内归纳 → `memory-consolidate`
+- 人读周报 → `weekly-report`
+- 检索/现行页解释 → `memory-recall`
+- gbrain 二进制、数据库或 harness 接线 → `jspace-use`
+
+## 自检
+
+```bash
+gbrain call get_page '{"slug":"<slug>","include_content":true}'
+jspace pending list
+jspace memory check --json
+```
+
+没有持久事实时,本 skill 的输出应为空,不创建占位页,不发提醒。

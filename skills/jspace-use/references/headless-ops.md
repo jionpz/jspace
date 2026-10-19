@@ -25,17 +25,17 @@
 ## 3. 耗尽 / 限流怎么处置
 
 1. **备用 provider（fallback 链）**：本机 provider 配置工具按 provider 配置备用模型链（常见形态：`<provider-config> provider fallback <id> <provider/model>…`，语义 = "该 provider 超出配额或不可用时改用这些"）。**它是按 provider 配的链，不是全局开关，默认不配就没有**——`provider fallback <id>` 不带参数即查询，输出 `has no fallback` 就说明这条链是空的，此时限流没有任何自动兜底。排查"为什么没自动切"先查这里。
-2. **重试**：`jspace cron run <id>` 手动重跑一次（`--timeout` 可调）；等待窗口（如 5 小时限流）后由 cron 自然再触发。
+2. **重试**：`jspace cron run --id <id>` 手动重跑一次（`--timeout` 可调）；等待窗口（如 5 小时限流）后由 cron 自然再触发。
 3. **降档**：改 cron prompt 用更小模型 / 精简任务（无头侧不改 gbrain 契约）；**更直接的做法是 `cron add --model` 给这个 cron 钉一个免费/宽配额模型**，把无头与交互的模型彻底解耦。
 4. **记录**：无头失败会自动进 `cron-failed.md`（见下），下次会话可见 —— 不要静默放弃。
 
 ## 4. JSpace 侧兜底（失败可见性）
 
-- 无头执行失败 → 打开结构化 incident（`.jspace/state/incidents/`，keyed cron+failure class）+ 每次运行日志（`.jspace/logs/cron/<id>/` 为人类 payload）；成功 retry 自动 resolve，`cron ack` 保留证据。
-- **会话开始检查**：`jspace cron check`（alias `failures`）一次聚合「未 ack incident + pending 暂存写 + 各 cron 状态」，需关注则退出码 1。
+- 无头执行失败 → 打开结构化 incident（`.jspace/state/incidents/`，keyed cron+failure class）+ 每次执行日志（`.jspace/logs/cron/<id>/` 为人类 payload）；成功 retry 自动 resolve，`cron ack` 保留证据。
+- **会话开始检查**：`jspace cron failures` 一次聚合「未 ack incident + actionable pending 暂存写 + 各 cron 状态 + damaged state」，需关注则退出码 1。
   - Claude Code：SessionStart hook best-effort（需 hook 真实触发；工作台 `.claude/settings.json`）。
-  - 其他 harness：会话开始时手动 `jspace cron check`。
-- **gbrain 锁冲突 / 写暂存**：交互会话持 serve 锁时，gbrain 写契约**暂存**（`jspace pending stage <slug> --content <file> --producer <name>` → `<filehub>/.jspace-logs/<id>.APPLY.json`），锁空闲窗口 `jspace pending apply` 落 live（幂等，重复 apply 不产生重复事实）；terminal_failed 用 `jspace pending ack <id>` 确认。`jspace cron check` / `jspace doctor` 列出 actionable pending（staged/terminal_failed；applied/acked 不再告警）。
+  - 其他 harness：会话开始时手动 `jspace cron failures`。
+- **gbrain 锁冲突 / 写暂存**：交互会话持 serve 锁或响应不确定时，gbrain 写契约**暂存**到工作台自己的队列：`jspace pending stage <slug> --content <file> --producer <name> --intent <create|replace> --origin <user_said|tool_output|inferred> [--expected-revision <n>]`，文件在 `.jspace/state/pending/<id>.APPLY.json`，不依赖 filehub。`create` 遇已有页返回 `target_exists`；`replace` 必须带 stage 时 revision。锁空闲窗口 `jspace pending apply` 落 live（只有 apply 成功并读回才算落库；`staged` 不等于 `applied`，`acked` 不等于落库）；terminal_failed 用 `jspace pending ack <id>` 确认。`jspace cron failures` / `jspace doctor` 列出 actionable pending（staged/terminal_failed；applied/acked 不再告警）。旧 `<filehub>/.jspace-logs/*.APPLY.json` 只能作为 `workspace upgrade` 的显式迁移输入，不是现行路径。
 - **asset-ingest 恢复**：资料入库走 `jspace ingest` journal（`begin` 暂存副本 → `advance --gbrain` → `advance --index` → `advance --complete` 移除 source）；任一步失败 `jspace ingest fail <id> --reason <原因>`（gbrain 前失败移除暂存副本、source 留 inbox，无孤儿）；中断用 `jspace ingest list` 续跑（已完成步骤不重做）。**cleanup-pending**：commit 的 source 移除未证明完成时 journal 为 `failed/failedStep=committed`（`list` 标注 `failed/cleanup-pending`），用同一 `advance <id> --complete` 幂等收尾（source 在 → 重试删除；已删除 → 直接收敛 committed），不虚报 source 已删。
 - **doctor**：`jspace doctor` 摘要 cron 失败数与 actionable pending（`jspace pending apply/ack`）。
 

@@ -5,9 +5,26 @@ import { buildPlan, rewriteBody, type MigrateGbrain } from "./migrate-memory-mod
 
 function fakeG(slugs: string[]): MigrateGbrain {
   return {
-    list: async () => ({ ok: true, rows: slugs.map((slug) => ({ slug })) }),
-    get: async () => ({ ok: true, content: `---\ntype: reference\nproject: 52期体验营\ntags: [x]\n---\nbody` }),
-    put: async () => ({ ok: true }),
+    listPages: async () => ({
+      ok: true,
+      rows: slugs.map((slug) => ({ slug, updatedAt: "2026-10-18T00:00:00Z" })),
+    }),
+    getPage: async (slug) => ({
+      ok: true,
+      page: {
+        slug,
+        revision: "revision-1",
+        contentHash: "hash",
+        content: `---\ntype: reference\nproject: 52期体验营\ntags: [x]\n---\nbody`,
+        tags: ["x"],
+      },
+    }),
+    putPage: async (input) => ({
+      ok: true,
+      requestId: input.requestId,
+      state: "committed",
+      revision: "revision-1",
+    }),
   };
 }
 

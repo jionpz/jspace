@@ -5,7 +5,7 @@
 > 本目录可被 Obsidian 作为 vault 打开。AI 只写纯 md 与相对链接,不依赖任何插件——哪天换工具,资料一点不坏。
 
 <!-- JSPACE:FILEHUB:START -->
-> filehub-contract-version: 3
+> filehub-contract-version: 4
 
 ## 归档契约
 
@@ -44,6 +44,17 @@ layout: flat | workstream | period
 
 跨项目引用用链接,不复制文件本体。
 
+项目内的套件、Agent 治理和运行支撑文件不是独立资产。由 owner `index.md` 的
+`support_paths` 显式声明(相对 owner 根,可指向文件或整个稳定目录):
+
+```yaml
+support_paths:
+  - project-context.md
+  - mcp-server/
+```
+
+支撑路径仍受 owner 边界、存在性与 index 登记冲突检查;不能用它隐藏普通资料或跨 owner 排除文件。
+
 ### 旧结构迁移
 
 已有 `docs/ decks/ data/ notes/` 不会被自动移动。先运行 `jspace doctor` 获取只读提示,再按 `asset-ingest/references/migration.md` 逐文件确认、移动并更新 `index.md` 与 gbrain 指针。迁移必须用户确认,可逐文件回滚。
@@ -64,6 +75,7 @@ layout: flat | workstream | period
 type: project-index
 project: <id>
 layout: flat
+support_paths: []
 tags: []
 created: YYYY-MM-DD
 ---

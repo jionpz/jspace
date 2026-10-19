@@ -9,7 +9,7 @@
 //                      channel, so the context lands as a visible user message,
 //                      the closest SessionStart equivalent this platform offers)
 //   session.idle     → surface cron failures as a visible no-reply message
-//                      (jspace cron check; exit != 0 → inject detail). NO auto
+//                      (jspace cron failures; exit != 0 → inject detail). NO auto
 //                      flush of staged writes — idle must not be more aggressive
 //                      than Claude/Grok (issue #7 P1.7): write-back AND staged
 //                      flush stay user-triggered (D3, no auto write)
@@ -45,12 +45,12 @@ async function runSessionStart(cwd: string): Promise<string> {
   }
 }
 
-/** Run `jspace cron check` (no --quiet: idle only surfaces when there is
+/** Run `jspace cron failures` (no --quiet: idle only surfaces when there is
  *  something to report) with a hard timeout + stdin ignored. Returns the exit
  *  code + output; the caller decides whether to surface it. */
 async function runCronCheck(cwd: string): Promise<{ exit: number; output: string }> {
   try {
-    const proc = Bun.spawn(["jspace", "cron", "check"], {
+    const proc = Bun.spawn(["jspace", "cron", "failures"], {
       cwd,
       stdout: "pipe",
       stderr: "ignore",
@@ -68,7 +68,7 @@ async function runCronCheck(cwd: string): Promise<{ exit: number; output: string
 
 /** Pure event dispatch (no Bun, no client): given the deps, return the event
  *  handler. Separated so the plugin's branches are unit-testable with mock
- *  inject + mock cron check (no real process, no Bun.spawn in tests). */
+ *  inject + mock cron failures (no real process, no Bun.spawn in tests). */
 export interface EventDeps {
   /** session.created → inject session-start context (awaited; self-capped by the
    *  runner's timeout so it can't stall the event loop indefinitely). */

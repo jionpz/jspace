@@ -1,7 +1,7 @@
 # Grok Build 接线参考（T1 桥接）
 
 > Grok Build 有**原生 memory 子系统**（`~/.grok/memory/` markdown + SQLite hybrid search、`/flush`、`/dream`），但按 **D1/B 决策**：gbrain 保持权威，Grok native memory 只是 Grok 内 UX、不参与 gbrain slug 生命周期。本工作台对 Grok 的接线 = Claude 接线的近似（hook 事件集对齐）+ bridge（PreCompact/收工时机注入提醒、由用户显式触发写回）。与 `harness-config` skill 的机器级接线分工：本文档是 JSpace 工作台对 Grok Build 的支持声明。
-> `<gbrain>` = gbrain 二进制绝对路径（`$GBRAIN_BIN` → `command -v gbrain` → `~/.bun/bin/gbrain`）。
+> `<gbrain>` = gbrain 二进制绝对路径（`$GBRAIN_BIN` → `command -v gbrain`；两者都解析不到时 `jspace harness wire` 显式失败并提示安装，不猜测 `~/.bun/bin/gbrain` 一类安装目录）。
 
 ## 支持面（capsules：capabilities.grok）
 
@@ -38,6 +38,6 @@ Grok Build 兼容扫描可能同时读 `.claude/settings.json`（现存 SessionS
 
 ```bash
 jspace doctor --dir .          # checkHarness: 活跃 grok 二进制在 PATH 检查
-jspace cron run <cron> --harness grok --dry-run --dir .   # argv = grok -p ... --allow Bash(*)
+jspace cron run --id <id> --harness grok --dry-run --dir .   # argv = grok -p ... --allow Bash(*)
 jspace harness wire --harness grok --dir .                # 无 config.toml -> error; 有 -> 合并 env
 ```

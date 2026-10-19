@@ -10,14 +10,14 @@
 
 ## 第一遍(确定性,零提问)
 
-**归位前先读上下文**：① 项目 `index.md` 的 `layout`（flat/workstream/period）；② `gbrain get profile/filing-prefs`（如存在）——用户历次纠正积累的归位规则；③ `ls` 目标项目目录——只延续与契约一致的已有组织方式。三者都参与确定性判断；格式目录不是可选答案。
+**归位前先读上下文**：① 项目 `index.md` 的 `layout`（flat/workstream/period）；② `gbrain call get_page '{"slug":"profile/filing-prefs","include_content":true}'`（如存在）——用户历次纠正积累的归位规则；③ `ls` 目标项目目录——只延续与契约一致的已有组织方式。三者都参与确定性判断；格式目录不是可选答案。
 
 遍历 `_inbox/` 剩余文件(排除:点文件、常驻契约文件 `README.md` / `AGENTS.md`、`.processing` 已完成项、skip 清单)。命中 `.skip-inbox-tidy` 豁免标记的目录**整目录跳过并计入「跳过」**(原因:豁免标记),不搬动其内容——与 unfiled 计数(`inbox status` / doctor / context hook)同一口径,见 filing.md「投放口常驻文件与豁免标记」。
 
 **确定性**判定(全部满足):
 1. 类型明确:`pdf / ppt / txt / md / excel` 之一(由扩展名 + 内容判断);
 2. 归属与位置可判:能从文件名/内容确定归 `projects/<项目>/` 或 `areas/<领域>/`,并依据 `layout` 确定根目录或稳定子目录;
-3. 无查重冲突:`gbrain get assets/<项目|领域>/<语义名>` 未存在,且目标目录无同名/同语义文件;
+3. 无查重冲突:目标目录无同名/同语义文件，且 `gbrain call get_page '{"slug":"assets/<owner>/<语义名>","include_content":true}'` 返回 `page_not_found`;
 4. 命名可提取:`YYYY-MM-DD-语义名` 能从文件名/内容直接得出。
 
 - 确定性 → 逐份走单文件「步骤 1-5」(识别→查重→归位→入脑→登记→自检),**零提问**。
@@ -36,28 +36,28 @@
 - `跳过` — 本轮不处理(保留在 `_inbox/`);
 - `改归属` — 用户指定 `projects/<项目>/` 或 `areas/<领域>/`;
 - `改命名` — 用户给出语义名(或纠正);
-- `升版本` — 同语义已存在 → 写 `-vN` 新页,旧页保留并注 supersedes;
-- `覆盖` — 同名同内容重入,允许覆盖错页(修复语义)。
+- `升版本` — 同语义已存在且有明确新版依据 → 写 `-vN` 新 slug/新页，新页正文声明 `Supersedes: [[old]]`，旧页用 CAS 改生命周期;
+- `跳过重复` — 同内容已存在 → 报告已有路径/页并跳过，不移动或删除任何副本。
 
 无头模式:**跳过本步**,模糊项留在 `_inbox/`(自然成为下次会话/下次跑的输入)。
 
 ## 汇总与机械校验
 
 - 汇总:`成功 / 跳过 / 失败 + 原因`,以及计数对比(批量前后 `_inbox/` 文件数一致,排除点文件、常驻契约文件与 `.skip-inbox-tidy` 豁免目录)。
-- 查重预检:确定性判断里已含「`gbrain get` 未存在」,防擅自覆盖。
+- 查重预检:确定性判断里已含结构化 `get_page` 未命中；同内容由内容身份和 `filehub check` 的 `filehub.asset.duplicate_content` 提示，不以文件名或列表行猜重。
 - 召回自检:每份(或抽样)贴出实际 `gbrain query <关键词>` 输出;未命中 → 检查 slug/tags/embedding,不得静默。
 
 ## 人工纠错(处理后)
 
 - `撤销本次`:把已归位文件移回 `_inbox/`(或用户指定 back 目录),删/标注对应 gbrain 页,撤销 index.md 登记行。
-- `重跑该份`:对已归位文件重走单文件逻辑(修复语义,允许覆盖错页),修正 gbrain 页与 index。
+- `重跑该份`:对已归位文件重走单文件逻辑；若事实或页内容错误，写新页并以 `Supersedes` 指向旧页，旧页只做生命周期 CAS，修正 index 与指针。
 
 ## 无头模式(cron / `claude -p`)
 
 - 只跑第一遍(确定性),不提问、不等待;模糊项留清单。
-- 每份走 journal(`jspace ingest begin → advance --gbrain → advance --index → advance --complete`);gbrain 锁冲突 → `jspace pending stage` 暂存,不失败。
+- 每份走 journal(`jspace ingest begin → advance --gbrain → advance --index → advance --complete`);gbrain 锁冲突/超时/响应丢失 → 用 `jspace pending stage` 保存完整页、`--intent create|replace`、真实 `--origin` 和 replace 所需的 stage-time `--expected-revision`，不失败也不越过 checkpoint。
 - 写执行日志到 `<filehub>/.jspace-logs/inbox-batch.md`(追加):时间、输入计数、成功/跳过/失败、逐文件结果(路径 → 目标)。未注册 filehub 时:写工作台 `.jspace/logs/inbox-batch.md`(工作台侧日志槽位)。
-- 失败可见性:journal + 日志落固定路径,供下次会话检查(`jspace ingest list` / `jspace pending list` / `jspace cron check`);不做静默吞错。
+- 失败可见性:journal + 日志落固定路径,供下次会话检查(`jspace ingest list` / `jspace pending list` / `jspace cron failures`);不做静默吞错。
 
 ## 边界
 

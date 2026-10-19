@@ -29,12 +29,14 @@ gbrain query "历史数据迁移涉及多少存量?"
 
 ### 3. 指针断言链(四连过才算命中)
 ```bash
-gbrain get assets/<领域A>/<迁移页语义名>          # ① 取 Pointer 字段
+gbrain call get_page '{"slug":"assets/<领域A>/<迁移页语义名>","include_content":true}'  # ① 取完整页、rel_path、tags
 test -f "~/filehub/areas/<领域A>/<文件>.md"   # ② 文件在
 grep "12.8" "~/filehub/areas/<领域A>/<文件>.md"  # ③ 找到那个数
 gbrain query "那 12.8T 的数据怎么搬?"            # ④ top-1 slug == 目标
 ```
 四连全过 → 命中;任一断 → 回步骤 5 校准。
+
+若页为 `status:superseded`，先对旧 slug 调 `gbrain call get_backlinks '{"slug":"<old-slug>","group":"page","limit":100}'`，按 cursor 取完并逐页读取候选；只接受正文声明 `Supersedes: [[<old-slug>]]` 的现行页。
 
 ### 4. 作答并引用出处
 > 历史数据迁移涉及约 12.8T 存量。
@@ -52,6 +54,6 @@ gbrain query "那 12.8T 的数据怎么搬?"            # ④ top-1 slug == 目�
 
 ## 断言清单(照此判"做完没")
 - [ ] `gbrain query` 原型 + 变体均 top-1 目标页,负对照不反超
-- [ ] `gbrain get <slug>` 取到 Pointer;`test -f` 成立;`grep <数>` ≥1
+- [ ] `gbrain call get_page '{"slug":"<slug>","include_content":true}'` 取到完整页与 `rel_path`；解析后的文件 `test -f` 成立；`grep <数>` ≥1
 - [ ] 答案含文件绝对路径 + gbrain slug
 - [ ] embedding 不可达时有固定降级提示(未静默)

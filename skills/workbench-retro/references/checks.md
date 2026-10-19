@@ -1,233 +1,294 @@
-# workbench-retro — 六条检查细则(取证 + 判读 + 分级)
+# workbench-retro - 六条检查细则(取证、判读与分级)
 
-每条检查三段式:**证据命令**(只读)→ **判读规则**(写死阈值,不靠感觉)→ **分级归属**。
-通用约束:证据拿不到(命令失败/输出为空/依赖不可达)→ 该条记「**无法判定** + 缺什么证据 + 怎么补」,**不猜、不省略、不用其它条的结论推断**。
+每条检查固定为:**只读取证 -> 阈值判读 -> 分级去向**。
 
-`<filehub>` = `.jspace/hub.json` 中 `type: filehub` 资源 `primary: true` path(经 `local.json` 绑定);解析不到 → 检查 2/3/5 全部记「无法判定(filehub 未注册)」。
+## 共通契约
+
+- 周期只取自 `jspace memory period --json`:用 `week_start`、`window_start`、`window_end_exclusive` 和 `observed_through`;周中运行只审到 cutoff,不另写日期算法。
+- 不得用执行当天、周日日期或自然“近 7 天”作为周 id。补跑过去周必须显式指定目标周一。
+- 页角色按 slug + tags 判断。`type` 只是描述元数据,不用于合法性过滤、抽样条件或“迁移完成”判断。
+- 页读取、列表和反向边统一使用 `gbrain call get_page|list_pages|get_backlinks`;`gbrain query|search` 只用于检索。
+- 列表行只证明元数据候选存在,不能证明正文、完整 tags、`activity:maintenance` 或来源。所有进入结论的候选都要 `get_page` 且 `include_content: true`。
+- 证据拿不到、分页未完成、coverage 降级或预算耗尽时,该条记 `unknown/partial + 缺什么 + 怎么补`,不得折叠成“无数据/一致”。
+- `<filehub>` = `.jspace/hub.json` 中 `type: filehub` 资源经 `local.bindings` 解析后的 `primary: true` 本机路径;解析不到时,检查 2/3/5 记 `unknown(filehub 未注册)`。
 
 ---
 
-## 检查 1 · 写回执行率(最重要)
+## 检查 1 - 写回执行率
 
-「本周明明有活动,却没有一条持久事实进 gbrain」——这是飞轮停摆最典型的形态,且完全无声。
-更隐蔽的一种:**记忆在长,但长的全是 cron 归纳的,没有一条来自日常会话**。所以本检查要分**来源**数,不只数总量。
+目标:区分会话写回、cron 写回、维护改写和无来源页;统计单位是**页**,不是命令运行次数或提醒次数。
 
-**证据**
+### 证据
+
+要得到包括无 tag 页在内的完整分母,先对工作台相关页做 keyset 全量候选扫描:
+
 ```bash
-# 1a 来源量化(B4:写侧按运行模式打来源 tag)
-gbrain list --tag source:session -n 50   # 会话写入(memory-writeback 等,含 updated_at)
-gbrain list --tag source:cron -n 50      # 定时写入(cron 无头跑的 consolidate/report/retro/ingest)
-
-# 1b 写回面(与来源正交:数哪些页动了)
-gbrain list --tag project -n 50   # 看 project/<id>/state 页与 updated_at
-gbrain list --tag knowledge -n 20 # 本周有无新知识页(再按 updated_at 滤窗口)
-
-# 1c 活动信号(佐证「这周确实在用」)
-ls -la <filehub>/projects/*/ | head -40  # 资产层本周有无文件变动
-ls .jspace/logs/cron/*/                  # cron 活动痕迹
+gbrain call list_pages '{"limit":100,"sort":"updated_asc"}'
+gbrain call list_pages '{"limit":100,"sort":"updated_asc","updated_after":"<last.updated_at_iso>","updated_after_slug":"<last.slug>"}'
 ```
 
-**判读 · 来源比(先做这一段,它决定报告的第一句话)**
+逐页直到空页或明确结束;达到页数/行数/时间预算时记 `partial`。来源 tag 查询可作交叉检查:
 
-三个计数都只数 `updated_at` **落在本周窗口内**的页:
+```bash
+gbrain call list_pages '{"tag":"source:session","limit":100,"sort":"updated_asc"}'
+gbrain call list_pages '{"tag":"source:cron","limit":100,"sort":"updated_asc"}'
+```
 
-| 计数 | 取法 |
+对每个 `updated_at` 落在窗口内的候选,读取完整页:
+
+```bash
+gbrain call get_page '{"slug":"<candidate-slug>","include_content":true}'
+```
+
+活动信号只作佐证:
+
+```bash
+find <filehub>/projects -type f -newermt '<window-start>' ! -newermt '<observed-through>'
+find .jspace/logs/cron -type f -newermt '<window-start>' ! -newermt '<observed-through>'
+jq '.session_count, .writeback_nudge_for_session' .jspace/state/briefing.json
+```
+
+### 判读
+
+| 计数 | 规则 |
 |---|---|
-| `session_writes` | `--tag source:session` 结果中落窗口的页数 |
-| `cron_writes` | `--tag source:cron` 结果中落窗口的页数 |
-| `untagged_writes` | 落窗口、但两条来源 tag 都没有的页(用 1b 的结果减去上面两组) |
+| `session_writes` | 完整页 tags 恰含 `source:session`,且在窗口内发生业务更新 |
+| `cron_writes` | 完整页 tags 恰含 `source:cron`,且在窗口内发生业务更新 |
+| `untagged_writes` | 窗口内有更新,但 `source:session` / `source:cron` 都没有 |
+| `maintenance_writes` | 窗口内有 `activity:maintenance`,从以上业务活动计数中排除,单独报告 |
 
-- **写回率 = `session_writes / (session_writes + cron_writes)`**,分母为 0 时记「本周无写入」,不写 0%(0/0 不是 0)。
-- `session_writes == 0` 且 `cron_writes > 0` → **会话写回腿停摆**:飞轮只有定时那条腿在转。整体性问题,报告开头单独点出。
-- `session_writes == 0` 且 `cron_writes == 0` 且有活动信号 → **写回腿整体停摆**(比上一条更严重)。
-- `session_writes > 0` → 记实际条数与比例,**不评价好坏**(基线数据,供跨周对比;单周数字没意义,走向才有)。跨周的达标口径(连续两周 > 0)与回写纪律见 `~/.agents/skills/jspace-use/references/usage-mileage.md` R2——本检查只负责**本周**这一行数字,不下「习惯已养成」的结论。
-- `untagged_writes > 0` → **不要**把它算进任何一条腿。分两种情况写:
-  - 页的 `updated_at` 早于本约定上线 → 记「历史页,无来源 tag」,只在基线里标注数量,不进判读;
-  - 页是本周新写的却没 tag → **写侧纪律缺口**（逐页复核用 `gbrain tags <slug>`；列表查询只能证明「至少有一页打了」，不能证明每页都打了）(某个 skill 没按 `~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」打标),归 `需你决策`,指明是哪个 slug/哪个 skill。
-- `gbrain list --tag source:session` 在本机 gbrain 版本上取不到结果(tag 解析差异等)→ 本段记「**无法判定** + 缺来源 tag 查询能力」,改用下面的降级 proxy,并把「来源 tag 不可查」本身作为一条 `需你决策` 报出来——**不要**默默用 proxy 冒充精确计数。
+- `source:session|cron` 是运行模式 tag;frontmatter `source` 是 harness;`content_origin` 是内容出处。三者不可互换,也不得根据 `source` 字段猜测运行模式。
+- 若一页同时有 session/cron 两个模式 tag、重复 routing tag 或没有模式 tag,记为来源纪律问题;不能凭列表筛选结果把它算进任一条腿。
+- 写回率 = `session_writes / (session_writes + cron_writes)`;分母 0 时写“本周无业务写入”,不写 `0%`。
+- `session_writes == 0 && cron_writes > 0` -> 会话写回腿停摆。
+- 两者都为 0 且有活动信号 -> 写回腿整体停摆。
+- `untagged_writes > 0` 时按页点名;历史页只在基线记数,窗口内新写页归写侧纪律缺口。
+- `maintenance_writes > 0` 只说明有维护改写,不得用它证明业务复用、M7 里程或“越用越强”。
+- 状态页 `project/<id>/state` 长期未更新可以是缺口线索,但不能替代来源计数;两者不一致时两个数字都报。
+- 来源 tag 查询不可用或 keyset 不完整时,来源比例记 `partial/unknown`。可按命名空间给出明确标注的“proxy 估算”,但 proxy 不得关闭 R2 或业务验收。
 
-**降级 proxy(仅当来源 tag 不可用时)**:cron 写入 ≈ `records/consolidate/*` `records/retro/*` `assets/周报/*` 这些 slug 命名空间里落窗口的页,再叠加 `.jspace/logs/cron/*/` 里成功运行的时间戳;会话写入 ≈ 落窗口的其余页。**这是估算,报告里必须标明「proxy 估算,非精确计数」**。
+提醒面只用于解释“没提醒”还是“提醒了没写”:`session_count` 在涨且轻提示已消费,说明 hook 在跑;它仍不等于 gbrain 已写入。
 
-**判读 · 写回面(来源比之外的缺口定位)**
-- 活动信号 = 本周内 filehub 有文件新增/修改,或 cron 成功运行,或域/hub 有变更。
-- 本周新知识 = `gbrain list --tag knowledge -n 20` 结果中 `updated_at` 落在本周窗口内的页;没有 → 记「本周无新知识」。
-- 某项目有活动信号,但其 `project/<id>/state` 页 `updated_at` ≥7 天未动 → **写回缺口**。
-- 全工作台本周 0 个 state 页更新且有活动信号 → **写回腿停摆**(与来源比的结论互为佐证;两者不一致时**两个数都报**,不挑一个顺眼的)。
+### 分级
 
-**判读 · 提醒面是否接上(找根因,不只报现象)**
-
-`session_writes == 0` 时顺手判一句「是没被提醒,还是提醒了没做」:
-
-```bash
-jq '.session_count, .writeback_nudge_for_session' .jspace/state/briefing.json   # 会话计数 / 轻提示已用到第几个会话
-```
-- 文件不存在或 `session_count` 本周没涨 → **session-start hook 没在跑**(提醒面根本没接上):归 `立即可做`,附 `jspace doctor --dir .` 看 `briefing.stale` 与 `harness.session_start_not_wired`。
-- `session_count` 在涨、`writeback_nudge_for_session` 也在跟 → 提醒发出去了但没人写回,是**习惯问题不是接线问题**:归 `需你决策`,别去改接线。这一情形下 `jspace doctor --verbose` 也会报 `memory.writeback_habit_unverified`(info 级习惯门禁,不是接线故障;doctor 不查 gbrain,精确计数仍以本检查的来源比为准)。
-- 各 harness 的 session-end 能力边界(哪些是 best_effort、哪些只有 turn 轻提示)→ `~/.agents/skills/jspace-use/references/harnesses.md`。
-
-**分级**:单项目缺口 → 需你决策(问「X 项目这周的进展要不要补记」);会话腿/整体停摆 → 需你决策 + 在报告开头单独点出;hook 没接上 → 立即可做。
+- 单项目写回缺口 -> `需你决策`:问该项目本期进展是否需要补记。
+- 会话腿/整体停摆 -> `需你决策`,并在报告首句点出。
+- hook 未接上或 cron failures 有 actionable 项 -> `立即可做`。
 
 ---
 
-## 检查 2 · 挂接一致性
+## 检查 2 - 挂接一致性
 
-filehub 有项目、域 README 没挂、hub 没注册 —— 三方漂移,导致 weekly-report 的项目发现源失效。
+目标:发现 filehub 项目、域 README、registry 三方的漂移。
 
-**证据**
+### 证据
+
 ```bash
-ls <filehub>/projects/                                   # 资产层真相
-rg -n '\|' workspace/<domain>/README.md | head -20        # 域 README 项目表
-jspace project list                                       # registry 注册情况
+find <filehub>/projects -mindepth 1 -maxdepth 1 -type d -print
+rg -n '\|' workspace/<domain>/README.md
+jspace project list
 ```
 
-**判读**
-- `projects/<X>/` 存在但域 README 项目表无 X → **未挂接**。
-- 域 README 有 X 但 `projects/<X>/` 不存在 → **悬挂行**(项目被删/改名)。
-- 项目表仍含 `<项目id>` 之类占位行 → **占位未清**。
+### 判读
 
-**分级**:全部 → 立即可做(附具体修复动作:在哪个文件加/删哪一行)。
+- `projects/<X>/` 存在但域 README 无 X -> 未挂接。
+- 域 README 有 X 但 `projects/<X>/` 不存在 -> 悬挂行。
+- 项目表仍有占位行 -> 占位未清。
+- registry 缺项目或 `asset_rel_path` 无法解析 -> 注册缺口。
+
+### 分级
+
+全部归 `立即可做`,附具体文件/行与修复命令;不要因 registry warning 自动创建项目或改写用户文档。
 
 ---
 
-## 检查 3 · 指针有效性
+## 检查 3 - 指针与资产查重
 
-gbrain asset 指针页的 `Pointer` 指向资产本体;文件被移动/改名/未同步 → 指针断,召回时才发现就晚了。
+目标:确认 asset 指针能用 `rel_path` 经本机 filehub 根解析,并区分“同内容重复”和“明确新版”。
 
-**证据**
+### 证据
+
 ```bash
-gbrain list --tag asset -n 20          # 指针抽样源(v2: asset 指针页)
-gbrain list --type reference -n 20                 # 迁移缺口抽样(仅 info,非唯一抽样源)
-gbrain get <slug>                                   # 读 Pointer / rel_path 字段
-test -f "<Pointer>" && echo OK || echo BROKEN
-gbrain stats                                        # pages_by_type:看 type 契约
+gbrain call list_pages '{"tag":"asset","limit":100,"sort":"updated_asc"}'
+gbrain call get_page '{"slug":"<asset-slug>","include_content":true}'
+jspace filehub check --dir . --json
 ```
 
-**判读**
-- 抽样 ≤5 条(全量扫描成本高、收益低;跨周轮换样本)。
-- `test -f` 失败但 `rel_path` 能经「本机 filehub 根 + rel_path」解析到实际文件 → **指针待重解析**(换机场景,非损坏)。
-- 两者都失败 → **断指针**。
-- 页缺 `rel_path` 字段 → **纪律缺口**(写侧没按 M5 纪律写)。
-- **type 契约**:`gbrain stats` 的 `pages_by_type` 只应出现 `note`(first-use 探针可保留 `smoke`);出现 `lesson|decision|reference` → **迁移未完成**(info / 需决策),不是合法 type;出现 `concept|project|knowledge|asset-pointer` → **写侧未按 gbrain.md 的 type 语义写**(需决策)。这条由 retro 承担而不是 `jspace doctor`:doctor 是离线结构化诊断、不碰 gbrain 运行时;retro 本就在读 gbrain,顺手即可判。
+对抽样页:
 
-**分级**:待重解析 / 断指针 → 立即可做;纪律缺口 / 迁移未完成 / type 契约 → 需你决策(是否回写侧修 asset-ingest 或 memory-* 的写页模板)。
+```bash
+test -f "<filehub>/<rel_path>" && echo OK || echo MISSING
+test -f "<Pointer>" && echo POINTER_OK || echo POINTER_MISSING
+```
+
+### 判读
+
+- 抽样不超过 5 条,跨周轮换;全量扫描超出小检查预算时标 `partial`。
+- `rel_path` 是主定位;按本机 filehub 根重解析。`Pointer` 只是本机提示,不是可移植事实源。
+- `rel_path` 解析成功 -> 指针可用;旧机绝对 `Pointer` 失效不单独判断指针。
+- `rel_path` 缺失但 `Pointer` 可解析 -> 可用但为待修纪律缺口;不要补造历史来源。
+- 两者都失败 -> 断指针。
+- asset 页的 `project` 是 owner namespace,`owner_kind: project|area` 应与 slug / `rel_path` 一致。人工旧页缺 `owner_kind` 时可由 `rel_path` 推断,并记为待修字段,不是伪造来源。
+- `jspace filehub check --json` 的 `filehub.asset.duplicate_content` 报告跨路径同内容;只提示人工处置,**不自动移动或删除文件**。
+- 同语义已存在且内容相同 -> 不覆盖、不另建第二份;明确新版 -> 新 `-vN` slug + 新页正文 `Supersedes: [[old]]` + 旧页 CAS 生命周期更新。错页不能靠覆盖现有 slug 修复。
+
+### 分级
+
+断指针/无法解析 -> `立即可做`;缺 `rel_path`/owner 字段 -> `需你决策`;同内容重复 -> 人工选择保留位置,不能自动清理。
 
 ---
 
-## 检查 4 · 流程卡点
+## 检查 4 - 流程卡点
 
-**证据**
+### 证据
+
 ```bash
-jspace cron check          # 未 ack incident + pending 暂存写 + 各 cron 状态
-jspace cron list           # 定时层到底启用了没(出厂全 enabled:false)
-jspace ingest list         # in-progress / cleanup-pending journal
-jspace pending list        # gbrain 锁冲突暂存
-ls .jspace/logs/cron/*/ | tail -20
+jspace cron failures --json
+jspace cron list --json
+jspace ingest list --json
+jspace pending list --json
+find .jspace/state/pending -maxdepth 1 -name '*.APPLY.json' -print 2>/dev/null
+find .jspace/logs/cron -type f -newermt '<window-start>' ! -newermt '<observed-through>'
 ```
 
-**判读**
-- 所有 cron 都 `enabled: false`(等价信号:`jspace doctor --verbose` 报 `cron.all_disabled`)→ **定时层从未启用**:资产整理与周自省两条腿根本没在转,本次 retro 必然是会话内手跑的。这条优先于下面所有失败判读——没运行过自然没失败。
-- `needs_attention > 0` → **有未处置失败**。
-- ingest journal 存在 in-progress/cleanup-pending 且 ≥2 天未推进 → **入库中断未续跑**。
-- pending 暂存 ≥1 条且 ≥1 天未 apply → **写入堆积**。
-- 同一 cron 本周失败 ≥2 次 → **重复失败**(区别于偶发:偶发=1 次且下次成功)。
+### 判读
 
-**分级**:未处置失败/中断/堆积 → 立即可做(附续跑或 ack 命令);重复失败 → 需你决策(要查根因,可能是配额/网关/契约问题);定时层从未启用 → 需你决策(给 `jspace-use` 第 2 章 4.5 的 enable → rehearsal → install 序列,让用户定开哪几条)。
+- 所有 cron `enabled: false` -> 定时层从未启用;没运行过就没有失败,不能据此说流程健康。
+- `jspace cron failures` exit != 0 -> 有 open incident、actionable pending 或 damaged state,逐项列出。
+- ingest journal 有 in-progress / cleanup-pending 且多日未推进 -> 入库中断。
+- pending 根是 `.jspace/state/pending/<id>.APPLY.json`,不依赖 filehub。`staged` / `acked` 都不等于落库;只有 apply 并有读回才完成。
+- `create` 目标已存在应报 `target_exists`;`replace` 必须带 stage 时 `expected_revision`。冲突、超时、锁和响应丢失都是不同状态,不得合并成“重试即可”。
+- 旧 `<filehub>/.jspace-logs/*.APPLY.json` 只作为 `workspace upgrade` 显式迁移输入;不作为现行扫描根。
+- 同一 cron 本期失败 >= 2 次 -> 重复失败;一次失败且随后成功 -> 偶发,保留证据。
+
+### 分级
+
+未处置失败、入库中断、pending 堆积 -> `立即可做`,附 `jspace cron failures` / `ingest list` / `pending apply|ack` 的恢复入口;重复失败 -> `需你决策`,先查根因。人工重跑统一 `jspace cron run --id <id>`。
 
 ---
 
-## 检查 5 · inbox 停滞
+## 检查 5 - inbox 停滞
 
-模糊项每周被第一遍跳过、第二遍又从没人工过目 → 文件永远躺在 `_inbox/`。
+### 证据
 
-**证据**
 ```bash
 jspace inbox status
 find <filehub>/_inbox -type f -mtime +7 -not -name '.*'
-tail -40 <filehub>/.jspace-logs/inbox-batch.md      # 看是否反复被列为模糊项
+tail -40 <filehub>/.jspace-logs/inbox-batch.md
 ```
 
-**判读**
-- `_inbox/` 有文件 mtime >7 天 → **停滞**;>21 天 → **长期停滞**(单独点出)。
-- 同一文件在 inbox-batch 日志里被列为模糊项 ≥2 次 → **规则缺口**:说明现有归属/命名规则判不了它,不是用户懒。
-- `_inbox/` 为空 → 记「无停滞」,同时留意是否**长期为空**(可能是压根没往里放东西,属使用习惯问题,记入观察中)。
+### 判读
 
-**分级**:停滞 → 需你决策(逐个问归属/命名);规则缺口 → 需你决策(提议改 asset-ingest 的判定规则)。
+- 文件超过 7 天 -> 停滞;超过 21 天 -> 长期停滞。
+- 同一文件在批次日志中被列为模糊项 >= 2 次 -> 规则缺口,不是用户懒。
+- inbox 为空 -> 无停滞,但连续多周为空记入观察,不能当作资产闭环证据。
+
+### 分级
+
+停滞 -> `需你决策`(归属/命名);规则缺口 -> `需你决策`(提议修订 asset-ingest);日志/状态不可读 -> `unknown`。
 
 ---
 
-## 检查 6 · 规则进化候选(retro 的独有价值)
+## 检查 6 - 规则进化候选
 
-`jspace-use` §8.3 只回答「何时**新建** skill」;本条补上「何时**修订**已有 skill / 沉淀新惯例」。
+### 证据
 
-**证据**
 ```bash
-gbrain list --tag knowledge -n 20       # 本周新增知识页主题(再按 updated_at 滤窗口)
-gbrain query "本周重复出现的问题"                     # 语义面佐证
-ls .jspace/logs/cron/*/ && tail -30 .jspace/logs/cron/<id>/<最近>.md   # 无头运行里反复出现的同类处置
+gbrain call list_pages '{"tag":"knowledge","limit":100,"sort":"updated_asc"}'
+gbrain call get_page '{"slug":"<knowledge-or-lesson-slug>","include_content":true}'
+gbrain query "本周重复出现的问题"
+tail -30 .jspace/logs/cron/<id>/<latest>.md
 rg -n '无法判定|跳过|模糊' <filehub>/.jspace-logs/inbox-batch.md | tail -10
 ```
 
-**判读(命中 ≥1 即为候选)**
-- 同一主题的知识页/教训本周出现 ≥2 次,或跨 ≥2 周重复 → 该沉淀进域 README 或 skill。
-- 某 skill 的某一步**每次都要临场判断**(日志里反复出现同类犹豫/跳过)→ 该 skill 缺决策规则,提议**修订**。
-- 出现了现有 skill 都不覆盖的重复流程 → 按 §8.3 信号评估**新建**。
-- 某条纪律连续 2 周被违反 → 不是人的问题,是**规则不可执行**,提议改规则本身。
+### 判读
 
-**分级**:全部 → 需你决策(给「改哪个文件的哪一节 + 改成什么」的具体提议,不直接改)。
+- 同一主题的本期知识/教训页 >= 2,或跨 >= 2 周重复 -> 提议沉淀到域 README 或 skill。
+- 同一 skill 步骤反复临场判断 -> 提议修订该规则。
+- 现有 skill 都不覆盖的重复流程 -> 评估新建 skill。
+- 连续 2 周违反同一纪律 -> 先判断规则是否不可执行,再提议修订。
+- 候选晋升到跨项目 `knowledge/` 必须有**第二项目真实复用证据**;仅“看起来通用”、fixture、维护更新或重复出现都只能挂账。
+
+### 分级
+
+全部归 `需你决策`;给“改哪个文件哪一节 + 改成什么”,retro 不直接修改规则。
 
 ---
 
-## 检查 6b · 取代链健康(带毒语料)
+## 检查 6b - 取代链健康
 
-两条互相矛盾的 decision 同时 active,比丢一页记忆更危险——检索会给出**自信的错误答案**。
+目标:确认旧页能否经反向边找到真正声明取代它的新页,且不把旧页正文当作导航。
 
-**证据**
+### 证据
+
+先从本期候选页的 slug + tags 找出 decisions/lessons/knowledge 角色,逐页读取:
+
 ```bash
-gbrain list --tag knowledge -n 30    # 抽样 decisions/lessons/knowledge 页
-gbrain get project/<id>/decisions/<主题>          # 对本周更新的决策页:正文是否含 Supersedes:
-# 目视:同一项目是否存在「主题相近」的两页 decisions 都无 status:superseded
+gbrain call get_page '{"slug":"<candidate-slug>","include_content":true}'
+gbrain call get_backlinks '{"slug":"<old-slug>","group":"page","limit":100}'
+gbrain call get_backlinks '{"slug":"<old-slug>","group":"page","limit":100,"cursor":"<cursor>"}'
 ```
 
-**判读**
-- 推翻决策时只写了新页、旧页未追加 `status:superseded` → **需你决策**,点名 slug,按 gbrain.md 取代协议三步补打。
-- 沿 `Supersedes:` 链走 >2 跳仍无 settled 页 → **需你决策**,链可能未完成。
-- 本周 `status:superseded` 新增 ≥1 且成对出现 Supersedes 回链 → 正常代谢,记 info。
+对每个 backlink 候选执行 `get_page(include_content:true)`,只接受正文实际包含以下方向的页:
 
-**分级**:取代链失守 → 需你决策(优先于一般规则进化候选)。
+```text
+Supersedes: [[<old-slug>]]
+```
+
+绝不能从旧页正文读取 `Supersedes` 后反向跟到“新页”。
+
+### 判读
+
+- 必须消费完整 `truncated` / `cursor` / `coverage`;coverage degraded、cursor 异常或预算耗尽 -> `partial/unknown`,不能报“无取代者”。
+- 候选正文方向不符 -> 丢弃,不按 `updated_at` 任取最新页。
+- 无候选 -> 旧页可能已失效但无现行页,记 `conflict/unknown`。
+- 多个合格现行候选、环、缺页或超过检查预算仍未收敛 -> `需你决策`。
+- 合格候选若无 status 或 `status:provisional|settled`,可作为现行页;provisional 必须带不确定性。`status:deprecated|archived` 不作为当前结论。
+- 旧页正文保持不可变;生命周期修复必须读取完整页和 revision,只保留一个 `status:*`,再以 `expected_revision` 做 CAS。不得分步 add/remove tag 冒充原子更新。
+- `type` 不参与上述判断。
+
+### 分级
+
+取代方向错误、多个 active 冲突、缺页/环 -> `需你决策`,优先于一般规则候选;只给恢复方案,不自动改库。
 
 ---
 
-## 报告结构(写 gbrain 页与呈现共用)
+## 报告结构
+
+`records/retro/<Monday>` 与用户输出共用:
 
 ```markdown
-# 周自省 <YYYY-MM-DD>(窗口 <起> ~ <止>)
+# 周自省 <Monday>(窗口 [<Monday 00:00>, <下周一 00:00>);observed_through <ISO-8601 offset>)
+
+coverage: complete | partial | unknown
 
 ## 一句话
-<本周纪律整体状态;有整体性问题在此点出>
+<本周纪律整体状态;会话腿停摆等整体问题先写>
 
 ## 写回率(检查 1)
-- 会话写入 <N> 条 / 定时写入 <M> 条 → 写回率 <N/(N+M)>(分母为 0 记「本周无写入」)
-- 无来源 tag 的页:<K> 条(<历史页 / 本周写侧漏打标,后者要点名 slug>)
-- 取证方式:<gbrain --tag 精确计数 / proxy 估算(说明原因)>
+- 会话写入 <N> 页 / cron 写入 <M> 页 -> 写回率 <N/(N+M)>(分母 0 时写“本周无业务写入”)
+- 维护改写排除 <K> 页;无来源 tag 页 <U> 页(历史/漏标分别列)
+- 取证覆盖:<keyset complete / partial + 原因>
+- 口径:session/cron 是运行模式 tag;frontmatter source 是 harness;content_origin 是内容出处
 - 提醒面:session_count <涨没涨> / 轻提示 <发没发>
 
 ## 立即可做(N)
-- [问题] 证据:`<命令输出片段>` → 结论:<...>
+- [问题] 证据:`<命令或字段摘要>` -> 结论:<...>
   修复:`<具体命令或编辑动作>`
 
 ## 需你决策(N)
-- [问题] 证据:... → 结论:...
+- [问题] 证据:<...> -> 结论:<...>
   选项:A ... / B ...;推荐 A,因为 ...
 
 ## 观察中(N)
-- [信号] 证据:... → 出现 1 次,下周复核
+- [信号] 证据:<...> -> 出现 1 次,下周复核
 
 ## 无法判定(N)
-- [检查 X] 缺:<什么证据> → 补法:<怎么拿到>
+- [检查 X] 缺:<证据/coverage> -> 补法:<怎么拿到>
 
 ## 基线数据(供跨周对比)
-- 会话写入数 / 定时写入数 / 写回率 / 无来源 tag 页数
-- state 页本周更新数 / 未挂接项目数 / 断指针数 / inbox 停滞数 / cron 失败数 / 契约外 type 页数
+- 业务写入/会话写入/cron 写入/无 tag 页/维护页
+- state 更新数/未挂接项目/断指针/重复内容/inbox 停滞/cron 失败/取代冲突
 ```
 
-「基线数据」是跨周对比的锚——单周的数字没意义,连续几周的走向才说明飞轮在加速还是在锈住。
+单周数字只作基线,不据此宣称“习惯已养成”;周期关闭条件与真实复用证据按 `jspace-use/references/usage-mileage.md` 和共同 `gbrain.md` 判定。

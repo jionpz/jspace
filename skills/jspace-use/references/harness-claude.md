@@ -1,7 +1,7 @@
 # Claude Code 接线参考（参考实现）
 
 > Claude Code 是 JSpace harness 接线的**参考实现**：hooks（`.claude/settings.json`）+ skills 投影（`.claude/skills/` + `.agents/skills/`）+ MCP（`~/.claude.json`）+ 用户级 `~/.agents/skills/`。其他 harness 的接线是对它的近似。与 `harness-config` skill 的机器级接线分工：本文档是 JSpace 工作台对 Claude Code 的支持声明；`~/.agents/AGENTS.md` 全局治理的逐 harness 差异见 harness-config。
-> `<gbrain>` = gbrain 二进制绝对路径（`$GBRAIN_BIN` → `command -v gbrain` → `~/.bun/bin/gbrain`）。
+> `<gbrain>` = gbrain 二进制绝对路径（`$GBRAIN_BIN` → `command -v gbrain`；两者都解析不到时 `jspace harness wire` 显式失败并提示安装，不猜测 `~/.bun/bin/gbrain` 一类安装目录）。
 
 ## 支持面（capsules：capabilities.claude）
 
@@ -40,11 +40,11 @@ Claude Code 的 `SessionEnd` 是**一次性会话级事件**，matcher 可按结
 
 ## gbrain skill 路由
 
-`jspace harness wire --harness claude`(等价旧入口 `jspace gbrain wire`,issue #12)把 `GBRAIN_SKILLS_DIR=<wb>/.jspace/skills` 注入 `~/.claude.json` 的 gbrain MCP server env(合并、备份、绝不重写;需已存在 gbrain MCP server)。
+`jspace harness wire --harness claude --dir <wb>` 把 `GBRAIN_SKILLS_DIR=<wb>/.jspace/skills` 注入 `~/.claude.json` 的 gbrain MCP server env(合并、备份、绝不重写;需已存在 gbrain MCP server)。这是唯一现行入口;旧的 gbrain wire 别名已移除。
 
 ## 验证
 
 ```bash
 jspace doctor --dir .          # checkHarness: 活跃 claude 且二进制在 PATH -> 无 harness 诊断
-jspace cron run <cron> --harness claude --dry-run --dir .   # argv 逐字节（--allowedTools 白名单）
+jspace cron run --id <id> --harness claude --dry-run --dir .   # argv 逐字节（--allowedTools 白名单）
 ```

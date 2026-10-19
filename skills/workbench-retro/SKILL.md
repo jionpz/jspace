@@ -1,6 +1,6 @@
 ---
 name: workbench-retro
-description: "**每周自省**:审计工作台纪律有没有被执行、流程哪里反复卡、规则/skill 该不该修订,产出分级建议清单(只提议不改)。Use when 周自省/复盘/本周回顾/工作流体检/retro。Do NOT use for 归纳本周事实内容(→memory-consolidate cron)、收工写回(→memory-writeback)、命令级故障排查(→jspace-use §7)。"
+description: "按工作台本地周窗口取证式审计纪律执行、流程卡点和规则漂移,产出分级建议与周 retro 页;默认只提议不改。Use when 周自省/复盘/工作流体检/retro。Do NOT use for 事实归纳(→memory-consolidate)、周报(→weekly-report)、收工写回(→memory-writeback)或命令排障(→jspace-use)。"
 triggers:
   - "周自省"
   - "复盘"
@@ -11,117 +11,95 @@ triggers:
   - "纪律检查"
 ---
 
-# workbench-retro — 每周自省(元过程侧)
+# workbench-retro - 每周纪律自省
 
-工作台用久了不是坏在功能上,是坏在**纪律静默腐化**:该写回的没写、新项目没挂接、指针悄悄断掉、模糊项每周被跳过。这些都不报错,只是慢慢地让「越用越强」变成「越用越乱」。本 skill 每周做一次取证式审计,产出**分级建议清单**——只提议,不改。
+审计“工作台有没有按规则运转”,不是再写一份进展摘要。每条结论必须绑定实际命令或文件证据;拿不到证据就记 `unknown`,不猜。
 
-## 与 memory-consolidate 的分工(别互相抄)
+## 触发 / 非目标
 
-| | memory-consolidate(cron) | 本 skill |
-|---|---|---|
-| 看什么 | 本周产生了**什么事实** | 本周**纪律有没有被执行**、流程哪里卡 |
-| 输入 | gbrain 近一周页面 | gbrain + filehub + cron 日志 + registry 结构 |
-| 输出 | `records/consolidate/<date>` + state 回写 | `records/retro/<date>` + 建议清单 |
-| 失败模式 | 事实丢失 | 纪律腐化(无声) |
+- 用:每周自省、流程复盘、怀疑纪律静默腐化。
+- 不用:归纳本周事实 → `memory-consolidate`;生成人读周报 → `weekly-report`;单次写回 → `memory-writeback`;某条命令报错 → `jspace-use` 的排障章节。
 
-时序:retro 排在 consolidate **之后**,可把巩固页当输入之一——「巩固页说 X 项目本周有活动,但 X 的 state 页 10 天没动」这类交叉信号只有后跑才拿得到。
+## 输入与前置
 
-## 何时用 / 何时不用
-- ✅ 用:每周一次(cron 自动或说「周自省」);怀疑纪律松了;连续几周感觉「东西越来越乱」。
-- ❌ 不用:归纳本周事实内容 → memory-consolidate cron;单次收工写回 → `memory-writeback`;某条命令报错要排查 → `jspace-use` §7;资料入库 → `asset-ingest`。
+- 工作台根与 `jspace` CLI;周期参数统一取自 `jspace memory period --json`。
+- gbrain、registry、filehub、cron 日志和可用的项目记录。
+- 只读工具与一次 retro 页写入权限;无头模式不得等待用户或修改其他文件。
 
-## 铁律:取证,不感想
+## 权威引用
 
-自省最容易退化成「AI 编一段听起来对的反思」。**每条结论必须绑定一条取证命令的实际输出**;拿不到证据就写「无法判定 + 缺什么证据」,**不许猜、不许润色成结论**。六条检查的完整取证细则 → `~/.agents/skills/workbench-retro/references/checks.md`。
+- 六条检查、判定阈值和报告骨架:`~/.agents/skills/workbench-retro/references/checks.md`
+- 写回和来源 tag:`~/.agents/skills/memory-writeback/references/writeback.md`、`~/.agents/skills/jspace-use/references/gbrain.md`
+- 周期、取代链和页 envelope:`~/.agents/skills/jspace-use/references/gbrain.md`
+- Golden run:`~/.agents/skills/workbench-retro/references/example-retro.md`
 
-## 输出格式(固定;完整骨架见 checks.md「报告结构」)
+## 写集
 
-报告依次是:一句话 → **写回率** → 立即可做 → 需你决策 → 观察中 → 无法判定 → 基线数据。**「写回率」是必出的一节**,即使数字不好看也照写:
+- `records/retro/<Monday>`:本次自省页,创建或 CAS 覆盖。
+- 不写:规则、skills、README、`hub.json`、项目文件、cron 配置、state、周报、资产本体。
+- 会话模式可以在报告中给修复命令;执行“立即可做”项仍需用户逐项确认。
 
-```markdown
-## 写回率(检查 1)
-- 会话写入 <N> 条 / 定时写入 <M> 条 → 写回率 <N/(N+M)>(分母为 0 记「本周无写入」,不写 0%)
-- 无来源 tag 的页:<K> 条(历史页 / 本周写侧漏打标——后者要点名 slug)
-- 取证方式:<`gbrain --tag` 精确计数 / proxy 估算(说明为什么降级)>
-- 提醒面:session_count <涨没涨> / 轻提示 <发没发>
-```
+## 输出
 
-它回答的是飞轮最要命的那个问题:**记忆在长,长的是 cron 归纳的还是会话沉淀的**。来源 tag 的写侧纪律见 `~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」;取不到精确计数就照实写「无法判定 + 降级 proxy」,**不许**拿 proxy 冒充精确数。
+固定报告结构:
 
-## 决策表
+1. 一句话结论
+2. 写回率(必出)
+3. 立即可做
+4. 需你决策
+5. 观察中
+6. 无法判定
+7. 基线数据
 
-| 判断 | 取值 | 动作 |
-|---|---|---|
-| 证据可得性 | 命令成功 / 失败或为空 | 按判读规则定级 / 记「无法判定 + 缺失证据」,不猜 |
-| 问题类型 | 机械偏差(挂接缺失/断指针) | **立即可做**:给出具体修复命令,待确认 |
-| | 需要人判断(建域/改纪律/改 skill) | **需你决策**:给选项 + 推荐项 + 理由 |
-| | 信号不足(出现 1 次) | **观察中**:记录,下周复核是否复现 |
-| 同一问题连续 ≥2 周出现 | 是 | 升级:从「观察中」提到「需你决策」,并说明已复现 N 周 |
-| 运行模式 | 会话 / 无头(cron) | 呈现清单待确认 / **只产报告,不提问、不修改** |
+每条发现写 `证据 -> 结论 -> 去向`,并标注 `complete/partial/unknown`。
 
-## 命令速查
+## 主流程
 
-```bash
-# 取证(只读;逐条判读见 references/checks.md)
-gbrain list --tag source:session -n 50 # 会话写入(写回率分子,检查 1)
-gbrain list --tag source:cron -n 50    # 定时写入(写回率分母另一半,检查 1)
-gbrain list --tag project -n 50        # state 页与更新时间(检查 1)
-gbrain list --tag knowledge -n 20      # 本周新知识(检查 1/6)
-jq '.session_count, .writeback_nudge_for_session' .jspace/state/briefing.json  # 提醒面接没接上(检查 1)
-ls <filehub>/projects/ && jspace project list      # 挂接一致性(检查 2)
-gbrain list --tag asset -n 20          # 指针抽样源(检查 3)
-gbrain list --type reference -n 20                 # 迁移缺口抽样(检查 3, info)
-jspace cron check && jspace ingest list && jspace pending list   # 流程卡点(检查 4)
-jspace cron list                                   # 定时层启用没(全 disabled = 两条腿没转,检查 4)
-find <filehub>/_inbox -type f -mtime +7            # inbox 停滞(检查 5)
-ls .jspace/logs/cron/*/ | tail -20                 # 本周 cron 运行痕迹(检查 4/6)
+1. **定周期**:先运行 `jspace memory period --json`。slug 只用 `week_start`;窗口、时区和 `observed_through` 只消费输出。补跑加 `--week`,固定取证加 `--now`。
+2. **取证**:
+   - gbrain 来源计数和页面抽样使用 `gbrain call list_pages` keyset,逐候选 `get_page`;
+   - `jspace cron failures --json`、`jspace cron list --json`、`jspace ingest list --json`、`jspace pending list --json`;
+   - `jspace memory check --json`、`jspace filehub check --json`;
+   - cron 日志、inbox、briefing 和项目挂接证据。
+3. **判读**:按 `checks.md` 的五类阈值分级。列表查询只能证明“能查到”,不能替代逐页 tag/正文校验。
+4. **取代链**:对 `status:superseded` 页调用 `get_backlinks` 全分页,逐个 `get_page`,只接受正文明确声明取代该旧页的现行候选;分叉、环、缺页和 degraded coverage 记 `unknown/conflict`。
+5. **不按 type 路由**:页角色由 slug + tags 判断;描述性 `type` 不用于合法性裁决,也不批量改写。
+6. **生成页面**:frontmatter `project: jspace`,tags `[retro, weekly, <source>]`,含窗口和 `observed_through`;同周已有页时读取 revision 后 CAS 覆盖同一 slug。
+7. **读回验证**:确认页存在、来源 tag 正确、每条结论有证据、写作前后工作台文件未变化。`put_page` 合并旧 tags;若读回出现两个来源 tag,用 `remove_tag` CAS 清理并再次读回。
 
-# 产出
-gbrain put records/retro/<YYYY-MM-DD> < <报告文件>   # dated memory record,同周覆盖同页
-```
+## 完成证据
 
-`<filehub>` = `.jspace/hub.json` 中 `type: filehub` 资源的 `primary: true` path(经 `local.json` 绑定解析)。
+- `records/retro/<Monday>` 可读回,周期为周一,窗口和 cutoff 完整;
+- 写回率一节存在;所有数字可追溯到实际输出;
+- 每个建议都有证据行和分级,无法取证项明确列出;
+- 同周重跑不产生第二个 retro 页;
+- 除 retro 页外没有修改任何文件;会话模式的执行项都有用户确认记录。
 
-## 步骤(主流程骨架)
+## 失败与恢复
 
-1. **定窗口**:默认近 7 天;说清起止日期,后续所有判读都相对它。
-2. **取证**:跑六条检查的命令(`~/.agents/skills/workbench-retro/references/checks.md`),**留下实际输出**。任一条拿不到证据 → 记「无法判定」,继续下一条,不中断。
-3. **判读分级**:按决策表把发现归入 立即可做 / 需你决策 / 观察中;每条写明「证据 → 结论」两段,不许只有结论。
-4. **复现升级**:读上周 `records/retro/<上周日期>` 页,把连续出现的「观察中」提级并标注已复现周数。
-5. **产出**:写 gbrain note 页 `records/retro/<YYYY-MM-DD>`(`tags: [retro, weekly, <来源 tag>]`——无头 cron 跑 → `source:cron`,会话内跑 → `source:session`;`project: jspace`;同周重跑覆盖同页,不新建);会话模式同时把清单呈给用户。
-6. **执行(仅会话模式、仅经确认)**:用户逐项确认后才执行「立即可做」项;**未确认的一律不动**。无头模式跳过本步。
+- 某项证据不可得:记 `unknown + 缺什么 + 如何补`,继续其他检查。
+- gbrain 分页/backlinks 不完整:报告 `partial`,不推断全库状况。
+- cron failures 返回非 0:这是“有事项需要关注”,不是审计失败;保留输出并分级。
+- 同周页 CAS 冲突:重读合并,不覆盖他人内容。
+- pending/gbrain 写失败:保留报告文件或使用 pending 暂存;读回前不宣称完成。
 
-## 边界(红线)
+## 转交
 
-- **只提议不改**:规则、skill、README、`hub.json`、域文件的任何修改都需用户逐项确认;无头模式下**一律不改**,只产报告。
-- 不删任何东西(退役/归档走 `jspace-use` §8.6 的确认流程)。
-- 不因为「看起来该改」就改 skill 源码——skill 修订是提议,落地走开发仓流程。
+- 进展事实归纳 → `memory-consolidate`
+- 人读周报 → `weekly-report`
+- 记忆/指针修复 → `memory-writeback` / `asset-ingest`
+- 工作台配置、cron、gbrain 环境 → `jspace-use`
+- 全局治理接线 → `harness-config`
 
-## 按需深入(条件读指针)
-
-- 六条检查的取证命令 / 判读阈值 / 分级归属 / 证据缺失处置 → `~/.agents/skills/workbench-retro/references/checks.md`
-- 写回纪律(判定「该写没写」的标准)+ 来源 tag 写侧约定 → `~/.agents/skills/memory-writeback/references/writeback.md`
-- 来源 tag 纪律源(`source:session` / `source:cron` 的语义与计数口径)→ `~/.agents/skills/jspace-use/references/gbrain.md`
-- session-end / turn 提醒的能力边界(哪些 harness 有 hook、哪些只有轻提示)→ `~/.agents/skills/jspace-use/references/harnesses.md`
-- 挂接三步与退役阈值 → `~/.agents/skills/jspace-use/SKILL.md` §8
-- dated memory record 纪律(为何用日期 slug 而非固定 slug)→ `~/.agents/skills/jspace-use/references/gbrain.md`
-
-## Golden run
-
-端到端范例(取证 → 判读 → 分级 → 写页)见 `~/.agents/skills/workbench-retro/references/example-retro.md`。
-
-## 自检(做完跑这条)
+## 自检
 
 ```bash
-gbrain get records/retro/<YYYY-MM-DD>   # 页存在;tags 含 retro + 来源 tag;每条结论都带证据行
-gbrain tags records/retro/<YYYY-MM-DD>  # 逐页断言来源 tag(source:session / source:cron)——漏打即补
-jspace doctor --dir .                   # 自省过程未把工作台改坏(应与跑之前一致)
+PERIOD="$(jspace memory period --json)"
+MONDAY="$(printf '%s' "$PERIOD" | jq -r '.week_start')"
+gbrain call get_page "{\"slug\":\"records/retro/$MONDAY\",\"include_content\":true}"
+jspace memory check --json
+jspace filehub check --json
+git status --short   # 工作台不是 git 仓库时跳过
 ```
-(报告缺「写回率」一节 = 不合格,补跑检查 1)
-(报告里出现任何一条没有证据支撑的结论 = 本次自省不合格,重跑第 2 步)
 
-## 参考
-- `~/.agents/skills/workbench-retro/references/checks.md` — 六条检查:取证命令 + 判读 + 分级
-- `~/.agents/skills/workbench-retro/references/example-retro.md` — golden run
-- `~/.agents/skills/memory-writeback/references/writeback.md` — 写回纪律(检查 1 的判定依据)
-- `~/.agents/skills/jspace-use/references/gbrain.md` — dated memory record 纪律
+缺“写回率”、用执行当天冒充目标周、按 type 判角色、把提醒次数当写入次数,均视为本次自省不合格。

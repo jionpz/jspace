@@ -78,18 +78,18 @@ Before finishing a work session, quietly check whether anything should be preser
 
 **归位纠正即偏好沉淀**：用户纠正了文件归位后，把纠正写成 `profile/filing-prefs` 页（`memory-writeback` 的 profile 分类），下次 `asset-ingest` 归位时自动读取。
 
-**提醒 ≠ 写入**：session-end hook 与每会话一次的收工轻提示（`jspace context turn`）都只提醒、从不写 gbrain；不跑 `memory-writeback` 就等于本次没沉淀。写回率自查 → `gbrain list --tag source:session -n 20`。
+**提醒 ≠ 写入**：session-end hook 与每会话一次的收工轻提示（`jspace context turn`）都只提醒、从不写 gbrain；不跑 `memory-writeback` 就等于本次没沉淀。写回率自查先用 `gbrain call list_pages '{"tag":"source:session","limit":100,"sort":"updated_asc"}'` 取候选，再逐页 `get_page(include_content:true)` 校验标签、窗口与 `activity:maintenance`；列表行本身不算写入证据。
 
 ## Scheduled Tasks (cron)
 
-**Session start 跑 `jspace cron check`**，上报失败与 pending 暂存写（`<filehub>/.jspace-logs/*.APPLY.json`）；定义在 `.jspace/cron.json`。**出厂四个任务全 `enabled: false`**——没开启就没有 inbox 整理 / 周报 / 记忆巩固 / 周自省（`jspace doctor --verbose` 以 `cron.all_disabled` info 提示）；开启序列 `jspace cron enable <id>` → `jspace cron run <id>` → `jspace cron install`，细节与代价说明 → jspace-use 第 2 章 4.5 与第 8 章。
+**Session start 跑 `jspace cron failures`**，上报未 ack incident、actionable pending 暂存写（`.jspace/state/pending/<id>.APPLY.json`）与各 cron 状态；定义在 `.jspace/cron.json`。**出厂四个任务全 `enabled: false`**——没开启就没有 inbox 整理 / 周报 / 记忆巩固 / 周自省（`jspace doctor --verbose` 以 `cron.all_disabled` info 提示）；开启序列 `jspace cron enable <id>` → `jspace cron run --id <id>` → `jspace cron install`，细节与代价说明 → jspace-use 第 2 章 4.5 与第 8 章。
 
 ## Brain operations
 
 gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbrain` for skill routing; keep the format intact.
 
 <!-- JSPACE-BRAIN-OPS:BEGIN -->
-- **jspace-use**: initialize jspace | setup jspace | configure jspace | first-use jspace | how to use jspace | 工作台怎么用 | maintain jspace | 维护工作台 | workspace upgrade | jspace doctor | cron check | 故障排查 | workbench broken | registry broken | gbrain missing | wire gbrain | fresh environment
+- **jspace-use**: initialize jspace | setup jspace | configure jspace | first-use jspace | how to use jspace | 工作台怎么用 | maintain jspace | 维护工作台 | workspace upgrade | jspace doctor | cron failures | 故障排查 | workbench broken | registry broken | gbrain missing | wire gbrain | fresh environment
 - **asset-ingest**: 资料入库 | 整理 inbox | 归位资料 | 把这份资料入库
 - **memory-recall**: 问一句 | 找那个文件 | 那个数 | 精准召回 | recall | find the file
 - **memory-writeback**: 收工 | 写回记忆 | 记一下本次进展 | 本次进展 | end of work | session end | writeback

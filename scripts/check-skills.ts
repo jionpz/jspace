@@ -13,12 +13,18 @@
 //   C6 retired:    RETIRED_SKILL_NAMES never overlaps the live manifest (a name
 //                  that ships AND is on the delete list would be installed and
 //                  removed in the same run).
+//   C7 contracts:  old gbrain/cron/pending aliases, reversed Supersedes,
+//                  type-based routing, and runtime-day period ids are rejected.
+//   C8 shape:      every official SKILL.md carries the unified section skeleton.
+//   C9 cron:       weekly tasks require Bash and an explicit Monday window +
+//                  observed_through input.
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { decodeSkillsManifest } from "../core/contracts/skills.ts";
 import { checkDocSkillListing, loadManifestSkillSets } from "./skill-doc-drift.ts";
 import { readWorkbenchSkills } from "./skill-frontmatter.ts";
+import { auditSkillDoc, auditWeeklyCronConfig, type WeeklyCronConfigLike } from "./skill-contract-audit.ts";
 import { RETIRED_SKILL_NAMES } from "../application/skills/retired.ts";
 
 const repoRoot = resolve(import.meta.dir, "..");
@@ -32,18 +38,16 @@ function pass(label: string): void {
   console.log(`  ok: ${label}`);
 }
 
-// ---- C1: reference integrity -------------------------------------------------
-// New form: `~/.agents/skills/<name>/<rest>` — must resolve to a repo source
-// file skills/<name>/<rest> (the user-level ~/.agents/skills/ is materialized
-// from the repo, so the repo source is the ground truth).
-// Old forms (`references/x.md`, `../<skill>/...`) are now forbidden — a stale
-// CWD-relative reference fails so the navigation fix can't silently regress.
+// ---- C1 + C7 + C8: references, contract vocabulary, entrypoint shape ---------
+// New reference form: `~/.agents/skills/<name>/<rest>` must resolve to a repo
+// source file skills/<name>/<rest>. Every match on a line is checked, not just
+// the first. Current docs are also scanned so retired command vocabulary cannot
+// survive outside the entrypoints.
 {
   const skillDirs = readdirSync(join(repoRoot, "skills"), { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name);
   let checked = 0;
-  const OLD_REF = /`(references\/[\w-]+\.md|\.\.\/[\w-]+\/(?:references\/[\w-]+\.md|SKILL\.md)|\.\.\/SKILL\.md)`/;
   for (const dir of skillDirs) {
     const base = join(repoRoot, "skills", dir);
     const walk = (d: string): void => {
@@ -55,30 +59,28 @@ function pass(label: string): void {
         }
         if (!entry.name.endsWith(".md")) continue;
         const body = readFileSync(p, "utf-8");
-        for (const line of body.split("\n")) {
-          // New form: ~/.agents/skills/<name>/<rest>
-          const m = line.match(/`~\/\.agents\/skills\/([\w-]+)\/([\w\/.-]+)`/);
-          if (m) {
-            // repo source: skills/<name>/<rest>
-            const resolved = join(repoRoot, "skills", m[1], m[2]);
-            if (!existsSync(resolved)) {
-              fail(`C1 broken reference: ${p.replace(repoRoot + "/", "")} -> ~/.agents/skills/${m[1]}/${m[2]} (no repo source skills/${m[1]}/${m[2]})`);
-            } else {
-              checked++;
-            }
-            continue;
-          }
-          // Old CWD-relative form is forbidden (must use ~/.agents/skills/...)
-          const old = line.match(OLD_REF);
-          if (old) {
-            fail(`C1 stale relative reference in ${p.replace(repoRoot + "/", "")}: \`${old[1]}\` — use \`~/.agents/skills/<skill>/...\` (multi-harness uniform) instead`);
-          }
-        }
+        const rel = p.slice(repoRoot.length + 1).replace(/\\/g, "/");
+        const result = auditSkillDoc(rel, body, { repoRoot, exists: existsSync });
+        for (const message of result.failures) fail(message);
+        checked += result.checkedReferences;
       }
     };
     walk(base);
   }
   if (checked > 0) pass(`C1 references resolve (${checked} refs)`);
+  for (const rel of [
+    "README.md",
+    "docs/PLATFORMS.md",
+    "docs/session-end-hooks.md",
+    "templates/workbench/AGENTS.md",
+  ]) {
+    const result = auditSkillDoc(rel, readFileSync(join(repoRoot, rel), "utf-8"), {
+      repoRoot,
+      exists: existsSync,
+    });
+    for (const message of result.failures) fail(message);
+  }
+  pass("C7/C8 skill contract vocabulary and entrypoint sections checked");
 }
 
 // ---- C2 + C3: render consistency and routing completeness --------------------
@@ -181,6 +183,24 @@ function pass(label: string): void {
   }
   if (overlap.length === 0) {
     pass(`C6 retired skill list (${RETIRED_SKILL_NAMES.length}) does not overlap the live manifest`);
+  }
+}
+
+// ---- C9: weekly cron contract ------------------------------------------------
+{
+  try {
+    const raw = JSON.parse(readFileSync(join(repoRoot, "templates", "workbench", ".jspace", "cron.json"), "utf-8")) as {
+      crons?: unknown;
+    };
+    if (!Array.isArray(raw.crons)) {
+      fail("C9 templates/workbench/.jspace/cron.json must contain a crons array");
+    } else {
+      const cronFailures = auditWeeklyCronConfig(raw.crons as WeeklyCronConfigLike[]);
+      for (const message of cronFailures) fail(message);
+      if (cronFailures.length === 0) pass("C9 weekly cron tools/input contracts are current");
+    }
+  } catch (e) {
+    fail(`C9 cannot read cron template: ${(e as Error).message}`);
   }
 }
 

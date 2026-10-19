@@ -1,7 +1,7 @@
 # Cursor 接线参考（会话 harness，D6 保留）
 
 > Cursor 是 **IDE-only 会话 harness**：**无 headless CLI**（无 `-p` 模式），所以**永不进 cron enum**（`capabilities.cursor.headless: null`，`cron_harness_enum_value: null`）。用户拍板（D6）保留 Cursor 为会话 harness，本次改造只**数据化不深度改造**——维持现状接线（MCP + sessionStart hook + Rules），不做新的自动化通道。与 `harness-config` skill 的机器级接线分工：本文档是 JSpace 工作台对 Cursor 的支持声明；`~/.agents/AGENTS.md` 全局治理的逐 harness 差异见 harness-config。
-> `<gbrain>` = gbrain 二进制绝对路径（`$GBRAIN_BIN` → `command -v gbrain` → `~/.bun/bin/gbrain`）。
+> `<gbrain>` = gbrain 二进制绝对路径（`$GBRAIN_BIN` → `command -v gbrain`；两者都解析不到时 `jspace harness wire` 显式失败并提示安装，不猜测 `~/.bun/bin/gbrain` 一类安装目录）。
 
 ## 支持面（capsules：capabilities.cursor）
 
@@ -44,5 +44,5 @@
 ```bash
 jspace harness wire --harness cursor --dir . --dry-run   # 预览 ~/.cursor/mcp.json + skills 薄链计划
 jspace doctor --dir .          # checkHarness: cursor 无 headless 不触发 bin 检查（非 cron harness）；缺薄链报 cursor.skills_unlinked info
-jspace cron run <cron> --harness cursor --dry-run --dir .   # fail("cursor has no headless CLI")
+jspace cron run --id <id> --harness cursor --dry-run --dir .   # fail("cursor has no headless CLI")
 ```

@@ -13,7 +13,7 @@
 | 工作台偏好 | `profile/<主题>` | 固定 slug **覆盖**,`tags: [profile]` | 协作约定 / 默认格式 |
 | 归位偏好 | `profile/filing-prefs` | 固定 slug **覆盖**,`tags: [profile]` | 文件放哪的用户纠正 |
 | 项目事件 | `records/project/<id>/<date>-<主题>` | **append-only 新页** | 里程碑 / 事故 / 范围变更(稀疏,非会话日志) |
-| 周快照 | `records/consolidate/<日期>` | **转 memory-consolidate** | 本周汇总（本 skill 不写） |
+| 周快照 | `records/consolidate/<Monday>` | **转 memory-consolidate** | 本周汇总（本 skill 不写） |
 
 - **绝不覆盖追加页**：decisions / lessons / knowledge / project events 只追加新页；更新「现状」只写 state 页或 profile 页。
 - **state 页是全局固定 slug**：多会话覆盖同一页 → 归属（project id）必须准，防串页。
@@ -64,7 +64,7 @@
 **处置**：
 - 项目决策 → `project/<id>/decisions/<主题>`
 - 项目专属教训 → `project/<id>/lessons/<主题>`
-- 跨项目可复用认识 → `knowledge/<域>/<主题>`（**第二项目实际用到**时才晋升，非「看起来通用」）
+- 跨项目可复用认识 → `knowledge/<域>/<主题>`（必须有**第二项目真实复用并留下产物/依据**才晋升，非「看起来通用」或 fixture）
 
 state 页保持「现状」不承载历史。晋升 = 复制蒸馏 + wikilink 回链，**不移动/不删除**原页。
 
@@ -74,17 +74,22 @@ state 页保持「现状」不承载历史。晋升 = 复制蒸馏 + wikilink �
 
 推翻旧决策或旧知识时：
 1. 写**新页**，正文含 `Supersedes: [[旧 slug]]`
-2. 给旧页**追加** `status:superseded` tag（正文不动）
+2. 读取旧页完整正文与 revision，保留正文，只把当前 `status:*` 调整为唯一 `status:superseded`，用一次 CAS `put_page` 写回
 3. state 卡「当前决策」指向新页
+
+不得用 `add_tag` / `remove_tag` 分开调用冒充原子更新；不以旧页正文反向跟随 `Supersedes`。找现行页必须从旧页 `get_backlinks` 分页取候选，再逐页 `get_page(include_content:true)` 核对正文方向。
 
 ## 6. 每页纪律
 
-- `project` + `tags` + `source`（harness 出处）必带。
-- `type` 统一 `note`（分类由 slug 承载）；检索用 `tags` 路由（state=`[project]`、profile=`[profile]`、决策/经验/知识=`[knowledge]`）。
+- `project` + `tags` + `source`（harness 出处）必带；`project` 是 owner namespace。
+- `type` 是描述性元数据，保持真实值，不要为了角色判定而改值；角色由 slug + tags 判定（state=`[project]`、profile=`[profile]`、决策/经验/知识=`[knowledge]`）。
 - 形态不明确时追加一个 `kind:*` tag（见 gbrain.md「Epistemic kind tags」）。
 - 未验证的主张/启发式 → `status:provisional`；有充分证据 → `status:settled`。
 - `project` 归属 = 活跃项目发现结果；无项目归属的通用事实 → 用 `knowledge/<通用域>/` + 打 tags；工作台偏好 → `profile/`。
-- **来源 tag 必带**（B4，见下节）：本 skill 的每一次写页都追加 `source:session`。
+- append-only 页只写新页，不改旧正文；生命周期更新使用完整页 + revision 的 CAS，且 `status:*` 至多一个。
+- 内容出处显式传 `content_origin: user_said|tool_output|inferred`；它与 frontmatter `source`（harness）及运行模式 tag 正交。
+- **来源 tag 必带**（B4，见下节）：本 skill 的每一次写页都恰好带一个 `source:session`。
+- 只为维护改写元数据/正文时加 `activity:maintenance`；它应从业务活动计数中排除，下一次真实业务更新应去掉该 tag。
 
 ## 6b. 来源 tag（`source:session`）——写回率的取证基础
 
@@ -92,19 +97,19 @@ state 页保持「现状」不承载历史。晋升 = 复制蒸馏 + wikilink �
 
 ```yaml
 ---
-type: note
+type: project-state
 project: acme
 tags: [project, source:session]     # 路由 tag + 来源 tag,两条都要
 source: claude                       # 仍是 harness 出处,语义不变、不要挪用
 ---
 ```
 
-- **为什么是 tag 不是 frontmatter 字段**：`gbrain list` 只能按 `--type` / `--tag` 过滤，`workbench-retro` 检查 1 要数「本周会话写入 vs cron 写入」，只有 tag 数得出来。frontmatter `source:` 的语义是 **harness 出处**（`claude` / `codex` / …），是另一个问题，**不要覆盖它**。
+- **为什么是 tag 不是 frontmatter 字段**：`list_pages` 可按 `tag` 过滤，`workbench-retro` 检查 1 要数「本周会话写入 vs cron 写入」，只有 tag 数得出来。frontmatter `source:` 的语义是 **harness 出处**（`claude` / `codex` / …），是另一个问题，**不要覆盖它**。
 - **本 skill 恒为 `source:session`**：memory-writeback 定义上就是「会话收工写回」，无头 cron 不跑它。会话/无头都可能跑的 skill（asset-ingest / weekly-report / memory-consolidate / workbench-retro）按**运行模式**选 `source:session` 或 `source:cron`。
 - **纪律源**：`~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」；本节只是收工场景的落地。
 - **自检（两步，缺一不可）**：
-  1. **逐页断言**：`gbrain tags <slug>` 输出必须含 `source:session`。这是唯一能证明「这一页打了 tag」的判据。
-  2. **列表确认**：`gbrain list --tag source:session -n 5`，刚写的页应当在列表里。
+  1. **逐页断言**：`gbrain call get_page '{"slug":"<slug>","include_content":true}'` 的 `tags` 必须含且仅含一个 `source:session`/`source:cron`。这是唯一能证明「这一页打了 tag」的判据。gbrain 的 `put_page` 只做 tag 合并,若旧页已有另一个来源 tag,用 `remove_tag`(带 `expected_revision` + 新 request id)清掉后再读回;否则不能声称「恰好一个」。
+  2. **列表确认**：`gbrain call list_pages '{"tag":"source:session","limit":100,"sort":"updated_asc"}'` 刚写的页应作为候选行出现；需要全量时继续 keyset，不以固定条数宣称全集。
   - 只做第 2 步是不够的：列表能列到**只证明「至少有一页打了 tag」**。2026-09-12 retro 实测窗口内 21/30 页漏打，写侧当时只做了列表确认。
   - 若查询在你的 gbrain 版本上取不到（tag 解析差异），**照实报告**给用户，不要改成「大概写进去了」——写回率取证依赖它。
 

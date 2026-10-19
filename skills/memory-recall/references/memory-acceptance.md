@@ -25,7 +25,7 @@
 1. 原型+变体均 top-1 正确页,负对照不串台。
 2. **稳定性**:同一查询连续 ≥3 次重跑全部 top-1。
 3. **双路径留证**:同时记录 `gbrain search <query>`(纯关键词)与 `gbrain query <query>`(hybrid)输出,证明语义层确实加分。
-4. **指针断言序列**(四连过):① `gbrain get <slug>` → 取 Pointer 字段;② `test -f "<Pointer>"` 成立;③ `grep -c "<事实关键词>" "<Pointer>"` ≥1;④ `gbrain query` 输出 top-1 slug == 目标 slug。
+4. **指针断言序列**(四连过):① `gbrain call get_page '{"slug":"<slug>","include_content":true}'` → 取 `rel_path`（只有缺失时才回退到 `Pointer`）;② 用本机 filehub primary 根解析 `rel_path` 后 `test -f "<解析路径>"` 成立;③ `grep -c "<事实关键词>" "<解析路径>"` ≥1;④ `gbrain query` 输出 top-1 slug == 目标 slug。
 
 ## 校准循环(≤3 轮)
 
@@ -40,10 +40,11 @@
 - **gbrain 锁**:`gbrain serve` 是某 harness 会话的 stdio 子进程,非独立 daemon。**禁 `kill` serve、禁独立重启**(独立重启会变幽灵锁持有者)。处置:协调结束持锁会话释放锁 → CLI 窗口内完成验收 → 持锁会话重连/正常结束自然恢复 serve。窗口内勿唤醒持锁会话。
 - **在线 embedding 依赖**:embedding 不可达 = 环境故障阻塞,不进校准循环,不写「通过」。provider(SiliconFlow / OpenRouter bge-m3)不固定,以验收时刻 `gbrain models doctor --json` 可达为准。
 - **canonical 面**:验收与重跑统一用 CLI(`gbrain`),serve 停泊窗口内;真实使用面(MCP)在锁恢复后补一次 `query` 冒烟对齐。
-- **读回校验**(`gbrain get`)须在 serve 停泊窗口内完成。
+- **读回校验**(`gbrain call get_page`)须在 serve 停泊窗口内完成。
 
 ## 基线验收结果(2026-08-03)
 
+- **历史取证记录**:本节保留 2026-08-03 的结果与日期。该轮来自升级前的文本 CLI 口径，不能按当前结构化命令原样重放；当前复跑必须使用上文的 `gbrain call get_page` / `query` / `search` 契约并重新留证。
 - **语料**:2 文档(含数值事实 X 的领域页 + 含公式 Y 的领域页)。结果已在两台真实运行下交叉验证,分数逐位一致:
   - Q1 / Q1' / Q2 / Q2' 各连续 ×3 重跑**全部 top-1 正确**,负对照不串台;指针断言四连全部成立。
   - 校准循环**未触发**(首跑即全过)。
@@ -90,7 +91,7 @@
 | 1 | 归位:真实 xlsx 经 asset-ingest 移到 `<filehub>/projects/<项目>/`,命名 `YYYY-MM-DD-语义名-vN.xlsx` | 文件存在;`projects/<项目>/index.md` 登记行 |
 | 2 | 深度抽取:`python3 office-extract.py <文件> --out <文件>.extract.md` | 伴生 `.extract.md` 存在;含 sheet 名 + 单元格引用 + 值;**幻影行(全空高空行)不输出**;超 `ROWS_LIMIT` 行有截断注记 |
 | 3 | 策展写页:gbrain asset 指针页 slug `assets/<项目id>/<语义名>-vN`(项目 id 用 ascii,与 state 卡一致) | 页含 Key Facts(关键数字带 `[Source: <rel_path>, Sheet <名> <列>, 日期]`) + `抽取:` 注记行 + `rel_path` |
-| 4 | 召回:① `gbrain query "<关键数字相关措辞>"` ② `gbrain search "<关键词>"` ③ 指针断言四连(`get` → Pointer → `test -f` → top-1 slug 一致) | query 与 search 均 top-1 目标页;指针四连成立 |
+| 4 | 召回:① `gbrain query "<关键数字相关措辞>"` ② `gbrain search "<关键词>"` ③ 指针断言四连(`get_page` → `rel_path`/Pointer → `test -f` → top-1 slug 一致) | query 与 search 均 top-1 目标页;指针四连成立 |
 
 **通过标准**:步骤 1–4 全过;关键数字的语义查询与关键词查询均 top-1;幻影行过滤与截断行为符合契约。
 

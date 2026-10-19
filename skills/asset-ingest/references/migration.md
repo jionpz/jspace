@@ -14,7 +14,7 @@
 
 - 用户说「把某项目旧资料收进来」「这些旧文件整理进文件中心」。
 - 项目开启/结项时,把散落旧文件归位到 `projects/<项目>/` 或 `archive/<年>/`。
-- `jspace doctor` 报告 `filehub.legacy_taxonomy`,用户要求处理旧 `docs`、`decks`、`data`、`notes` 格式目录结构。
+- `jspace filehub check --json` 报告旧格式目录或指针/索引问题，用户要求处理旧 `docs`、`decks`、`data`、`notes` 格式目录结构。
 
 ## A. 外部存量收编
 
@@ -30,14 +30,14 @@
 
 ### 2. 命名 + 查重(复用 filing.md)
 - 命名:`YYYY-MM-DD-语义名-vN.ext`(入库日期 + 语义名 + 版本)。
-- 查重:目标目录同名/同语义文件 + `gbrain get assets/<项目|领域>/<语义名>` 是否已建页。
-- 冲突 → 询问用户:跳过 / 修复(同名同内容重入,允许覆盖错页)/ 升版本(`-vN`,写新页)。
+- 查重:目标目录同名/同语义文件 + `gbrain call get_page '{"slug":"assets/<owner>/<语义名>","include_content":true}'` 是否已建页。
+- 同内容 → 报告已有位置并跳过；不同内容 → 默认保留原件并报告 conflict；明确新版关系才写 `-vN` 新 slug/新页，绝不覆盖错页。
 
 ### 3. 归位
 - 把文件从源目录**移动**到目标目录(不动原件副本,源目录保持干净)。
 
 ### 4. 入脑(复用 gbrain-write.md)
-- 写 gbrain asset 指针页(slug `assets/<项目|领域>/<语义名>`):frontmatter(type/source/project/tags: [asset]/**rel_path**)+ Summary + Key Facts + Pointer。
+- 写 gbrain asset 指针页(slug `assets/<owner>/<语义名>`):frontmatter 至少含 descriptive `type`、`source`、owner id 的 `project`、`owner_kind: project|area`、`tags: [asset, source:*]`、`rel_path`；正文含 Summary + Key Facts + Pointer。
 - excel/ppt 关键数字需要时可走深度抽取(`~/.agents/skills/asset-ingest/references/deep-extract.md`)。
 
 ### 5. 登记
@@ -55,7 +55,7 @@
 
 ### 1. 只读盘点
 - 记录旧 `rel_path`、文件大小/哈希、项目 index 登记、gbrain asset 页候选。
-- 运行 `jspace doctor`;不要把 warning 当成可以自动修复的许可。
+- 运行 `jspace filehub check --json` 与 `jspace memory check --json`;不要把 warning/unknown 当成可以自动修复的许可。
 
 ### 2. 生成映射
 - 为每个文件给出 `old_rel_path -> new_rel_path`。
@@ -69,8 +69,8 @@
 1. 验证新旧路径都在 filehub 根内,目标不冲突。
 2. 优先同 filehub 内 rename;不复制两份。
 3. 更新项目 `index.md` 的路径与 wikilink。
-4. 找到所有指向旧 `rel_path` / Pointer 的 gbrain asset 页,更新 `Pointer` 与 `rel_path`;内容未变时这是唯一允许的指针修正。
-5. 读回:新路径存在、旧路径不存在、`gbrain get <slug>` 的 `rel_path` 正确、查询仍命中。
+4. 找到所有指向旧 `rel_path` / Pointer 的 gbrain asset 页；内容未变时这是唯一允许的指针修正，读取完整页与 revision 后用 `put_page` + `expected_revision` 更新，不新建版本。
+5. 读回:新路径存在、旧路径不存在、`gbrain call get_page '{"slug":"<slug>","include_content":true}'` 的 `rel_path` 正确、查询仍命中。
 6. 任一验证失败 → 停止,按相反顺序恢复 index 和指针,再把文件移回旧路径。
 
 ### 4. 完成判定

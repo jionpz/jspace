@@ -46,7 +46,7 @@
 
 ```bash
 gbrain models doctor --json          # embedding_config / embedding_reachability,连同时间留档
-gbrain get <slug>                    # 抽样确认 frontmatter 有 rel_path
+gbrain call get_page '{"slug":"<slug>","include_content":true}'  # 抽样确认 frontmatter 有 rel_path
 gbrain query "<规范查询>"             # 记录 top-1 slug 与相对次序(≥2 条)
 ```
 
@@ -89,14 +89,14 @@ gbrain models doctor --json
 
 - **M5 教训(必须遵守)**:`gbrain init` 时就配好 embedding,**不要**先 `--no-embedding` 再改维度——事后改维会带来重建索引的额外成本与不一致风险。
 - B brain 与 A 隔离(判据 3):import 只从 `<export>` 读文本页,不连 A 的 DB。
-- 断言:导入页数与 P1 导出页数一致;抽样 `gbrain get <slug>` 仍含原 `rel_path`;`embedding_reachability: ok`。不可达 → 走 R4 降级分支,**不得**跳过 P4。
+- 断言:导入页数与 P1 导出页数一致;抽样 `gbrain call get_page '{"slug":"<slug>","include_content":true}'` 仍含原 `rel_path`;`embedding_reachability: ok`。不可达 → 走 R4 降级分支,**不得**跳过 P4。
 
 ## P4 · 换机解析(指针腿,不可跳过)
 
 对每条验收 slug:
 
 ```bash
-gbrain get <slug>                                  # ① 读页;页内 Pointer 仍指向 A 机绝对路径
+gbrain call get_page '{"slug":"<slug>","include_content":true}'  # ① 读页;旧 Pointer 仍指向 A 机时以 rel_path 重解析
 # ② 读 B 机 hub.json 的 type: filehub resource(primary: true)-> <filehubB>
 test -f "<filehubB>/<rel_path>"                    # ③ 本机 Pointer 存在
 grep -c "<事实关键词>" "<filehubB>/<rel_path>"      # ④(可选)找到那个数
@@ -119,7 +119,7 @@ gbrain search "<关键词>"             # 关键词对照(双路径留证)
 
 ## P6 · 问一句闭环(产品句)
 
-在 B 上按 `~/.agents/skills/memory-recall/SKILL.md` 走完整读侧流程:query → 四连(① `gbrain get` ② 用**重解析后**的 Pointer `test -f` ③ grep 找数 ④ top-1 slug 一致)→ 作答。
+在 B 上按 `~/.agents/skills/memory-recall/SKILL.md` 走完整读侧流程:query → 四连(① `gbrain call get_page` ② 用**重解析后**的 `rel_path`/Pointer `test -f` ③ grep 找数 ④ top-1 slug 一致)→ 作答。
 
 - 通过标准:答案引用 **B 机绝对路径** + slug;不得只报「页里有」。
 - 这是唯一一条同时压住指针腿与记忆腿的端到端断言,P4 / P5 都过了才有意义。

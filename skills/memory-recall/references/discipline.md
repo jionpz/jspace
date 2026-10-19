@@ -1,10 +1,10 @@
 # memory-recall — 召回纪律细则
 
-纪律源 = `~/.agents/skills/memory-recall/references/memory-acceptance.md`（可复跑验收协议）。本文件把协议中经基线验收（2026-08-03 通过）的纪律固化为日常读侧操作细则；协议是**回归**，本文件是**日常**。
+纪律源 = `~/.agents/skills/memory-recall/references/memory-acceptance.md`（可复跑验收协议）。本文件把协议中经基线验收（2026-08-03 通过）的纪律固化为日常读侧操作细则；协议是**回归**，本文件是**日常**。历史结果与日期保留为历史证据；命令面已统一到当前结构化契约，旧文本结果不能按当前 CLI 重放。
 
 ## 1. canonical 面约束
 
-- 召回/重跑默认走 **CLI**（`gbrain query` / `gbrain get`），在 **serve 停泊窗口**内完成（gbrain serve 是某 harness 会话的 stdio 子进程，非独立 daemon；禁 `kill` serve、禁独立重启）。
+- 召回/重跑默认走 **CLI**（检索 `gbrain query` / `gbrain search`；读写页 `gbrain call get_page|list_pages|...`），在 **serve 停泊窗口**内完成（gbrain serve 是某 harness 会话的 stdio 子进程，非独立 daemon；禁 `kill` serve、禁独立重启）。
 - 真实使用面（MCP）在锁恢复后补一次 `query` 冒烟对齐。
 - 重跑必须**同一 canonical 面**（CLI），否则证据不可比。
 
@@ -20,27 +20,27 @@
 
 **处置（必做）**:
 1. top-1 slug 匹配 `records/consolidate/*` 或 `records/retro/*` → **不得**把快照当答案。
-2. `gbrain get` 读快照正文,找 wikilink / 项目名 / 明确事实指针。
-3. 跳到源页(`project/*/state`、`decisions/`、`knowledge/`、`assets/`)再作答;答案引用**源 slug**,可注明「经由周快照 `<date>` 路由」。
-4. 快照无明确指针 → 换更具体 query,或 `gbrain list --tag project` / `--tag knowledge` 缩小面后重问。
+2. `gbrain call get_page '{"slug":"<snapshot>","include_content":true}'` 读快照正文,找 wikilink / 项目名 / 明确事实指针。
+3. 跳到源页(`project/*/state`、`decisions/`、`knowledge/`、`assets/`)再作答;答案引用**源 slug**,可注明「经由周快照 `<Monday>` 路由」。
+4. 快照无明确指针 → 换更具体 query,或 `gbrain call list_pages '{"tag":"project","limit":100,"sort":"updated_asc"}'` / `{"tag":"knowledge"}` 缩小候选面后重问；候选仍需逐页读回。
 
 ## 3. 指针断言链（四连过才算命中）
 
 | 步 | 断言 | 命令 |
 |---|---|---|
-| ① | 取到 Pointer | `gbrain get <slug>` → 读 Pointer 字段 |
-| ② | 文件存在 | `test -f "<Pointer>"` |
-| ③ | 找到那个数 | 打开 / `grep "<关键词>" "<Pointer>"` ≥1 |
+| ① | 取到完整页与目标文件定位 | `gbrain call get_page '{"slug":"<slug>","include_content":true}'`；优先读 `rel_path` |
+| ② | 文件存在 | 用本机 filehub 根 + `rel_path` 解析后 `test -f "<resolved>"`；无 `rel_path` 时才用旧机 `Pointer` 并标 portable unknown |
+| ③ | 找到那个数 | 打开 / `grep "<关键词>" "<resolved>"` ≥1 |
 | ④ | top-1 一致 | `gbrain query` 输出 top-1 slug == 目标 slug |
 
-- Pointer 是**绝对路径**（本机真理，按机维护）；换机/导入场景按 §8 用 `rel_path` 重解析。
+- `Pointer` 只是本机绝对路径提示；可移植定位是 `rel_path`。换机/导入场景按 §8 重解析。
 - 四连全过才算该用例命中；任一断 → 回步骤 5 校准。
 
 ### 3b. 取代检查（decisions / knowledge 命中后 — 主流程必做）
 
-- `gbrain get <slug>` 后检查 tags 是否含 `status:superseded`。
-- 若已 superseded → 读正文 `Supersedes: [[...]]` wikilink，跟随到现行页再作答；答案标注「该条已被 X 取代」。
-- 沿链走 ≤2 跳仍无 settled 页 → 上报用户「取代链未完成」,不得猜测。
+- 读页后检查 tags 是否含 `status:superseded`；不要从旧页正文读取 `Supersedes` 反向找现行页。
+- 若已 superseded → 对旧 slug 调 `gbrain call get_backlinks`，按 `truncated/cursor` 取完；逐个 `get_page(include_content:true)` 候选，只接受正文明确含 `Supersedes: [[<旧页>]]` 的页。
+- 沿反向边继续到第一个非 superseded 的现行页；无 status、provisional、settled 都可作为当前页，provisional 必须标不确定。零/多候选、缺页、环、coverage degraded 或预算耗尽 → “不确定/冲突”，不得按时间猜。
 - 若含 `status:archived` 或 `status:deprecated` → 默认不作为确定依据；仅在用户明确问历史时引用。
 - 含 `status:provisional` → 可返回但须标注不确定。
 

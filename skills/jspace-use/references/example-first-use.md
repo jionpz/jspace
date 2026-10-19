@@ -23,7 +23,7 @@ command -v bun   # → (无输出,退出码 1)
 ## Phase 1 — 装 gbrain(first core)
 
 ```bash
-# 二进制解析:$GBRAIN_BIN → command -v gbrain → ~/.bun/bin/gbrain
+# 二进制解析:$GBRAIN_BIN → command -v gbrain(JSpace 不猜测 ~/.bun/bin/gbrain;两者都解析不到时 harness wire 显式失败并提示安装)
 bun install -g gbrain
 ollama pull bge-m3    # Ollama 库:BAAI/bge-m3(1024 维)
 gbrain init --embedding-model ollama:bge-m3 --embedding-dimensions 1024
@@ -39,10 +39,25 @@ gbrain models doctor --json   # embedding_config / embedding_reachability
 
 smoke 后清理(不留探针页):
 ```bash
-printf '---\ntype: note\ntags: [smoke]\nembed_skip: true\n---\nprobe\n' | gbrain put smoke/first-use
-gbrain get smoke/first-use && gbrain delete smoke/first-use
+cat > /tmp/jspace-smoke.md <<'EOF'
+---
+tags: [smoke]
+embed_skip: true
+---
+probe
+EOF
+jq -n --arg slug smoke/first-use --rawfile content /tmp/jspace-smoke.md \
+  --arg request_id "${SMOKE_REQUEST_ID:-$(uuidgen | tr '[:upper:]' '[:lower:]')}" \
+  --arg source_id 'jspace:first-use:smoke' \
+  --arg content_origin inferred \
+  '{slug:$slug,content:$content,request_id:$request_id,source_id:$source_id,content_origin:$content_origin}' \
+  > /tmp/jspace-smoke.json
+gbrain call put_page "$(cat /tmp/jspace-smoke.json)"
+gbrain call get_page '{"slug":"smoke/first-use","include_content":true}'
+# 探针页可以保留；清理不是本步骤的完成条件。若需清理，按本机确认的删除接口
+# 单独记录，不能用旧文本读写命令替代结构化契约。
 ```
-断言:`gbrain doctor --json` resolver/pgvector 全 `ok`;smoke 页 put→get→delete 三步通过。细则 `~/.agents/skills/jspace-use/references/gbrain.md`。
+断言:`gbrain doctor --json` resolver/pgvector 全 `ok`;smoke 页 `put_page`→`get_page` 通过，清理方式已记录。细则 `~/.agents/skills/jspace-use/references/gbrain.md`。
 
 ## Phase 2 — Registry health
 
@@ -81,7 +96,7 @@ Claude Code 走 MCP,写 `~/.claude.json` 的 `mcpServers.gbrain`(`command` = gbr
 
 接线后补一步 gbrain skill 路由:
 ```bash
-jspace gbrain wire --dir .   # GBRAIN_SKILLS_DIR=<工作台>/.jspace/skills 注入 gbrain MCP env
+jspace harness wire --harness claude --dir .   # GBRAIN_SKILLS_DIR=<工作台>/.jspace/skills 注入 gbrain MCP env
 ```
 重启 Claude Code 让 `gbrain serve` 以新 env 启动(否则 resolver 只认根 `skills/` 或回退内置 skill)。细则 `~/.agents/skills/jspace-use/references/gbrain.md`「Skill routing wiring」。
 
@@ -91,7 +106,7 @@ jspace gbrain wire --dir .   # GBRAIN_SKILLS_DIR=<工作台>/.jspace/skills 注�
 
 ```bash
 for id in inbox-tidy weekly-report memory-consolidate workbench-retro; do jspace cron enable "$id" --dir .; done
-jspace cron run inbox-tidy --dir .    # rehearsal:先手跑验证契约(逐个跑一遍最稳)
+jspace cron run --id inbox-tidy --dir .    # rehearsal:先手跑验证契约(逐个跑一遍最稳)
 jspace cron install --dir .           # 装进系统调度(此处 macOS launchd)
 jspace cron status --dir .
 ```

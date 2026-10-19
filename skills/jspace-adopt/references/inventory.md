@@ -67,7 +67,7 @@
 - OpenCode:`.opencode/plugins/`、用户 MCP 配置;
 - Cursor:`.cursor/hooks.json`、用户 MCP 配置;
 - Pi:项目投影与用户 MCP 配置;
-- Codex:cron 兼容状态(仅记录,不纳入 `harness wire` 的直接目标)。
+- Codex:headless cron 条目(仅记录,不纳入 `harness wire` 的直接目标——JSpace 不代写其 `~/.codex/config.toml`)。
 
 记录已有 `gbrain` 项、非 gbrain 项、冲突项和备份需求;配置中的 token/secret 只写“存在/缺失”,不复述值。
 
@@ -77,7 +77,7 @@
 
 - `gbrain` 二进制是否可用(按环境解析,不安装);
 - 旧 slug 列表或用户记录的 slug(重点 `project/*/state`、`assets/*/*`);
-- 至少一个旧 slug 的 `get`/`query` 结果;
+- 至少一个旧 slug 的 `gbrain call get_page` 与 `gbrain query` 结果;
 - 哪些是中文/id 混用、哪些已是 ASCII。
 
 **已有 slug 是历史身份**:保留原名,只记录;新项目才用 ASCII id。不要为了统一命名批量重命名。

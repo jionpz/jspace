@@ -52,7 +52,7 @@ python3 .jspace/skills/asset-ingest/scripts/extract.py <文件> --out <伴生文
    - `Summary`：这份文件是什么。
    - `Key Facts`：收关键数字/表头要点，精炼（≤ ~10 条）；**数字要带出处语境**（如 `[Source: projects/acme/2026-08-03-acme报价.xlsx, Sheet 报价单 B2, 2026-08-03]`）。关键数字进页是「问一句找那个数」的命中保障。
 4. **入脑**（写 gbrain asset 指针页，既有模板 + 新增）：
-   - frontmatter 不变（`type: note` / `project` / `tags: [asset]` / `rel_path`）。
+   - frontmatter 保持既有 asset 契约（descriptive `type` / owner id 的 `project` / `owner_kind: project|area` / `tags` 含 `asset` 和来源 tag / `rel_path`）；`type` 不做角色过滤。
    - `Key Facts` 策展数字；**加一行** `抽取: <伴生文件 rel_path>`（全量数据可重开）。
    - 引文纪律：事实带 `[Source: <本体 rel_path>, YYYY-MM-DD]`（对齐 gbrain ingest 引文）。
 5. **登记**：项目 `index.md` 挂一行（既有；可在行内附注 `.extract.md` 存在）。
