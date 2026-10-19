@@ -65,8 +65,19 @@ export function parseMemoryMarkdown(raw: string): ParsedMemoryMarkdown {
     if (value.trim() === "") {
       const items: string[] = [];
       let next = i + 1;
-      while (next < end && /^[ \t]+-/.test(lines[next])) {
-        const item = unquote(lines[next].replace(/^[ \t]+-[ \t]*/, ""));
+      while (next < end) {
+        const l = lines[next];
+        // Blank lines and full-line comments are legal inside a YAML block
+        // sequence. Skipping them (instead of stopping) matters: a comment in
+        // `support_paths` used to silently truncate the rest of the list, so the
+        // dropped files surfaced far away as confusing `asset.unindexed`
+        // warnings instead of a parse error.
+        if (l.trim() === "" || l.trimStart().startsWith("#")) {
+          next++;
+          continue;
+        }
+        if (!/^[ \t]+-/.test(l)) break;
+        const item = unquote(l.replace(/^[ \t]+-[ \t]*/, ""));
         if (item !== "") items.push(item);
         next++;
       }

@@ -87,3 +87,29 @@ test("memoryOwnerEquals follows gbrain slug ASCII case folding", () => {
   expect(memoryOwnerEquals("servers", "agents")).toBe(false);
   expect(memoryOwnerEquals(undefined, "AI服务商")).toBe(false);
 });
+
+test("block lists survive comment and blank lines (support_paths truncation regression)", () => {
+  // Real-use regression: an owner index wrote a comment inside `support_paths`;
+  // the parser stopped at it and silently dropped the remaining paths, which
+  // surfaced only as far-away `filehub.asset.unindexed` warnings.
+  const parsed = parseMemoryMarkdown(
+    [
+      "---",
+      "type: project-index",
+      "support_paths:",
+      "  - a.md",
+      "  # grouped screenshots",
+      "  - b.png",
+      "",
+      "  - c.png",
+      "tags: [project]",
+      "owner: acme",
+      "---",
+      "body",
+    ].join("\n"),
+  );
+  expect(parsed.lists.support_paths).toEqual(["a.md", "b.png", "c.png"]);
+  // a following top-level key still terminates the list and parses normally
+  expect(parsed.tags).toEqual(["project"]);
+  expect(parsed.fields.owner).toBe("acme");
+});
