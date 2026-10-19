@@ -1,16 +1,37 @@
-// application/ingest/use-cases.ts — `jspace ingest` use cases.
-// Thin wrappers over the journal state machine (application/ingest/journal.ts)
-// with real fs ops and filehub/project resolution. The semantic skill supplies
-// the plan (target/slug/project/index) and the gbrain page content; the CLI owns
-// the mechanical steps (stage copy, advance, commit remove-source, compensation).
-import { copyFileSync, unlinkSync } from "node:fs";
-import { isAbsolute, relative, join, resolve } from "node:path";
-import type { CmdResult } from "../commands/command.ts";
-import { fail } from "../../core/shared/errors.ts";
+// application/ingest/use-cases.ts — `jspace ingest` application surface.
+//
+// The skill supplies semantics (owner, semantic target, slug, index line);
+// this layer proves the mechanical contract:
+// - target belongs to the declared project/area;
+// - index location is derived from the owner, never supplied ad hoc;
+// - gbrain/index checkpoints require real readback before journal advance;
+// - source cleanup is guarded by content hashes and exact index evidence.
+import { createHash } from "node:crypto";
+import {
+  constants as fsConstants,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+} from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { realGbrain } from "../../adapters/gbrain/gbrain.ts";
 import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
+import type { CmdResult } from "../commands/command.ts";
+import type { GbrainDeps } from "../../core/contracts/gbrain.ts";
+import type {
+  IngestGbrainEvidence,
+  IngestIndexEvidence,
+  IngestJournalV2,
+  IngestOwnerKind,
+  IngestStep,
+} from "../../core/contracts/ingest.ts";
+import { fail } from "../../core/shared/errors.ts";
 import { resolveFilehubRoot } from "../registry/filehub-lookup.ts";
-import { confinedWithin } from "../registry/helpers.ts";
-import type { IngestStep } from "../../core/contracts/ingest.ts";
+import { confinedWithin, resolveRealPath } from "../registry/helpers.ts";
+import { localStamp } from "../time.ts";
 import {
   advanceIngest,
   beginIngest,
@@ -23,25 +44,37 @@ import {
   rollbackIngest,
   type IngestFileOps,
 } from "./journal.ts";
-import { resolveProjectId } from "./project.ts";
 
-/** IngestFileOps confined to the filehub root — a tampered journal or a
- *  directory symlink under the filehub must never make the CLI copy/delete
- *  an arbitrary file (issue #8 #4). begin already requires the source to live
- *  under <filehub>/_inbox; this is defense in depth at every copy and unlink
- *  (stage copy + complete source removal + fail staged-target compensation). */
+function filehubRoot(root: string): string {
+  const configured = resolveFilehubRoot(root);
+  if (!configured) fail(`no filehub registered for workbench ${root}; run "jspace filehub init" first`);
+  if (!existsSync(configured)) fail(`registered filehub root does not exist: ${configured}`);
+  try {
+    return resolveRealPath(configured);
+  } catch (error) {
+    fail(`registered filehub root is unreadable: ${configured}: ${(error as Error).message}`);
+  }
+}
+
+/** File operations are confined to the real filehub root. Target parents may be
+ *  created for a semantic subdirectory, but the copy itself is exclusive. */
 function filehubOps(root: string): IngestFileOps {
-  const fh = resolveFilehubRoot(root);
-  if (!fh) fail(`no filehub registered for workbench ${root}; run "jspace filehub init" first`);
-  const confined = (p: string, verb: string): string => {
-    const abs = isAbsolute(p) ? p : resolve(p);
-    const real = confinedWithin(abs, fh);
-    if (!real) fail(`refusing to ${verb} a file outside the filehub: ${p}`);
+  const fh = filehubRoot(root);
+  const confined = (path: string, verb: string): string => {
+    const absolute = isAbsolute(path) ? path : resolve(path);
+    const real = confinedWithin(absolute, fh);
+    if (!real) fail(`refusing to ${verb} a file outside the filehub: ${path}`);
     return real;
   };
   return {
-    copyFile: (src, dst) => copyFileSync(confined(src, "copy"), confined(dst, "copy")),
-    unlink: (p) => unlinkSync(confined(p, "remove")),
+    copyFileExclusive: (source, target) => {
+      const realSource = confined(source, "copy");
+      const realTarget = confined(target, "copy");
+      mkdirSync(dirname(realTarget), { recursive: true });
+      copyFileSync(realSource, realTarget, fsConstants.COPYFILE_EXCL);
+    },
+    unlink: (path) => unlinkSync(confined(path, "remove")),
+    readIndex: (relPath) => readFileSync(confined(join(fh, relPath), "read"), "utf-8"),
   };
 }
 
@@ -49,75 +82,265 @@ export interface IngestBeginArgs {
   file: string;
   target: string;
   slug: string;
-  project: string;
-  indexLine?: string;
+  ownerKind: IngestOwnerKind;
+  ownerId: string;
+  indexLine: string;
 }
 
-/** Begin an ingest: resolve filehub/project, compute relPath, stage a target
- *  copy and record the journal (source stays in inbox). Reports duplicate/resume
- *  idempotently instead of re-staging. */
-export function ingestBegin(root: string, args: IngestBeginArgs): CmdResult {
-  const fh = resolveFilehubRoot(root);
-  if (!fh) fail(`no filehub registered for workbench ${root}; run "jspace filehub init" first`);
-  // issue #8 #4: the source must already be staged in the filehub inbox —
-  // ingesting from an arbitrary path would copy sensitive files (e.g. a private
-  // key) into a possibly-synced filehub. Resolve to an absolute path for the journal.
-  const inboxDir = join(fh, "_inbox");
-  const sourceAbs = resolve(args.file);
-  if (!confinedWithin(sourceAbs, inboxDir)) {
-    fail(`source must be inside the filehub inbox (${inboxDir}): ${args.file}`);
+function assertSingleSegment(value: string, label: string): void {
+  if (value.length === 0 || value !== value.trim() || value === "." || value === ".." || /[\\/]/.test(value)) {
+    fail(`${label} must be one non-empty path segment: ${value}`);
   }
-  const targetAbs = isAbsolute(args.target) ? args.target : join(fh, args.target);
-  // Symlink-aware: a directory symlink under the filehub (e.g. projects/evil →
-  // /tmp/outside) must not pass a lexical relative() check and then copyFileSync
-  // out of the vault. confinedWithin resolves the deepest existing prefix.
-  const target = confinedWithin(targetAbs, fh);
+}
+
+function hasExactDirectoryPrefix(relPath: string, root: string): boolean {
+  return relPath.startsWith(`${root}/`);
+}
+
+function resolveOwner(
+  root: string,
+  fh: string,
+  ownerKind: IngestOwnerKind,
+  ownerId: string,
+): { ownerRootRel: string; indexPath: string } {
+  assertSingleSegment(ownerId, "--owner-id");
+  if (ownerKind === "project") {
+    const reads = readWorkbenchState(root);
+    if (reads.hub.status !== "ok") fail(`cannot read hub.json for workbench ${root}`);
+    const project = reads.hub.value.projects.find((candidate) => candidate.id === ownerId);
+    if (!project) fail(`no registered project: ${ownerId}; run "jspace project add ${ownerId}" first`);
+    if (project.status !== "active") fail(`project ${ownerId} is ${project.status}; choose an active owner`);
+    return {
+      ownerRootRel: project.asset_rel_path,
+      indexPath: `${project.asset_rel_path}/index.md`,
+    };
+  }
+
+  const ownerRootRel = `areas/${ownerId}`;
+  const ownerRoot = confinedWithin(join(fh, ownerRootRel), fh);
+  if (!ownerRoot) fail(`area root escapes the filehub: ${ownerRootRel}`);
+  try {
+    if (!statSync(ownerRoot).isDirectory()) fail(`area root is not a directory: ${ownerRootRel}`);
+  } catch {
+    fail(`no existing area: ${ownerRootRel}; create/confirm the area before filing into it`);
+  }
+  return { ownerRootRel, indexPath: `${ownerRootRel}/index.md` };
+}
+
+export function ingestBegin(root: string, args: IngestBeginArgs): CmdResult {
+  const fh = filehubRoot(root);
+  const inbox = confinedWithin(join(fh, "_inbox"), fh);
+  if (!inbox) fail(`filehub inbox is missing or escapes the filehub: ${join(fh, "_inbox")}`);
+  const source = confinedWithin(resolve(args.file), inbox);
+  if (!source) fail(`source must be inside the filehub inbox (${join(fh, "_inbox")}): ${args.file}`);
+
+  const owner = resolveOwner(root, fh, args.ownerKind, args.ownerId);
+  const targetCandidate = isAbsolute(args.target) ? args.target : join(fh, args.target);
+  const target = confinedWithin(targetCandidate, fh);
   if (!target) fail(`target must be under the filehub root (${fh})`);
-  const relPath = relative(fh, targetAbs);
-  const reads = readWorkbenchState(root);
-  const hub = reads.hub.status === "ok" ? reads.hub.value : null;
-  const proj = resolveProjectId(hub, args.project);
-  const res = beginIngest(
+  const relPath = relative(fh, target).replace(/\\/g, "/");
+  if (!hasExactDirectoryPrefix(relPath, owner.ownerRootRel)) {
+    fail(`target must be inside ${owner.ownerRootRel}/ for ${args.ownerKind}:${args.ownerId}: ${relPath}`);
+  }
+  if (relPath === owner.indexPath || basename(relPath) === "index.md") {
+    fail(`asset target must not replace an owner index file: ${relPath}`);
+  }
+  if (!args.slug.startsWith(`assets/${args.ownerId}/`) || args.slug.split("/").some((part) => part === "" || part === "." || part === "..")) {
+    fail(`slug must begin with assets/${args.ownerId}/ and name a semantic page: ${args.slug}`);
+  }
+  if (/[\r\n]/.test(args.indexLine) || args.indexLine.trim() === "") {
+    fail("--index-line must be one non-empty physical line");
+  }
+  if (!args.indexLine.includes(args.slug)) {
+    fail(`--index-line must contain the exact gbrain slug ${args.slug}`);
+  }
+  const result = beginIngest(
     root,
-    { source: sourceAbs, target, relPath, slug: args.slug, projectId: proj.id, indexEntry: args.indexLine },
+    {
+      source,
+      target,
+      relPath,
+      ownerKind: args.ownerKind,
+      ownerId: args.ownerId,
+      slug: args.slug,
+      indexPath: owner.indexPath,
+      indexEntry: args.indexLine,
+    },
     filehubOps(root),
   );
-  const lines: string[] = [];
-  if (res.kind === "duplicate") {
-    lines.push(`jspace: ok: already ingested (id ${res.journal.id}); skipping duplicate`);
-  } else if (res.kind === "cleanup-pending") {
-    // the previous commit did not prove source removal; finish it before restaging.
+
+  if (result.kind === "target-exists") {
     return {
       exitCode: 1,
-      errors: [`ingest ${res.journal.id}: source cleanup pending from a previous commit; finish it first`],
+      errors: [`ingest target already exists; no bytes were overwritten: ${target}`],
+      lines: [`jspace: ingest conflict: target already exists: ${target}`],
+    };
+  }
+  if (result.kind === "duplicate") {
+    return { lines: [`jspace: ok: already ingested (id ${result.journal.id}); skipping duplicate`] };
+  }
+  if (result.kind === "cleanup-pending") {
+    return {
+      exitCode: 1,
+      errors: [`ingest ${result.journal.id}: source cleanup pending from a previous commit; finish it first`],
       lines: [
-        `jspace: ingest ${res.journal.id}: source cleanup pending (failedStep=committed); source NOT removed`,
-        `  retry: ${completeRetryCommand(res.journal.id)}`,
+        `jspace: ingest ${result.journal.id}: source cleanup pending (failedStep=committed); source NOT removed`,
+        `  retry: ${completeRetryCommand(result.journal.id)}`,
       ],
     };
-  } else if (res.kind === "resume") {
-    lines.push(`jspace: ok: ingest already in progress (id ${res.journal.id}, ${res.journal.status}); continuing`);
-  } else {
-    lines.push(`jspace: ok: ingest staged (id ${res.journal.id}): ${args.file} -> ${target}`);
-    lines.push(`  next: write the gbrain page, then: jspace ingest advance ${res.journal.id} --gbrain`);
-    lines.push(`  journal id: ${res.journal.id}`);
   }
-  if (!proj.registered) {
-    lines.push(`jspace: warn: project ${args.project} is not registered; using derived id ${proj.id} (run "jspace project add" to register)`);
+  if (result.kind === "failed") {
+    return {
+      exitCode: 1,
+      errors: [`ingest ${result.journal.id} is already failed; resolve or roll back that journal first`],
+      lines: [`jspace: ingest ${result.journal.id}: failed at ${result.journal.failedStep}: ${result.journal.failureReason}`],
+    };
   }
-  return { lines };
+  if (result.kind === "resume") {
+    return {
+      lines: [
+        `jspace: ok: ingest already in progress (id ${result.journal.id}, ${result.journal.status}); continuing`,
+        `  owner=${result.journal.ownerKind}:${result.journal.ownerId} target=${result.journal.relPath}`,
+      ],
+    };
+  }
+  return {
+    lines: [
+      `jspace: ok: ingest staged (id ${result.journal.id}): ${args.file} -> ${target}`,
+      `  owner=${args.ownerKind}:${args.ownerId} index=${owner.indexPath}`,
+      `  next: write the gbrain page, then: jspace ingest advance ${result.journal.id} --gbrain`,
+      `  journal id: ${result.journal.id}`,
+    ],
+  };
 }
 
-/** Advance to the next step (gbrain / index / committed). The committed step
- *  runs the cleanup-pending machine: on source-removal failure it exits non-zero,
- *  reports the reason and the exact retry command — never a fake `source removed`. */
-export function ingestAdvance(root: string, id: string, step: IngestStep): CmdResult {
+function parseFrontmatter(content: string): Map<string, string> {
+  const fields = new Map<string, string>();
+  if (!content.startsWith("---")) return fields;
+  const end = content.indexOf("\n---", 3);
+  if (end < 0) return fields;
+  for (const raw of content.slice(3, end).split(/\r?\n/)) {
+    const match = raw.match(/^([A-Za-z0-9_-]+):[ \t]*(.*)$/);
+    if (!match) continue;
+    const value = match[2].trim().replace(/^['"]|['"]$/g, "");
+    fields.set(match[1], value);
+  }
+  return fields;
+}
+
+function parseTags(content: string): string[] {
+  if (!content.startsWith("---")) return [];
+  const end = content.indexOf("\n---", 3);
+  if (end < 0) return [];
+  const frontmatter = content.slice(3, end);
+  const inline = frontmatter.match(/^tags:[ \t]*\[([^\]]*)\]/m);
+  if (inline) {
+    return inline[1].split(",").map((tag) => tag.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean);
+  }
+  const block = frontmatter.match(/^tags:[ \t]*\n((?:[ \t]+-[^\n]*\n?)*)/m);
+  if (!block) return [];
+  return block[1]
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("-"))
+    .map((line) => line.slice(1).trim().replace(/^['"]|['"]$/g, ""))
+    .filter(Boolean);
+}
+
+function requireAssetMetadata(journal: IngestJournalV2, content: string): string[] {
+  const fields = parseFrontmatter(content);
+  const tags = parseTags(content);
+  if (fields.get("project") !== journal.ownerId) {
+    fail(`gbrain page project must be ${journal.ownerId}`);
+  }
+  if (fields.get("rel_path") !== journal.relPath) {
+    fail(`gbrain page rel_path must be ${journal.relPath}`);
+  }
+  const declaredOwnerKind = fields.get("owner_kind");
+  if (declaredOwnerKind !== undefined && declaredOwnerKind !== journal.ownerKind) {
+    fail(`gbrain page owner_kind must be ${journal.ownerKind}`);
+  }
+  if (!tags.includes("asset")) fail("gbrain asset page tags must include asset");
+  const provenance = tags.filter((tag) => tag === "source:session" || tag === "source:cron");
+  if (provenance.length !== 1) {
+    fail("gbrain asset page tags must include exactly one of source:session or source:cron");
+  }
+  return tags;
+}
+
+async function verifyGbrainPage(journal: IngestJournalV2, gbrain: GbrainDeps): Promise<IngestGbrainEvidence> {
+  const result = await gbrain.getPage(journal.slug);
+  if (!result.ok) fail(`gbrain readback failed for ${journal.slug}: ${result.code}: ${result.message}`);
+  const page = result.page;
+  if (page.slug !== journal.slug) fail(`gbrain readback returned ${page.slug}, expected ${journal.slug}`);
+  const contentTags = requireAssetMetadata(journal, page.content);
+  if (!page.tags.includes("asset")) fail("gbrain metadata tags must include asset");
+  const provenance = page.tags.filter((tag) => tag === "source:session" || tag === "source:cron");
+  if (provenance.length !== 1) {
+    fail("gbrain metadata tags must include exactly one of source:session or source:cron");
+  }
+  if (journal.ownerKind === "project" && !journal.relPath.startsWith("projects/")) {
+    fail(`project asset rel_path must begin with projects/: ${journal.relPath}`);
+  }
+  if (journal.ownerKind === "area" && !journal.relPath.startsWith(`areas/${journal.ownerId}/`)) {
+    fail(`area asset rel_path must begin with areas/${journal.ownerId}/: ${journal.relPath}`);
+  }
+  return {
+    verifiedAt: localStamp(),
+    revision: page.revision,
+    contentHash: page.contentHash,
+    slug: page.slug,
+    ownerKind: journal.ownerKind,
+    ownerId: journal.ownerId,
+    relPath: journal.relPath,
+    tags: [...new Set([...page.tags, ...contentTags])],
+  };
+}
+
+function verifyIndex(journal: IngestJournalV2, ops: IngestFileOps): IngestIndexEvidence {
+  let content: string;
+  try {
+    content = ops.readIndex(journal.indexPath);
+  } catch (error) {
+    fail(`index readback failed for ${journal.indexPath}: ${(error as Error).message}`);
+  }
+  if (!content.split(/\r?\n/).includes(journal.indexEntry)) {
+    fail(`index ${journal.indexPath} does not contain the exact planned line: ${journal.indexEntry}`);
+  }
+  return {
+    verifiedAt: localStamp(),
+    path: journal.indexPath,
+    contentHash: createHash("sha256").update(content).digest("hex"),
+    line: journal.indexEntry,
+  };
+}
+
+export async function ingestAdvance(
+  root: string,
+  id: string,
+  step: IngestStep,
+  gbrain: GbrainDeps = realGbrain(),
+): Promise<CmdResult> {
   if (step === "committed") {
-    const res = completeIngest(root, id, filehubOps(root));
-    if (res.kind === "cleanup-pending") {
+    const journal = readJournal(root, id);
+    if (journal.status !== "index" && !isCleanupPending(journal)) {
+      throw new Error(
+        `ingest ${id}: cannot complete from ${journal.status}; only index or cleanup-pending may be completed`,
+      );
+    }
+    const refreshed = await verifyGbrainPage(journal, gbrain);
+    const result = completeIngest(root, id, filehubOps(root), undefined, refreshed);
+    if (result.kind === "blocked") {
       return {
         exitCode: 1,
-        errors: [`ingest ${id}: source cleanup failed: ${res.error.message}`],
+        errors: [`ingest ${id}: ${result.error.message}`],
+        lines: [`jspace: ingest ${id}: completion blocked; source and target were preserved`, `  reason: ${result.error.message}`],
+      };
+    }
+    if (result.kind === "cleanup-pending") {
+      return {
+        exitCode: 1,
+        errors: [`ingest ${id}: source cleanup failed: ${result.error.message}`],
         lines: [
           `jspace: ingest ${id}: source cleanup pending; source NOT removed`,
           `  retry: ${completeRetryCommand(id)}`,
@@ -126,39 +349,58 @@ export function ingestAdvance(root: string, id: string, step: IngestStep): CmdRe
     }
     return { lines: [`jspace: ok: ingest ${id} -> committed (source removed)`] };
   }
-  advanceIngest(root, id, step, filehubOps(root));
+  if (step === "staged") fail(`ingest ${id}: staged is a starting state, not an advance target`);
+
+  if (step === "gbrain") {
+    await advanceIngest(root, id, "gbrain", (journal) => verifyGbrainPage(journal, gbrain));
+  } else {
+    await advanceIngest(root, id, "index", (journal) => Promise.resolve(verifyIndex(journal, filehubOps(root))));
+  }
   return { lines: [`jspace: ok: ingest ${id} -> ${step}`] };
 }
 
-/** Mark failed with compensation for the step in progress. */
 export function ingestFail(root: string, id: string, reason: string): CmdResult {
-  const j = failIngest(root, id, reason, filehubOps(root));
-  const lines = [`jspace: ingest ${id} failed at ${j.failedStep ?? "?"}: ${reason}`];
-  if (j.failedStep === "staged") {
+  const journal = failIngest(root, id, reason, filehubOps(root));
+  const lines = [`jspace: ingest ${id} failed at ${journal.failedStep ?? "?"}: ${reason}`];
+  if (journal.failureReason?.includes("preserved")) {
+    lines.push("  preserved: staged target changed; source and target both remain for inspection");
+  } else if (journal.failedStep === "staged") {
     lines.push("  compensated: removed staged target copy; source stays in inbox (no orphan)");
   }
   return { exitCode: 1, lines };
 }
 
-/** Explicitly abandon a staged ingest (source stays in inbox). */
 export function ingestRollback(root: string, id: string): CmdResult {
-  rollbackIngest(root, id, filehubOps(root));
+  const journal = rollbackIngest(root, id, filehubOps(root));
+  if (journal.failureReason?.includes("preserved")) {
+    return {
+      exitCode: 1,
+      errors: [`ingest ${id}: rollback blocked because the staged target changed`],
+      lines: [`jspace: ingest ${id}: rollback blocked; source and changed target were preserved`],
+    };
+  }
   return { lines: [`jspace: ok: ingest ${id} rolled back (staged copy removed, source stays in inbox)`] };
 }
 
 export function ingestStatus(root: string, id: string, json: boolean): CmdResult {
-  const j = readJournal(root, id);
-  if (json) return { lines: [], data: j };
-  const pending = isCleanupPending(j);
-  const statusLine = `jspace: ingest ${id}: status=${j.status}` +
-    (j.failedStep ? ` failedStep=${j.failedStep}` : "") +
-    (j.failureReason ? ` reason=${j.failureReason}` : "");
+  const journal = readJournal(root, id);
+  if (json) return { lines: [], data: journal };
+  const status = `jspace: ingest ${id}: status=${journal.status}` +
+    (journal.failedStep ? ` failedStep=${journal.failedStep}` : "") +
+    (journal.failureReason ? ` reason=${journal.failureReason}` : "");
   const lines = [
-    statusLine,
-    `  ${j.source} -> ${j.target}`,
-    `  slug=${j.slug} project=${j.projectId} hash=${j.contentHash.slice(0, 8)}`,
+    status,
+    `  owner=${journal.ownerKind}:${journal.ownerId}`,
+    `  ${journal.source} -> ${journal.target}`,
+    `  slug=${journal.slug} index=${journal.indexPath} hash=${journal.sourceHash.slice(0, 8)}`,
   ];
-  if (pending) {
+  if (journal.gbrainEvidence) {
+    lines.push(`  gbrain=${journal.gbrainEvidence.slug}@${journal.gbrainEvidence.revision}`);
+  }
+  if (journal.indexEvidence) {
+    lines.push(`  index-evidence=${journal.indexEvidence.path}`);
+  }
+  if (isCleanupPending(journal)) {
     lines.push(`  cleanup pending: source not yet removed; finish cleanup: ${completeRetryCommand(id)}`);
   }
   return { lines };
@@ -166,16 +408,12 @@ export function ingestStatus(root: string, id: string, json: boolean): CmdResult
 
 export function ingestList(root: string, json: boolean): CmdResult {
   const { records: journals, issues } = readJournals(root);
-  if (json) {
-    // issues surface damaged journals (symmetric with pending/incidents) — never
-    // silently dropped from the machine-readable surface.
-    return { lines: [], data: issues.length > 0 ? { journals, issues } : { journals } };
-  }
+  if (json) return { lines: [], data: issues.length > 0 ? { journals, issues } : { journals } };
   if (journals.length === 0) return { lines: ["jspace: ok: no ingest journals"] };
   return {
-    lines: journals.map((j) => {
-      const st = isCleanupPending(j) ? "failed/cleanup-pending" : j.status;
-      return `${j.id}  ${st}  ${j.relPath}`;
+    lines: journals.map((journal) => {
+      const status = isCleanupPending(journal) ? "failed/cleanup-pending" : journal.status;
+      return `${journal.id}  ${status}  ${journal.ownerKind}:${journal.ownerId}  ${journal.relPath}`;
     }),
   };
 }

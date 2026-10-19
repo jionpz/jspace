@@ -9,15 +9,17 @@
 import { expect, test } from "bun:test";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readlinkSync,
   readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { initWorkbench } from "./init.ts";
 import { workspaceDiff, workspaceUpgrade } from "./workspace.ts";
 import { readMarker, writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
@@ -54,6 +56,27 @@ const upgradeDeps = {
 
 function tmp(): string {
   return mkdtempSync(join(tmpdir(), "jspace-ws-"));
+}
+
+function snapshotTree(root: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const walk = (dir: string): void => {
+    for (const name of readdirSync(dir).sort()) {
+      const p = join(dir, name);
+      const rel = relative(root, p);
+      const st = lstatSync(p);
+      if (st.isSymbolicLink()) {
+        out[rel] = `link:${readlinkSync(p)}:${st.mtimeMs}`;
+      } else if (st.isDirectory()) {
+        out[rel] = `dir:${st.mtimeMs}`;
+        walk(p);
+      } else {
+        out[rel] = `file:${st.size}:${st.mtimeMs}:${sha256Of(readFileSync(p, "utf-8"))}`;
+      }
+    }
+  };
+  walk(root);
+  return out;
 }
 
 function oldWorkbench(root: string, templateVersion = "0.9.0"): void {
@@ -365,10 +388,11 @@ test("legacy workbench: unmodified old-name root skills/ copy is removed, upgrad
   writeBytesAtomic(
     join(root, ".jspace", "state", "materialized.json"),
     JSON.stringify({
-      schema_version: 1,
+      schema_version: 2,
       asset_version: "1.0.6",
       applied_at: "2026-08-05",
       files: { "skills/jspace-bootstrap/SKILL.md": { sha256: sha256Of("OLD SKILL") } },
+      links: {},
     }) + "\n",
   );
   // diff: new-name rel -> create, legacy old-name unmodified copy -> remove
@@ -393,10 +417,11 @@ test("legacy workbench: modified old-name root skills/ copy is kept as stale, js
   writeBytesAtomic(
     join(root, ".jspace", "state", "materialized.json"),
     JSON.stringify({
-      schema_version: 1,
+      schema_version: 2,
       asset_version: "1.0.6",
       applied_at: "2026-08-05",
       files: { "skills/jspace-bootstrap/SKILL.md": { sha256: sha256Of("OLD SKILL") } },
+      links: {},
     }) + "\n",
   );
   const { data } = workspaceDiff(root, BUNDLE_MANIFEST, true, ASSETS);
@@ -449,6 +474,25 @@ test("block-update during upgrade is backed up and restored by --rollback", () =
   workspaceUpgrade(root, { rollbackId: ids[0], dryRun: false, acceptConflicts: true }, upgradeDeps);
   // rollback restores the whole pre-upgrade file (block embedded earlier is gone)
   expect(readFileSync(join(root, "AGENTS.md"), "utf-8")).toBe("OLD AGENTS CONTENT");
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("rollback --dry-run is a strict read-only preview (files, metadata, journal and lock unchanged)", () => {
+  const root = tmp();
+  oldWorkbench(root);
+  workspaceUpgrade(root, { dryRun: false, acceptConflicts: true }, upgradeDeps);
+  const dir = join(root, ".jspace", "state", "upgrades");
+  const ids = existsSync(dir) ? readdirSync(dir) : [];
+  expect(ids.length).toBe(1);
+  const lockPath = mutationLockPath(root);
+  const snapshot = snapshotTree(root);
+
+  const r = workspaceUpgrade(root, { rollbackId: ids[0], dryRun: true, acceptConflicts: true }, upgradeDeps);
+
+  expect(r.lines[0]).toContain("dry-run: would roll back");
+  expect(r.lines.some((line) => line.includes("[restore] AGENTS.md"))).toBe(true);
+  expect(snapshotTree(root)).toEqual(snapshot);
+  expect(existsSync(lockPath)).toBe(false);
   rmSync(root, { recursive: true, force: true });
 });
 

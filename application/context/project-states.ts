@@ -4,7 +4,7 @@
 // GbrainDeps port with a short per-call timeout: a stalled gbrain must never
 // block a harness hook (settings.json caps session-start at 10s). It degrades
 // to an empty list on any failure — the project line is advisory, never a gate.
-import type { GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
+import type { GbrainDeps } from "../../core/contracts/gbrain.ts";
 
 /** Max project state cards surfaced in the session-start injection line. */
 export const MAX_ACTIVE_PROJECTS = 8;
@@ -104,8 +104,8 @@ async function* walkPages<T extends { slug: string }>(
       while (next < batch.length) {
         const slug = batch[next++].slug;
         try {
-          const got = await gbrain.get(slug);
-          if (got.ok && got.content) bodies.set(slug, got.content);
+          const got = await gbrain.getPage(slug);
+          if (got.ok && got.page.content) bodies.set(slug, got.page.content);
         } catch {
           // drop this slug — absence already means "page unavailable"
         }
@@ -128,7 +128,7 @@ export async function collectActiveProjects(
   gbrain: GbrainDeps,
   opts: CollectActiveProjectsOptions = {},
 ): Promise<ProjectState[]> {
-  const listed = await gbrain.list({ tag: "project", limit: 100 });
+  const listed = await gbrain.listPages({ tag: "project", limit: 100 });
   if (!listed.ok || !listed.rows) return [];
 
   // Filter to the state-card namespace and sort by recency (list is already
@@ -156,7 +156,7 @@ export async function collectActiveProjects(
  */
 export async function collectActiveProfiles(gbrain: GbrainDeps): Promise<ProfileState[]> {
   try {
-    const listed = await gbrain.list({ tag: "profile", limit: 100 });
+    const listed = await gbrain.listPages({ tag: "profile", limit: 100 });
     if (!listed.ok || !listed.rows) return [];
 
     const profileRows = listed.rows.filter((r) => /^profile\/[^/]+$/.test(r.slug));
@@ -230,7 +230,7 @@ export interface RecentKnowledgeEntry {
  *  Never throws; any failure resolves to an empty list. */
 export async function collectRecentKnowledge(gbrain: GbrainDeps): Promise<RecentKnowledgeEntry[]> {
   try {
-    const listed = await gbrain.list({ tag: "knowledge", limit: 50 });
+    const listed = await gbrain.listPages({ tag: "knowledge", limit: 50 });
     if (!listed.ok || !listed.rows) return [];
 
     const eligible = listed.rows.filter(
@@ -293,14 +293,14 @@ export function parseStateCard(body: string): { what: string; now: string; next:
  *  (top-N active, one-line summary), this returns the full skeleton for all
  *  cards. Never throws — a gbrain failure resolves to an empty list. */
 export async function listProjectStates(gbrain: GbrainDeps): Promise<ProjectOverview[]> {
-  const listed = await gbrain.list({ tag: "project", limit: 100 });
+  const listed = await gbrain.listPages({ tag: "project", limit: 100 });
   if (!listed.ok || !listed.rows) return [];
   const stateRows = listed.rows.filter((r) => /^project\/[^/]+\/state$/.test(r.slug));
   const out: ProjectOverview[] = [];
   for (const row of stateRows) {
     const id = row.slug.slice("project/".length, -"/state".length);
-    const got = await gbrain.get(row.slug);
-    const parsed = got.ok && got.content ? parseStateCard(got.content) : { what: "", now: "", next: "", related: [] as string[] };
+    const got = await gbrain.getPage(row.slug);
+    const parsed = got.ok ? parseStateCard(got.page.content) : { what: "", now: "", next: "", related: [] as string[] };
     out.push({ id, ...parsed, updatedAt: row.updatedAt });
   }
   return out;

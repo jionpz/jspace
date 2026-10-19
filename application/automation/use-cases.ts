@@ -68,6 +68,7 @@ function cronAddImpl(
     prompt,
     enabled: !disabled,
     ...(tools !== undefined ? { tools } : {}),
+    ...(model !== undefined ? { model } : {}),
   });
   saveCrons(root, data);
   const lines = [`jspace: ok: added cron: ${id} (${schedule}, ${harness}, ${disabled ? "disabled" : "enabled"})`];

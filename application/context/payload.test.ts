@@ -245,7 +245,7 @@ test("turn: clean workbench -> empty (no noise); each state -> single-line top p
   const broken = { ...empty, hubBroken: true };
 
   expect(renderTurn({ ...pending, cronIncidents: inc.cronIncidents })).toBe("<jspace-state>pending: 2 笔暂存写待落盘（jspace pending apply）</jspace-state>");
-  expect(renderTurn(inc)).toBe("<jspace-state>cron: x[failed] 失败未确认（jspace cron check）</jspace-state>");
+  expect(renderTurn(inc)).toBe("<jspace-state>cron: x[failed] 失败未确认（jspace cron failures）</jspace-state>");
   expect(renderTurn(inbox)).toBe("<jspace-state>inbox: 3 份待整理（「整理一下 inbox」）</jspace-state>");
   expect(renderTurn(broken)).toContain("hub.json 缺失或损坏");
   // turn single-line, well under 512B
@@ -304,11 +304,11 @@ test("many cron incidents -> current-state caps at MAX_CRON_LINES with tail", ()
 test("open incidents -> banner at the very top of session-start/precompact/session-end (issue #13)", () => {
   const state = { ...empty, cronIncidents: [{ cronId: "inbox-tidy", failureClass: "failed" }] };
   const ss = renderSessionStart(state, "/wb");
-  expect(ss.startsWith("⚠️ open incidents: 1（jspace cron check）")).toBe(true);
+  expect(ss.startsWith("⚠️ open incidents: 1（jspace cron failures）")).toBe(true);
   const pc = renderPreCompact(state, "/wb");
-  expect(pc.startsWith("⚠️ open incidents: 1（jspace cron check）")).toBe(true);
+  expect(pc.startsWith("⚠️ open incidents: 1（jspace cron failures）")).toBe(true);
   const se = renderSessionEnd(state, "/wb");
-  expect(se.startsWith("⚠️ open incidents: 1（jspace cron check）")).toBe(true);
+  expect(se.startsWith("⚠️ open incidents: 1（jspace cron failures）")).toBe(true);
   // no incidents -> no banner
   expect(renderSessionStart(empty, "/wb")).not.toContain("⚠️ open incidents");
 });

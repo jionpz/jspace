@@ -1,6 +1,6 @@
 // application/workspace/doctor.test.ts — `jspace doctor` health surface
 // (zero coverage before the review; the most user-facing diagnostics).
-// Real loadCrons/parseSchedule against a temp workbench; installed-task detection
+// Real loadCrons against a temp workbench; installed-task detection
 // is stubbed (the real one spawns the platform scheduler — never in tests).
 // Run: bun test application/workspace/doctor.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { doctorWorkbench, type CronHealthDeps, type CronLike } from "./doctor.ts";
 import { loadCapabilities } from "../../adapters/harness/registry.ts";
-import { loadCrons, parseSchedule } from "../automation/definitions.ts";
+import { loadCrons } from "../automation/definitions.ts";
 import { sha256Of } from "../workspace/manifest.ts";
 import { filehubReadme as embeddedFilehubReadme } from "../../cli/embed.ts";
 import { FILEHUB_CONTRACT_VERSION } from "../registry/filehub-block.ts";
@@ -48,7 +48,6 @@ function setCrons(crons: { id: string; schedule: string; enabled: boolean }[]): 
 
 const stubDeps = (over: Partial<CronHealthDeps> = {}): CronHealthDeps => ({
   loadCrons,
-  parseSchedule,
   installedCronIds: () => [],
   linuxCronHealth: () => ({ crontab: "ok", service: "ok" }),
   officialSkillNames: () => ["jspace-use", "asset-ingest", "memory-recall", "memory-writeback"],
@@ -346,7 +345,7 @@ test("_inbox payload next to resident/exempt entries still warns with the exact 
   expect(diag!.message).toContain("1 unfiled file(s)");
 });
 
-test("malformed .APPLY.json -> filehub.pending_decode warning (P2-6)", () => {
+test("malformed .APPLY.json -> pending.decode warning (P2-6)", () => {
   writeFileSync(
     join(root, ".jspace", "hub.json"),
     JSON.stringify({
@@ -356,13 +355,12 @@ test("malformed .APPLY.json -> filehub.pending_decode warning (P2-6)", () => {
       projects: [],
     }),
   );
-  const fh = join(root, "filehub");
-  mkdirSync(join(fh, ".jspace-logs"), { recursive: true });
-  writeFileSync(join(fh, ".jspace-logs", "corrupt.APPLY.json"), "{ not json", "utf-8");
-  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ schema_version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
+  const dir = join(root, ".jspace", "state", "pending");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "corrupt.APPLY.json"), "{ not json", "utf-8");
   const r = doctorWorkbench(root, stubDeps());
   const diags = (r.data as { diagnostics: { code: string }[] }).diagnostics;
-  expect(diags.some((d) => d.code === "filehub.pending_decode")).toBe(true);
+  expect(diags.some((d) => d.code === "pending.decode")).toBe(true);
 });
 
 test("malformed ingest journal -> ingest.journal_decode warning (symmetric with pending)", () => {
@@ -398,10 +396,11 @@ test("orphan skill dir with a journal record -> no skills.orphan_dir (upgrade ow
   writeFileSync(
     join(root, ".jspace", "state", "materialized.json"),
     JSON.stringify({
-      schema_version: 1,
+      schema_version: 2,
       asset_version: "1.0.6",
       applied_at: "2026-08-05",
       files: { ".jspace/skills/jspace-bootstrap/SKILL.md": { sha256: sha256Of("old skill") } },
+      links: {},
     }) + "\n",
   );
   const r = doctorWorkbench(root, stubDeps());
@@ -618,10 +617,11 @@ test("projection wholly missing but was materialized -> skills.projection_drift"
   writeFileSync(
     join(root, ".jspace", "state", "materialized.json"),
     JSON.stringify({
-      schema_version: 1,
+      schema_version: 2,
       asset_version: "1.0.9",
       applied_at: "2026-08-06",
       files: { ".claude/skills/jspace-use/SKILL.md": { sha256: "x" } },
+      links: {},
     }) + "\n",
   );
   expect(codes(doctorWorkbench(root, stubDeps()))).toContain("skills.projection_drift");

@@ -67,13 +67,13 @@ export function checkGBrain(root: string, cron: GbrainDeps): RegistryDiagnostic[
                 severity: "info",
                 code: "gbrain.config_invalid_json",
                 path: "gbrain",
-                message: `harness config for ${name} is not valid JSON; run ${name === "claude" ? "jspace gbrain wire" : `jspace harness wire --harness ${name}`} to re-wire GBRAIN_SKILLS_DIR`,
+                message: `harness config for ${name} is not valid JSON; run jspace harness wire --harness ${name} to re-wire GBRAIN_SKILLS_DIR`,
               });
               return true;
             }
           })();
     if (!wired) {
-      const cmd = name === "claude" ? "jspace gbrain wire" : `jspace harness wire --harness ${name}`;
+      const cmd = `jspace harness wire --harness ${name}`;
       diags.push({
         severity: "info",
         code: "gbrain.skillsdir_unwired",

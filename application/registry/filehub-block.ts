@@ -13,7 +13,7 @@ export const FILEHUB_BLOCK_END = "<!-- JSPACE:FILEHUB:END -->";
 
 /** Current filehub README contract version. Bump only when the managed text
  *  changes in a way installed filehubs should adopt via `jspace filehub upgrade`. */
-export const FILEHUB_CONTRACT_VERSION = 3;
+export const FILEHUB_CONTRACT_VERSION = 4;
 
 const VERSION_RE = /^>\s*filehub-contract-version:\s*(\d+)\s*$/m;
 

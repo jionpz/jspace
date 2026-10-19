@@ -74,13 +74,27 @@ function makeWorkbench(opts: {
       }),
     );
   }
-  if (opts.filehub && opts.applies?.length) {
-    const dir = join(fh, ".jspace-logs");
+  if (opts.applies?.length) {
+    const dir = join(wb, ".jspace", "state", "pending");
     mkdirSync(dir, { recursive: true });
     for (const a of opts.applies) {
       writeFileSync(
         join(dir, `${a}.APPLY.json`),
-        JSON.stringify({ schema_version: 1, id: a, idempotencyKey: "a".repeat(64), producer: "test", slug: `assets/${a}`, content: "content", status: "staged", retryCount: 0, createdAt: "2026-08-04T100000" }),
+        JSON.stringify({
+          schema_version: 2,
+          id: a,
+          requestId: a,
+          intent: "create",
+          contentHash: "a".repeat(64),
+          contentOrigin: "tool_output",
+          sourceId: `test:${a}`,
+          producer: "test",
+          slug: `assets/${a}`,
+          content: "content",
+          status: "staged",
+          retryCount: 0,
+          createdAt: "2026-08-04T100000",
+        }),
       );
     }
   }
@@ -102,19 +116,19 @@ test("filehubRoot resolution: unregistered -> null; registered -> primary path",
   rmSync(wb2, { recursive: true, force: true });
 });
 
-test("findPendingApplies: empty unless filehub has APPLY.json", () => {
+test("findPendingApplies: empty state is rooted at the workbench, not filehub", () => {
   const wb = makeWorkbench({});
-  expect(findPendingApplies(wb)).toEqual({ root: null, paths: [], issues: [] });
+  expect(findPendingApplies(wb)).toEqual({ root: wb, paths: [], issues: [] });
   const wb2 = makeWorkbench({ filehub: true });
-  expect(findPendingApplies(wb2)).toEqual({ root: join(wb2, "filehub"), paths: [], issues: [] });
+  expect(findPendingApplies(wb2)).toEqual({ root: wb2, paths: [], issues: [] });
   rmSync(wb, { recursive: true, force: true });
   rmSync(wb2, { recursive: true, force: true });
 });
 
-test("findPendingApplies: lists staged APPLY.json envelopes", () => {
-  const wb = makeWorkbench({ filehub: true, applies: [APPLY_A, APPLY_B] });
+test("findPendingApplies: lists staged envelopes without requiring a filehub", () => {
+  const wb = makeWorkbench({ applies: [APPLY_A, APPLY_B] });
   const r = findPendingApplies(wb);
-  expect(r.root).toBe(join(wb, "filehub"));
+  expect(r.root).toBe(wb);
   expect(r.paths).toHaveLength(2);
   expect(r.paths[0]).toContain(APPLY_A);
   rmSync(wb, { recursive: true, force: true });
@@ -186,19 +200,19 @@ test("cronFailures: damaged run record -> damaged_state diagnostics, warnings, e
   rmSync(wb, { recursive: true, force: true });
 });
 
-test("damaged pending envelope (.APPLY.json malformed) -> cron check reports damaged_state (P2-6)", () => {
-  const wb = makeWorkbench({ filehub: true, crons: ["x"] });
-  const fh = join(wb, "filehub");
-  mkdirSync(join(fh, ".jspace-logs"), { recursive: true });
-  writeFileSync(join(fh, ".jspace-logs", "corrupt.APPLY.json"), "{ not json", "utf-8");
+test("damaged pending envelope (.APPLY.json malformed) -> cron failures reports damaged_state (P2-6)", () => {
+  const wb = makeWorkbench({ crons: ["x"] });
+  const dir = join(wb, ".jspace", "state", "pending");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "corrupt.APPLY.json"), "{ not json", "utf-8");
   const r = cronFailures(wb);
-  const d = r.data as FailureData & { damaged_state: { code: string }[] };
-  expect(d.damaged_state.some((s) => s.code.includes("APPLY"))).toBe(true);
+  const d = r.data as FailureData & { damaged_state: { code: string; file: string }[] };
+  expect(d.damaged_state.some((s) => s.file.includes("corrupt.APPLY.json"))).toBe(true);
   expect(r.exitCode).toBe(1); // needs attention
   rmSync(wb, { recursive: true, force: true });
 });
 
-test("damaged ingest journal -> cron check reports damaged_state (symmetric with pending)", () => {
+test("damaged ingest journal -> cron failures reports damaged_state (symmetric with pending)", () => {
   const wb = makeWorkbench({ crons: ["x"] });
   const dir = join(wb, ".jspace", "state", "ingest");
   mkdirSync(dir, { recursive: true });

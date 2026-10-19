@@ -1,38 +1,32 @@
-// application/ingest/journal.ts — ingest journal repository + state machine +
-// compensation. Machine truth for asset-ingest recovery: a file's
-// source stays in the inbox until `--complete` removes it, and a failure before
-// the gbrain page is written compensates by removing the staged target copy, so
-// no orphan file exists and nothing is silently lost.
+// application/ingest/journal.ts — durable ingest journal state machine.
 //
-// Commit ordering (cleanup-pending): `--complete` first durably records
-// `failed/failedStep=committed` (source cleanup pending), only then unlinks the
-// source, and persists `committed` only after cleanup is proven complete. A
-// crash or unlink failure therefore leaves a visible, retryable residue instead
-// of a committed journal whose source removal silently failed (P1).
+// Safety invariants:
+// - the inbox source is removed only after verified gbrain/index checkpoints;
+// - target creation is exclusive (no overwrite);
+// - content identity, not an inbox path alone, detects duplicates;
+// - source and target hashes are rechecked immediately before cleanup;
+// - compensation removes a staged target only when its bytes still match the
+//   exact copy this journal created.
 import { createHash } from "node:crypto";
-import { closeSync, openSync, readSync, existsSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync } from "node:fs";
 import { join } from "node:path";
-import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
+import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import {
   decodeIngestJournal,
-  INGEST_STEPS,
-  type IngestJournalV1,
+  type IngestGbrainEvidence,
+  type IngestIndexEvidence,
+  type IngestJournalV2,
   type IngestStep,
-  type IngestStatus,
 } from "../../core/contracts/ingest.ts";
-import { withWorkbenchMutationLock } from "../lock.ts";
-import { localStamp } from "../time.ts";
-import { readJsonRecords } from "../fs.ts";
 import type { ContractIssue } from "../../core/contracts/diagnostics.ts";
+import { readJsonRecords } from "../fs.ts";
+import { withIngestMutationLock, withIngestMutationLockAsync } from "../lock.ts";
+import { localStamp } from "../time.ts";
 
 export const INGEST_STATE_DIR = join(CONFIG_DIR, "state", "ingest");
 
-/**
- * Byte-level sha256 of a file (streamed in chunks; never decodes to text).
- * Distinct from sha256Of (string content) — contentHash must be the file's real
- * sha256, which utf-8 decoding corrupts for PDF/PPTX/XLSX (illegal bytes → U+FFFD).
- */
+/** Byte-level sha256 for arbitrary binary assets. */
 export function sha256File(p: string): string {
   const h = createHash("sha256");
   const fd = openSync(p, "r");
@@ -50,49 +44,56 @@ export function sha256File(p: string): string {
 }
 
 export interface IngestPlan {
-  source: string; // inbox file absolute path
-  target: string; // staged target absolute path (inside the filehub)
-  relPath: string; // filehub-relative target (portable pointer)
-  slug: string; // gbrain slug assets/<projectId>/<semantic>
-  projectId: string;
-  indexEntry?: string; // planned project index.md line
+  source: string;
+  target: string;
+  relPath: string;
+  ownerKind: "project" | "area";
+  ownerId: string;
+  slug: string;
+  indexPath: string;
+  indexEntry: string;
 }
 
-/** Injected file operations (fault-injectable in tests). */
 export interface IngestFileOps {
-  copyFile: (src: string, dst: string) => void;
+  /** Must use O_EXCL / COPYFILE_EXCL semantics. */
+  copyFileExclusive: (src: string, dst: string) => void;
   unlink: (p: string) => void;
+  /** Read an index by its filehub-relative path. */
+  readIndex: (relPath: string) => string;
 }
 
 export type BeginResult =
-  | { kind: "created"; journal: IngestJournalV1 }
-  | { kind: "duplicate"; journal: IngestJournalV1 }
-  | { kind: "resume"; journal: IngestJournalV1 }
-  | { kind: "cleanup-pending"; journal: IngestJournalV1 };
+  | { kind: "created"; journal: IngestJournalV2 }
+  | { kind: "duplicate"; journal: IngestJournalV2 }
+  | { kind: "resume"; journal: IngestJournalV2 }
+  | { kind: "cleanup-pending"; journal: IngestJournalV2 }
+  | { kind: "failed"; journal: IngestJournalV2 }
+  | { kind: "target-exists"; journal?: undefined };
 
-/** Result of completing an ingest: committed success, or cleanup still pending
- *  after a source-removal failure (journal durably `failed/failedStep=committed`;
- *  the same `--complete` retries it idempotently). */
 export type CompleteResult =
-  | { kind: "committed"; journal: IngestJournalV1 }
-  | { kind: "cleanup-pending"; journal: IngestJournalV1; error: Error };
+  | { kind: "committed"; journal: IngestJournalV2 }
+  | { kind: "cleanup-pending"; journal: IngestJournalV2; error: Error }
+  | { kind: "blocked"; journal: IngestJournalV2; error: Error };
 
-/** Injected journal writer (fault-injectable in tests). */
-export type JournalWriter = (root: string, j: IngestJournalV1) => void;
+export type JournalWriter = (root: string, j: IngestJournalV2) => void;
+
+export type IngestVerifier =
+  | ((journal: IngestJournalV2) => Promise<IngestGbrainEvidence>)
+  | ((journal: IngestJournalV2) => Promise<IngestIndexEvidence>);
 
 function dir(root: string): string {
   return join(root, INGEST_STATE_DIR);
 }
 
-export function writeJournal(root: string, j: IngestJournalV1): void {
-  // atomic (temp+rename) so a crash mid-write never leaves a truncated .json
-  // that readJournals would silently skip (machine-truth invariant).
-  writeBytesAtomic(join(dir(root), `${j.id}.json`), JSON.stringify(j, null, 2) + "\n");
+export function writeJournal(root: string, journal: IngestJournalV2): void {
+  const decoded = decodeIngestJournal(journal);
+  if (!decoded.ok) {
+    throw new Error(`refusing to write invalid ingest journal: ${decoded.issues.map((i) => i.message).join("; ")}`);
+  }
+  writeBytesAtomic(join(dir(root), `${journal.id}.json`), JSON.stringify(journal, null, 2) + "\n");
 }
 
-export function readJournals(root: string): { records: IngestJournalV1[]; issues: ContractIssue[] } {
-  // Damaged journals are surfaced via issues (never silently dropped) so the
-  // health surface (doctor / context) can report them like damaged incidents.
+export function readJournals(root: string): { records: IngestJournalV2[]; issues: ContractIssue[] } {
   return readJsonRecords(dir(root), {
     ext: ".json",
     decode: decodeIngestJournal,
@@ -100,153 +101,216 @@ export function readJournals(root: string): { records: IngestJournalV1[]; issues
   });
 }
 
-export function readJournal(root: string, id: string): IngestJournalV1 {
-  const j = readJournals(root).records.find((x) => x.id === id);
-  if (!j) throw new Error(`no ingest journal: ${id}`);
-  return j;
+export function readJournal(root: string, id: string): IngestJournalV2 {
+  const journal = readJournals(root).records.find((candidate) => candidate.id === id);
+  if (!journal) throw new Error(`no ingest journal: ${id}`);
+  return journal;
 }
 
-/** True when the journal is cleanup-pending: the previous commit removed the
- *  source (or was about to) but did not durably prove cleanup complete. The
- *  same `--complete` retries it: unlink if the source still exists, otherwise
- *  converge to committed. Never treat it as a plain un-retryable failure. */
-export function isCleanupPending(j: IngestJournalV1): boolean {
-  return j.status === "failed" && j.failedStep === "committed";
+export function isCleanupPending(journal: IngestJournalV2): boolean {
+  return journal.status === "failed" && journal.failedStep === "committed";
 }
 
-/** The exact user-facing retry command for a cleanup-pending ingest (single
- *  source of truth so journal errors and CLI output never drift). */
 export function completeRetryCommand(id: string): string {
   return `jspace ingest advance ${id} --complete`;
 }
 
-function withStamp(j: IngestJournalV1): IngestJournalV1 {
-  return { ...j, updatedAt: localStamp() };
+function withStamp(journal: IngestJournalV2): IngestJournalV2 {
+  return { ...journal, updatedAt: localStamp() };
 }
 
-/** Start an ingest: hash source for idempotency, stage a target copy (source
- *  stays in inbox), record journal=staged. Duplicate (same source already
- *  committed, or same content+target) and in-progress resumes are returned
- *  without re-staging. A missing source is a hard error unless it is already
- *  recorded as committed (source removed after commit). */
+function samePlan(journal: IngestJournalV2, plan: IngestPlan, sourceHash: string): boolean {
+  return (
+    journal.source === plan.source &&
+    journal.sourceHash === sourceHash &&
+    journal.target === plan.target &&
+    journal.relPath === plan.relPath &&
+    journal.ownerKind === plan.ownerKind &&
+    journal.ownerId === plan.ownerId &&
+    journal.slug === plan.slug &&
+    journal.indexPath === plan.indexPath &&
+    journal.indexEntry === plan.indexEntry
+  );
+}
+
+function isEexist(error: unknown): boolean {
+  const candidate = error as { code?: string; message?: string };
+  return candidate?.code === "EEXIST" || candidate?.message?.includes("EEXIST") === true;
+}
+
+function safeUnlinkIfIdentity(path: string, expectedHash: string, ops: IngestFileOps): { removed: boolean; changed: boolean } {
+  if (!existsSync(path)) return { removed: false, changed: false };
+  let actual: string;
+  try {
+    actual = sha256File(path);
+  } catch {
+    return { removed: false, changed: true };
+  }
+  if (actual !== expectedHash) return { removed: false, changed: true };
+  ops.unlink(path);
+  return { removed: true, changed: false };
+}
+
 export function beginIngest(root: string, plan: IngestPlan, ops: IngestFileOps): BeginResult {
-  // The dedupe read, the staged copy, and the journal write must not interleave
-  // with another ingest: two processes seeing "no duplicate" both stage.
-  return withWorkbenchMutationLock(root, () => beginIngestImpl(root, plan, ops));
+  return withIngestMutationLock(root, () => beginIngestImpl(root, plan, ops));
 }
 
 function beginIngestImpl(root: string, plan: IngestPlan, ops: IngestFileOps): BeginResult {
+  if (!existsSync(plan.source)) throw new Error(`ingest: source not found: ${plan.source}`);
+  const sourceHash = sha256File(plan.source);
   const journals = readJournals(root).records;
-  // a previous commit left cleanup pending for this source: do NOT stage a
-  // second copy/journal — the user/skill must finish cleanup with --complete.
-  // Note: source identity is the path; if a NEW file landed at the same inbox
-  // path, --complete will remove that path (documented inbox discipline).
-  const pendingCleanup = journals.find((j) => isCleanupPending(j) && j.source === plan.source);
-  if (pendingCleanup) return { kind: "cleanup-pending", journal: pendingCleanup };
-  // source already ingested and committed (source may be gone after commit)
-  const dupBySource = journals.find((j) => j.status === "committed" && j.source === plan.source);
-  if (dupBySource) return { kind: "duplicate", journal: dupBySource };
 
-  let contentHash = "";
-  if (existsSync(plan.source)) {
-    contentHash = sha256File(plan.source);
-    const dupByContent = journals.find(
-      (j) => j.status === "committed" && j.contentHash === contentHash && j.relPath === plan.relPath,
-    );
-    if (dupByContent) return { kind: "duplicate", journal: dupByContent };
-    const inProgress = journals.find(
-      (j) => j.status !== "committed" && j.status !== "failed" && j.source === plan.source,
-    );
-    if (inProgress) return { kind: "resume", journal: inProgress };
-  }
-  if (!existsSync(plan.source)) {
-    throw new Error(`ingest: source not found: ${plan.source}`);
+  const committed = journals.find(
+    (journal) => journal.status === "committed" && journal.sourceHash === sourceHash,
+  );
+  if (committed) return { kind: "duplicate", journal: committed };
+
+  const cleanup = journals.find(
+    (journal) => isCleanupPending(journal) && journal.source === plan.source && journal.sourceHash === sourceHash,
+  );
+  if (cleanup) return { kind: "cleanup-pending", journal: cleanup };
+
+  const inProgress = journals.find(
+    (journal) =>
+      (journal.status === "staged" || journal.status === "gbrain" || journal.status === "index") &&
+      samePlan(journal, plan, sourceHash),
+  );
+  if (inProgress) return { kind: "resume", journal: inProgress };
+
+  const failed = journals.find(
+    (journal) =>
+      journal.status === "failed" &&
+      !isCleanupPending(journal) &&
+      journal.source === plan.source &&
+      journal.sourceHash === sourceHash,
+  );
+  if (failed) return { kind: "failed", journal: failed };
+
+  if (existsSync(plan.target)) return { kind: "target-exists" };
+  try {
+    ops.copyFileExclusive(plan.source, plan.target);
+  } catch (error) {
+    if (isEexist(error) || existsSync(plan.target)) return { kind: "target-exists" };
+    throw error;
   }
 
-  ops.copyFile(plan.source, plan.target);
-  const journal: IngestJournalV1 = {
-    schema_version: 1,
+  let targetHash: string;
+  try {
+    targetHash = sha256File(plan.target);
+  } catch (error) {
+    // The target's bytes cannot be proven; preserve it for inspection.
+    throw new Error(`ingest: could not hash staged target ${plan.target}: ${(error as Error).message}`);
+  }
+  if (targetHash !== sourceHash) {
+    // Unexpected copy mutation: never delete either copy without evidence.
+    throw new Error(
+      `ingest: staged target content differs from source (${plan.target}); both copies were preserved`,
+    );
+  }
+
+  const journal: IngestJournalV2 = {
+    schema_version: 2,
     id: crypto.randomUUID(),
     source: plan.source,
     target: plan.target,
     relPath: plan.relPath,
+    ownerKind: plan.ownerKind,
+    ownerId: plan.ownerId,
     slug: plan.slug,
-    projectId: plan.projectId,
-    contentHash,
+    indexPath: plan.indexPath,
+    indexEntry: plan.indexEntry,
+    sourceHash,
+    targetHash,
     status: "staged",
-    ...(plan.indexEntry !== undefined ? { indexEntry: plan.indexEntry } : {}),
     createdAt: localStamp(),
     updatedAt: localStamp(),
   };
   try {
     writeJournal(root, journal);
-  } catch (e) {
-    // journal write failed after the staged copy: compensate (remove the copy)
-    // so no target file exists without a journal record (no-orphan invariant).
-    try {
-      ops.unlink(plan.target);
-    } catch {
-      /* best-effort compensation */
+  } catch (error) {
+    const cleanupResult = safeUnlinkIfIdentity(plan.target, sourceHash, ops);
+    if (cleanupResult.changed) {
+      throw new Error(
+        `ingest: journal write failed and the staged target changed; both copies were preserved: ${(error as Error).message}`,
+      );
     }
-    throw e;
+    throw error;
   }
   return { kind: "created", journal };
 }
 
-/** Advance an intermediate mechanical step (gbrain / index). `committed` is
- *  handled by completeIngest() — it has its own cleanup-pending machine so a
- *  failed source removal stays visible and retryable instead of a fake success.
- *  A cleanup-pending journal (failed/failedStep=committed) can only move forward
- *  via completeIngest(); other failed states stay illegal. */
-export function advanceIngest(root: string, id: string, step: IngestStep, ops: IngestFileOps): IngestJournalV1 {
-  // state machine read → validate → write on ONE journal: concurrent advance of
-  // the same id would otherwise let the later writer resurrect an older step.
-  return withWorkbenchMutationLock(root, () => advanceIngestImpl(root, id, step, ops));
-}
-
-function advanceIngestImpl(root: string, id: string, step: IngestStep, _ops: IngestFileOps): IngestJournalV1 {
-  const j = readJournal(root, id);
-  if (j.status === "failed") {
-    if (isCleanupPending(j)) {
-      throw new Error(`ingest ${id}: source cleanup pending; run "${completeRetryCommand(id)}" first`);
+function assertAdvanceable(journal: IngestJournalV2, step: "gbrain" | "index"): void {
+  if (journal.status === "failed") {
+    if (isCleanupPending(journal)) {
+      throw new Error(`ingest ${journal.id}: source cleanup pending; run "${completeRetryCommand(journal.id)}" first`);
     }
-    throw new Error(`ingest ${id} is failed; retry or rollback first`);
+    throw new Error(`ingest ${journal.id} is failed; resolve or roll back the journal first`);
   }
-  if (step === "committed") throw new Error(`ingest ${id}: use "${completeRetryCommand(id)}" for the committed step`);
-  const stepIndex = INGEST_STEPS.indexOf(step);
-  const currentIndex = INGEST_STEPS.indexOf(j.status as IngestStep);
-  if (stepIndex !== currentIndex + 1) {
-    throw new Error(`ingest ${id}: cannot advance to ${step} from ${j.status}`);
+  const expected = step === "gbrain" ? "staged" : "gbrain";
+  if (journal.status !== expected) {
+    throw new Error(`ingest ${journal.id}: cannot advance to ${step} from ${journal.status}`);
   }
-  const updated = withStamp({ ...j, status: step });
-  writeJournal(root, updated);
-  return updated;
 }
 
-/** Complete an ingest (the `--complete` step). Starting states are `index` (normal
- *  path) and `failed/failedStep=committed` (cleanup-pending recovery); anything
- *  else is illegal. Ordering guarantees a visible, retryable residue over false
- *  success or silent loss:
- *
- *  1. durably record cleanup-pending (`failed/failedStep=committed`) BEFORE any
- *     source mutation — a crash here leaves `index`, so `--complete` just reruns;
- *  2. unlink the source when present (missing = already cleaned, skip);
- *  3. persist `committed` only after cleanup is known complete.
- *
- * Unlink failure keeps the cleanup-pending state durable and returns
- * `{ kind: "cleanup-pending", error }`; the same command retries idempotently.
- * If the final committed write fails after a successful unlink, the durable
- * cleanup-pending state still reads back and the next `--complete` converges
- * without re-unlinking. */
+export async function advanceIngest(
+  root: string,
+  id: string,
+  step: "gbrain" | "index",
+  verify: IngestVerifier,
+): Promise<IngestJournalV2> {
+  return withIngestMutationLockAsync(root, async () => {
+    const journal = readJournal(root, id);
+    assertAdvanceable(journal, step);
+    const evidence = await verify(journal);
+    const updated = withStamp({
+      ...journal,
+      status: step,
+      ...(step === "gbrain"
+        ? { gbrainEvidence: evidence as IngestGbrainEvidence }
+        : { indexEvidence: evidence as IngestIndexEvidence }),
+    });
+    writeJournal(root, updated);
+    return updated;
+  });
+}
+
+function failedJournal(
+  journal: IngestJournalV2,
+  failedStep: IngestStep,
+  reason: string,
+): IngestJournalV2 {
+  return withStamp({
+    ...journal,
+    status: "failed",
+    failedStep,
+    failureReason: reason,
+  });
+}
+
+function verifyIndexLine(journal: IngestJournalV2, ops: IngestFileOps): { contentHash: string } {
+  let content: string;
+  try {
+    content = ops.readIndex(journal.indexPath);
+  } catch (error) {
+    throw new Error(`index ${journal.indexPath} is not readable: ${(error as Error).message}`);
+  }
+  const lines = content.split(/\r?\n/);
+  if (!lines.includes(journal.indexEntry)) {
+    throw new Error(`index ${journal.indexPath} does not contain the exact planned line: ${journal.indexEntry}`);
+  }
+  return { contentHash: createHash("sha256").update(content).digest("hex") };
+}
+
 export function completeIngest(
   root: string,
   id: string,
   ops: IngestFileOps,
   write: JournalWriter = writeJournal,
+  refreshedGbrainEvidence?: IngestGbrainEvidence,
 ): CompleteResult {
-  // Spans the whole cleanup-pending sequence (record → unlink → commit) so a
-  // concurrent advance/fail cannot interleave between its durable steps.
-  return withWorkbenchMutationLock(root, () => completeIngestImpl(root, id, ops, write));
+  return withIngestMutationLock(root, () =>
+    completeIngestImpl(root, id, ops, write, refreshedGbrainEvidence),
+  );
 }
 
 function completeIngestImpl(
@@ -254,120 +318,188 @@ function completeIngestImpl(
   id: string,
   ops: IngestFileOps,
   write: JournalWriter,
+  refreshedGbrainEvidence: IngestGbrainEvidence | undefined,
 ): CompleteResult {
-  const j = readJournal(root, id);
-  const pending =
-    j.status === "index"
-      ? withStamp({ ...j, status: "failed" as IngestStatus, failedStep: "committed", failureReason: "source cleanup pending" })
-      : isCleanupPending(j)
-        ? j
-        : null;
-  if (!pending) {
+  const journal = readJournal(root, id);
+  const cleanupPending = isCleanupPending(journal);
+  if (journal.status !== "index" && !cleanupPending) {
     throw new Error(
-      `ingest ${id}: cannot complete from ${j.status}${j.failedStep ? ` (failedStep=${j.failedStep})` : ""}; only index or cleanup-pending may be completed`,
+      `ingest ${id}: cannot complete from ${journal.status}${journal.failedStep ? ` (failedStep=${journal.failedStep})` : ""}; only index or cleanup-pending may be completed`,
     );
   }
-  if (pending !== j) {
+  const gbrainEvidence = refreshedGbrainEvidence ?? journal.gbrainEvidence;
+  if (!gbrainEvidence || !journal.indexEvidence) {
+    throw new Error(`ingest ${id}: completion requires verified gbrain and index evidence`);
+  }
+  if (
+    gbrainEvidence.slug !== journal.slug ||
+    gbrainEvidence.ownerKind !== journal.ownerKind ||
+    gbrainEvidence.ownerId !== journal.ownerId ||
+    gbrainEvidence.relPath !== journal.relPath
+  ) {
+    throw new Error(`ingest ${id}: refreshed gbrain evidence does not match the journal plan`);
+  }
+
+  const block = (reason: string): CompleteResult => {
+    const blocked = failedJournal(journal, "index", reason);
     try {
-      write(root, pending); // persist cleanup-pending before unlink
-    } catch (e) {
-      // durable journal is still `index`; the recovery is simply to rerun.
-      const error = e instanceof Error ? e : new Error(String(e));
-      throw new Error(`ingest ${id}: could not record cleanup-pending (journal is still index); retry ${completeRetryCommand(id)}: ${error.message}`);
+      write(root, blocked);
+    } catch {
+      // Keep the original durable state; the next command reports the same issue.
+    }
+    return { kind: "blocked", journal: blocked, error: new Error(reason) };
+  };
+
+  if (!existsSync(journal.target)) {
+    return block(`staged target is missing: ${journal.target}; source and journal were preserved`);
+  }
+  let targetHash: string;
+  try {
+    targetHash = sha256File(journal.target);
+  } catch (error) {
+    return block(`staged target is unreadable: ${(error as Error).message}`);
+  }
+  if (targetHash !== journal.targetHash) {
+    return block(`staged target changed after begin (${journal.target}); both copies were preserved`);
+  }
+
+  try {
+    verifyIndexLine(journal, ops);
+  } catch (error) {
+    return block((error as Error).message);
+  }
+
+  if (existsSync(journal.source)) {
+    let sourceHash: string;
+    try {
+      sourceHash = sha256File(journal.source);
+    } catch (error) {
+      return block(`inbox source is unreadable: ${(error as Error).message}`);
+    }
+    if (sourceHash !== journal.sourceHash) {
+      return block(`inbox source changed after begin (${journal.source}); both copies were preserved`);
+    }
+  } else if (!cleanupPending) {
+    return block(`inbox source disappeared before verified cleanup (${journal.source}); target was preserved`);
+  }
+
+  let pending = journal;
+  if (!cleanupPending) {
+    pending = withStamp({
+      ...journal,
+      gbrainEvidence,
+      status: "failed",
+      failedStep: "committed",
+      failureReason: "source cleanup pending",
+    });
+    try {
+      write(root, pending);
+    } catch (error) {
+      throw new Error(
+        `ingest ${id}: could not record cleanup-pending (journal is still index); retry ${completeRetryCommand(id)}: ${(error as Error).message}`,
+      );
     }
   }
-  return finishCleanup(root, pending, ops, write);
-}
 
-function finishCleanup(root: string, pending: IngestJournalV1, ops: IngestFileOps, write: JournalWriter): CompleteResult {
   if (existsSync(pending.source)) {
     try {
       ops.unlink(pending.source);
-    } catch (e) {
-      const error = e instanceof Error ? e : new Error(String(e));
-      // keep cleanup-pending durable and record why; retry is the same command.
-      const recorded = withStamp({ ...pending, failureReason: `source cleanup pending: ${error.message}` });
+    } catch (error) {
+      const reason = `source cleanup pending: ${(error as Error).message}`;
+      const recorded = withStamp({ ...pending, failureReason: reason });
       try {
         write(root, recorded);
       } catch {
-        /* the pre-unlink cleanup-pending journal is already durable */
+        // The pre-unlink cleanup-pending record is already durable.
       }
-      return { kind: "cleanup-pending", journal: recorded, error };
+      return { kind: "cleanup-pending", journal: recorded, error: new Error((error as Error).message) };
     }
   }
-  // source removed now (or already absent): persist committed
-  const committed = withStamp({ ...pending, status: "committed" as IngestStatus, failedStep: undefined, failureReason: undefined });
+
+  const committed = withStamp({
+    ...pending,
+    gbrainEvidence,
+    status: "committed",
+    failedStep: undefined,
+    failureReason: undefined,
+  });
   try {
     write(root, committed);
-  } catch (e) {
-    // atomic write left the pre-unlink cleanup-pending journal on disk; the
-    // source is gone, so the next --complete skips the unlink and converges.
-    const error = e instanceof Error ? e : new Error(String(e));
-    return { kind: "cleanup-pending", journal: pending, error };
+  } catch (error) {
+    return { kind: "cleanup-pending", journal: pending, error: new Error((error as Error).message) };
   }
   return { kind: "committed", journal: committed };
 }
 
-/** Mark an ingest failed and apply the compensation for the step in progress.
- *  staged (gbrain never written) -> remove the staged target copy, source stays
- *  in inbox (no orphan). gbrain/index -> page already exists; no destructive
- *  compensation (index/commit remain retryable). failedStep records the LAST
- *  COMPLETED step (j.status) — never "committed": the cleanup-pending marker
- *  (`failed/failedStep=committed`) is produced ONLY by completeIngest when the
- *  source removal is in doubt. A plain failure must not masquerade as
- *  cleanup-pending, or `--complete` would force-commit it and unlink the source. */
-export function failIngest(root: string, id: string, reason: string, ops: IngestFileOps): IngestJournalV1 {
-  return withWorkbenchMutationLock(root, () => failIngestImpl(root, id, reason, ops));
+export function failIngest(
+  root: string,
+  id: string,
+  reason: string,
+  ops: IngestFileOps,
+): IngestJournalV2 {
+  return withIngestMutationLock(root, () => failIngestImpl(root, id, reason, ops));
 }
 
-function failIngestImpl(root: string, id: string, reason: string, ops: IngestFileOps): IngestJournalV1 {
-  const j = readJournal(root, id);
-  if (j.status === "committed") throw new Error(`ingest ${id} is already committed`);
-  if (isCleanupPending(j)) {
+function failIngestImpl(
+  root: string,
+  id: string,
+  reason: string,
+  ops: IngestFileOps,
+): IngestJournalV2 {
+  const journal = readJournal(root, id);
+  if (journal.status === "committed") throw new Error(`ingest ${id} is already committed`);
+  if (isCleanupPending(journal)) {
     throw new Error(`ingest ${id}: source cleanup pending; run "${completeRetryCommand(id)}" first`);
   }
-  if (j.status === "failed") throw new Error(`ingest ${id} is already failed`);
-  if (j.status === "staged") {
-    // gbrain page was never written: remove the staged copy, keep source in inbox.
-    ops.unlink(j.target);
+  if (journal.status === "failed") throw new Error(`ingest ${id} is already failed`);
+
+  let failureReason = reason;
+  if (journal.status === "staged") {
+    const cleanup = safeUnlinkIfIdentity(journal.target, journal.targetHash, ops);
+    if (cleanup.changed) {
+      failureReason += "; staged target changed and was preserved alongside the inbox source";
+    }
   }
-  const updated = withStamp({
-    ...j,
-    status: "failed" as IngestStatus,
-    failedStep: j.status as IngestStep,
-    failureReason: reason,
-  });
-  writeJournal(root, updated);
-  return updated;
+  const failed = failedJournal(journal, journal.status as IngestStep, failureReason);
+  writeJournal(root, failed);
+  return failed;
 }
 
-/** Explicitly abandon a staged-only ingest (no gbrain page yet): remove the
- *  staged target copy so the source is the only copy. Refuses once the page
- *  exists (gbrain/index) — there a page would be orphaned by removal. */
-export function rollbackIngest(root: string, id: string, ops: IngestFileOps): IngestJournalV1 {
-  return withWorkbenchMutationLock(root, () => rollbackIngestImpl(root, id, ops));
+export function rollbackIngest(root: string, id: string, ops: IngestFileOps): IngestJournalV2 {
+  return withIngestMutationLock(root, () => rollbackIngestImpl(root, id, ops));
 }
 
-function rollbackIngestImpl(root: string, id: string, ops: IngestFileOps): IngestJournalV1 {
-  const j = readJournal(root, id);
-  if (j.status === "committed") throw new Error(`ingest ${id} is already committed`);
-  if (isCleanupPending(j)) {
+function rollbackIngestImpl(root: string, id: string, ops: IngestFileOps): IngestJournalV2 {
+  const journal = readJournal(root, id);
+  if (journal.status === "committed") throw new Error(`ingest ${id} is already committed`);
+  if (isCleanupPending(journal)) {
     throw new Error(`ingest ${id}: source cleanup pending; run "${completeRetryCommand(id)}" first`);
   }
-  if (j.status === "failed") throw new Error(`ingest ${id} is already failed`);
-  if (j.status === "gbrain" || j.status === "index") {
+  if (journal.status === "failed") throw new Error(`ingest ${id} is already failed`);
+  if (journal.status === "gbrain" || journal.status === "index") {
     throw new Error(`ingest ${id}: gbrain page already written; rollback would orphan it — continue or repair manually`);
   }
-  if (j.status === "staged") ops.unlink(j.target);
-  const updated = withStamp({ ...j, status: "failed" as IngestStatus, failedStep: "staged", failureReason: "rolled back" });
-  writeJournal(root, updated);
-  return updated;
+
+  const cleanup = safeUnlinkIfIdentity(journal.target, journal.targetHash, ops);
+  const failed = failedJournal(
+    journal,
+    "staged",
+    cleanup.changed
+      ? "rollback refused: staged target changed; both copies were preserved"
+      : "rolled back",
+  );
+  writeJournal(root, failed);
+  return failed;
 }
 
-/** In-progress journals whose source still exists in inbox are resumable:
- *  the next batch continues from the recorded step (no completed step redoes). */
-export function resumableJournals(root: string): IngestJournalV1[] {
-  return readJournals(root).records.filter(
-    (j) => (j.status === "staged" || j.status === "gbrain" || j.status === "index") && existsSync(j.source),
-  );
+export function resumableJournals(root: string): IngestJournalV2[] {
+  return readJournals(root).records.filter((journal) => {
+    if (journal.status !== "staged" && journal.status !== "gbrain" && journal.status !== "index") return false;
+    if (!existsSync(journal.source)) return false;
+    try {
+      return sha256File(journal.source) === journal.sourceHash;
+    } catch {
+      return false;
+    }
+  });
 }

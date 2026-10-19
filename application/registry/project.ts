@@ -11,7 +11,7 @@ import { writeHubAtomic } from "../../adapters/fs/workbench-state.ts";
 import { withWorkbenchMutationLock } from "../lock.ts";
 import { loadHub } from "../workspace/state.ts";
 import { listProjectStates, type ProjectOverview } from "../context/project-states.ts";
-import type { GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
+import type { GbrainDeps } from "../../core/contracts/gbrain.ts";
 
 /** Default owning domain: `filehub init --register` creates this when missing. */
 const DEFAULT_DOMAIN = "files";

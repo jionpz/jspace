@@ -39,23 +39,17 @@ test("three platform backend representative invocations all parse", () => {
   }
 });
 
-test("positional id and --id are equivalent", () => {
-  const pos = parse(["cron", "run", "nightly", "--dir", "/wb"], ROOT);
-  const flag = parse(["cron", "run", "--id", "nightly", "--dir", "/wb"], ROOT);
-  expect((pos as { args: Record<string, unknown> }).args.id).toBe("nightly");
-  expect((flag as { args: Record<string, unknown> }).args.id).toBe("nightly");
-});
-
-test("both --id and positional id is ambiguous", () => {
-  expect(() => parse(["cron", "run", "--id", "a", "b"], ROOT)).toThrow(/ambiguous/);
-});
-
-test("no id (neither --id nor positional) fails at the handler", async () => {
-  const out = parse(["cron", "run"], ROOT);
+test("cron run accepts the canonical --id form", () => {
+  const out = parse(["cron", "run", "--id", "nightly", "--dir", "/wb"], ROOT);
   expect(out.kind).toBe("run");
-  const r = out as { spec: CommandSpec; args: Record<string, unknown> };
-  expect(r.args.id).toBeUndefined();
-  await expect(
-    r.spec.handler!({ json: false, dryRun: false, dir: undefined, root: "/wb", cwd: "/" }, r.args),
-  ).rejects.toThrow(/required: id/);
+  expect((out as { args: Record<string, unknown> }).args.id).toBe("nightly");
+});
+
+test("cron run rejects the retired positional form", () => {
+  expect(() => parse(["cron", "run", "nightly", "--dir", "/wb"], ROOT)).toThrow();
+  expect(() => parse(["cron", "run", "--id", "a", "b"], ROOT)).toThrow();
+});
+
+test("cron run requires --id at parse time", () => {
+  expect(() => parse(["cron", "run"], ROOT)).toThrow(/required/i);
 });

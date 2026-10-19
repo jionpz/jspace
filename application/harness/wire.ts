@@ -56,7 +56,8 @@ export interface HarnessWireDeps {
   resolveWorkbenchSkillsDir: (root: string) => string;
   /** Ensure `.jspace/skills/RESOLVER.md` exists (gbrain's hasResolverFile gate). */
   ensureResolverFile: (skillsDir: string) => boolean;
-  /** Resolve the gbrain binary per harnesses.md: $GBRAIN_BIN → `command -v gbrain` → ~/.bun/bin/gbrain. */
+  /** Resolve the gbrain binary per harnesses.md: $GBRAIN_BIN (executable file) →
+   *  PATH (`command -v gbrain`); null = actionable `no-gbrain-bin` failure. */
   resolveGbrainBin: () => string | null;
   /** When true, skip write/backup and only compute what would change. */
   dryRun?: boolean;
@@ -64,20 +65,30 @@ export interface HarnessWireDeps {
 
 // ---- helpers ----------------------------------------------------------------
 
-/** Default gbrain binary resolver (per harnesses.md): `$GBRAIN_BIN` → PATH
- *  (`which`/`where`) → `~/.bun/bin/gbrain` (win32 `.exe`). Returns null only
- *  when every source is unavailable, so a wire never guesses a path. The CLI
- *  supplies this via deps; tests inject a fake. Pure: env + fs probing are
- *  injected (`binOnPath` returns the resolved path or the bare name when absent). */
-export function defaultGbrainBin(home: string, platform: string, envGbrainBin: string | undefined, binOnPath: (name: string) => string): string | null {
+/** Actionable failure shared by every backend when the gbrain binary is
+ *  unresolved — the override may be unset, or set to something not executable. */
+export const GBRAIN_BIN_UNRESOLVED_REASON =
+  "could not resolve the gbrain binary: set $GBRAIN_BIN to an executable gbrain binary, or install gbrain on PATH; cannot wire the MCP server command";
+
+/** Default gbrain binary resolver: `$GBRAIN_BIN` (accepted only when it is an
+ *  executable file) → PATH (`which`/`where`). It never guesses an install
+ *  directory: a guessed `~/.bun/bin/gbrain` would be written into the harness's
+ *  machine config and only fail later, at MCP spawn time. Returning null is the
+ *  actionable failure (`no-gbrain-bin`), not a silent fallback. The CLI supplies
+ *  this via deps; tests inject a fake. Pure: env + fs probing are injected
+ *  (`binOnPath` returns the resolved path or the bare name when absent). */
+export function defaultGbrainBin(
+  envGbrainBin: string | undefined,
+  binOnPath: (name: string) => string,
+  isExecutableFile: (path: string) => boolean,
+): string | null {
   const envBin = envGbrainBin?.trim();
-  if (envBin) return envBin;
+  if (envBin) return isExecutableFile(envBin) ? envBin : null;
   const onPath = binOnPath("gbrain");
   // resolveHarnessBin falls back to the bare name when absent — a real result
   // differs from the name.
-  if (onPath !== "gbrain") return onPath;
-  const fallback = platform === "win32" ? join(home, ".bun", "bin", "gbrain.exe") : join(home, ".bun", "bin", "gbrain");
-  return fallback;
+  if (onPath === "gbrain") return null;
+  return isExecutableFile(onPath) ? onPath : null;
 }
 
 /** Expand a leading `~` in a declared config path (`~/.cursor/mcp.json` → home-relative). */
@@ -150,11 +161,7 @@ function wireMcpListBackend(cap: HarnessCapability, deps: HarnessWireDeps, root:
   if (cfg === null) return { ok: false, status: "missing-config", reason: `${cap.name} has no mcp_config declared` };
   const bin = deps.resolveGbrainBin();
   if (bin === null) {
-    return {
-      ok: false,
-      status: "no-gbrain-bin",
-      reason: "could not resolve the gbrain binary (set $GBRAIN_BIN, or install gbrain on PATH); cannot wire the MCP server command",
-    };
+    return { ok: false, status: "no-gbrain-bin", reason: GBRAIN_BIN_UNRESOLVED_REASON };
   }
   const path = expandHome(cfg.path, deps.homedir());
   const skillsDir = deps.resolveWorkbenchSkillsDir(root);
@@ -202,7 +209,7 @@ function wireOpencodeBackend(cap: HarnessCapability, deps: HarnessWireDeps, root
   if (cfg === null) return { ok: false, status: "missing-config", reason: `${cap.name} has no mcp_config declared` };
   const bin = deps.resolveGbrainBin();
   if (bin === null) {
-    return { ok: false, status: "no-gbrain-bin", reason: "could not resolve the gbrain binary (set $GBRAIN_BIN, or install gbrain on PATH); cannot wire the MCP server command" };
+    return { ok: false, status: "no-gbrain-bin", reason: GBRAIN_BIN_UNRESOLVED_REASON };
   }
   const path = expandHome(cfg.path, deps.homedir());
   const skillsDir = deps.resolveWorkbenchSkillsDir(root);
@@ -464,7 +471,7 @@ export function wireHarness(harness: string, deps: HarnessWireDeps, root: string
     return {
       ok: false,
       status: "unsupported",
-      reason: `unsupported harness: ${harness} (supported: ${wireHarnessNames().join(", ")}; codex is a cron-compat entry, not a session harness)`,
+      reason: `unsupported harness: ${harness} (supported: ${wireHarnessNames().join(", ")}; codex has no JSpace-managed MCP config — Codex supports MCP natively, but JSpace provides no writer for ~/.codex/config.toml)`,
     };
   }
   return wireCapability(cap, deps, root);

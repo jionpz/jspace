@@ -19,10 +19,10 @@ const MAX_SESSION_START_BYTES = 4 * 1024;
 const SKILL_LIST = skillsManifest.workbench.map((s) => s.name).join(" / ");
 
 /** Open-incident banner (issue #13): put failures at the very top of context
- *  output so a session that does not run `jspace cron check` still sees them. */
+ *  output so a session that does not run `jspace cron failures` still sees them. */
 function incidentBanner(state: WorkbenchState): string {
   if (state.cronIncidents.length === 0) return "";
-  return `⚠️ open incidents: ${state.cronIncidents.length}（jspace cron check）`;
+  return `⚠️ open incidents: ${state.cronIncidents.length}（jspace cron failures）`;
 }
 
 /** Session-start blocks (design §3.1): static pointer, evaluated state,
@@ -93,7 +93,7 @@ export function renderTurn(state: WorkbenchState, opts: TurnOptions = {}): strin
   if (state.cronIncidents.length > 0) {
     const inc = state.cronIncidents[0];
     const id = truncateId(inc.cronId);
-    return `<jspace-state>cron: ${id}[${inc.failureClass}] 失败未确认（jspace cron check）</jspace-state>`;
+    return `<jspace-state>cron: ${id}[${inc.failureClass}] 失败未确认（jspace cron failures）</jspace-state>`;
   }
   if (state.inboxCount > 0) {
     // inbox alone never starves the writeback nudge: when both are pending, emit
@@ -222,7 +222,7 @@ function nextAction(state: WorkbenchState, mode: "start" | "closing" = "start"):
   if (state.pendingCount > 0) actions.push(`先跑 jspace pending apply 落盘 ${state.pendingCount} 笔暂存写`);
   if (state.cronIncidents.length > 0) {
     const inc = state.cronIncidents[0];
-    actions.push(`处理 cron 失败: ${truncateId(inc.cronId)}[${inc.failureClass}]（jspace cron check）`);
+    actions.push(`处理 cron 失败: ${truncateId(inc.cronId)}[${inc.failureClass}]（jspace cron failures）`);
   }
   if (state.inboxCount > 0) actions.push(`inbox 有 ${state.inboxCount} 份待整理，可说「整理一下 inbox」`);
   if (mode === "closing") {

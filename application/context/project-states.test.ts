@@ -1,7 +1,11 @@
 // application/context/project-states.test.ts — R3 project state collection.
 // Run: bun test application/context/project-states.test.ts
 import { expect, test } from "bun:test";
-import type { GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
+import type {
+  GbrainDeps,
+  GbrainListOptions,
+  GbrainListRow,
+} from "../../core/contracts/gbrain.ts";
 import {
   collectActiveProjects,
   collectActiveProfiles,
@@ -15,12 +19,55 @@ import {
   MAX_RECENT_KNOWLEDGE,
 } from "./project-states.ts";
 
-function fakeGbrain(over: Partial<GbrainDeps> = {}): GbrainDeps {
+type TestListResult =
+  | { ok: true; rows: Pick<GbrainListRow, "slug" | "updatedAt">[] }
+  | { ok: false; error?: string };
+
+type TestPageResult =
+  | { ok: true; content: string }
+  | { ok: false };
+
+interface TestOverrides {
+  list?: (opts?: GbrainListOptions) => TestListResult | Promise<TestListResult>;
+  get?: (slug: string) => TestPageResult | Promise<TestPageResult>;
+}
+
+function fakeGbrain(over: TestOverrides = {}): GbrainDeps {
   return {
-    get: async () => ({ ok: false }),
-    put: async () => ({ ok: true }),
-    list: async () => ({ ok: true, rows: [] }),
-    ...over,
+    getPage: async (slug) => {
+      const result = over.get ? await over.get(slug) : { ok: false as const };
+      if (!result.ok) return { ok: false, code: "not_found", message: "not found" };
+      return {
+        ok: true,
+        page: {
+          slug,
+          revision: "revision-1",
+          contentHash: "hash",
+          content: result.content,
+          tags: [],
+        },
+      };
+    },
+    listPages: async (opts) => {
+      const result = over.list ? await over.list(opts) : { ok: true as const, rows: [] };
+      return result.ok
+        ? { ok: true, rows: result.rows }
+        : { ok: false, code: "process_error", message: result.error ?? "list failed" };
+    },
+    putPage: async (input) => ({
+      ok: true,
+      requestId: input.requestId,
+      state: "committed",
+      revision: "revision-1",
+    }),
+    getWriteRequest: async () => ({ ok: false, code: "not_found", message: "not found" }),
+    getBacklinks: async () => ({
+      ok: true,
+      rows: [],
+      total: 0,
+      truncated: false,
+      coverage: { state: "complete", degraded: false },
+    }),
   };
 }
 

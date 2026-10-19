@@ -2,7 +2,7 @@
 // Run: bun test application/context/collect.test.ts
 import { expect, test } from "bun:test";
 import type { HubV1 } from "../../core/contracts/hub.ts";
-import type { PendingWriteEnvelopeV1 } from "../../core/contracts/pending.ts";
+import type { PendingWriteEnvelopeV2 } from "../../core/contracts/pending.ts";
 import { collectWorkbenchState, type CollectDeps } from "./collect.ts";
 
 function stubDeps(over: Partial<CollectDeps> = {}): CollectDeps {
@@ -19,11 +19,15 @@ function stubDeps(over: Partial<CollectDeps> = {}): CollectDeps {
   };
 }
 
-function env(over: Partial<PendingWriteEnvelopeV1>): PendingWriteEnvelopeV1 {
+function env(over: Partial<PendingWriteEnvelopeV2>): PendingWriteEnvelopeV2 {
   return {
-    schema_version: 1,
+    schema_version: 2,
     id: "e",
-    idempotencyKey: "k",
+    requestId: "r",
+    intent: "create",
+    contentHash: "h",
+    contentOrigin: "user_said",
+    sourceId: "s",
     producer: "asset-ingest",
     slug: "s",
     content: "c",

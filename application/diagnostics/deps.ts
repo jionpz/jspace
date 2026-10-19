@@ -18,7 +18,6 @@ export interface CronLike {
 
 export interface CronsDeps {
   loadCrons: (root: string) => { crons: CronLike[] };
-  parseSchedule: (schedule: string) => unknown;
   installedCronIds: (root: string) => string[];
   /** Linux cron health tri-state. `unverifiable` = detection failed in a way
    *  that may be environmental (sandbox / namespace isolation) rather than a
@@ -83,9 +82,4 @@ export interface GovernanceDeps {
 }
 
 /** Combined cron-health injection surface for doctorWorkbench. */
-export interface CronHealthDeps extends CronsDeps, SkillsDeps, GbrainDeps, CursorSkillsDeps, HarnessCheckDeps, SessionHooksDeps, GovernanceDeps {
-  /** Parsed ~/.claude.json (user machine config), or null when missing/invalid.
-   *  Injected so doctor can check the gbrain MCP skills-dir wiring without
-   *  touching the machine-level file itself. */
-  readUserClaudeJson?: () => unknown | null;
-}
+export interface CronHealthDeps extends CronsDeps, SkillsDeps, GbrainDeps, CursorSkillsDeps, HarnessCheckDeps, SessionHooksDeps, GovernanceDeps {}

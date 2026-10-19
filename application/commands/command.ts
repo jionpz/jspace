@@ -1,6 +1,6 @@
 // application/commands/command.ts — declarative CommandSpec framework.
 //
-// Single source for name/aliases/options/positionals/help/handler. The engine
+// Single source for name/options/positionals/help/handler. The engine
 // derives help text, argument collection, validation and dispatch from each
 // spec — no separate CHOICES constants / *_HELP strings / parse switches.
 // Mirrors the argparse surface it replaces (same error wording, exit code 2).
@@ -52,7 +52,6 @@ export interface CommandFeatures {
 
 export interface CommandSpec<T = Record<string, unknown>> {
   name: string;
-  aliases?: string[];
   summary: string; // one line for parent help
   description?: string; // shown after usage (optional)
   features?: CommandFeatures;
@@ -450,9 +449,7 @@ function resolveCommand(
   let rest = argv;
   for (;;) {
     const head = rest[0];
-    const child = (current.children ?? []).find(
-      (c) => c.name === head || (c.aliases ?? []).includes(head),
-    );
+    const child = (current.children ?? []).find((c) => c.name === head);
     if (!child) break;
     prog = `${prog} ${head}`;
     current = child;
@@ -481,7 +478,7 @@ export function parse(
   }
 
   const topChildren = root.children ?? [];
-  const topMatch = topChildren.some((c) => c.name === argv[0] || (c.aliases ?? []).includes(argv[0]));
+  const topMatch = topChildren.some((c) => c.name === argv[0]);
   if (!topMatch) {
     err(rootUsage, progBase, `argument command: invalid choice: '${argv[0]}' (choose from '${topChildren.map((c) => c.name).join("', '")}')`);
   }

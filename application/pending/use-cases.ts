@@ -1,30 +1,46 @@
 // application/pending/use-cases.ts — `jspace pending` use cases.
-// Stage (producer), list, apply (applier) and ack staged gbrain writes stored as
-// typed envelopes in `<filehub>/.jspace-logs/`. Mechanical; the skill calls these
-// when a gbrain write conflicts with the serve lock.
+// Envelopes are workbench-owned state under `.jspace/state/pending/`.
 import { existsSync, readFileSync } from "node:fs";
 import type { CmdResult } from "../commands/command.ts";
+import type { GbrainContentOrigin } from "../../core/contracts/gbrain.ts";
+import type { PendingIntent } from "../../core/contracts/pending.ts";
 import { fail } from "../../core/shared/errors.ts";
-import { resolveFilehubRoot } from "../registry/filehub-lookup.ts";
-import { withFilehubMutationLock } from "../lock.ts";
-import { readEnvelopes, readEnvelope, stageEnvelope, writeEnvelope } from "./envelope.ts";
-import { applyPending } from "./apply.ts";
+import { withPendingMutationLock } from "../lock.ts";
 import { realGbrain, type GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
+import { readEnvelope, readEnvelopes, stageEnvelope, writeEnvelope } from "./envelope.ts";
+import { applyPending } from "./apply.ts";
 
-/** Producer: stage a gbrain write (lock conflict / deferred apply). */
-export function pendingStage(root: string, slug: string, contentFile: string, producer: string): CmdResult {
-  const fh = resolveFilehubRoot(root);
-  if (!fh) fail(`no filehub registered for workbench ${root}`);
-  if (!existsSync(contentFile)) fail(`content file not found: ${contentFile}`);
-  const content = readFileSync(contentFile, "utf-8");
-  const env = stageEnvelope(fh, producer, slug, content);
-  return { lines: [`jspace: ok: staged pending write ${env.id} (${env.slug}, producer ${producer}); apply later with "jspace pending apply"`] };
+export interface PendingStageArgs {
+  slug: string;
+  contentFile: string;
+  producer: string;
+  intent: PendingIntent;
+  contentOrigin: GbrainContentOrigin;
+  expectedRevision?: string;
+}
+
+export function pendingStage(root: string, args: PendingStageArgs): CmdResult {
+  if (!existsSync(args.contentFile)) fail(`content file not found: ${args.contentFile}`);
+  const content = readFileSync(args.contentFile, "utf-8");
+  const env = withPendingMutationLock(root, () =>
+    stageEnvelope(root, {
+      producer: args.producer,
+      slug: args.slug,
+      content,
+      intent: args.intent,
+      contentOrigin: args.contentOrigin,
+      ...(args.expectedRevision !== undefined ? { expectedRevision: args.expectedRevision } : {}),
+    }),
+  );
+  return {
+    lines: [
+      `jspace: ok: staged pending ${env.intent} ${env.id} (${env.slug}, producer ${env.producer}); apply later with "jspace pending apply"`,
+    ],
+  };
 }
 
 export function pendingList(root: string, json: boolean): CmdResult {
-  const fh = resolveFilehubRoot(root);
-  if (!fh) return json ? { lines: [], data: { envelopes: [] } } : { lines: ["jspace: ok: no filehub registered (no pending envelopes)"] };
-  const { records: envs, issues } = readEnvelopes(fh);
+  const { records: envs, issues } = readEnvelopes(root);
   const warnings = issues.map((i) => `pending envelope damaged (${i.path}): ${i.message}`);
   if (json) {
     return { lines: [], data: { envelopes: envs, issues }, warnings: warnings.length > 0 ? warnings : undefined };
@@ -33,38 +49,42 @@ export function pendingList(root: string, json: boolean): CmdResult {
   const lines =
     envs.length === 0
       ? ["jspace: warn: no valid pending envelopes"]
-      : envs.map((e) => `${e.id}  ${e.status}  retry=${e.retryCount}  ${e.slug}  (${e.producer})`);
+      : envs.map(
+          (e) =>
+            `${e.id}  ${e.status}  ${e.intent}  retry=${e.retryCount}  ${e.slug}  (${e.producer})`,
+        );
   return { lines, warnings: warnings.length > 0 ? warnings : undefined };
 }
 
-/** Applier: apply staged envelopes (dedupe / put / retry / terminal-failure). */
-export async function pendingApply(root: string, id: string | undefined, gbrain: GbrainDeps = realGbrain()): Promise<CmdResult> {
-  const fh = resolveFilehubRoot(root);
-  if (!fh) fail(`no filehub registered for workbench ${root}`);
-  const damaged = readEnvelopes(fh).issues;
-  const res = await applyPending(fh, gbrain, id);
+export async function pendingApply(
+  root: string,
+  id: string | undefined,
+  gbrain: GbrainDeps = realGbrain(),
+): Promise<CmdResult> {
+  const damaged = readEnvelopes(root).issues;
+  const res = await applyPending(root, gbrain, id);
+  const attention = res.failed.length + res.terminal.length + damaged.length;
   const lines = [
-    `jspace: ok: pending apply: applied ${res.applied.length}, deduped ${res.deduped.length}, ` +
+    `jspace: ${attention > 0 ? "error" : "ok"}: pending apply: applied ${res.applied.length}, recovered ${res.recovered.length}, ` +
       `failed(retryable) ${res.failed.length}, terminal ${res.terminal.length}, skipped ${res.skipped.length}`,
   ];
   for (const t of res.terminal) {
-    const env = readEnvelope(fh, t);
+    const env = readEnvelope(root, t);
     lines.push(`  [terminal] ${t} ${env.slug}: ${env.error ?? ""} (ack with: jspace pending ack ${t})`);
   }
   const warnings = damaged.map((i) => `pending envelope damaged (${i.path}): ${i.message}`);
-  return { lines, warnings: warnings.length > 0 ? warnings : undefined };
+  return {
+    lines,
+    ...(attention > 0 ? { exitCode: 1 } : {}),
+    ...(warnings.length > 0 ? { warnings } : {}),
+  };
 }
 
-/** Acknowledge a terminal-failed envelope (evidence retained, stops alerting). */
 export function pendingAck(root: string, id: string): CmdResult {
-  const fh = resolveFilehubRoot(root);
-  if (!fh) fail(`no filehub registered for workbench ${root}`);
-  // read(status check) -> write under the filehub lock: an ack racing the
-  // applier could otherwise write a stale snapshot over a fresher status.
-  return withFilehubMutationLock(fh, () => {
-    const env = readEnvelope(fh, id);
+  return withPendingMutationLock(root, () => {
+    const env = readEnvelope(root, id);
     if (env.status !== "terminal_failed") fail(`envelope ${id} is ${env.status}; only terminal_failed can be acked`);
-    writeEnvelope(fh, { ...env, status: "acked" });
+    writeEnvelope(root, { ...env, status: "acked" });
     return { lines: [`jspace: ok: acknowledged pending write ${id} (${env.slug}); evidence retained`] };
   });
 }

@@ -16,6 +16,7 @@ import { projectAdd, projectList, projectListStatus } from "./project.ts";
 import { ingestBegin } from "../ingest/use-cases.ts";
 import { parse, type CmdContext, type CommandSpec } from "../commands/command.ts";
 import { COMMANDS } from "../../cli/commands/registry.ts";
+import type { GbrainDeps } from "../../core/contracts/gbrain.ts";
 
 const initDeps = { resolvePath, expandTilde, isCompiled, devRoot, materialize: materializeTree, manifest: BUNDLE_MANIFEST };
 
@@ -75,7 +76,7 @@ test("project add --dry-run leaves hub.json unchanged", () => {
   expect(loadHub(root).projects.map((p) => p.id)).toEqual(["books"]);
 });
 
-test("registered project removes the ingest not-registered warning", () => {
+test("ingest requires a registered project instead of deriving a fallback owner", () => {
   domainAdd(root, "files", undefined, undefined, undefined, false);
   // register a filehub resource (type=filehub) so ingest can resolve the root
   const fh = join(root, "filehub");
@@ -86,22 +87,27 @@ test("registered project removes the ingest not-registered warning", () => {
   const src = join(fh, "_inbox", "sample.txt");
   writeFileSync(src, "test content");
 
-  const unregistered = ingestBegin(root, {
-    file: src,
-    target: "projects/zeta/sample.txt",
-    slug: "assets/zeta/sample",
-    project: "zeta",
-  });
-  expect(unregistered.lines.some((l) => l.includes("not registered"))).toBe(true);
+  expect(() =>
+    ingestBegin(root, {
+      file: src,
+      target: "projects/zeta/sample.txt",
+      slug: "assets/zeta/sample",
+      ownerKind: "project",
+      ownerId: "zeta",
+      indexLine: "2026-10-18 | sample | assets/zeta/sample",
+    }),
+  ).toThrow(/no registered project/);
 
   projectAdd(root, "books", undefined, undefined, false);
   const registered = ingestBegin(root, {
     file: src,
     target: "projects/books/sample.txt",
     slug: "assets/books/sample",
-    project: "books",
+    ownerKind: "project",
+    ownerId: "books",
+    indexLine: "2026-10-18 | sample | assets/books/sample",
   });
-  expect(registered.lines.some((l) => l.includes("not registered"))).toBe(false);
+  expect(registered.lines.some((l) => l.includes("ingest staged"))).toBe(true);
 });
 
 test("--asset-rel-path argv binds to args.assetRelPath via dest (regression)", () => {
@@ -166,21 +172,51 @@ tags: [project]
 联调
 `;
 
-function gbrainWith(rows: { slug: string; updatedAt: string; content: string }[]) {
+function gbrainWith(rows: { slug: string; updatedAt: string; content: string }[]): GbrainDeps {
   return {
-    get: async (slug: string) => {
+    getPage: async (slug: string) => {
       const r = rows.find((x) => x.slug === slug);
-      return r ? { ok: true, content: r.content } : { ok: false };
+      return r
+        ? {
+            ok: true,
+            page: {
+              slug,
+              revision: "revision-1",
+              contentHash: "a".repeat(64),
+              content: r.content,
+              tags: ["project"],
+            },
+          }
+        : { ok: false, code: "not_found", message: "missing" };
     },
-    put: async () => ({ ok: true }),
-    list: async () => ({ ok: true, rows: rows.map((r) => ({ slug: r.slug, updatedAt: r.updatedAt })) }),
+    listPages: async () => ({
+      ok: true,
+      rows: rows.map((r) => ({ slug: r.slug, title: "", type: "note", updatedAt: r.updatedAt })),
+    }),
+    putPage: async () => ({ ok: false, code: "process_error", message: "not used" }),
+    getWriteRequest: async () => ({ ok: false, code: "not_found", message: "not used" }),
+    getBacklinks: async () => ({
+      ok: true,
+      rows: [],
+      total: 0,
+      truncated: false,
+      coverage: { state: "complete", degraded: false },
+    }),
   };
 }
 
-const EMPTY_GBRAIN = {
-  get: async () => ({ ok: false }),
-  put: async () => ({ ok: true }),
-  list: async () => ({ ok: true, rows: [] }),
+const EMPTY_GBRAIN: GbrainDeps = {
+  getPage: async () => ({ ok: false, code: "not_found", message: "missing" }),
+  listPages: async () => ({ ok: false, code: "process_error", message: "unavailable" }),
+  putPage: async () => ({ ok: false, code: "process_error", message: "not used" }),
+  getWriteRequest: async () => ({ ok: false, code: "not_found", message: "not used" }),
+  getBacklinks: async () => ({
+    ok: true,
+    rows: [],
+    total: 0,
+    truncated: false,
+    coverage: { state: "complete", degraded: false },
+  }),
 };
 
 test("project list --status: state cards first (incl. unregistered code projects) + hub-only cards flagged", async () => {
@@ -190,7 +226,7 @@ test("project list --status: state cards first (incl. unregistered code projects
     { slug: "project/jspace/state", updatedAt: "2026-08-10", content: CARD },
     { slug: "project/wms/state", updatedAt: "2026-08-05", content: CARD2 },
   ]);
-  const r = await projectListStatus(root, false, gbrain as never);
+  const r = await projectListStatus(root, false, gbrain);
   // jspace is a state card (no hub entry); tiyanying-52 is hub-only, flagged.
   expect(r.lines[0]).toContain("jspace");
   expect(r.lines[0]).toContain("本地工作控制平面");
@@ -203,7 +239,7 @@ test("project list --status: state cards first (incl. unregistered code projects
 
 test("project list --status --json returns structured cards", async () => {
   const gbrain = gbrainWith([{ slug: "project/jspace/state", updatedAt: "2026-08-10", content: CARD }]);
-  const r = await projectListStatus(root, true, gbrain as never);
+  const r = await projectListStatus(root, true, gbrain);
   const data = (r.data as { projects: unknown[] }).projects;
   expect(data[0]).toEqual({
     id: "jspace", what: "本地工作控制平面", now: "记忆模型重构实现中", next: "迁移脚本",
@@ -214,7 +250,7 @@ test("project list --status --json returns structured cards", async () => {
 test("project list --status: gbrain unavailable degrades to hub-only list", async () => {
   domainAdd(root, "files", undefined, undefined, undefined, false);
   projectAdd(root, "books", undefined, undefined, false);
-  const r = await projectListStatus(root, false, EMPTY_GBRAIN as never);
+  const r = await projectListStatus(root, false, EMPTY_GBRAIN);
   expect(r.lines[0]).toContain("books");
   expect(r.lines[0]).toContain("无状态卡");
 });

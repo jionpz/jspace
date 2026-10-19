@@ -177,14 +177,9 @@ test("unrecognized option inside a subcommand reports top usage/prog", () => {
   expect(e.message).toBe("unrecognized arguments: --bogus");
 });
 
-test("aliases resolve like the primary name", async () => {
-  const aliasRoot: CommandSpec = {
-    name: "",
-    summary: "",
-    children: [{ ...helloSpec, aliases: ["hi"] }],
-  };
-  const out = parse(["hi", "x"], aliasRoot);
-  expect(out.kind).toBe("run");
+test("removed command names are rejected instead of resolved as aliases", () => {
+  const root: CommandSpec = { name: "", summary: "", children: [helloSpec] };
+  expect(() => parse(["hi", "x"], root)).toThrow(/invalid choice/);
 });
 
 test("--dry-run feature resolves to args.dryRun (dest mapping)", async () => {

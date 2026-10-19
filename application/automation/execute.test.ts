@@ -185,7 +185,7 @@ const hasBatchStaleIncident = (cronId: string) =>
 // inbox-tidy is a skill-target cron: resolveCronPrompt compiles asset-ingest's
 // SKILL.md from the manifest, so the default (empty SKILLS + null readFile) fails
 // at the compile gate before the batch guard. Provide the asset-ingest entry.
-const ASSET_INGEST: SkillsManifestV1 = { schema_version: 1, workbench: [{ name: "asset-ingest", version: "1.0.0", scope: "workbench", dependencies: [], entrypoints: ["batch"] }], global: [] };
+const ASSET_INGEST: SkillsManifestV1 = { schema_version: 1, workbench: [{ name: "asset-ingest", version: "1.0.0", scope: "workbench", entrypoints: ["batch"] }], global: [] };
 const inboxDeps = (over: Partial<ExecuteDeps> = {}): ExecuteDeps => deps({
   skillsManifest: ASSET_INGEST,
   readFile: (p) => (p.endsWith("SKILL.md") ? "# asset-ingest\n" : null),
@@ -281,6 +281,8 @@ test.skipIf(process.platform === "win32")("run record startedAt is the START ins
   // pre-fix this was ~before+2000 (the resolve instant); must now be ~before.
   expect(stampMs(rec.startedAt) - before).toBeLessThan(1500);
   // the prose log still carries the elapsed time, so duration stays readable
-  expect(readFileSync(rec.outputLog, "utf-8")).toMatch(/^duration_sec: [12]$/m);
+  // `sleep 2` guarantees at least two elapsed seconds; CI load can delay the
+  // child beyond the old one-second upper bound.
+  expect(readFileSync(rec.outputLog, "utf-8")).toMatch(/^duration_sec: [2-9][0-9]*$/m);
   expect(rec.outputLog).toContain(rec.startedAt); // filename == the run's instant
 });

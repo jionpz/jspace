@@ -15,6 +15,8 @@ import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import {
   decodeMaterializedJournal,
+  decodeMaterializedJournalV1,
+  type MaterializedJournalV1,
   type MaterializedJournalV2,
   type MaterializedLinkEntry,
 } from "../../core/contracts/materialized.ts";
@@ -28,21 +30,76 @@ export const MATERIALIZED_FILE = join(CONFIG_DIR, "state", "materialized.json");
 export type MaterializedJournal = MaterializedJournalV2;
 export type { MaterializedLinkEntry };
 
-export function readMaterializedJournal(root: string): MaterializedJournal | null {
+export interface MaterializedJournalUpgradeRead {
+  journal: MaterializedJournal | null;
+  legacyV1: MaterializedJournalV1 | null;
+}
+
+function parseJournal(root: string): unknown | null {
   const p = join(root, MATERIALIZED_FILE);
   const raw = safeReadFile(p);
-  if (raw === null) return null; // absent = no known base (old workbench / fresh clone)
-  let parsed: unknown;
+  if (raw === null) return null;
   try {
-    parsed = JSON.parse(raw);
+    return JSON.parse(raw);
   } catch (e) {
     fail(`materialized journal ${p} is not valid JSON (${(e as Error).message}); repair it or run "jspace workspace upgrade" to restore`);
+  }
+}
+
+export function readMaterializedJournal(root: string): MaterializedJournal | null {
+  const p = join(root, MATERIALIZED_FILE);
+  const parsed = parseJournal(root);
+  if (parsed === null) return null; // absent = no known base (old workbench / fresh clone)
+  if (isRecord(parsed) && parsed.schema_version === 1) {
+    const legacy = decodeMaterializedJournalV1(parsed);
+    if (!legacy.ok) {
+      fail(`materialized journal ${p} is damaged: ${legacy.issues.map((i) => i.message).join("; ")}; repair it or run "jspace workspace upgrade" to restore`);
+    }
+    fail(`materialized journal ${p} uses retired schema v1; run "jspace workspace upgrade" to migrate it`);
   }
   const d = decodeMaterializedJournal(parsed);
   if (!d.ok) {
     fail(`materialized journal ${p} is damaged: ${d.issues.map((i) => i.message).join("; ")}; repair it or run "jspace workspace upgrade" to restore`);
   }
   return d.value;
+}
+
+/** Upgrade-only read: accepts a valid v1 as migration input, never from normal
+ *  runtime paths. */
+export function readMaterializedJournalForUpgrade(root: string): MaterializedJournalUpgradeRead {
+  const p = join(root, MATERIALIZED_FILE);
+  const parsed = parseJournal(root);
+  if (parsed === null) return { journal: null, legacyV1: null };
+  if (isRecord(parsed) && parsed.schema_version === 1) {
+    const legacy = decodeMaterializedJournalV1(parsed);
+    if (!legacy.ok) {
+      fail(`materialized journal ${p} is damaged: ${legacy.issues.map((i) => i.message).join("; ")}; repair it or run "jspace workspace upgrade" to restore`);
+    }
+    return { journal: null, legacyV1: legacy.value };
+  }
+  const current = decodeMaterializedJournal(parsed);
+  if (!current.ok) {
+    fail(`materialized journal ${p} is damaged: ${current.issues.map((i) => i.message).join("; ")}; repair it or run "jspace workspace upgrade" to restore`);
+  }
+  return { journal: current.value, legacyV1: null };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+export function migrateMaterializedJournalV1(legacy: MaterializedJournalV1): MaterializedJournal {
+  return {
+    schema_version: 2,
+    asset_version: legacy.asset_version,
+    applied_at: legacy.applied_at,
+    files: legacy.files,
+    links: {},
+  };
+}
+
+export function serializeMaterializedJournal(journal: MaterializedJournal): string {
+  return JSON.stringify(journal, null, 2) + "\n";
 }
 
 function writeJournal(

@@ -21,7 +21,7 @@ function writeFile(p: string, content: string): void {
 }
 
 const validJournal = () =>
-  JSON.stringify({ schema_version: 1, asset_version: "v1.0.5", applied_at: "2026-08-04", files: { "AGENTS.md": { sha256: "abc" } } });
+  JSON.stringify({ schema_version: 2, asset_version: "v1.0.5", applied_at: "2026-08-04", files: { "AGENTS.md": { sha256: "abc" } }, links: {} });
 
 test("readMaterializedJournal: missing -> null (no known base); valid -> value; damaged -> fail loud", () => {
   const root = wb();

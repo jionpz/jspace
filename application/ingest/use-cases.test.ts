@@ -1,236 +1,424 @@
-// application/ingest/use-cases.test.ts — `jspace ingest` use cases end-to-end
-// against a temp workbench with a registered filehub + project (real fs ops,
-// temp fixture only — never a real filehub).
-// Run: bun test application/ingest/use-cases.test.ts
+// application/ingest/use-cases.test.ts — end-to-end ingest use cases against
+// an isolated workbench/filehub and a fake gbrain port.
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { join } from "node:path";
+import type { GbrainDeps, GbrainPageResult } from "../../core/contracts/gbrain.ts";
 import { readJournals } from "./journal.ts";
-import { ingestAdvance, ingestBegin, ingestFail, ingestList, ingestRollback, ingestStatus } from "./use-cases.ts";
+import {
+  ingestAdvance,
+  ingestBegin,
+  ingestFail,
+  ingestList,
+  ingestRollback,
+  ingestStatus,
+  type IngestBeginArgs,
+} from "./use-cases.ts";
 
-let wb: string;
-let fh: string;
+let workbench: string;
+let filehub: string;
 let inbox: string;
-let projDir: string;
+let projectRoot: string;
+
 beforeEach(() => {
-  wb = mkdtempSync(join(tmpdir(), "jspace-ingest-uc-"));
-  fh = join(wb, "filehub");
-  projDir = join(fh, "projects", "foo");
-  mkdirSync(projDir, { recursive: true });
-  inbox = join(fh, "_inbox");
+  workbench = mkdtempSync(join(tmpdir(), "jspace-ingest-uc-"));
+  filehub = join(workbench, "filehub");
+  inbox = join(filehub, "_inbox");
+  projectRoot = join(filehub, "projects", "foo");
   mkdirSync(inbox, { recursive: true });
-  mkdirSync(join(wb, ".jspace"), { recursive: true });
+  mkdirSync(projectRoot, { recursive: true });
+  mkdirSync(join(filehub, "areas", "books"), { recursive: true });
+  writeFileSync(join(projectRoot, "index.md"), "# Index\n");
+  writeFileSync(join(filehub, "areas", "books", "index.md"), "# Books\n");
+  mkdirSync(join(workbench, ".jspace"), { recursive: true });
   writeFileSync(
-    join(wb, ".jspace", "hub.json"),
+    join(workbench, ".jspace", "hub.json"),
     JSON.stringify({
       schema_version: 1,
       domains: [{ id: "files", path: "workspace/files" }],
-      resources: [{ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] }],
+      resources: [
+        {
+          id: "filehub",
+          type: "filehub",
+          domain: "files",
+          entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }],
+        },
+      ],
       projects: [{ id: "foo", domain: "files", asset_rel_path: "projects/foo", status: "active" }],
     }),
   );
-  writeFileSync(join(wb, ".jspace", "local.json"), JSON.stringify({ schema_version: 1, installation_id: "inst", bindings: { "filehub-path": fh } }));
+  writeFileSync(
+    join(workbench, ".jspace", "local.json"),
+    JSON.stringify({ schema_version: 1, installation_id: "inst", bindings: { "filehub-path": filehub } }),
+  );
 });
-afterEach(() => rmSync(wb, { recursive: true, force: true }));
+
+afterEach(() => {
+  rmSync(workbench, { recursive: true, force: true });
+});
 
 function sourceFile(name = "doc.txt", content = "ingestable content\n"): string {
-  const p = join(inbox, name);
-  writeFileSync(p, content, "utf-8");
-  return p;
+  const path = join(inbox, name);
+  writeFileSync(path, content, "utf-8");
+  return path;
+}
+
+function args(source: string, over: Partial<IngestBeginArgs> = {}): IngestBeginArgs {
+  return {
+    file: source,
+    target: "projects/foo/2026-10-18-doc.txt",
+    slug: "assets/foo/doc",
+    ownerKind: "project",
+    ownerId: "foo",
+    indexLine: "2026-10-18 | doc.txt | assets/foo/doc",
+    ...over,
+  };
 }
 
 function journalId(): string {
-  return readJournals(wb).records[0].id;
+  return readJournals(workbench).records[0].id;
 }
 
-test("begin stages a copy, keeps source, uses registered project id (no warning)", () => {
-  const src = sourceFile();
-  const target = join(projDir, "2026-08-04-doc.txt");
-  const res = ingestBegin(wb, { file: src, target, slug: "assets/foo/doc", project: "foo" });
-  expect(res.lines.some((l) => l.includes("ingest staged"))).toBe(true);
-  expect(res.lines.some((l) => l.includes("warn: project"))).toBe(false); // registered
-  expect(readJournals(wb).records[0].projectId).toBe("foo");
-  expect(existsSync(target)).toBe(true); // staged copy
-  expect(existsSync(src)).toBe(true); // source stays in inbox
+function pageFor(
+  slug: string,
+  content: string,
+  over: Partial<Extract<GbrainPageResult, { ok: true }>["page"]> = {},
+): Extract<GbrainPageResult, { ok: true }> {
+  return {
+    ok: true,
+    page: {
+      slug,
+      revision: "revision-4",
+      contentHash: "d".repeat(64),
+      content,
+      tags: ["asset", "source:session"],
+      type: "note",
+      ...over,
+    },
+  };
+}
+
+function fakeGbrain(result: (slug: string) => Promise<GbrainPageResult>): GbrainDeps {
+  return {
+    getPage: result,
+    listPages: async () => ({ ok: true, rows: [] }),
+    putPage: async () => ({ ok: false, code: "process_error", message: "not used" }),
+    getWriteRequest: async () => ({ ok: false, code: "not_found", message: "not used" }),
+    getBacklinks: async () => ({
+      ok: true,
+      rows: [],
+      total: 0,
+      truncated: false,
+      coverage: { state: "complete", degraded: false },
+    }),
+  };
+}
+
+function assetPage(relPath: string, ownerId = "foo", ownerKind = "project"): string {
+  return [
+    "---",
+    "type: note",
+    "source: codex",
+    `project: ${ownerId}`,
+    `owner_kind: ${ownerKind}`,
+    "tags: [asset, source:session]",
+    `rel_path: ${relPath}`,
+    "---",
+    "# Doc",
+    "",
+    "## Pointer",
+    relPath,
+  ].join("\n");
+}
+
+test("begin derives the project index, stages under the registered asset root and keeps source", () => {
+  const source = sourceFile();
+  const result = ingestBegin(workbench, args(source));
+  expect(result.lines.some((line) => line.includes("ingest staged"))).toBe(true);
+  const journal = readJournals(workbench).records[0];
+  expect(journal.ownerKind).toBe("project");
+  expect(journal.ownerId).toBe("foo");
+  expect(journal.indexPath).toBe("projects/foo/index.md");
+  expect(journal.relPath).toBe("projects/foo/2026-10-18-doc.txt");
+  expect(existsSync(join(projectRoot, "2026-10-18-doc.txt"))).toBe(true);
+  expect(existsSync(source)).toBe(true);
 });
 
-test("unregistered project derives id + warns", () => {
-  const src = sourceFile();
-  const res = ingestBegin(wb, { file: src, target: join(projDir, "x.txt"), slug: "assets/foo/x", project: "Acme 报价" });
-  expect(res.lines.some((l) => l.includes("warn: project Acme 报价 is not registered"))).toBe(true);
-  expect(readJournals(wb).records[0].projectId).toBe("acme"); // Latin prefix slugs; pure CJK uses hash fallback (see project.test.ts)
+test("unregistered project is rejected instead of deriving a fake owner", () => {
+  const source = sourceFile();
+  expect(() => ingestBegin(workbench, args(source, { ownerId: "missing" }))).toThrow(/no registered project/);
 });
 
-test("begin rejects a source outside the filehub inbox (issue #8 #4)", () => {
-  const outside = join(wb, "outside.txt"); // in the workbench but NOT under filehub/_inbox
-  writeFileSync(outside, "secret\n", "utf-8");
-  const target = join(projDir, "x.txt");
-  expect(() => ingestBegin(wb, { file: outside, target, slug: "assets/foo/x", project: "foo" })).toThrow(/filehub inbox/);
+test("area owner uses an existing area and its derived index", () => {
+  const source = sourceFile();
+  const result = ingestBegin(
+    workbench,
+    args(source, {
+      ownerKind: "area",
+      ownerId: "books",
+      target: "areas/books/topics/doc.txt",
+      slug: "assets/books/doc",
+      indexLine: "2026-10-18 | doc.txt | assets/books/doc",
+    }),
+  );
+  expect(result.lines.some((line) => line.includes("owner=area:books"))).toBe(true);
+  expect(readJournals(workbench).records[0].indexPath).toBe("areas/books/index.md");
 });
 
-test("begin refuses a target that escapes the filehub via directory symlink", () => {
-  const outside = join(wb, "outside-dir");
-  mkdirSync(outside);
-  const evil = join(fh, "projects", "evil");
-  symlinkSync(outside, evil);
-  const src = sourceFile("sym.txt");
+test("missing area is rejected rather than silently creating a new taxonomy", () => {
+  const source = sourceFile();
   expect(() =>
-    ingestBegin(wb, { file: src, target: join(evil, "leaked.txt"), slug: "assets/foo/x", project: "foo" }),
-  ).toThrow(/filehub root/);
-  expect(existsSync(join(outside, "leaked.txt"))).toBe(false);
+    ingestBegin(
+      workbench,
+      args(source, {
+        ownerKind: "area",
+        ownerId: "new-area",
+        target: "areas/new-area/doc.txt",
+        slug: "assets/new-area/doc",
+      }),
+    ),
+  ).toThrow(/no existing area/);
 });
 
-test("begin stores an absolute source in the journal (issue #8 #4)", () => {
-  const src = sourceFile();
-  ingestBegin(wb, { file: src, target: join(projDir, "x.txt"), slug: "assets/foo/x", project: "foo" });
-  expect(isAbsolute(readJournals(wb).records[0].source)).toBe(true);
+test("target must stay inside the declared project/area root", () => {
+  const source = sourceFile();
+  expect(() =>
+    ingestBegin(workbench, args(source, { target: "areas/books/doc.txt" })),
+  ).toThrow(/must be inside projects\/foo/);
 });
 
-test("complete refuses to unlink a tampered source outside the filehub (issue #8 #4)", () => {
-  const src = sourceFile();
-  ingestBegin(wb, { file: src, target: join(projDir, "x.txt"), slug: "assets/foo/x", project: "foo" });
+test("source must be inside the filehub inbox", () => {
+  const outside = join(workbench, "outside.txt");
+  writeFileSync(outside, "secret\n");
+  expect(() => ingestBegin(workbench, args(outside))).toThrow(/filehub inbox/);
+});
+
+test("target symlink escaping the filehub is rejected", () => {
+  const outside = join(workbench, "outside");
+  mkdirSync(outside);
+  symlinkSync(outside, join(projectRoot, "escape"));
+  const source = sourceFile();
+  expect(() =>
+    ingestBegin(workbench, args(source, { target: "projects/foo/escape/doc.txt" })),
+  ).toThrow(/under the filehub root/);
+  expect(existsSync(join(outside, "doc.txt"))).toBe(false);
+});
+
+test("existing target is a visible conflict and is never overwritten", () => {
+  const source = sourceFile();
+  const target = join(projectRoot, "2026-10-18-doc.txt");
+  writeFileSync(target, "existing bytes\n");
+  const result = ingestBegin(workbench, args(source));
+  expect(result.exitCode).toBe(1);
+  expect(readFileSync(target, "utf-8")).toBe("existing bytes\n");
+  expect(readJournals(workbench).records).toHaveLength(0);
+});
+
+test("index line must identify both the asset and slug", () => {
+  const source = sourceFile();
+  expect(() =>
+    ingestBegin(workbench, args(source, { indexLine: "unrelated line" })),
+  ).toThrow(/must contain the exact gbrain slug/);
+});
+
+test("gbrain checkpoint requires a real page readback and metadata match", async () => {
+  const source = sourceFile();
+  ingestBegin(workbench, args(source));
   const id = journalId();
-  ingestAdvance(wb, id, "gbrain");
-  ingestAdvance(wb, id, "index");
-  // tamper the journal: point source at a file outside the filehub
-  const outside = join(wb, "outside.txt");
-  writeFileSync(outside, "secret\n", "utf-8");
-  const journalPath = join(wb, ".jspace", "state", "ingest", `${id}.json`);
-  const j = JSON.parse(readFileSync(journalPath, "utf-8"));
-  j.source = outside;
-  writeFileSync(journalPath, JSON.stringify(j), "utf-8");
-  // the unlink guard surfaces as a cleanup-pending result (source NOT removed)
-  const res = ingestAdvance(wb, id, "committed");
-  expect(existsSync(outside)).toBe(true); // the out-of-filehub file was NOT deleted
-  expect(res.exitCode).toBe(1);
-  expect(res.lines.join("\n")).toContain("source NOT removed");
-  expect(JSON.parse(readFileSync(journalPath, "utf-8")).failureReason).toContain("outside the filehub");
+  await expect(
+    ingestAdvance(
+      workbench,
+      id,
+      "gbrain",
+      fakeGbrain(async () => ({ ok: false, code: "not_found", message: "page missing" })),
+    ),
+  ).rejects.toThrow(/readback failed/);
+  expect(readJournals(workbench).records[0].status).toBe("staged");
+
+  await expect(
+    ingestAdvance(
+      workbench,
+      id,
+      "gbrain",
+      fakeGbrain(async (slug) => pageFor(slug, assetPage("projects/foo/other.txt"))),
+    ),
+  ).rejects.toThrow(/rel_path/);
+  expect(readJournals(workbench).records[0].status).toBe("staged");
 });
 
-test("full chain begin→gbrain→index→committed removes source from inbox", () => {
-  const src = sourceFile();
-  const target = join(projDir, "2026-08-04-doc.txt");
-  ingestBegin(wb, { file: src, target, slug: "assets/foo/doc", project: "foo" });
+test("successful gbrain readback stores evidence and advances", async () => {
+  const source = sourceFile();
+  ingestBegin(workbench, args(source));
   const id = journalId();
-  expect(ingestAdvance(wb, id, "gbrain").lines[0]).toContain("-> gbrain");
-  expect(ingestAdvance(wb, id, "index").lines[0]).toContain("-> index");
-  expect(ingestAdvance(wb, id, "committed").lines[0]).toContain("committed");
-  expect(existsSync(src)).toBe(false); // source removed at commit
-  expect(readJournals(wb).records[0].status).toBe("committed");
+  const page = assetPage("projects/foo/2026-10-18-doc.txt");
+  const result = await ingestAdvance(
+    workbench,
+    id,
+    "gbrain",
+    fakeGbrain(async (slug) => pageFor(slug, page)),
+  );
+  expect(result.lines[0]).toContain("-> gbrain");
+  const journal = readJournals(workbench).records[0];
+  expect(journal.status).toBe("gbrain");
+  expect(journal.gbrainEvidence?.revision).toBe("revision-4");
+  expect(journal.gbrainEvidence?.relPath).toBe(journal.relPath);
 });
 
-test("fail at staged compensates (target removed, source stays), exitCode 1", () => {
-  const src = sourceFile();
-  const target = join(projDir, "2026-08-04-doc.txt");
-  ingestBegin(wb, { file: src, target, slug: "assets/foo/doc", project: "foo" });
+test("gbrain metadata missing asset/provenance tags is rejected", async () => {
+  const source = sourceFile();
+  ingestBegin(workbench, args(source));
   const id = journalId();
-  const res = ingestFail(wb, id, "gbrain put failed");
-  expect(res.exitCode).toBe(1);
-  expect(res.lines.some((l) => l.includes("compensated: removed staged target"))).toBe(true);
-  expect(existsSync(target)).toBe(false); // staged copy compensated
-  expect(existsSync(src)).toBe(true); // source stays, retryable
-  expect(readJournals(wb).records[0].status).toBe("failed");
+  const page = assetPage("projects/foo/2026-10-18-doc.txt");
+  await expect(
+    ingestAdvance(
+      workbench,
+      id,
+      "gbrain",
+      fakeGbrain(async (slug) => pageFor(slug, page, { tags: ["asset"] })),
+    ),
+  ).rejects.toThrow(/exactly one/);
+  expect(readJournals(workbench).records[0].status).toBe("staged");
 });
 
-test("duplicate begin after commit is skipped; re-begin of in-progress resumes", () => {
-  const src = sourceFile();
-  const target = join(projDir, "2026-08-04-doc.txt");
-  ingestBegin(wb, { file: src, target, slug: "assets/foo/doc", project: "foo" });
+test("index checkpoint requires the exact line in the derived index", async () => {
+  const source = sourceFile();
+  ingestBegin(workbench, args(source));
   const id = journalId();
-  ingestAdvance(wb, id, "gbrain");
-  ingestAdvance(wb, id, "index");
-  ingestAdvance(wb, id, "committed");
-  const again = ingestBegin(wb, { file: src, target, slug: "assets/foo/doc", project: "foo" });
-  expect(again.lines.some((l) => l.includes("already ingested"))).toBe(true);
-  expect(readJournals(wb).records).toHaveLength(1);
+  await ingestAdvance(
+    workbench,
+    id,
+    "gbrain",
+    fakeGbrain(async (slug) => pageFor(slug, assetPage("projects/foo/2026-10-18-doc.txt"))),
+  );
+  await expect(ingestAdvance(workbench, id, "index")).rejects.toThrow(/does not contain/);
+  expect(readJournals(workbench).records[0].status).toBe("gbrain");
+
+  writeFileSync(join(projectRoot, "index.md"), "# Index\n2026-10-18 | doc.txt | assets/foo/doc\n");
+  const advanced = await ingestAdvance(workbench, id, "index");
+  expect(advanced.lines[0]).toContain("-> index");
+  const journal = readJournals(workbench).records[0];
+  expect(journal.status).toBe("index");
+  expect(journal.indexEvidence?.line).toBe(journal.indexEntry);
 });
 
-test("status json + list report journals", () => {
-  const src = sourceFile();
-  ingestBegin(wb, { file: src, target: join(projDir, "a.txt"), slug: "assets/foo/a", project: "foo" });
+test("full chain removes source only after verified gbrain and index checkpoints", async () => {
+  const source = sourceFile();
+  ingestBegin(workbench, args(source));
   const id = journalId();
-  const s = ingestStatus(wb, id, true);
-  expect((s.data as { status: string }).status).toBe("staged");
-  const list = ingestList(wb, true);
+  await ingestAdvance(
+    workbench,
+    id,
+    "gbrain",
+    fakeGbrain(async (slug) => pageFor(slug, assetPage("projects/foo/2026-10-18-doc.txt"))),
+  );
+  writeFileSync(join(projectRoot, "index.md"), "# Index\n2026-10-18 | doc.txt | assets/foo/doc\n");
+  await ingestAdvance(workbench, id, "index");
+  const complete = await ingestAdvance(
+    workbench,
+    id,
+    "committed",
+    fakeGbrain(async (slug) => pageFor(slug, assetPage("projects/foo/2026-10-18-doc.txt"))),
+  );
+  expect(complete.lines[0]).toContain("committed");
+  expect(existsSync(source)).toBe(false);
+  expect(readJournals(workbench).records[0].status).toBe("committed");
+});
+
+test("staged journal cannot complete", async () => {
+  const source = sourceFile();
+  ingestBegin(workbench, args(source));
+  await expect(ingestAdvance(workbench, journalId(), "committed")).rejects.toThrow(/cannot complete from staged/);
+  expect(existsSync(source)).toBe(true);
+});
+
+test("source change before complete preserves both materials", async () => {
+  const source = sourceFile();
+  ingestBegin(workbench, args(source));
+  const id = journalId();
+  await ingestAdvance(
+    workbench,
+    id,
+    "gbrain",
+    fakeGbrain(async (slug) => pageFor(slug, assetPage("projects/foo/2026-10-18-doc.txt"))),
+  );
+  writeFileSync(join(projectRoot, "index.md"), "# Index\n2026-10-18 | doc.txt | assets/foo/doc\n");
+  await ingestAdvance(workbench, id, "index");
+  writeFileSync(source, "changed before cleanup\n");
+  const result = await ingestAdvance(
+    workbench,
+    id,
+    "committed",
+    fakeGbrain(async (slug) => pageFor(slug, assetPage("projects/foo/2026-10-18-doc.txt"))),
+  );
+  expect(result.exitCode).toBe(1);
+  expect(existsSync(source)).toBe(true);
+  expect(existsSync(join(projectRoot, "2026-10-18-doc.txt"))).toBe(true);
+  expect(readJournals(workbench).records[0].failureReason).toContain("source changed");
+});
+
+test("completion re-reads gbrain and preserves the inbox if the page disappeared", async () => {
+  const source = sourceFile();
+  ingestBegin(workbench, args(source));
+  const id = journalId();
+  await ingestAdvance(
+    workbench,
+    id,
+    "gbrain",
+    fakeGbrain(async (slug) => pageFor(slug, assetPage("projects/foo/2026-10-18-doc.txt"))),
+  );
+  writeFileSync(join(projectRoot, "index.md"), "# Index\n2026-10-18 | doc.txt | assets/foo/doc\n");
+  await ingestAdvance(workbench, id, "index");
+  await expect(
+    ingestAdvance(
+      workbench,
+      id,
+      "committed",
+      fakeGbrain(async () => ({ ok: false, code: "not_found", message: "page removed" })),
+    ),
+  ).rejects.toThrow(/readback failed/);
+  expect(existsSync(source)).toBe(true);
+  expect(readJournals(workbench).records[0].status).toBe("index");
+});
+
+test("fail at staged compensates, while rollback is restricted to staged", () => {
+  const source = sourceFile();
+  ingestBegin(workbench, args(source));
+  const id = journalId();
+  const failed = ingestFail(workbench, id, "write failed");
+  expect(failed.exitCode).toBe(1);
+  expect(existsSync(join(projectRoot, "2026-10-18-doc.txt"))).toBe(false);
+  expect(existsSync(source)).toBe(true);
+
+  const source2 = sourceFile("doc2.txt", "second\n");
+  ingestBegin(
+    workbench,
+    args(source2, {
+      target: "projects/foo/doc2.txt",
+      slug: "assets/foo/doc2",
+      indexLine: "2026-10-18 | doc2.txt | assets/foo/doc2",
+    }),
+  );
+  const secondId = readJournals(workbench).records.find((journal) => journal.relPath.endsWith("doc2.txt"))!.id;
+  const rolled = ingestRollback(workbench, secondId);
+  expect(rolled.lines[0]).toContain("rolled back");
+  expect(existsSync(join(projectRoot, "doc2.txt"))).toBe(false);
+});
+
+test("status/list expose schema-2 owner and checkpoint evidence", () => {
+  const source = sourceFile();
+  ingestBegin(workbench, args(source));
+  const id = journalId();
+  const status = ingestStatus(workbench, id, true);
+  expect((status.data as { ownerKind: string }).ownerKind).toBe("project");
+  const list = ingestList(workbench, true);
   expect((list.data as { journals: unknown[] }).journals).toHaveLength(1);
-});
-
-test("rollback abandons a staged ingest; source stays, target removed", () => {
-  const src = sourceFile();
-  const target = join(projDir, "2026-08-04-doc.txt");
-  ingestBegin(wb, { file: src, target, slug: "assets/foo/doc", project: "foo" });
-  const id = journalId();
-  ingestRollback(wb, id);
-  expect(existsSync(target)).toBe(false);
-  expect(existsSync(src)).toBe(true);
-  expect(readJournals(wb).records[0].status).toBe("failed");
-});
-
-// ---- cleanup-pending recovery ----
-
-/** Replace the source file with a directory so a real unlinkSync throws on every
- *  platform — forces the cleanup-pending path through the real fs ops. */
-function blockSourceRemoval(src: string): void {
-  rmSync(src, { force: true });
-  mkdirSync(src, { recursive: true });
-}
-
-test("ingestAdvance reports unlink failure as non-zero with a retry action, then recovers", () => {
-  const src = sourceFile();
-  const target = join(projDir, "2026-08-04-doc.txt");
-  ingestBegin(wb, { file: src, target, slug: "assets/foo/doc", project: "foo" });
-  const id = journalId();
-  ingestAdvance(wb, id, "gbrain");
-  ingestAdvance(wb, id, "index");
-  blockSourceRemoval(src);
-  const res = ingestAdvance(wb, id, "committed");
-  expect(res.exitCode).toBe(1);
-  expect(res.lines.some((l) => l.includes("source NOT removed"))).toBe(true);
-  expect(res.lines.some((l) => l.includes("--complete"))).toBe(true); // exact retry action
-  expect(res.errors?.some((e) => e.includes("source cleanup failed"))).toBe(true);
-  const j = readJournals(wb).records[0];
-  expect(j.status).toBe("failed");
-  expect(j.failedStep).toBe("committed"); // cleanup-pending machine state
-  expect(j.failureReason).toContain("source cleanup pending");
-  // clear the blocking dir -> source absent -> the SAME --complete converges
-  rmSync(src, { recursive: true, force: true });
-  const res2 = ingestAdvance(wb, id, "committed");
-  expect(res2.exitCode ?? 0).toBe(0);
-  expect(readJournals(wb).records[0].status).toBe("committed");
-});
-
-test("ingestBegin on a cleanup-pending source directs to finish cleanup, no second journal", () => {
-  const src = sourceFile();
-  const target = join(projDir, "2026-08-04-doc.txt");
-  ingestBegin(wb, { file: src, target, slug: "assets/foo/doc", project: "foo" });
-  const id = journalId();
-  ingestAdvance(wb, id, "gbrain");
-  ingestAdvance(wb, id, "index");
-  blockSourceRemoval(src);
-  expect(ingestAdvance(wb, id, "committed").exitCode).toBe(1); // leave cleanup pending
-  const again = ingestBegin(wb, { file: src, target, slug: "assets/foo/doc", project: "foo" });
-  expect(again.exitCode).toBe(1);
-  expect(again.lines.some((l) => l.includes("--complete"))).toBe(true);
-  expect(readJournals(wb).records).toHaveLength(1); // no second journal / re-stage
-});
-
-test("ingest list/status surface cleanup-pending and its retry action; JSON shape unchanged", () => {
-  const src = sourceFile();
-  const target = join(projDir, "2026-08-04-doc.txt");
-  ingestBegin(wb, { file: src, target, slug: "assets/foo/doc", project: "foo" });
-  const id = journalId();
-  ingestAdvance(wb, id, "gbrain");
-  ingestAdvance(wb, id, "index");
-  blockSourceRemoval(src);
-  expect(ingestAdvance(wb, id, "committed").exitCode).toBe(1); // leave cleanup pending
-  const st = ingestStatus(wb, id, false);
-  expect(st.lines.some((l) => l.includes("cleanup pending"))).toBe(true);
-  expect(st.lines.some((l) => l.includes("--complete"))).toBe(true);
-  const list = ingestList(wb, false);
-  expect(list.lines.some((l) => l.includes("failed/cleanup-pending"))).toBe(true);
-  // --json shape is unchanged: status=failed + failedStep=committed, no new fields
-  const js = ingestStatus(wb, id, true).data as { status: string; failedStep?: string };
-  expect(js.status).toBe("failed");
-  expect(js.failedStep).toBe("committed");
 });

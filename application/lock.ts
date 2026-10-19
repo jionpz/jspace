@@ -116,12 +116,16 @@ export function acquireLockWithClock(
  *  shorter than the minute-level cron execution lock. */
 export const MUTATION_LOCK_STALE_MS = 30_000;
 
-/** Pending-envelope apply holds the lock across one gbrain call, whose own
- *  timeout is GBRAIN_TIMEOUT_MS (30s). The stale budget must stay strictly
- *  above that, or a slow-but-alive applier would be mistaken for crash residue
- *  and have its lock stolen mid-await. 4x is the margin; the coupling is
- *  asserted in application/lock.test.ts. */
-export const FILEHUB_MUTATION_LOCK_STALE_MS = 120_000;
+/** Pending writes moved into the owning workbench and can await one gbrain
+ *  call. Use a separate lock from ordinary workbench mutations so a slow
+ *  backend does not block registry edits for the same duration. The stale
+ *  budget must stay above GBRAIN_TIMEOUT_MS or a live applier could be mistaken
+ *  for crash residue and have its lock stolen mid-await. */
+export const PENDING_MUTATION_LOCK_STALE_MS = 120_000;
+
+/** Ingest advance may hold the journal lock across one gbrain read (30s).
+ *  It uses a dedicated lock so it never blocks ordinary registry mutations. */
+export const INGEST_MUTATION_LOCK_STALE_MS = 120_000;
 
 export interface MutationLockDeps {
   fs?: LockFs;
@@ -137,11 +141,12 @@ export function mutationLockPath(root: string): string {
   return join(root, ".jspace", "state", "locks", "mutation.lock");
 }
 
-/** Pending envelopes live in `<filehub>/.jspace-logs/`. The lock sits next to
- *  them, NOT in the workbench: several workbenches can bind the same filehub,
- *  so a workbench-scoped lock would not serialize envelope writers at all. */
-export function filehubMutationLockPath(fhRoot: string): string {
-  return join(fhRoot, ".jspace-logs", "mutation.lock");
+export function pendingMutationLockPath(root: string): string {
+  return join(root, ".jspace", "state", "locks", "pending.lock");
+}
+
+export function ingestMutationLockPath(root: string): string {
+  return join(root, ".jspace", "state", "locks", "ingest.lock");
 }
 
 interface MutationLockSpec {
@@ -217,30 +222,69 @@ export function withWorkbenchMutationLock<T>(
   );
 }
 
-/** Filehub-scoped variant for `<filehub>/.jspace-logs/` state (pending
- *  envelopes). Sync, for short state transitions. */
-export function withFilehubMutationLock<T>(
-  fhRoot: string,
+export function withPendingMutationLock<T>(
+  root: string,
   fn: () => T,
   deps: MutationLockDeps = {},
 ): T {
   return withMutationLock(
-    { lockPath: filehubMutationLockPath(fhRoot), key: fhRoot, noun: "filehub", staleMs: FILEHUB_MUTATION_LOCK_STALE_MS },
+    {
+      lockPath: pendingMutationLockPath(root),
+      key: root,
+      noun: "workbench pending state",
+      staleMs: PENDING_MUTATION_LOCK_STALE_MS,
+    },
     fn,
     deps,
   );
 }
 
-/** Async variant: the pending applier awaits an external gbrain call inside the
- *  lock. Hold the lock for ONE envelope, never an unbounded batch — the stale
- *  budget is sized for a single call (see FILEHUB_MUTATION_LOCK_STALE_MS). */
-export function withFilehubMutationLockAsync<T>(
-  fhRoot: string,
+export function withPendingMutationLockAsync<T>(
+  root: string,
   fn: () => Promise<T>,
   deps: MutationLockDeps = {},
 ): Promise<T> {
   return withMutationLockAsync(
-    { lockPath: filehubMutationLockPath(fhRoot), key: fhRoot, noun: "filehub", staleMs: FILEHUB_MUTATION_LOCK_STALE_MS },
+    {
+      lockPath: pendingMutationLockPath(root),
+      key: root,
+      noun: "workbench pending state",
+      staleMs: PENDING_MUTATION_LOCK_STALE_MS,
+    },
+    fn,
+    deps,
+  );
+}
+
+export function withIngestMutationLock<T>(
+  root: string,
+  fn: () => T,
+  deps: MutationLockDeps = {},
+): T {
+  return withMutationLock(
+    {
+      lockPath: ingestMutationLockPath(root),
+      key: root,
+      noun: "workbench ingest state",
+      staleMs: INGEST_MUTATION_LOCK_STALE_MS,
+    },
+    fn,
+    deps,
+  );
+}
+
+export function withIngestMutationLockAsync<T>(
+  root: string,
+  fn: () => Promise<T>,
+  deps: MutationLockDeps = {},
+): Promise<T> {
+  return withMutationLockAsync(
+    {
+      lockPath: ingestMutationLockPath(root),
+      key: root,
+      noun: "workbench ingest state",
+      staleMs: INGEST_MUTATION_LOCK_STALE_MS,
+    },
     fn,
     deps,
   );

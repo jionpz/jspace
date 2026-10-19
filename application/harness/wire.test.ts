@@ -4,7 +4,7 @@
 // can carry provider apiKeys), backup-on-write, no-gbrain-bin, unsupported.
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { wireCapability, wireHarness, describeCapability, type HarnessWireDeps, type WirePlan } from "./wire.ts";
+import { wireCapability, wireHarness, describeCapability, defaultGbrainBin, type HarnessWireDeps, type WirePlan } from "./wire.ts";
 import { getCapability } from "../../adapters/harness/registry.ts";
 
 const HOME = "/Users/t";
@@ -454,5 +454,34 @@ describe("harness wire — grok (reuses application/gbrain/grok-wiring.ts)", () 
     const r = wireHarness("grok", deps, ROOT);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.status).toBe("missing-config");
+  });
+});
+
+// The resolver red line (legacy-removal audit A7): never guess an install
+// directory. A guessed `~/.bun/bin/gbrain` would be written into the harness's
+// machine config and only fail later, at MCP spawn time.
+describe("defaultGbrainBin", () => {
+  const usable = () => true;
+  const unusable = () => false;
+
+  test("$GBRAIN_BIN wins when it is an executable file", () => {
+    expect(defaultGbrainBin("/opt/gbrain", () => "/usr/local/bin/gbrain", usable)).toBe("/opt/gbrain");
+  });
+
+  test("a broken $GBRAIN_BIN fails instead of falling back to PATH", () => {
+    // An explicit override that cannot run must be surfaced, not silently
+    // replaced by another binary the user did not choose.
+    expect(defaultGbrainBin("/opt/not-executable", () => "/usr/local/bin/gbrain", unusable)).toBeNull();
+  });
+
+  test("PATH result is used when $GBRAIN_BIN is unset", () => {
+    expect(defaultGbrainBin(undefined, () => "/usr/local/bin/gbrain", usable)).toBe("/usr/local/bin/gbrain");
+    expect(defaultGbrainBin("   ", () => "/usr/local/bin/gbrain", usable)).toBe("/usr/local/bin/gbrain");
+  });
+
+  test("PATH miss returns null — the ~/.bun/bin/gbrain guess is gone", () => {
+    // binOnPath returns the bare name when `which`/`where` found nothing.
+    expect(defaultGbrainBin(undefined, () => "gbrain", usable)).toBeNull();
+    expect(defaultGbrainBin(undefined, () => "/stale/gbrain", unusable)).toBeNull();
   });
 });

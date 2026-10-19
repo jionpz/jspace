@@ -7,7 +7,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { HubV1 } from "../../core/contracts/hub.ts";
 import type { IncidentCollection } from "../automation/incidents.ts";
-import type { PendingWriteEnvelopeV1 } from "../../core/contracts/pending.ts";
+import type { PendingWriteEnvelopeV2 } from "../../core/contracts/pending.ts";
 import type { ContractIssue } from "../../core/contracts/diagnostics.ts";
 import { readIncidents } from "../automation/incidents.ts";
 import { readJournals } from "../ingest/journal.ts";
@@ -58,7 +58,7 @@ export interface CollectDeps {
   readHub: (root: string) => HubV1;
   hubOk: (root: string) => boolean;
   resolveFilehubRoot: (root: string) => string | null;
-  readEnvelopes: (fhRoot: string) => { records: PendingWriteEnvelopeV1[]; issues: ContractIssue[] };
+  readEnvelopes: (root: string) => { records: PendingWriteEnvelopeV2[]; issues: ContractIssue[] };
   readIncidents: (root: string) => IncidentCollection;
   /** Count files in the filehub _inbox (0 when absent/empty). Resolves the
    *  filehub root itself, so it takes root — kept in deps so the collector
@@ -135,19 +135,22 @@ export function collectWorkbenchState(root: string, deps: CollectDeps = realDeps
     state.hubBroken = true;
   }
 
-  // filehub-backed: pending envelopes + inbox (same resolution as pending/ingest).
+  // Pending writes are workbench-owned and independent of filehub registration.
   try {
-    const fh = deps.resolveFilehubRoot(root);
-    if (fh !== null) {
-      const { records, issues } = deps.readEnvelopes(fh);
-      const actionable = records.filter((e) => e.status === "staged" || e.status === "terminal_failed");
-      state.pendingCount = actionable.length;
-      state.pendingProducers = [...new Set(actionable.map((e) => e.producer))];
-      state.pendingDamaged = issues.length;
-      state.inboxCount = deps.readInboxCount(root);
-    }
+    const { records, issues } = deps.readEnvelopes(root);
+    const actionable = records.filter((e) => e.status === "staged" || e.status === "terminal_failed");
+    state.pendingCount = actionable.length;
+    state.pendingProducers = [...new Set(actionable.map((e) => e.producer))];
+    state.pendingDamaged = issues.length;
   } catch {
-    // filehub unreadable: fields stay at defaults
+    // pending state unreadable: fields stay at defaults
+  }
+
+  // Filehub inbox is a separate concern; a missing filehub does not disable pending.
+  try {
+    if (deps.resolveFilehubRoot(root) !== null) state.inboxCount = deps.readInboxCount(root);
+  } catch {
+    // filehub unreadable: inbox stays at its default
   }
 
   // cron incidents.

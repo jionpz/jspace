@@ -1,12 +1,11 @@
 // application/automation/status.ts — cron status / failures / check surface
 // (moved from cli/cron.ts). Returns CmdResult so the CLI layer never prints
 // directly; the "needs attention" exit rides the exitCode field (the workbench
-// SessionStart hook probes `jspace cron check`'s exit 1).
+// SessionStart hook probes `jspace cron failures`' exit 1).
 import { join } from "node:path";
 import type { CmdResult } from "../commands/command.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import type { ContractIssue } from "../../core/contracts/diagnostics.ts";
-import { resolveFilehubRoot } from "../registry/filehub-lookup.ts";
 import { loadCrons } from "./definitions.ts";
 import { lastRun, readRuns } from "./runs.ts";
 import { readIncidents } from "./incidents.ts";
@@ -18,15 +17,14 @@ export function cronLogDir(root: string, id: string): string {
 }
 
 /** Find actionable pending gbrain writes: staged (needs apply) or
- *  terminal_failed (needs ack) envelopes in <filehub>/.jspace-logs/*.APPLY.json.
+ *  terminal_failed (needs ack) envelopes in
+ *  <workbench>/.jspace/state/pending/*.APPLY.json.
  *  Applied/acked envelopes no longer alert. Damaged envelope files are surfaced
  *  via issues (like damaged incidents/runs), never silently dropped. */
-export function findPendingApplies(root: string): { root: string | null; paths: string[]; issues: ContractIssue[] } {
-  const fh = resolveFilehubRoot(root);
-  if (!fh) return { root: null, paths: [], issues: [] };
-  const { records, issues } = readEnvelopes(fh);
+export function findPendingApplies(root: string): { root: string; paths: string[]; issues: ContractIssue[] } {
+  const { records, issues } = readEnvelopes(root);
   const actionable = records.filter((e) => e.status === "staged" || e.status === "terminal_failed");
-  return { root: fh, paths: actionable.map((e) => envelopePath(fh, e.id)), issues };
+  return { root, paths: actionable.map((e) => envelopePath(root, e.id)), issues };
 }
 
 /** `jspace cron status` — last run result per cron (all, or one). */
@@ -43,7 +41,7 @@ export function cronStatus(root: string, id?: string): CmdResult {
 }
 
 /**
- * `jspace cron failures [--json]` / `jspace cron check [--json]` — one-place
+ * `jspace cron failures [--json]` — one-place
  * session-start surface: recent failures + pending staged gbrain writes +
  * per-cron status. exitCode 1 when anything needs attention (for hooks/scripts).
  */
@@ -101,7 +99,7 @@ export function cronFailures(root: string): CmdResult {
     "jspace: cron failures",
     `open incidents: (${open.length})`,
     ...open.map((i) => `  ${i.cronId} [${i.failureClass}] ${i.openedAt} evidence: ${i.evidence.join(", ")}`),
-    `pending gbrain writes (APPLY.json): (${pending.paths.length})`,
+    `pending gbrain writes: (${pending.paths.length})`,
     ...pending.paths.map((p) => `  ${p}`),
     ...(stateIssues.length > 0
       ? [`damaged state records: (${stateIssues.length})`, ...stateIssues.map((s) => `  ${s.path}: ${s.message}`)]

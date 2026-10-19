@@ -13,7 +13,20 @@
 // RETIRED names are DELETED outright — a renamed/removed official skill must not
 // survive on a deployed machine. User-created dirs under other names are still
 // never touched (empty leftovers are the only other thing swept).
-import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+} from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import type { MaterializedLinkEntry } from "../../core/contracts/materialized.ts";
@@ -40,6 +53,169 @@ export interface ProjectionApplyResult {
   links: Record<string, MaterializedLinkEntry>;
   /** User-facing lines (info level — fallbacks and keeps must be visible). */
   lines: string[];
+}
+
+export interface RetiredUserSkillPreservation {
+  name: string;
+  reason: string;
+}
+
+export interface RetiredUserSkillCleanup {
+  removed: string[];
+  preserved: RetiredUserSkillPreservation[];
+}
+
+/**
+ * Content fingerprints of every `jspace-bootstrap` file ever shipped from this
+ * repository. A user-level directory only counts as machine residue when every
+ * file is one of these exact historical official files; a same-named directory
+ * with user content or an edited copy is preserved and reported.
+ */
+const RETIRED_OFFICIAL_SHA256: Readonly<Record<string, readonly string[]>> = {
+  "SKILL.md": [
+    "25a6a9f5c6b181a9fce29fa650fa0a97d645b23628b93f1cfc4c74764c0d249b",
+    "2b7feacf23e3eb00fcfd13536cbe0f5ccf8921d123bfe19eb2af493ff3a15ee3",
+    "7cb3b504cb02f9c33d32a75a228a7e627ed09f8f7bdfa2501a0036ecffdd490e",
+    "8455ea7ef302b5ffb86720f57d786c3f27a0bb15a22b777be98a97d1179f8016",
+    "884e35352143dda38e012bb3c97283fb8d0807e2688528c022b396667003c1b6",
+    "9ac8c36789c78cce7d07c16007c9cb1d15467987ef088f43661bf2aaae923c2a",
+    "a1bd22ac85a5803e3588277062b5b0371f4777a4f441e91704137e7a1b0b21b1",
+    "db873a31c8ae998746016e80e421701b3660a01dd2aeac9c952963eb67a0d834",
+    "dbc27883519875dca658fd01480f719a6bf35331853161df89ac6f4d76ebdc40",
+    "e35682a1291d96c9a915b0de408af5703f7a17c807f228f0f304e830730c2eda",
+    "f418b78e30d40d420115678f6572d4f1659101e85883b4591dc78bb6bd1cbc7f",
+    "fc338f3cd6ca53e0e426f424cd915696bc7d6f0e465034b0e0f6fc769e97407e",
+  ],
+  "agents/openai.yaml": ["d6fb2598ad72ff41a22e59ebe0f2ccc644791a816065176b3115bc0e2ee9e371"],
+  "references/example-bootstrap.md": ["a7e9b0b0644d1fb17402c4b0b570f7daecd1b877e77552732ca9f64ff4d9e9df"],
+  "references/gbrain.md": [
+    "0d7053ffac87d4fd0e778cf40e9a2d66295dd00d557f55d828b39b05a99b30f1",
+    "12905472c118603ca95920a18be21d6f8b51d5d1dd26c721ff19560b99ef3682",
+    "2161ed8c3e9aa4fa44ead2e6d486cc6c110b9fe8fe4e1d26dbf0c9b5c1a22aa5",
+    "2a101c539486add4d5e0ccde14347dbab76c95526d7f413f43bbadeb888b0c33",
+    "380961bf70832dd0a8b4a5887e0da1fb647d564289afbd0cae05216abf3825ee",
+    "64c63a1c12857e63e801dc2209c95b55b1a0602f57ac01549b9dc25c7d5789bc",
+    "b067f3ab1e7c0b226868c2f65dd71f8a4a6d39fc1e7edf4418ca52f835cedf53",
+    "ea0a756ec9ddf15341ff7251f9ace5c75aca64824f73a6214fe3c0605c2621a7",
+  ],
+  "references/harnesses.md": [
+    "1ac7c176856fad40d4d858764004db7e8b2cad226f8a1dcbeb9355cf98ba4090",
+    "35318bcbbae465a15f90b2280e150d693eb348a772e0f5a4474830952a569a4c",
+    "5a8f4db5b5752681e309d27bf4679318cbad1a4f9829c24a2e26d767ec9eb3a9",
+    "aeea3c2d77c8d204b0387ee37639c8b2f51139aa09b139df7c8e3d85ba16ec00",
+    "b89338fcee6f56a46d4c116e27ce35cbb29d2b3f01e0fcdc048324845f2ed4e3",
+    "e46b558f580d7dd88925828bb407c28e009b51235ab4880b90ef089ff126826c",
+  ],
+  "references/headless-ops.md": [
+    "0d5e11027d00cca5d99e8e1538e58009243a898869b9d231b7406aec6dc0b6c1",
+    "1fea930d72945e1609d2503667916877f20d9d4af9bbcf1c7a4acbeefc69b0f4",
+    "a1aef844240e2ac0b07db93321e87026b0a9b59dd4db2e2ea8216ca1eedaaf58",
+    "fa35f62bd7ba87bc4e9d29bec1af97567b2666523475982e90df5db84bb97c10",
+  ],
+  "references/registry.md": [
+    "0b17b5292fc18d3bd2af43b9c76461c96a18fa344190ce86c9690b77a1ccdc91",
+    "38c80a3dfed5b126481c9d6c2c99cd5cfd5ca49e262eb9cad049a2c2bc10eba2",
+    "479c66d177329a574e564816697d13c47aee3ad811cef6eecdd3daa2f024139c",
+    "8faf898a877d44440057bf128baa2fe9063b24229567648ae52cd57b41c347c0",
+    "9d584e75c1db7890a6a9dc87d0bd8e51e39ba013d3c33e7be6a3dd6371c9cd42",
+    "f652e7e6aec82c5bba7ca4ac2006a68a8f471735bcfd3bb4224c74f21545de1d",
+    "fbab4b4399317e43f7bba1fad8f15b6e85be0b1b6eea2aa3d558868f94ee8283",
+  ],
+};
+
+const RETIRED_OFFICIAL_HASH_SETS = new Map(
+  Object.entries(RETIRED_OFFICIAL_SHA256).map(([rel, hashes]) => [rel, new Set(hashes)]),
+);
+
+function fileSha256(path: string): string {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+type RetiredOfficialProof = { safe: true } | { safe: false; reason: string };
+
+/** Prove that a real directory is nothing but historical official files.
+ *  Preservation wins on every ambiguity: unknown paths, edited files, symlinks,
+ *  unreadable entries and unsupported objects are all reported as conflicts. */
+function proveRetiredOfficialDir(dir: string): RetiredOfficialProof {
+  const visit = (absDir: string): RetiredOfficialProof => {
+    let entries;
+    try {
+      entries = readdirSync(absDir, { withFileTypes: true });
+    } catch (error) {
+      return { safe: false, reason: `directory is unreadable: ${(error as Error).message}` };
+    }
+    for (const entry of entries) {
+      const abs = join(absDir, entry.name);
+      const rel = relative(dir, abs).replace(/\\/g, "/");
+      if (entry.isSymbolicLink()) {
+        return { safe: false, reason: `contains an unverified symlink: ${rel}` };
+      }
+      if (entry.isDirectory()) {
+        const nested = visit(abs);
+        if (!nested.safe) return nested;
+        continue;
+      }
+      if (!entry.isFile()) {
+        return { safe: false, reason: `contains an unsupported filesystem object: ${rel}` };
+      }
+      const allowed = RETIRED_OFFICIAL_HASH_SETS.get(rel);
+      if (allowed === undefined) {
+        return { safe: false, reason: `contains a file never shipped by the retired official skill: ${rel}` };
+      }
+      let digest: string;
+      try {
+        digest = fileSha256(abs);
+      } catch (error) {
+        return { safe: false, reason: `file is unreadable: ${rel}: ${(error as Error).message}` };
+      }
+      if (!allowed.has(digest)) {
+        return { safe: false, reason: `contains a modified historical file: ${rel}` };
+      }
+    }
+    return { safe: true };
+  };
+  return visit(dir);
+}
+
+function proveRetiredOfficialEntry(entryAbs: string): RetiredOfficialProof {
+  let lst;
+  try {
+    lst = lstatSync(entryAbs);
+  } catch (error) {
+    return { safe: false, reason: `entry is unreadable: ${(error as Error).message}` };
+  }
+  if (lst.isSymbolicLink()) {
+    let target: string;
+    try {
+      target = readlinkSync(entryAbs);
+    } catch (error) {
+      return { safe: false, reason: `symlink target is unreadable: ${(error as Error).message}` };
+    }
+    let real: string;
+    try {
+      real = realpathSync(entryAbs);
+    } catch {
+      return { safe: false, reason: `symlink target is missing: ${target}` };
+    }
+    let targetStat;
+    try {
+      targetStat = statSync(real);
+    } catch (error) {
+      return { safe: false, reason: `symlink target is unreadable: ${target}: ${(error as Error).message}` };
+    }
+    if (!targetStat.isDirectory()) {
+      return { safe: false, reason: `symlink target is not a directory: ${target}` };
+    }
+    const proof = proveRetiredOfficialDir(real);
+    if (!proof.safe) {
+      return { safe: false, reason: `symlink target is not a proven historical official copy (${target}): ${proof.reason}` };
+    }
+    return { safe: true };
+  }
+  if (!lst.isDirectory()) {
+    return { safe: false, reason: "entry is not a directory" };
+  }
+  return proveRetiredOfficialDir(entryAbs);
 }
 
 /** Official skill names declared by the manifest (the only entries the engine
@@ -243,29 +419,40 @@ export function ensureUserSkillLink(
   return { mode, changed: true, divergent: convergent };
 }
 
-/** Remove RETIRED official skills from a USER-level skill root. Machine residue
- *  by definition — we own these names, so a dangling link or a non-empty stale
- *  copy goes too, not just empty dirs. Returns the removed names. */
+/** Remove RETIRED official skills from a USER-level skill root only when their
+ *  contents prove they are historical official copies. Unlike workbench
+ *  projection dirs, `~/.agents/skills/` is user-owned: a same-named directory
+ *  with unknown or edited content is preserved and reported. */
 export function removeRetiredUserSkills(
   userRoot: string,
   officialNow: readonly string[],
   dryRun = false,
-): string[] {
+): RetiredUserSkillCleanup {
   const retired = retiredSet(officialNow);
-  if (retired.size === 0) return [];
+  if (retired.size === 0) return { removed: [], preserved: [] };
   let names: string[];
   try {
     names = readdirSync(userRoot);
   } catch {
-    return []; // not installed / unreadable — nothing to clean
+    return { removed: [], preserved: [] }; // not installed / unreadable — nothing to clean
   }
   const removed: string[] = [];
+  const preserved: RetiredUserSkillPreservation[] = [];
   for (const name of names) {
     if (!retired.has(name)) continue;
+    const entryAbs = join(userRoot, name);
+    const proof = proveRetiredOfficialEntry(entryAbs);
+    if (!proof.safe) {
+      preserved.push({ name, reason: proof.reason });
+      continue;
+    }
     if (!dryRun) rmSync(join(userRoot, name), { recursive: true, force: true });
     removed.push(name);
   }
-  return removed.sort();
+  return {
+    removed: removed.sort(),
+    preserved: preserved.sort((a, b) => a.name.localeCompare(b.name)),
+  };
 }
 
 /** Read-only classification for a user-level entry — dry-run surface of

@@ -5,7 +5,7 @@
 // user-level ensureUserSkillLink primitive.
 // Run: bun test application/workspace/projections.test.ts
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applyProjectionLinks, ensureUserSkillLink, manifestSkillNames, planProjectionLinks, removeRetiredUserSkills } from "./projections.ts";
@@ -177,25 +177,113 @@ test("ensureUserSkillLink: create, no-op, and divergent copy REPLACED by the lin
   rmSync(home, { recursive: true, force: true });
 });
 
-test("removeRetiredUserSkills deletes a NON-empty retired official skill dir", () => {
+const HISTORICAL_BOOTSTRAP_YAML = `interface:
+  display_name: "jspace bootstrap"
+  short_description: "Configure JSpace for first use"
+  default_prompt: "Use $jspace-bootstrap to configure this fresh JSpace workbench end to end."
+`;
+
+test("removeRetiredUserSkills deletes a proven historical official copy", () => {
   const home = mkdtempSync(join(tmpdir(), "jspace-ul-retired-"));
   const userRoot = join(home, ".agents/skills");
-  // a stale full copy of a skill we renamed away, plus a live one and a user skill
-  mkdirSync(join(userRoot, "jspace-bootstrap"), { recursive: true });
-  writeFileSync(join(userRoot, "jspace-bootstrap/SKILL.md"), "OLD SKILL");
+  mkdirSync(join(userRoot, "jspace-bootstrap/agents"), { recursive: true });
+  writeFileSync(join(userRoot, "jspace-bootstrap/agents/openai.yaml"), HISTORICAL_BOOTSTRAP_YAML);
   mkdirSync(join(userRoot, "jspace-use"), { recursive: true });
   writeFileSync(join(userRoot, "jspace-use/SKILL.md"), "current");
   mkdirSync(join(userRoot, "my-own-skill"), { recursive: true });
 
-  const removed = removeRetiredUserSkills(userRoot, ["jspace-use", "asset-ingest"]);
-  expect(removed).toEqual(["jspace-bootstrap"]);
+  const result = removeRetiredUserSkills(userRoot, ["jspace-use", "asset-ingest"]);
+  expect(result).toEqual({ removed: ["jspace-bootstrap"], preserved: [] });
   expect(existsSync(join(userRoot, "jspace-bootstrap"))).toBe(false);
   expect(existsSync(join(userRoot, "jspace-use"))).toBe(true);
   expect(existsSync(join(userRoot, "my-own-skill"))).toBe(true); // never touched
+  rmSync(home, { recursive: true, force: true });
+});
 
+test("removeRetiredUserSkills preserves unknown, modified and augmented same-name dirs", () => {
+  const home = mkdtempSync(join(tmpdir(), "jspace-ul-retired-preserve-"));
+  const userRoot = join(home, ".agents/skills");
+
+  // The retirer only sees the canonical retired name, so exercise each form in
+  // sequence under that name and verify the conflict is reported.
+  const canonical = join(userRoot, "jspace-bootstrap");
+  mkdirSync(canonical, { recursive: true });
+  writeFileSync(join(canonical, "SKILL.md"), "same name, user-authored");
+  expect(removeRetiredUserSkills(userRoot, ["jspace-use"])).toEqual({
+    removed: [],
+    preserved: [expect.objectContaining({ name: "jspace-bootstrap", reason: expect.stringContaining("modified historical") })],
+  });
+  expect(readFileSync(join(canonical, "SKILL.md"), "utf-8")).toBe("same name, user-authored");
+
+  rmSync(canonical, { recursive: true, force: true });
+  mkdirSync(join(canonical, "agents"), { recursive: true });
+  writeFileSync(join(canonical, "agents/openai.yaml"), `${HISTORICAL_BOOTSTRAP_YAML}edited\n`);
+  expect(removeRetiredUserSkills(userRoot, ["jspace-use"])).toEqual({
+    removed: [],
+    preserved: [expect.objectContaining({ name: "jspace-bootstrap", reason: expect.stringContaining("modified historical") })],
+  });
+  expect(existsSync(canonical)).toBe(true);
+
+  writeFileSync(join(canonical, "agents/openai.yaml"), HISTORICAL_BOOTSTRAP_YAML);
+  writeFileSync(join(canonical, "notes.md"), "user notes");
+  expect(removeRetiredUserSkills(userRoot, ["jspace-use"])).toEqual({
+    removed: [],
+    preserved: [expect.objectContaining({ name: "jspace-bootstrap", reason: expect.stringContaining("never shipped") })],
+  });
+  expect(existsSync(join(canonical, "notes.md"))).toBe(true);
+  rmSync(home, { recursive: true, force: true });
+});
+
+test("removeRetiredUserSkills preserves dangling and unknown symlinks", () => {
+  const home = mkdtempSync(join(tmpdir(), "jspace-ul-retired-links-"));
+  const userRoot = join(home, ".agents/skills");
+  mkdirSync(userRoot, { recursive: true });
+  const canonical = join(userRoot, "jspace-bootstrap");
+
+  symlinkSync(join(home, "missing-target"), canonical, "dir");
+  expect(removeRetiredUserSkills(userRoot, ["jspace-use"])).toEqual({
+    removed: [],
+    preserved: [expect.objectContaining({ name: "jspace-bootstrap", reason: expect.stringContaining("missing") })],
+  });
+  expect(existsSync(canonical)).toBe(false);
+  expect(lstatSync(canonical).isSymbolicLink()).toBe(true);
+
+  unlinkSync(canonical);
+  mkdirSync(join(home, "user-target"), { recursive: true });
+  writeFileSync(join(home, "user-target/SKILL.md"), "user skill");
+  symlinkSync(join(home, "user-target"), canonical, "dir");
+  expect(removeRetiredUserSkills(userRoot, ["jspace-use"])).toEqual({
+    removed: [],
+    preserved: [expect.objectContaining({ name: "jspace-bootstrap", reason: expect.stringContaining("not a proven") })],
+  });
+  expect(lstatSync(canonical).isSymbolicLink()).toBe(true);
+  rmSync(home, { recursive: true, force: true });
+});
+
+test("removeRetiredUserSkills dry-run reports a proven removal without deleting", () => {
+  const home = mkdtempSync(join(tmpdir(), "jspace-ul-retired-dry-"));
+  const userRoot = join(home, ".agents/skills");
+  const canonical = join(userRoot, "jspace-bootstrap");
+  mkdirSync(join(canonical, "agents"), { recursive: true });
+  writeFileSync(join(canonical, "agents/openai.yaml"), HISTORICAL_BOOTSTRAP_YAML);
+
+  expect(removeRetiredUserSkills(userRoot, ["jspace-use"], true)).toEqual({
+    removed: ["jspace-bootstrap"],
+    preserved: [],
+  });
+  expect(existsSync(canonical)).toBe(true);
+  rmSync(home, { recursive: true, force: true });
+});
+
+test("removeRetiredUserSkills still sweeps an empty retired residue dir", () => {
+  const home = mkdtempSync(join(tmpdir(), "jspace-ul-retired-empty-"));
+  const userRoot = join(home, ".agents/skills");
   // dry-run reports without deleting
   mkdirSync(join(userRoot, "jspace-bootstrap"), { recursive: true });
-  expect(removeRetiredUserSkills(userRoot, ["jspace-use"], true)).toEqual(["jspace-bootstrap"]);
+  expect(removeRetiredUserSkills(userRoot, ["jspace-use"], true)).toEqual({
+    removed: ["jspace-bootstrap"],
+    preserved: [],
+  });
   expect(existsSync(join(userRoot, "jspace-bootstrap"))).toBe(true);
   rmSync(home, { recursive: true, force: true });
 });

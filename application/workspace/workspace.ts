@@ -2,22 +2,43 @@
 // manifest + assets are injected so the layer stays free of the embedded-bundle
 // cli module. Filesystem writes go through injected writeFile for testability
 // (failure injection) and are preceded by backup + journal in .jspace/state/.
-import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fail } from "../../core/shared/errors.ts";
 import type { CmdResult } from "../commands/command.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import { portabilityIssues } from "../../core/contracts/paths.ts";
+import { decodeHub, type HubV1 } from "../../core/contracts/hub.ts";
 import { readMarker, writeMarkerAtomic, writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
-import { decodeUpgradeJournal, type UpgradeJournalV1 } from "../../core/contracts/upgrade.ts";
+import { ENVELOPE_EXT } from "../../core/contracts/pending.ts";
+import {
+  decodeLegacyUpgradeJournal,
+  decodeUpgradeJournal,
+  type UpgradeJournalV1,
+} from "../../core/contracts/upgrade.ts";
 import { extractAgentsBlock, replaceAgentsBlock } from "./agents-block.ts";
 import { diffBundle, materializedRels, skillProjections } from "./manifest.ts";
-import { readMaterializedJournal, writeJournalLinks, writeUpdatedMaterializedJournal } from "./journal.ts";
+import {
+  MATERIALIZED_FILE,
+  migrateMaterializedJournalV1,
+  readMaterializedJournal,
+  readMaterializedJournalForUpgrade,
+  serializeMaterializedJournal,
+  writeJournalLinks,
+  writeUpdatedMaterializedJournal,
+} from "./journal.ts";
 import { applyProjectionLinks, manifestSkillNames, planProjectionLinks } from "./projections.ts";
 import { safeReadFile } from "./fs-helpers.ts";
 import { migrateHubSchema, type HubTransform, type MigrationOutcome } from "../../core/registry/migrations.ts";
 import { withWorkbenchMutationLock } from "../lock.ts";
+import {
+  planLegacyIngestMigrations,
+  planLegacyPendingMigrationsForWorkbench,
+  type LegacyMigrationNotice,
+  type LegacyPendingMove,
+} from "./legacy-data-migrations.ts";
 
 function setTemplateVersion(root: string, version: string): void {
   const marker = readMarker(root);
@@ -105,6 +126,9 @@ export interface UpgradeDeps {
   /** Registered hub.json schema migrations (from-version -> next transform).
    *  Defaults to the empty module table; injectable for tests. */
   migrations?: Record<string, HubTransform>;
+  /** Current workbench filehub binding, used only by one-time data migrations.
+   *  Kept injected so workspace logic never re-resolves registry ownership. */
+  filehubRoot?: string | null;
 }
 
 export interface UpgradeOptions {
@@ -115,8 +139,69 @@ export interface UpgradeOptions {
 
 type UpgradeJournal = UpgradeJournalV1;
 
+interface ExtraUpgradeOp {
+  action: "create" | "migrate" | "remove";
+  rel: string;
+  reason: string;
+  /** Schema/data migrations that must not be rolled back by restoring an
+   *  unreadable predecessor shape. Recorded explicitly in the upgrade journal. */
+  forwardOnly?: boolean;
+  /** Rechecked immediately before a migration write. `null` means the target
+   *  must still be absent; a string must match the exact planned predecessor. */
+  expectedContent?: string | null;
+  /**
+   * Present for `create` / `migrate`. `remove` relies on the pre-upgrade backup
+   * written under the upgrade id.
+   */
+  content?: string;
+}
+
+interface ExternalMoveRecord {
+  id: string;
+  slug: string;
+  source: string;
+  sha256: string;
+  target: string;
+}
+
+const EXTERNAL_MOVE_MANIFEST = "external-moves.json";
+
 function upgradeJournalPath(root: string, id: string): string {
   return join(root, CONFIG_DIR, "state", "upgrades", id, "journal.json");
+}
+
+function readCurrentHub(root: string, deps: UpgradeDeps): HubV1 | null {
+  const raw = deps.readFile(join(root, ".jspace", "hub.json"));
+  if (raw === null) return null;
+  try {
+    const decoded = decodeHub(JSON.parse(raw));
+    return decoded.ok ? decoded.value : null;
+  } catch {
+    return null;
+  }
+}
+
+function migrationWarnings(notices: readonly LegacyMigrationNotice[]): string[] {
+  return notices.map((item) => `${item.code} ${item.subject}: ${item.message}`);
+}
+
+function writeExternalMoveManifest(
+  root: string,
+  upgradeId: string,
+  moves: readonly LegacyPendingMove[],
+): void {
+  if (moves.length === 0) return;
+  const records: ExternalMoveRecord[] = moves.map((move) => ({
+    id: move.id,
+    slug: move.slug,
+    source: move.sourceLabel,
+    sha256: createHash("sha256").update(move.sourceContent).digest("hex"),
+    target: move.targetRel,
+  }));
+  writeBytesAtomic(
+    join(root, CONFIG_DIR, "state", "upgrades", upgradeId, EXTERNAL_MOVE_MANIFEST),
+    JSON.stringify({ schema_version: 1, moves: records }, null, 2) + "\n",
+  );
 }
 
 function writeUpgradeJournal(root: string, id: string, journal: UpgradeJournal): void {
@@ -169,6 +254,46 @@ function validateRollbackRels(root: string, journal: UpgradeJournalV1): void {
   }
 }
 
+function planLegacyUpgradeJournalMigrations(
+  root: string,
+  deps: UpgradeDeps,
+): ExtraUpgradeOp[] {
+  const dir = join(root, CONFIG_DIR, "state", "upgrades");
+  if (!existsSync(dir)) return [];
+  const ops: ExtraUpgradeOp[] = [];
+  for (const id of readdirSync(dir).sort()) {
+    const rel = join(CONFIG_DIR, "state", "upgrades", id, "journal.json").replace(/\\/g, "/");
+    const raw = deps.readFile(join(root, rel));
+    if (raw === null) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      continue; // readUpgradeJournal already reports this loudly on rollback
+    }
+    if (decodeUpgradeJournal(parsed).ok) continue;
+    const legacy = decodeLegacyUpgradeJournal(parsed);
+    if (!legacy.ok) continue;
+    if (!legacy.value.plan.some((step) => step.action === "delete")) continue;
+    const migrated: UpgradeJournalV1 = {
+      ...legacy.value,
+      plan: legacy.value.plan.map((step) => ({
+        ...step,
+        action: step.action === "delete" ? "remove" : step.action,
+      })),
+    };
+    ops.push({
+      action: "migrate",
+      rel,
+      reason: "upgrade journal action delete -> remove",
+      content: JSON.stringify(migrated, null, 2) + "\n",
+      forwardOnly: true,
+      expectedContent: raw,
+    });
+  }
+  return ops;
+}
+
 function rollbackUpgrade(root: string, id: string, deps: UpgradeDeps): CmdResult {
   // id must be a UUID before it is used to build a journal path (traversal)
   if (!UUID_RE.test(id)) fail(`invalid rollback id: ${id} (expected a UUID)`);
@@ -176,6 +301,11 @@ function rollbackUpgrade(root: string, id: string, deps: UpgradeDeps): CmdResult
   validateRollbackRels(root, journal);
   const backupDir = join(root, CONFIG_DIR, "state", "upgrades", id);
   for (const step of journal.plan) {
+    // Data-contract migrations are forward-only. Restoring an old schema makes
+    // the current runtime unreadable, and the current journal writer rebuilds
+    // materialized hashes after a content rollback.
+    if (step.action === "migrate-forward") continue;
+    if (step.rel === MATERIALIZED_FILE && step.action === "migrate") continue;
     const beforePath = join(backupDir, "before", step.rel);
     if (existsSync(beforePath)) {
       deps.writeFile(join(root, step.rel), readFileSync(beforePath, "utf-8"));
@@ -194,6 +324,42 @@ function rollbackUpgrade(root: string, id: string, deps: UpgradeDeps): CmdResult
   return { lines: [`jspace: ok: rolled back workspace upgrade ${id}`] };
 }
 
+function rollbackUpgradePreview(root: string, id: string): CmdResult {
+  if (!UUID_RE.test(id)) fail(`invalid rollback id: ${id} (expected a UUID)`);
+  const journal = readUpgradeJournal(root, id);
+  validateRollbackRels(root, journal);
+  const backupDir = join(root, CONFIG_DIR, "state", "upgrades", id);
+  const changes = journal.plan.map((step) => {
+    if (step.action === "migrate-forward") return `[forward-only] ${step.rel}`;
+    if (step.rel === MATERIALIZED_FILE && step.action === "migrate") return `[forward-only] ${step.rel}`;
+    if (existsSync(join(backupDir, "before", step.rel))) return `[restore] ${step.rel}`;
+    if (step.action === "create") return `[remove] ${step.rel}`;
+    return `[leave] ${step.rel} (no backup recorded)`;
+  });
+  const externalManifest = join(backupDir, EXTERNAL_MOVE_MANIFEST);
+  if (existsSync(externalManifest)) {
+    try {
+      const parsed = JSON.parse(readFileSync(externalManifest, "utf-8")) as {
+        moves?: Array<{ id?: unknown; source?: unknown; target?: unknown }>;
+      };
+      for (const move of parsed.moves ?? []) {
+        if (typeof move.source === "string" && typeof move.target === "string") {
+          changes.push(`[forward-only] ${move.source} -> ${move.target}`);
+        }
+      }
+    } catch {
+      changes.push(`[leave] ${EXTERNAL_MOVE_MANIFEST} (unreadable; inspect backup manually)`);
+    }
+  }
+  return {
+    lines: [
+      `jspace: dry-run: would roll back workspace upgrade ${id} (${changes.length} item(s)):`,
+      ...changes,
+      `jspace: dry-run: no files, journals, locks, or marker state were changed`,
+    ],
+  };
+}
+
 export function workspaceUpgrade(
   root: string,
   opts: UpgradeOptions,
@@ -201,10 +367,8 @@ export function workspaceUpgrade(
 ): CmdResult {
   // Upgrade rewrites seeds/skills/hub.json in place: without the lock a
   // concurrent `domain add` can be silently overwritten by the hub migration.
-  // A plain --dry-run preview mutates nothing and must not create a lock file.
-  // NOTE: --rollback ignores --dry-run today (see rollbackUpgrade), so a
-  // rollback takes the lock even when dryRun is set — it really does mutate.
-  if (opts.dryRun && opts.rollbackId === undefined) {
+  // Every dry-run path is strictly read-only, including rollback previews.
+  if (opts.dryRun) {
     return workspaceUpgradeImpl(root, opts, deps);
   }
   return withWorkbenchMutationLock(root, () => workspaceUpgradeImpl(root, opts, deps));
@@ -215,9 +379,12 @@ function workspaceUpgradeImpl(
   opts: UpgradeOptions,
   deps: UpgradeDeps,
 ): CmdResult {
-  if (opts.rollbackId !== undefined) return rollbackUpgrade(root, opts.rollbackId, deps);
+  if (opts.rollbackId !== undefined) {
+    return opts.dryRun ? rollbackUpgradePreview(root, opts.rollbackId) : rollbackUpgrade(root, opts.rollbackId, deps);
+  }
 
-  const recorded = readMaterializedJournal(root)?.files ?? {};
+  const materialized = readMaterializedJournalForUpgrade(root);
+  const recorded = materialized.journal?.files ?? materialized.legacyV1?.files ?? {};
   const entries = diffBundle(root, deps.manifest, {
     readFile: deps.readFile,
     recorded,
@@ -246,6 +413,34 @@ function workspaceUpgradeImpl(
   };
   const projOps = planProjectionLinks(root, projectionOpts);
   const projPending = projOps.filter((o) => o.action !== "no-op");
+  const hub = readCurrentHub(root, deps);
+  const legacyPending = planLegacyPendingMigrationsForWorkbench(root, {
+    hub,
+    filehubRoot: deps.filehubRoot ?? null,
+    readFile: deps.readFile,
+  });
+  const legacyIngest = planLegacyIngestMigrations(root, {
+    hub,
+    filehubRoot: deps.filehubRoot ?? null,
+    readFile: deps.readFile,
+  });
+  const legacyNotices = [...legacyPending.notices, ...legacyIngest.notices];
+  const legacyWarnings = migrationWarnings(legacyNotices);
+  const extraOps: ExtraUpgradeOp[] = [
+    ...legacyPending.ops.map((op) => ({ ...op, forwardOnly: true })),
+    ...legacyIngest.ops.map((op) => ({ ...op, forwardOnly: true })),
+    ...planLegacyUpgradeJournalMigrations(root, deps),
+  ];
+  if (materialized.legacyV1 !== null) {
+    extraOps.push({
+      action: "migrate",
+      rel: MATERIALIZED_FILE,
+      reason: "materialized journal v1 -> v2 (preserve recorded hashes)",
+      content: serializeMaterializedJournal(migrateMaterializedJournalV1(materialized.legacyV1)),
+      forwardOnly: true,
+      expectedContent: deps.readFile(join(root, MATERIALIZED_FILE)),
+    });
+  }
 
   if (opts.dryRun) {
     const changes = entries.filter(
@@ -256,20 +451,24 @@ function workspaceUpgradeImpl(
     // refuse) — never shown as an auto-migrate that would silently succeed.
     const mig = hubMigration !== null && hubMigration.outcome.status === "migrated";
     const manual = hubMigration !== null && hubMigration.outcome.status === "no-migration";
-    const lines = changes.length === 0 && !mig && !manual && projPending.length === 0
+    const hasMigrations = projPending.length > 0 || extraOps.length > 0 || legacyPending.moves.length > 0;
+    const lines = changes.length === 0 && !mig && !manual && !hasMigrations && legacyNotices.length === 0
       ? ["jspace: ok: would upgrade: nothing to do"]
       : [
-          `jspace: ok: would upgrade ${changes.length + (mig ? 1 : 0) + projPending.length} item(s):`,
+          `jspace: ok: would upgrade ${changes.length + (mig ? 1 : 0) + projPending.length + extraOps.length + legacyPending.moves.length} item(s):`,
           ...changes.map((e) => `[${e.action}] ${e.rel}`),
           ...projPending.map((o) => `[${o.action}] ${o.rel} -> ${o.target}`),
+          ...extraOps.map((op) => `[${op.action}] ${op.rel} (${op.reason})`),
+          ...legacyPending.moves.map((move) => `[retire] ${move.sourceLabel} -> ${move.targetRel}`),
           ...(mig
             ? [`[migrate] ${hubMigration.rel} (hub schema ${hubMigration.outcome.from} -> ${hubMigration.outcome.to})`]
             : []),
           ...(manual
             ? [`[manual] ${hubMigration.rel} (hub schema ${hubMigration.outcome.from} -> ${hubMigration.outcome.to}; no registered migration — the real upgrade will refuse)`]
             : []),
+          ...legacyNotices.map((item) => `[preserve] ${item.subject}: ${item.message}`),
         ];
-    return { lines };
+    return { lines, ...(legacyWarnings.length > 0 ? { warnings: legacyWarnings } : {}) };
   }
   if (hubMigration !== null && hubMigration.outcome.status === "no-migration") {
     fail(
@@ -281,8 +480,21 @@ function workspaceUpgradeImpl(
       `workspace upgrade: ${conflicts.length} conflict(s) in: ${conflicts.map((e) => e.rel).join(", ")} (use --accept-conflicts to override)`,
     );
   }
-  if (plan.length === 0 && hubMigration === null && projPending.length === 0) {
-    return { lines: ["jspace: ok: workspace is up to date"] };
+  if (
+    plan.length === 0 &&
+    hubMigration === null &&
+    projPending.length === 0 &&
+    extraOps.length === 0 &&
+    legacyPending.moves.length === 0
+  ) {
+    return {
+      lines: [
+        legacyNotices.length === 0
+          ? "jspace: ok: workspace is up to date"
+          : `jspace: warn: workspace is up to date; ${legacyNotices.length} legacy record(s) were left in place (see warnings)`,
+      ],
+      ...(legacyWarnings.length > 0 ? { warnings: legacyWarnings } : {}),
+    };
   }
   if (hubMigration !== null && hubMigration.outcome.status === "migrated") {
     plan.push({ action: "migrate", rel: hubMigration.rel, ownership: "user", reason: "hub schema migration" });
@@ -298,17 +510,30 @@ function workspaceUpgradeImpl(
     id,
     from_version: marker.value.template_version,
     to_version: deps.manifest.bundle_version,
-    plan: plan.map((e) => ({ action: e.action, rel: e.rel })),
+    plan: [
+      ...plan.map((e) => ({ action: e.action, rel: e.rel })),
+      ...extraOps.map((op) => ({
+        action: op.forwardOnly === true ? "migrate-forward" : op.action,
+        rel: op.rel,
+      })),
+    ],
     status: "pending",
   };
   writeUpgradeJournal(root, id, journal);
-  for (const e of plan) {
-    const cur = deps.readFile(join(root, e.rel));
+  for (const rel of [...plan.map((e) => e.rel), ...extraOps.map((op) => op.rel)]) {
+    const cur = deps.readFile(join(root, rel));
     if (cur !== null) {
       // atomic backup (issue #9 #9-08): the upgrade rollback copy must not be
       // left half-written if the process dies mid-upgrade.
-      writeBytesAtomic(join(backupDir, "before", e.rel), cur);
+      writeBytesAtomic(join(backupDir, "before", rel), cur);
     }
+  }
+  writeExternalMoveManifest(root, id, legacyPending.moves);
+  for (const move of legacyPending.moves) {
+    writeBytesAtomic(
+      join(backupDir, "before", "external", `${move.id}${ENVELOPE_EXT}`),
+      move.sourceContent,
+    );
   }
 
   const pathByRel = new Map<string, string>();
@@ -322,7 +547,39 @@ function workspaceUpgradeImpl(
   }
 
   try {
+    const extraByRel = new Map(extraOps.map((op) => [op.rel, op]));
+    for (const op of extraOps) {
+      if (op.action === "remove") {
+        try {
+          unlinkSync(join(root, op.rel));
+        } catch {
+          /* already absent */
+        }
+        continue;
+      }
+      if (op.content === undefined) throw new Error(`missing migration content for ${op.rel}`);
+      if ("expectedContent" in op) {
+        const current = deps.readFile(join(root, op.rel));
+        if (current !== op.expectedContent) {
+          throw new Error(`migration source changed before write: ${op.rel}; no overwrite was attempted`);
+        }
+      }
+      deps.writeFile(join(root, op.rel), op.content);
+    }
+    for (const move of legacyPending.moves) {
+      const source = deps.readFile(move.sourceAbs);
+      if (source === null) continue; // already retired by an interrupted prior run
+      if (source !== move.sourceContent) {
+        throw new Error(`legacy pending source changed before retirement: ${move.sourceLabel}; source and migrated target were preserved`);
+      }
+      const target = deps.readFile(join(root, move.targetRel));
+      if (target !== move.targetContent) {
+        throw new Error(`migrated pending target is missing or changed: ${move.targetRel}; source was preserved`);
+      }
+      unlinkSync(move.sourceAbs);
+    }
     for (const e of plan) {
+      if (extraByRel.has(e.rel)) throw new Error(`duplicate upgrade operation for ${e.rel}`);
       if (e.action === "migrate") {
         // migrated user data, not a bundle asset; write the transformed document
         const doc = hubMigration?.outcome.document;
@@ -375,12 +632,16 @@ function workspaceUpgradeImpl(
     writeUpgradeJournal(root, id, { ...journal, status: "applied" });
     return {
       lines: [
-        `jspace: ok: upgraded workspace to ${deps.manifest.bundle_version} (${plan.length} file(s) changed)`,
+        `jspace: ok: upgraded workspace to ${deps.manifest.bundle_version} (${plan.length + extraOps.length + legacyPending.moves.length} item(s) changed)`,
+        ...(legacyPending.moves.length > 0
+          ? [`jspace: ok: retired ${legacyPending.moves.length} legacy pending envelope(s) into this workbench (backup: ${id})`]
+          : []),
         ...projSummary,
         ...proj.lines,
         `Upgrade journal: ${id} (restore with: jspace workspace upgrade --rollback ${id})`,
         `Validate: jspace doctor --dir ${root}`,
       ],
+      ...(legacyWarnings.length > 0 ? { warnings: legacyWarnings } : {}),
     };
   } catch (e) {
     writeUpgradeJournal(root, id, { ...journal, status: "failed" });

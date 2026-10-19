@@ -45,7 +45,7 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps, verbose = fa
     ...inspectWorkbench(env),
     ...checkInbox(reads),
     ...checkFilehubContract(reads),
-    ...checkPending(reads),
+    ...checkPending(root),
     ...checkIngest(root),
     ...checkSkills(root, cron),
     ...checkDomains(root, reads.hub.status === "ok" ? reads.hub.value : null),

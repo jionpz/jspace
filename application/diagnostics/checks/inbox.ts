@@ -376,25 +376,27 @@ export function checkFilehubContract(reads: WorkbenchReads): RegistryDiagnostic[
   return diags;
 }
 
-/** Pending gbrain write envelopes: damaged files + actionable (staged /
- *  terminal_failed). Damaged envelopes surface as warnings (visible-degradation). */
-export function checkPending(reads: WorkbenchReads): RegistryDiagnostic[] {
+/** Pending gbrain write envelopes are workbench-owned and independent of
+ *  filehub registration. Damaged envelopes surface as warnings. */
+export function checkPending(root: string): RegistryDiagnostic[] {
   const diags: RegistryDiagnostic[] = [];
-  const fhRoot = resolveFhRoot(reads);
-  if (!fhRoot) return diags;
-  if (probeDir(fhRoot) !== "dir") return diags; // binding.missing covers this
-  const envRead = readEnvelopes(fhRoot);
+  const envRead = readEnvelopes(root);
   for (const issue of envRead.issues) {
     diags.push({
       severity: "warning",
-      code: "filehub.pending_decode",
-      path: `filehub.${issue.path}`,
+      code: "pending.decode",
+      path: `pending.${issue.path}`,
       message: `pending envelope unreadable: ${issue.message}`,
     });
   }
   const actionable = envRead.records.filter((e) => e.status === "staged" || e.status === "terminal_failed");
   if (actionable.length > 0) {
-    diags.push({ severity: "warning", code: "filehub.pending_applies", path: `filehub.${fhRoot}/.jspace-logs`, message: `filehub: ${actionable.length} actionable pending gbrain write(s); apply with "jspace pending apply", ack terminal_failed with "jspace pending ack"` });
+    diags.push({
+      severity: "warning",
+      code: "pending.applies",
+      path: join(root, ".jspace", "state", "pending"),
+      message: `workbench: ${actionable.length} actionable pending gbrain write(s); apply with "jspace pending apply", ack terminal_failed with "jspace pending ack"`,
+    });
   }
   return diags;
 }

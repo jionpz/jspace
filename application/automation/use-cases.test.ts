@@ -187,6 +187,26 @@ test("cronAdd rejects --tools on harness without tool restriction", () => {
   rmSync(wb, { recursive: true, force: true });
 });
 
+test("cronAdd persists --model for headless roundtrip", () => {
+  const wb = makeWorkbench([]);
+  cronAdd(
+    wb,
+    "pinned-model",
+    "0 21 * * *",
+    "claude",
+    "tidy",
+    false,
+    { isInstalled: () => false },
+    "linux",
+    undefined,
+    "provider/free-tier",
+  );
+  expect(loadCrons(wb).crons[0].model).toBe("provider/free-tier");
+  const raw = JSON.parse(readFileSync(join(wb, ".jspace", "cron.json"), "utf-8"));
+  expect(raw.crons[0].model).toBe("provider/free-tier");
+  rmSync(wb, { recursive: true, force: true });
+});
+
 test("cronRemove deletes + hints; unknown id throws", () => {
   const wb = makeWorkbench([{ id: "a", enabled: true }]);
   const r = cronRemove(wb, "a", { isInstalled: () => true });

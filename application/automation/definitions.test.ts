@@ -17,7 +17,7 @@ const OLD_SKILL = "asset-ingest OLD content";
 const skillsManifest: SkillsManifestV1 = {
   schema_version: 1,
   workbench: [
-    { name: "asset-ingest", version: "1", scope: "workbench", dependencies: [], entrypoints: ["batch"], description: "" },
+    { name: "asset-ingest", version: "1", scope: "workbench", entrypoints: ["batch"], description: "" },
   ],
   global: [],
 };
@@ -110,14 +110,16 @@ test("resolveCronPrompt throws (fail) on an invalid skill target", () => {
   expect(() => resolveCronPrompt(stale, "/wb", ctx())).toThrow(/jspace update/);
 });
 
-test("loadCrons: pre-1.0.11 cron.json (legacy version field) fails with repair guidance", () => {
+test("loadCrons: legacy cron.json (version field, no schema_version) fails with the current repair guidance", () => {
   const root = mkdtempSync(join(tmpdir(), "jspace-cron-old-"));
   try {
     mkdirSync(join(root, ".jspace"), { recursive: true });
     writeFileSync(join(root, ".jspace", "cron.json"), JSON.stringify({ version: 1, crons: [] }), "utf-8");
-    // error message must tell the user how to fix (regenerate / hand-edit the
-    // field) — not just "must be one of 1".
-    expect(() => loadCrons(root)).toThrow(/init|schema_version/);
+    // The error must report the actual value + the supported schema_version and
+    // point at the non-destructive fix path (update the CLI, or hand-migrate the
+    // file) — never the refused `init --force` suggestion.
+    expect(() => loadCrons(root)).toThrow(/schema_version undefined is not supported/);
+    expect(() => loadCrons(root)).toThrow(/jspace update/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
