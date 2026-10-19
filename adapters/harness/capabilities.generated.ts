@@ -79,8 +79,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "fallback": "manual",
         "crash_recovery": "best_effort"
       },
-      "cron_harness_enum_value": "claude",
-      "documented": true
+      "cron_harness_enum_value": "claude"
     },
     "grok": {
       "headless": [
@@ -149,8 +148,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "fallback": "manual",
         "crash_recovery": "best_effort"
       },
-      "cron_harness_enum_value": "grok",
-      "documented": true
+      "cron_harness_enum_value": "grok"
     },
     "opencode": {
       "headless": [
@@ -211,8 +209,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "fallback": "manual",
         "crash_recovery": "best_effort"
       },
-      "cron_harness_enum_value": "opencode",
-      "documented": true
+      "cron_harness_enum_value": "opencode"
     },
     "cursor": {
       "headless": null,
@@ -259,8 +256,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "fallback": "manual",
         "crash_recovery": "manual"
       },
-      "cron_harness_enum_value": null,
-      "documented": true
+      "cron_harness_enum_value": null
     },
     "pi": {
       "headless": [
@@ -316,8 +312,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "fallback": "manual",
         "crash_recovery": "best_effort"
       },
-      "cron_harness_enum_value": "pi",
-      "documented": true
+      "cron_harness_enum_value": "pi"
     },
     "codex": {
       "headless": [
@@ -355,8 +350,7 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
         "fallback": "manual",
         "crash_recovery": "best_effort"
       },
-      "cron_harness_enum_value": "codex",
-      "documented": false
+      "cron_harness_enum_value": "codex"
     }
   }
 };

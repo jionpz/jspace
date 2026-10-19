@@ -46,7 +46,7 @@ export interface GlobalGovernance {
 export type McpBinding = { native: true } | { via: string };
 
 /** Where a harness keeps its gbrain MCP server config (issue #8 #16 — single
- *  source for `harness wire`/`gbrain wire` and doctor's wiring check; all five
+ *  source for `harness wire` and doctor's wiring check; all five
  *  session harnesses have a real wire today). `env_key` overrides the env field
  *  name inside the server object (default "env"; opencode's local-server shape
  *  uses "environment"). `path` may start with `~` (expanded per home dir). */
@@ -87,8 +87,8 @@ export interface HarnessCapabilityData {
   argv_flags: { permission?: string; tools_value?: string; output?: string; output_value?: string; model?: string };
   /** Session events jspace wires (or plans to wire); source = channel kind. */
   sessions: HarnessSession[];
-  /** Where the session-start briefing hook is materialized (optional for
-   *  compatibility-only entries such as codex). */
+  /** Where the session-start briefing hook is materialized (absent for harnesses
+   *  that declare no session-start event, e.g. codex). */
   session_start?: HarnessSessionStart;
   /** How this harness loads the machine-global governance source. */
   global_context?: HarnessGlobalContext;
@@ -104,8 +104,6 @@ export interface HarnessCapabilityData {
   lifecycle: HarnessLifecycle;
   /** Value valid in cron.json `harness`; null for IDE-only harnesses. */
   cron_harness_enum_value: string | null;
-  /** false for compatibility-only entries (codex) with no harness-<name>.md doc. */
-  documented: boolean;
   /** true when cron.json `tools` / `--tools` may restrict headless tool access. */
   supports_tool_restriction: boolean;
   /** Per-harness env whitelist for headless cron spawns (cronSpawnEnv SSOT). */

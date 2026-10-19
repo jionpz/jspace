@@ -67,8 +67,9 @@
 #                           spawns (SSOT for cronSpawnEnv); GBRAIN_* + base keys
 #                           are always included; NODE_OPTIONS only when listed
 #                           in allow_keys.
-#   documented            — false for compatibility-only entries (codex) that have no
-#                           harness-<name>.md doc (P5 assertion exemption).
+# Every entry is a formal, documented harness: `check-harness-consistency` requires
+# a skills/jspace-use/references/harness-<name>.md for each key here (no
+# compatibility-only exemption — codex has one too, stating its real limits).
 
 schema_version: 1
 
@@ -124,7 +125,6 @@ harnesses:
       fallback: manual
       crash_recovery: best_effort
     cron_harness_enum_value: claude
-    documented: true
 
   grok:
     headless: ["grok", "-p"]
@@ -157,7 +157,6 @@ harnesses:
       fallback: manual
       crash_recovery: best_effort
     cron_harness_enum_value: grok
-    documented: true
 
   opencode:
     # Unattended cron needs non-interactive tool approval; scope --auto to the
@@ -194,7 +193,6 @@ harnesses:
       fallback: manual
       crash_recovery: best_effort
     cron_harness_enum_value: opencode
-    documented: true
 
   cursor:
     headless: null
@@ -223,7 +221,6 @@ harnesses:
       fallback: manual
       crash_recovery: manual
     cron_harness_enum_value: null
-    documented: true
 
   pi:
     headless: ["pi", "-p"]
@@ -250,7 +247,6 @@ harnesses:
       fallback: manual
       crash_recovery: best_effort
     cron_harness_enum_value: pi
-    documented: true
 
   codex:
     headless: ["codex", "exec"]
@@ -274,4 +270,3 @@ harnesses:
       fallback: manual
       crash_recovery: best_effort
     cron_harness_enum_value: codex
-    documented: false

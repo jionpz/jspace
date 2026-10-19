@@ -7,7 +7,6 @@ import { join } from "node:path";
 import {
   cronHarnessNamesFrom,
   cronHarnessNames,
-  documentedHarnessNamesFrom,
   getCapability,
   harnessNames,
   loadCapabilities,
@@ -60,27 +59,26 @@ test("cron harness set excludes cursor (no headless) and matches the contract en
   expect(cronHarnessNames()).not.toContain("cursor");
 });
 
-test("fixture capabilities drive wire/cron/documented sets without code edits", () => {
+test("fixture capabilities drive wire/cron sets without code edits", () => {
   const caps = structuredClone(loadCapabilities());
   caps.harnesses["fixture-wire"] = {
     ...caps.harnesses.claude,
     mcp_config: { path: "~/.fixture-wire.json", format: "json", server_key: "mcpServers.gbrain", writer: "merge-json-server" },
     cron_harness_enum_value: null,
-    documented: false,
   };
   caps.harnesses["fixture-cron"] = {
     ...caps.harnesses.claude,
     mcp_config: null,
     cron_harness_enum_value: "fixture-cron",
-    documented: true,
   };
 
   expect(wireHarnessNamesFrom(caps)).toContain("fixture-wire");
   expect(wireHarnessNamesFrom(caps)).not.toContain("fixture-cron");
   expect(cronHarnessNamesFrom(caps)).toContain("fixture-cron");
   expect(cronHarnessNamesFrom(caps)).not.toContain("fixture-wire");
-  expect(documentedHarnessNamesFrom(caps)).toContain("fixture-cron");
-  expect(documentedHarnessNamesFrom(caps)).not.toContain("fixture-wire");
+  // The doc set is the full capability key set — every harness is a formal,
+  // documented entry (no compatibility-only exemption).
+  expect(harnessNames()).toEqual(["claude", "grok", "opencode", "cursor", "pi", "codex"]);
 });
 
 test("workbench projection dirs union per-harness + shared, no duplicates", () => {

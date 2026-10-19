@@ -28,7 +28,7 @@ test("session.created injects session-start context with the session id", async 
   const handler = createEventHandler(deps);
   await handler({ event: { type: "session.created", properties: { sessionID: "sess-123" } } });
   expect(injected).toEqual(["sess-123"]);
-  // created must not trigger a cron check
+  // created must not trigger a cron failures probe
   expect(cronChecked).toEqual([]);
 });
 
@@ -55,7 +55,7 @@ test("session.idle without session id is a no-op (nothing to surface)", async ()
   expect(cronChecked).toEqual([]);
 });
 
-test("unrelated event types are ignored (no inject, no cron check)", async () => {
+test("unrelated event types are ignored (no inject, no cron failures probe)", async () => {
   const { deps, injected, cronChecked } = makeDeps();
   const handler = createEventHandler(deps);
   await handler({ event: { type: "chat.message" } });

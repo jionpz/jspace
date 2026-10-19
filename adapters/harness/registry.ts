@@ -29,8 +29,8 @@ export function resolveCapabilities(raw: HarnessCapabilitiesFile): Record<string
       fail(`capabilities: ${name} is missing lifecycle grades`);
     }
     // Every session harness that declares a session-start event must say where
-    // the briefing hook is materialized (issue #13). codex is the compatibility
-    // exception — it has no session-start event.
+    // the briefing hook is materialized (issue #13). codex declares no session
+    // events at all, so it never reaches this check.
     const hasSessionStart = data.sessions.some((s) => /session.?start/i.test(s.name));
     if (hasSessionStart && data.session_start === undefined) {
       fail(`capabilities: ${name} declares a session-start event but no session_start materialization path`);
@@ -136,13 +136,6 @@ export function cronHarnessNamesFrom(caps: HarnessCapabilitiesFile): string[] {
     .sort();
 }
 
-/** Harness keys with human-facing harness docs. */
-export function documentedHarnessNamesFrom(caps: HarnessCapabilitiesFile): string[] {
-  return Object.entries(caps.harnesses)
-    .filter(([, cap]) => cap.documented)
-    .map(([name]) => name);
-}
-
 export function getCapability(name: string): HarnessCapability {
   const cap = HARNESSES[name];
   if (!cap) fail(`unsupported harness: ${name}`);
@@ -162,11 +155,6 @@ export function wireHarnessNames(): string[] {
 /** Cron harness keys valid in cron.json `harness` (headless-capable only). */
 export function cronHarnessNames(): string[] {
   return cronHarnessNamesFrom(CAPABILITIES);
-}
-
-/** Harness keys that have a human-facing harness-<name>.md reference. */
-export function documentedHarnessNames(): string[] {
-  return documentedHarnessNamesFrom(CAPABILITIES);
 }
 
 /** Whether a harness supports per-cron tool restriction (`--tools` / cron.json `tools`). */
