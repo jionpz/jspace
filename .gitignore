@@ -38,6 +38,7 @@ Thumbs.db
 .opencode/
 .grok/
 .cursor/
+.dsh/
 
 # But the workbench template ships real assets under harness config dirs —
 # these are seed templates (hooks / plugins) and must be committed, not ignored
