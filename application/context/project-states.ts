@@ -47,17 +47,17 @@ export const CONTEXT_CANDIDATE_LIMITS: Record<ContextCollectorKind, number> = {
   knowledge: 12,
 };
 
-/** Max concurrent `gbrain get` spawns per batch. Every get is a process spawn
- *  (~0.5s, almost all startup cost), so serial fetching dominated the
- *  session-start hook (measured 4.87s / 20 calls / 6 serial waves against a 10s
- *  cap). The bound keeps a 100-row candidate list from spawning 100 processes
- *  at once; measured safe at 32 concurrent.
+/** Candidate reads reserved per accounting chunk. The reads inside a chunk are
+ *  dispatched serially; the three collectors themselves run in parallel, each
+ *  making its own adapter calls against the shared deadline. The chunk only
+ *  bounds how much candidate quota one collector reserves before it re-checks
+ *  its target, so a 100-row candidate list cannot quietly consume the whole
+ *  32-read budget and an unneeded body read is never dispatched.
  *
- *  Value picked by sweep on the live workbench (9 projects + 8 profiles + 25
- *  knowledge candidates): 4 -> 2.33s, 8 -> 2.06s, 12 -> 1.71s, 16 -> 1.82s,
- *  24 -> 2.09s. 12 is the measured optimum — past it the extra spawns contend
- *  more than they overlap. */
-export const GET_CONCURRENCY = 12;
+ *  Measured on the live workbench (2026-10-20): one full session-start read
+ *  takes 2.46s end-to-end and renders a 4087-byte payload, inside the 4s
+ *  shared deadline. */
+export const CANDIDATE_RESERVE_CHUNK = 12;
 
 /** Page size per collector, unchanged from the single-page implementation. */
 const PAGE_SIZE: Record<ContextCollectorKind, number> = { projects: 100, profiles: 100, knowledge: 50 };
@@ -362,7 +362,7 @@ async function collectRecent<T>(
         stoppedByDeadline = true;
         break;
       }
-      const wanted = Math.min(GET_CONCURRENCY, candidates.length - index);
+      const wanted = Math.min(CANDIDATE_RESERVE_CHUNK, candidates.length - index);
       const reserved = budget.reserveCandidates(spec.kind, wanted);
       if (reserved === 0) {
         halted = true;
