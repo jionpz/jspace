@@ -222,9 +222,16 @@ export function realGbrain(
   async function call(
     method: string,
     args: Record<string, unknown>,
+    callTimeoutMs?: number,
   ): Promise<{ ok: true; value: unknown } | GbrainFailure> {
-    const r = await run([bin, "call", method, JSON.stringify(args)], base);
-    if (r.timedOut) return failure("timeout", `gbrain ${method} timed out after ${timeoutMs}ms`);
+    // A shared deadline hands each call its own remaining budget; a missing
+    // override keeps the adapter default so every pre-existing caller is intact.
+    const effectiveTimeoutMs = callTimeoutMs ?? timeoutMs;
+    const r = await run([bin, "call", method, JSON.stringify(args)], {
+      ...base,
+      timeoutMs: effectiveTimeoutMs,
+    });
+    if (r.timedOut) return failure("timeout", `gbrain ${method} timed out after ${effectiveTimeoutMs}ms`);
     if (r.exit !== 0) return normalizeError(r.stdout, r.stderr);
     const parsed = parseJson(r.stdout);
     if (parsed === undefined) return failure("schema_error", `gbrain ${method} returned non-JSON stdout`);
@@ -232,16 +239,26 @@ export function realGbrain(
   }
 
   return {
-    async getPage(slug) {
-      const r = await call("get_page", { slug, include_content: true });
+    async getPage(slug, opts = {}) {
+      const r = await call("get_page", { slug, include_content: true }, opts.timeoutMs);
       return r.ok ? parsePage(r.value, slug) : r;
     },
 
     async listPages(opts = {}) {
       const limit = opts.limit ?? 100;
+      const sort = opts.sort ?? "updated_asc";
+      // Ascending keyset and descending offset are separate continuations; mixing
+      // them would invent a stability the store does not provide. Fail loud here
+      // instead of silently dropping one of the two arguments.
+      if (opts.cursor !== undefined && sort === "updated_desc") {
+        return failure("schema_error", "list_pages: cursor is only valid with updated_asc");
+      }
+      if (opts.offset !== undefined && sort === "updated_asc") {
+        return failure("schema_error", "list_pages: offset is only valid with updated_desc");
+      }
       const args: Record<string, unknown> = {
         limit,
-        sort: "updated_asc",
+        sort,
         ...(opts.type !== undefined ? { type: opts.type } : {}),
         ...(opts.tag !== undefined ? { tag: opts.tag } : {}),
         ...(opts.cursor !== undefined
@@ -250,14 +267,24 @@ export function realGbrain(
               updated_after_slug: opts.cursor.updatedAfterSlug,
             }
           : {}),
+        ...(opts.offset !== undefined ? { offset: opts.offset } : {}),
       };
-      const r = await call("list_pages", args);
+      const r = await call("list_pages", args, opts.timeoutMs);
       if (!r.ok) return r;
       const rows = parseListRows(r.value);
       if (rows === null) return failure("schema_error", "list_pages returned an invalid row set");
+      const filled = rows.length >= limit;
+      if (sort === "updated_desc") {
+        const nextOffset = filled ? (opts.offset ?? 0) + rows.length : undefined;
+        return {
+          ok: true,
+          rows,
+          ...(nextOffset !== undefined ? { nextOffset } : {}),
+        } satisfies GbrainListResult;
+      }
       const last = rows.at(-1);
       const nextCursor: GbrainListCursor | undefined =
-        rows.length >= limit && last !== undefined
+        filled && last !== undefined
           ? { updatedAfter: last.updatedAt, updatedAfterSlug: last.slug }
           : undefined;
       return {

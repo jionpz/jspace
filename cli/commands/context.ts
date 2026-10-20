@@ -15,10 +15,11 @@ import {
   collectActiveProfiles,
   collectActiveProjects,
   collectRecentKnowledge,
+  createContextReadBudget,
+  failedCollection,
   PROJECT_COLLECT_TIMEOUT_MS,
-  type ProfileState,
-  type ProjectState,
-  type RecentKnowledgeEntry,
+  toContextReadSummary,
+  type ContextCollection,
 } from "../../application/context/project-states.ts";
 import { realGbrain } from "../../adapters/gbrain/gbrain.ts";
 import { loadHub } from "../../application/workspace/state.ts";
@@ -67,8 +68,9 @@ const sessionStartSpec: CommandSpec = {
       if (!g.emit) return { lines: [] }; // not a workbench / hooks off: silent exit 0
       const state = collectWorkbenchState(g.root);
       // R3: project + profile cards come from gbrain through the async port with
-      // a short per-call timeout. The two lists run in parallel on one instance;
-      // either failure degrades to [] without blocking the other or the hook.
+      // a short per-call timeout. The three dimensions run in parallel on one
+      // adapter but share a single deadline and candidate budget; a failure is
+      // reported as partial/failed in the payload, never as an empty list.
       let excludeProjectIds: Set<string> | undefined;
       try {
         const hub = loadHub(g.root);
@@ -78,14 +80,26 @@ const sessionStartSpec: CommandSpec = {
         // hub unreadable — inject without registry filter; gbrain status:archived still applies
       }
       const gbrain = realGbrain(undefined, PROJECT_COLLECT_TIMEOUT_MS);
+      // One deadline and one candidate budget for the whole read: the three
+      // collectors run in parallel but must not each mint a fresh window. A
+      // collector that throws (defensive only — they are never-throw) still
+      // becomes a typed failed summary, never an empty list.
+      const budget = createContextReadBudget();
+      const settle = <T>(p: Promise<ContextCollection<T>>): Promise<ContextCollection<T>> =>
+        p.catch((e: unknown) => failedCollection<T>(e instanceof Error ? e.message : String(e)));
       const [projects, profiles, recentKnowledge] = await Promise.all([
-        collectActiveProjects(gbrain, { excludeProjectIds }).catch((): ProjectState[] => []),
-        collectActiveProfiles(gbrain).catch((): ProfileState[] => []),
-        collectRecentKnowledge(gbrain).catch((): RecentKnowledgeEntry[] => []),
+        settle(collectActiveProjects(gbrain, { excludeProjectIds, budget })),
+        settle(collectActiveProfiles(gbrain, { budget })),
+        settle(collectRecentKnowledge(gbrain, { budget })),
       ]);
-      state.projects = projects;
-      state.profiles = profiles;
-      state.recentKnowledge = recentKnowledge;
+      state.projects = projects.items;
+      state.profiles = profiles.items;
+      state.recentKnowledge = recentKnowledge.items;
+      state.memoryRead = {
+        projects: toContextReadSummary(projects),
+        profiles: toContextReadSummary(profiles),
+        recentKnowledge: toContextReadSummary(recentKnowledge),
+      };
       const text = renderSessionStart(state, g.root);
       // Best-effort briefing timestamp: never blocks the hook if the write fails.
       try {

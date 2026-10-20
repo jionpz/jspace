@@ -27,34 +27,71 @@ export function projectList(root: string, json: boolean): CmdResult {
 
 /** Overview view (`project list --status`): every gbrain project state card
  *  (including code projects not registered in the hub) + hub-registered projects
- *  without a state card, flagged. gbrain failure degrades to the hub-only list.
+ *  without a state card, flagged. Coverage decides what "no card" means: only a
+ *  complete inventory may claim a hub project has no state card; a partial or
+ *  failed scan leaves it unknown.
  */
 export async function projectListStatus(root: string, json: boolean, gbrain: GbrainDeps): Promise<CmdResult> {
   const hub = loadHub(root);
-  const states = await listProjectStates(gbrain);
+  const inventory = await listProjectStates(gbrain);
+  const complete = inventory.coverage.status === "complete";
 
   // Union: state cards first (recency-sorted by gbrain list), then hub projects
   // without a card. Code projects with a card but no hub entry appear via the
   // state-card set.
   const seen = new Set<string>();
-  const cards: (ProjectOverview & { hubRegistered: boolean; hasStateCard: boolean })[] = [];
-  for (const s of states) {
+  const cards: (ProjectOverview & {
+    hubRegistered: boolean;
+    /** True only for a card actually found in this scan. */
+    hasStateCard: boolean;
+    /** Whether the absence of a card is proven, or merely unconfirmed. */
+    stateCardEvidence: "present" | "absent" | "unknown";
+  })[] = [];
+  for (const s of inventory.states) {
     seen.add(s.id);
-    cards.push({ ...s, hubRegistered: hub.projects.some((p) => p.id === s.id), hasStateCard: true });
+    cards.push({
+      ...s,
+      hubRegistered: hub.projects.some((p) => p.id === s.id),
+      hasStateCard: true,
+      stateCardEvidence: "present",
+    });
   }
   for (const p of hub.projects) {
-    if (!seen.has(p.id)) cards.push({ id: p.id, what: "", now: "", next: "", related: [], updatedAt: "", hubRegistered: true, hasStateCard: false });
+    if (seen.has(p.id)) continue;
+    cards.push({
+      id: p.id,
+      what: "",
+      now: "",
+      next: "",
+      related: [],
+      updatedAt: "",
+      hubRegistered: true,
+      hasStateCard: false,
+      stateCardEvidence: complete ? "absent" : "unknown",
+    });
   }
 
-  if (json) return { lines: [], data: { projects: cards } };
+  if (json) return { lines: [], data: { projects: cards, coverage: inventory.coverage } };
 
-  if (cards.length === 0) return { lines: ["jspace: ok: no projects"] };
+  if (cards.length === 0) {
+    return {
+      lines:
+        inventory.coverage.status === "complete"
+          ? ["jspace: ok: no projects"]
+          : ["jspace: ok: no projects found; 状态卡盘点不完整 — 结果不是全集"],
+    };
+  }
   const lines = cards.map((c) => {
+    if (c.stateCardEvidence === "unknown") return `${c.id}  (状态卡是否存在未确认 — hub 已注册)`;
     if (!c.hasStateCard) return `${c.id}  (无状态卡 — hub 已注册)`;
     const skeleton = [c.what, c.now].filter((s) => s !== "").join(" — ");
     const rel = c.related.length > 0 ? `  [相关: ${c.related.join(", ")}]` : "";
     return `${c.id}  ${skeleton || "(无摘要)"}${rel}`;
   });
+  if (!complete) {
+    const detail = inventory.coverage.detail ?? inventory.coverage.status;
+    lines.push(`（状态卡盘点不完整: ${detail}；本列表不是全集）`);
+  }
   return { lines };
 }
 

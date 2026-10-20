@@ -13,7 +13,12 @@ import { readIncidents } from "../automation/incidents.ts";
 import { readJournals } from "../ingest/journal.ts";
 import { countInbox } from "../registry/inbox.ts";
 import { readEnvelopes } from "../pending/envelope.ts";
-import type { ProfileState, ProjectState, RecentKnowledgeEntry } from "./project-states.ts";
+import type {
+  ContextReadSummary,
+  ProfileState,
+  ProjectState,
+  RecentKnowledgeEntry,
+} from "./project-states.ts";
 import { loadHub } from "../workspace/state.ts";
 import { resolveFilehubRoot } from "../registry/filehub-lookup.ts";
 import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
@@ -49,6 +54,14 @@ export interface WorkbenchState {
   /** Recent decisions/lessons/knowledge pages (flywheel-boost: gives AI
    *  awareness of prior learnings, not just current state). */
   recentKnowledge: RecentKnowledgeEntry[];
+  /** Read-side status of the three gbrain-backed collections. Absent means the
+   *  read was not attempted at all — never evidence of a complete empty set.
+   *  Filled by the session-start command, which owns the shared read budget. */
+  memoryRead?: {
+    projects: ContextReadSummary;
+    profiles: ContextReadSummary;
+    recentKnowledge: ContextReadSummary;
+  };
   /** hub.json is missing or malformed — the gate turns this into a visible
    *  alert instead of a silent "clean state" (visible-degradation rule). */
   hubBroken: boolean;

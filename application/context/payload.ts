@@ -4,6 +4,7 @@
 // give paths not content, truncate lists with an explicit "and N more" tail
 // (never drop silently), keep session-start under 4KiB.
 import type { WorkbenchState } from "./collect.ts";
+import type { ContextReadIssue } from "./project-states.ts";
 import skillsManifest from "../../skills-manifest.json";
 
 const MAX_STATE_DOMAINS = 5;
@@ -205,7 +206,58 @@ function stateLines(state: WorkbenchState): string[] {
       .join(" / ");
     lines.push(`近期沉淀: ${shown}`);
   }
+  if (state.memoryRead !== undefined) {
+    const warning = memoryReadWarning(state.memoryRead);
+    if (warning !== "") lines.push(warning);
+  }
   return lines;
+}
+
+const DIMENSION_LABEL = { projects: "项目", profiles: "偏好", recentKnowledge: "近期沉淀" } as const;
+type ReadDimension = keyof typeof DIMENSION_LABEL;
+
+/** Human label for a typed read issue. Short on purpose: the whole warning is a
+ *  single line, and the specific code matters more than prose. */
+function issueLabel(issue: ContextReadIssue): string {
+  switch (issue.kind) {
+    case "list_error":
+    case "later_list_error":
+      return issue.code;
+    case "page_budget":
+      return "页数上限";
+    case "row_budget":
+      return "行数上限";
+    case "candidate_budget":
+      return "候选读取上限";
+    case "deadline":
+      return "timeout";
+    case "desc_offset":
+      return "跨页";
+    case "page_drift":
+      return "分页漂移";
+    case "page_read_error":
+      return "部分正文不可读";
+    case "unexpected":
+      return "内部错误";
+  }
+}
+
+/** Collapse the three read summaries into at most one line. All-complete reads
+ *  add no noise; `complete + empty` is a successful empty read, not a warning. */
+function memoryReadWarning(read: NonNullable<WorkbenchState["memoryRead"]>): string {
+  const dimensions: ReadDimension[] = ["projects", "profiles", "recentKnowledge"];
+  const affected = dimensions.filter((d) => read[d].status !== "complete");
+  if (affected.length === 0) return "";
+  const failed = affected.filter((d) => read[d].status === "failed");
+  const partial = affected.filter((d) => read[d].status === "partial");
+  const lead = failed.length > 0 ? "记忆读取失败" : "记忆读取不完整";
+  const segments = [failed, partial]
+    .filter((group) => group.length > 0)
+    .map((group) => {
+      const reasons = [...new Set(group.flatMap((d) => read[d].issues.map(issueLabel)))];
+      return `${group.map((d) => DIMENSION_LABEL[d]).join("/")}（${reasons.join("；") || "原因未知"}）`;
+    });
+  return `${lead}: ${segments.join("；")}（可重试或按需 memory-recall）`;
 }
 
 /** Priority: broken hub > pending writes > open cron incident > inbox.

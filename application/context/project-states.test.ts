@@ -17,6 +17,10 @@ import {
   MAX_ACTIVE_PROJECTS,
   MAX_ACTIVE_PROFILES,
   MAX_RECENT_KNOWLEDGE,
+  PROJECT_COLLECT_TIMEOUT_MS,
+  type ProfileState,
+  type ProjectState,
+  type RecentKnowledgeEntry,
 } from "./project-states.ts";
 
 type TestListResult =
@@ -71,6 +75,21 @@ function fakeGbrain(over: TestOverrides = {}): GbrainDeps {
   };
 }
 
+/** This file pins selection / backfill semantics; the read-status matrix lives
+ *  in project-states.pagination.test.ts, so assertions here read `items`. */
+async function collectProjects(
+  g: GbrainDeps,
+  o?: Parameters<typeof collectActiveProjects>[1],
+): Promise<ProjectState[]> {
+  return (await collectActiveProjects(g, o)).items;
+}
+async function collectProfiles(g: GbrainDeps): Promise<ProfileState[]> {
+  return (await collectActiveProfiles(g)).items;
+}
+async function collectKnowledge(g: GbrainDeps): Promise<RecentKnowledgeEntry[]> {
+  return (await collectRecentKnowledge(g)).items;
+}
+
 const CARD = `---
 type: note
 project: jspace
@@ -103,24 +122,24 @@ test("collectActiveProjects: filters project/*/state, keeps top-N with summaries
     get: async (slug) =>
       slug === "project/jspace/state" ? { ok: true, content: CARD } : { ok: false },
   });
-  const r = await collectActiveProjects(g);
+  const r = await collectProjects(g);
   expect(r).toHaveLength(2);
   expect(r[0]).toEqual({ id: "jspace", summary: "记忆模型重构设计期,P1 任务规划完成。", updatedAt: "2026-08-10" });
   expect(r[1]).toEqual({ id: "wms", summary: "", updatedAt: "2026-08-05" });
 });
 
 test("collectActiveProjects: list failure or no state cards -> empty, never throws", async () => {
-  expect(await collectActiveProjects(fakeGbrain({ list: async () => ({ ok: false, error: "lock" }) }))).toEqual([]);
-  expect(await collectActiveProjects(fakeGbrain({ list: async () => ({ ok: true, rows: [] }) }))).toEqual([]);
+  expect(await collectProjects(fakeGbrain({ list: async () => ({ ok: false, error: "lock" }) }))).toEqual([]);
+  expect(await collectProjects(fakeGbrain({ list: async () => ({ ok: true, rows: [] }) }))).toEqual([]);
   expect(
-    await collectActiveProjects(fakeGbrain({ list: async () => ({ ok: true, rows: [{ slug: "knowledge/x", updatedAt: "d" }] }) })),
+    await collectProjects(fakeGbrain({ list: async () => ({ ok: true, rows: [{ slug: "knowledge/x", updatedAt: "d" }] }) })),
   ).toEqual([]);
 });
 
 test("collectActiveProjects: caps at MAX_ACTIVE_PROJECTS", async () => {
   const rows = Array.from({ length: 15 }, (_, i) => ({ slug: `project/p${i}/state`, updatedAt: `2026-08-${i + 1}` }));
   const g = fakeGbrain({ list: async () => ({ ok: true, rows }) });
-  const r = await collectActiveProjects(g);
+  const r = await collectProjects(g);
   expect(r).toHaveLength(MAX_ACTIVE_PROJECTS);
 });
 
@@ -148,7 +167,7 @@ tags: [project, status:archived]
       return { ok: false };
     },
   });
-  const r = await collectActiveProjects(g);
+  const r = await collectProjects(g);
   expect(r).toHaveLength(1);
   expect(r[0].id).toBe("new");
 });
@@ -161,7 +180,7 @@ test("collectActiveProjects: skips hub archived project ids", async () => {
     }),
     get: async () => ({ ok: true, content: CARD }),
   });
-  const r = await collectActiveProjects(g, { excludeProjectIds: new Set(["paused"]) });
+  const r = await collectProjects(g, { excludeProjectIds: new Set(["paused"]) });
   expect(r).toEqual([]);
 });
 
@@ -177,7 +196,7 @@ test("collectActiveProjects: get failure still yields the id (recency is the sig
     list: async () => ({ ok: true, rows: [{ slug: "project/jspace/state", updatedAt: "2026-08-10" }] }),
     get: async () => ({ ok: false }),
   });
-  const r = await collectActiveProjects(g);
+  const r = await collectProjects(g);
   expect(r).toEqual([{ id: "jspace", summary: "", updatedAt: "2026-08-10" }]);
 });
 
@@ -219,20 +238,20 @@ test("collectActiveProfiles: filters profile/<theme>, drops nested slugs", async
     get: async (slug) =>
       slug === "profile/沟通偏好" ? { ok: true, content: PROFILE } : { ok: false },
   });
-  const r = await collectActiveProfiles(g);
+  const r = await collectProfiles(g);
   expect(r).toHaveLength(2);
   expect(r[0]).toEqual({ theme: "沟通偏好", summary: "一句话：先结论后细节。", updatedAt: "2026-08-10" });
   expect(r[1]).toEqual({ theme: "报告格式", summary: "", updatedAt: "2026-08-08" });
 });
 
 test("collectActiveProfiles: list failure or throw -> empty, never throws", async () => {
-  expect(await collectActiveProfiles(fakeGbrain({ list: async () => ({ ok: false, error: "lock" }) }))).toEqual([]);
-  expect(await collectActiveProfiles(fakeGbrain({ list: async () => ({ ok: true, rows: [] }) }))).toEqual([]);
+  expect(await collectProfiles(fakeGbrain({ list: async () => ({ ok: false, error: "lock" }) }))).toEqual([]);
+  expect(await collectProfiles(fakeGbrain({ list: async () => ({ ok: true, rows: [] }) }))).toEqual([]);
   expect(
-    await collectActiveProfiles(fakeGbrain({ list: async () => ({ ok: true, rows: [{ slug: "knowledge/x", updatedAt: "d" }] }) })),
+    await collectProfiles(fakeGbrain({ list: async () => ({ ok: true, rows: [{ slug: "knowledge/x", updatedAt: "d" }] }) })),
   ).toEqual([]);
   expect(
-    await collectActiveProfiles(
+    await collectProfiles(
       fakeGbrain({
         list: async () => {
           throw new Error("boom");
@@ -245,7 +264,7 @@ test("collectActiveProfiles: list failure or throw -> empty, never throws", asyn
 test("collectActiveProfiles: caps at MAX_ACTIVE_PROFILES", async () => {
   const rows = Array.from({ length: 8 }, (_, i) => ({ slug: `profile/t${i}`, updatedAt: `2026-08-${i + 1}` }));
   const g = fakeGbrain({ list: async () => ({ ok: true, rows }) });
-  const r = await collectActiveProfiles(g);
+  const r = await collectProfiles(g);
   expect(r).toHaveLength(MAX_ACTIVE_PROFILES);
   expect(r.map((p) => p.theme)).toEqual(["t0", "t1", "t2", "t3"]); // recency = list order, not last-N
   expect(MAX_ACTIVE_PROFILES).toBe(4);
@@ -291,7 +310,7 @@ tags: [profile, weekly]
       return { ok: false };
     },
   });
-  const r = await collectActiveProfiles(g);
+  const r = await collectProfiles(g);
   expect(r).toHaveLength(MAX_ACTIVE_PROFILES);
   expect(r.map((p) => p.theme)).toEqual(["沟通偏好", "报告格式", "extra", "overflow"]);
 });
@@ -301,7 +320,7 @@ test("collectActiveProfiles: get failure still yields the theme (recency is the 
     list: async () => ({ ok: true, rows: [{ slug: "profile/沟通偏好", updatedAt: "2026-08-10" }] }),
     get: async () => ({ ok: false }),
   });
-  const r = await collectActiveProfiles(g);
+  const r = await collectProfiles(g);
   expect(r).toEqual([{ theme: "沟通偏好", summary: "", updatedAt: "2026-08-10" }]);
 });
 
@@ -337,21 +356,21 @@ ascii slug 约定。
       return { ok: false };
     },
   });
-  const r = await collectRecentKnowledge(g);
+  const r = await collectKnowledge(g);
   expect(r).toHaveLength(2);
   expect(r.map((k) => k.slug)).toEqual(["project/acme/lessons/deploy", "knowledge/governance/naming"]);
   expect(r[1].summary).toBe("ascii slug 约定。");
 });
 
 test("collectRecentKnowledge: failure -> empty, never throws", async () => {
-  expect(await collectRecentKnowledge(fakeGbrain({ list: async () => { throw new Error("boom"); } }))).toEqual([]);
-  expect(await collectRecentKnowledge(fakeGbrain({ list: async () => ({ ok: false, error: "lock" }) }))).toEqual([]);
+  expect(await collectKnowledge(fakeGbrain({ list: async () => { throw new Error("boom"); } }))).toEqual([]);
+  expect(await collectKnowledge(fakeGbrain({ list: async () => ({ ok: false, error: "lock" }) }))).toEqual([]);
 });
 
 test("collectRecentKnowledge: caps at MAX_RECENT_KNOWLEDGE", async () => {
   const rows = Array.from({ length: 10 }, (_, i) => ({ slug: `knowledge/k${i}/topic`, updatedAt: `2026-08-${i + 1}` }));
   const g = fakeGbrain({ list: async () => ({ ok: true, rows }) });
-  const r = await collectRecentKnowledge(g);
+  const r = await collectKnowledge(g);
   expect(r).toHaveLength(MAX_RECENT_KNOWLEDGE);
 });
 
@@ -378,7 +397,7 @@ tags: [profile]
 // Writers legitimately produce typed pages (decision/project/lesson/…); an
 // earlier read-side `--type note` filter silently dropped every non-note state
 // card. These tests pin the port calls so the filter cannot creep back.
-test("collectActiveProjects / collectActiveProfiles / collectRecentKnowledge ask gbrain by tag only", async () => {
+test("collectActiveProjects / collectActiveProfiles / collectRecentKnowledge ask gbrain by tag, recent-first, still no type filter", async () => {
   const seen: Array<Record<string, unknown>> = [];
   const g = fakeGbrain({
     list: async (opts) => {
@@ -386,15 +405,20 @@ test("collectActiveProjects / collectActiveProfiles / collectRecentKnowledge ask
       return { ok: true, rows: [] };
     },
   });
-  await collectActiveProjects(g);
-  await collectActiveProfiles(g);
-  await collectRecentKnowledge(g);
-  expect(seen).toEqual([
-    { tag: "project", limit: 100 },
-    { tag: "profile", limit: 100 },
-    { tag: "knowledge", limit: 50 },
+  await collectProjects(g);
+  await collectProfiles(g);
+  await collectKnowledge(g);
+  expect(seen.map((o) => ({ tag: o.tag, limit: o.limit, sort: o.sort }))).toEqual([
+    { tag: "project", limit: 100, sort: "updated_desc" },
+    { tag: "profile", limit: 100, sort: "updated_desc" },
+    { tag: "knowledge", limit: 50, sort: "updated_desc" },
   ]);
-  for (const opts of seen) expect("type" in opts).toBe(false);
+  for (const opts of seen) {
+    expect("type" in opts).toBe(false); // typed pages must never be filtered out
+    expect("cursor" in opts).toBe(false); // recent windows never use the audit keyset
+    expect("offset" in opts).toBe(false); // first page only
+    expect(opts.timeoutMs as number).toBeLessThanOrEqual(PROJECT_COLLECT_TIMEOUT_MS);
+  }
 });
 
 test("collectActiveProjects: a type: project state card is NOT dropped (agent-infra regression)", async () => {
@@ -404,7 +428,7 @@ test("collectActiveProjects: a type: project state card is NOT dropped (agent-in
     list: async () => ({ ok: true, rows: [{ slug: "project/agent-infra/state", updatedAt: "2026-09-05" }] }),
     get: async () => ({ ok: true, content: typedCard }),
   });
-  const r = await collectActiveProjects(g);
+  const r = await collectProjects(g);
   expect(r).toHaveLength(1);
   expect(r[0].id).toBe("agent-infra");
 });

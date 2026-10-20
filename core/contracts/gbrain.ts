@@ -44,11 +44,29 @@ export interface GbrainListCursor {
   updatedAfterSlug: string;
 }
 
-export interface GbrainListOptions {
+/** List ordering. `updated_asc` (the default) is the only lossless pagination
+ *  the store offers — it carries a keyset cursor. `updated_desc` exists for
+ *  bounded "most recent" windows and continues by `offset`, which is not a
+ *  stable snapshot; callers must treat a second page as partial evidence. */
+export type GbrainListSort = "updated_asc" | "updated_desc";
+
+/** Transport-level options shared by single-call reads. `timeoutMs` overrides
+ *  the adapter default for this call only (a shared deadline must never let a
+ *  late call mint a fresh full budget). */
+export interface GbrainReadOptions {
+  timeoutMs?: number;
+}
+
+export interface GbrainListOptions extends GbrainReadOptions {
   type?: string;
   tag?: string;
   limit?: number;
+  /** Ascending keyset continuation. Only valid with `updated_asc`. */
   cursor?: GbrainListCursor;
+  /** Defaults to `updated_asc` so every pre-existing caller is unchanged. */
+  sort?: GbrainListSort;
+  /** Descending offset continuation. Only valid with `updated_desc`. */
+  offset?: number;
 }
 
 export interface GbrainListRow {
@@ -93,8 +111,11 @@ export type GbrainListResult =
   | {
       ok: true;
       rows: GbrainListRow[];
-      /** Present when the adapter filled the requested page size. */
+      /** Present when an ascending page filled and more rows may follow. */
       nextCursor?: GbrainListCursor;
+      /** Present when a descending page filled: next `offset` to request.
+       *  Offset continuation is not a stable snapshot — see `GbrainListSort`. */
+      nextOffset?: number;
     }
   | GbrainFailure;
 
@@ -128,7 +149,7 @@ export type GbrainBacklinksResult =
  *  typed result; transport failures never throw into a harness hook.
  *  `getWriteRequest` returns `not_found` for an unknown request id. */
 export interface GbrainDeps {
-  getPage: (slug: string) => Promise<GbrainPageResult>;
+  getPage: (slug: string, opts?: GbrainReadOptions) => Promise<GbrainPageResult>;
   listPages: (opts?: GbrainListOptions) => Promise<GbrainListResult>;
   putPage: (input: GbrainPutInput) => Promise<GbrainPutResult>;
   getWriteRequest: (requestId: string) => Promise<GbrainWriteRequestResult>;

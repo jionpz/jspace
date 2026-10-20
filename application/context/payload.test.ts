@@ -2,6 +2,7 @@
 // Run: bun test application/context/payload.test.ts
 import { expect, test } from "bun:test";
 import type { WorkbenchState } from "./collect.ts";
+import type { ContextReadIssue, ContextReadStatus } from "./project-states.ts";
 import { renderSessionStart, renderTurn, renderPreCompact, renderSessionEnd } from "./payload.ts";
 import skillsManifest from "../../skills-manifest.json";
 
@@ -321,4 +322,66 @@ test("long cronId -> truncated in both session-start and turn (stays under budge
   expect(r).not.toContain("x".repeat(60)); // the full 500 never appears
   const t = renderTurn(state);
   expect(Buffer.byteLength(t, "utf-8")).toBeLessThan(512);
+});
+
+// ---- memoryRead: read-side degradation must be visible, and only once ----
+
+function readSummary(status: ContextReadStatus, issues: ContextReadIssue[] = []) {
+  return { status, issues, pagesRead: 1, rowsScanned: 2 };
+}
+
+const readLines = (text: string): string[] => text.split("\n").filter((l) => l.includes("记忆读取"));
+
+test("memoryRead: a complete (including empty) read adds no warning", () => {
+  const state: WorkbenchState = {
+    ...empty,
+    memoryRead: {
+      projects: readSummary("complete"),
+      profiles: readSummary("complete"),
+      recentKnowledge: readSummary("complete"),
+    },
+  };
+  const r = renderSessionStart(state, "/wb");
+  expect(readLines(r)).toHaveLength(0);
+});
+
+test("memoryRead: no summary means the read was not attempted, not that it was empty", () => {
+  expect(readLines(renderSessionStart(empty, "/wb"))).toHaveLength(0);
+});
+
+test("memoryRead: three partial dimensions collapse into exactly one line", () => {
+  const state: WorkbenchState = {
+    ...empty,
+    memoryRead: {
+      projects: readSummary("partial", [{ kind: "desc_offset", pages: 2 }]),
+      profiles: readSummary("partial", [{ kind: "deadline", elapsedMs: 4000 }]),
+      recentKnowledge: readSummary("partial", [{ kind: "candidate_budget", reads: 12 }]),
+    },
+  };
+  const r = renderSessionStart(state, "/wb");
+  const lines = readLines(r);
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toContain("项目/偏好/近期沉淀");
+  expect(lines[0]).toContain("跨页");
+  expect(lines[0]).toContain("timeout");
+  expect(lines[0]).toContain("候选读取上限");
+  expect(lines[0]).toContain("memory-recall");
+  expect(Buffer.byteLength(r, "utf-8")).toBeLessThanOrEqual(4 * 1024);
+});
+
+test("memoryRead: a failed read uses 读取失败 and keeps the typed code", () => {
+  const state: WorkbenchState = {
+    ...empty,
+    memoryRead: {
+      projects: readSummary("failed", [{ kind: "list_error", code: "lock" }]),
+      profiles: readSummary("complete"),
+      recentKnowledge: readSummary("partial", [{ kind: "page_read_error", count: 2, codes: ["timeout"] }]),
+    },
+  };
+  const r = renderSessionStart(state, "/wb");
+  const lines = readLines(r);
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toContain("记忆读取失败");
+  expect(lines[0]).toContain("lock");
+  expect(lines[0]).toContain("项目"); // the failed dimension is named
 });

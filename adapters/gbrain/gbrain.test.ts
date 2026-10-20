@@ -316,3 +316,78 @@ test("realGbrain default bin follows $GBRAIN_BIN at construction time", async ()
     else process.env.GBRAIN_BIN = prev;
   }
 });
+
+test("listPages defaults to updated_asc and never sends an offset", async () => {
+  const { run, calls } = fakeRun(() => okRes([]));
+  await realGbrain(run, 2000).listPages({ tag: "project", limit: 10 });
+  expect(argsOf(calls[0]!)).toEqual({ limit: 10, sort: "updated_asc", tag: "project" });
+});
+
+test("listPages explicit updated_desc sends offset and no keyset fields", async () => {
+  const { run, calls } = fakeRun(() =>
+    okRes([{ slug: "p/2", type: "note", title: "b", updated_at_iso: "2026-10-18T11:00:00Z" }]),
+  );
+  const r = await realGbrain(run, 2000).listPages({
+    tag: "project",
+    limit: 2,
+    sort: "updated_desc",
+    offset: 4,
+  });
+  expect(r).toEqual({
+    ok: true,
+    rows: [{ slug: "p/2", type: "note", title: "b", updatedAt: "2026-10-18T11:00:00Z" }],
+  });
+  expect(argsOf(calls[0]!)).toEqual({
+    limit: 2,
+    sort: "updated_desc",
+    tag: "project",
+    offset: 4,
+  });
+});
+
+test("listPages desc continuation is an offset: full page continues, short page ends", async () => {
+  const full = fakeRun(() =>
+    okRes([
+      { slug: "a/one", updated_at_iso: "2026-10-18T10:00:00Z" },
+      { slug: "a/two", updated_at_iso: "2026-10-18T09:00:00Z" },
+    ]),
+  );
+  const fullResult = await realGbrain(full.run).listPages({ limit: 2, sort: "updated_desc" });
+  expect(fullResult.ok).toBe(true);
+  if (fullResult.ok) {
+    expect(fullResult.nextOffset).toBe(2);
+    expect(fullResult.nextCursor).toBeUndefined();
+  }
+
+  const offsetPage = await realGbrain(full.run).listPages({ limit: 2, sort: "updated_desc", offset: 2 });
+  if (offsetPage.ok) expect(offsetPage.nextOffset).toBe(4);
+
+  const short = fakeRun(() => okRes([{ slug: "a/one", updated_at_iso: "2026-10-18T10:00:00Z" }]));
+  const shortResult = await realGbrain(short.run).listPages({ limit: 2, sort: "updated_desc" });
+  expect(shortResult.ok).toBe(true);
+  if (shortResult.ok) expect(shortResult.nextOffset).toBeUndefined();
+});
+
+test("listPages rejects mixing an ascending cursor with a descending sort", async () => {
+  const { run, calls } = fakeRun(() => okRes([]));
+  const g = realGbrain(run);
+  const mixed = await g.listPages({
+    sort: "updated_desc",
+    cursor: { updatedAfter: "2026-10-18T00:00:00Z", updatedAfterSlug: "a" },
+  });
+  expect(mixed.ok).toBe(false);
+  if (!mixed.ok) expect(mixed.code).toBe("schema_error");
+  const ascOffset = await g.listPages({ sort: "updated_asc", offset: 1 });
+  expect(ascOffset.ok).toBe(false);
+  if (!ascOffset.ok) expect(ascOffset.code).toBe("schema_error");
+  expect(calls).toHaveLength(0);
+});
+
+test("per-call timeoutMs overrides the adapter default for that call only", async () => {
+  const { run, calls } = fakeRun(() => okRes([]));
+  const g = realGbrain(run, 30_000);
+  await g.listPages({ timeoutMs: 120 });
+  await g.getPage("x", { timeoutMs: 40 });
+  await g.listPages();
+  expect(calls.map((c) => c.opts.timeoutMs)).toEqual([120, 40, 30_000]);
+});
