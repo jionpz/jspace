@@ -695,7 +695,7 @@ test("an empty source_sha256 is invalid, not silently treated as legacy", async 
   expect(report.coverage.memory.source_digest_absent).toBe(1);
 });
 
-test("an unreadable archived target is unknown and never counted as present", async () => {
+test.skipIf(process.platform === "win32")("an unreadable archived target is unknown and never counted as present", async () => {
   if (typeof process.getuid === "function" && process.getuid() === 0) return;
   mkdirSync(join(root, "archive", "2026"), { recursive: true });
   writeFileSync(join(root, "archive", "2026", "old.md"), "archived\n", { mode: 0o000 });
