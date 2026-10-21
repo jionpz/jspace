@@ -636,3 +636,44 @@ test("a malformed source_sha256 is a warning and is not compared", async () => {
   expect(finding?.severity).toBe("warning");
   expect(report.coverage.memory.source_digest_absent).toBe(1);
 });
+
+test("a page cannot force content hashing of a restricted target", async () => {
+  mkdirSync(join(root, "secrets"), { recursive: true });
+  writeFileSync(join(root, "secrets", "token.txt"), "super-secret-value\n");
+  const secretDigest = sha256Text("super-secret-value\n");
+  const page = `---
+type: note
+source: codex
+project: acme
+owner_kind: project
+rel_path: secrets/token.txt
+source_sha256: ${"a".repeat(64)}
+tags: [asset, source:session]
+---
+# Leak
+`;
+  const report = await filehubCheck(
+    fakeGbrain([{ slug: "assets/acme/leak", content: page, tags: ["asset", "source:session"] }]),
+    { root, projects: PROJECTS },
+  );
+  expect(report.findings.some((item) => item.code === "filehub.memory.source_digest_changed")).toBe(false);
+  expect(report.coverage.memory.source_digest_present).toBe(0);
+  expect(report.coverage.memory.source_digest_absent).toBe(1);
+  expect(report.findings.every((item) => !item.message.includes(secretDigest.slice(0, 12)))).toBe(true);
+});
+
+test("coverage counters add up when the page target is missing", async () => {
+  rmSync(join(root, "projects", "acme", "report.md"));
+  const page = ASSET_PAGE.replace(
+    "rel_path: projects/acme/report.md",
+    `rel_path: projects/acme/report.md\nsource_sha256: ${"b".repeat(64)}`,
+  );
+  const report = await filehubCheck(
+    fakeGbrain([{ slug: "assets/acme/report", content: page, tags: ["asset", "source:session"] }]),
+    { root, projects: PROJECTS },
+  );
+  expect(report.findings.some((item) => item.code === "filehub.memory.file_missing")).toBe(true);
+  expect(report.coverage.memory.active_asset_pages).toBe(1);
+  expect(report.coverage.memory.source_digest_present).toBe(0);
+  expect(report.coverage.memory.source_digest_absent).toBe(1);
+});

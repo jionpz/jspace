@@ -1230,12 +1230,17 @@ export async function filehubCheck(
         });
       }
       const declaredDigest = page.parsed.fields.source_sha256;
+      // Only ordinary assets and archived assets may be content-hashed on a
+      // page's demand. Restricted/support/index/companion targets (and files
+      // outside the scanned set) must never be read for a digest: check's
+      // duplicate-content pass deliberately excludes them, and a page must not
+      // be able to turn a diagnostics command into a secret reader.
+      const digestEligible =
+        scanned !== undefined && (scanned.kind === "asset" || scanned.kind === "archive");
       if (declaredDigest === undefined || declaredDigest === "") {
-        // Legacy pages predate the field: coverage records the gap, but per-asset
+        // Legacy pages predate the field. Coverage records the gap; per-asset
         // findings stay silent so an un-migrated filehub does not turn noisy.
-        sourceDigestAbsent += 1;
       } else if (!/^[0-9a-f]{64}$/.test(declaredDigest)) {
-        sourceDigestAbsent += 1;
         addFinding({
           code: "filehub.memory.source_digest_invalid",
           severity: "warning",
@@ -1243,7 +1248,7 @@ export async function filehubCheck(
           path: relPath,
           message: "source_sha256 must be a 64-character lowercase sha256 digest; identity comparison skipped",
         });
-      } else {
+      } else if (digestEligible) {
         sourceDigestPresent += 1;
         const current = readAssetDigest(relPath);
         if ("digest" in current && current.digest !== declaredDigest) {
@@ -1305,6 +1310,11 @@ export async function filehubCheck(
       });
     }
   }
+
+  // present = digest was read back and compared; every other active page is
+  // counted absent (legacy, malformed, missing, restricted target, ...), so the
+  // two counters always add up to active_asset_pages.
+  sourceDigestAbsent = activePages.length - sourceDigestPresent;
 
   for (const [relPath, pages] of activePagesByRel) {
     if (pages.length > 1) {
