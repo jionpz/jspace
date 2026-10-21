@@ -166,6 +166,10 @@ export interface FilehubCheckReport {
       asset_pages: number;
       active_asset_pages: number;
       inactive_asset_pages: number;
+      /** Active asset pages that declare a usable `source_sha256` (identity comparable). */
+      source_digest_present: number;
+      /** Active asset pages whose source identity cannot be compared (legacy or malformed). */
+      source_digest_absent: number;
     };
   };
   counts: {
@@ -961,7 +965,7 @@ function renderFilehubCheck(report: FilehubCheckReport): { lines: string[]; exit
     `jspace: filehub check: ${report.status} (${report.coverage.files.scanned_objects} object(s); ${f.error} error, ${f.warning} warning, ${f.unknown} unknown)`,
     `  files: ${report.coverage.files.state} (${report.coverage.files.asset_files} asset, ${report.coverage.files.indexes} index, ${report.coverage.files.companions} companion, ${report.coverage.files.support_files} support, ${report.coverage.files.archived_files} archive; ${report.coverage.files.asset_content_hashed} content hashed${unhashed})`,
     `  registry: ${report.coverage.registry.state}`,
-    `  memory: ${report.coverage.memory.state} (${report.coverage.memory.active_asset_pages} active + ${report.coverage.memory.inactive_asset_pages} inactive asset page(s), ${report.coverage.memory.list_calls} list call(s))`,
+    `  memory: ${report.coverage.memory.state} (${report.coverage.memory.active_asset_pages} active + ${report.coverage.memory.inactive_asset_pages} inactive asset page(s), ${report.coverage.memory.list_calls} list call(s); source digests: ${report.coverage.memory.source_digest_present} present / ${report.coverage.memory.source_digest_absent} absent)`,
   ];
   for (const finding of report.findings) {
     const location = finding.path ?? finding.slug;
@@ -1073,6 +1077,24 @@ export async function filehubCheck(
       activePagesByRel.get(page.relPath)!.push(page);
     }
   }
+
+  // Content digests are read once per asset and shared by the page identity
+  // check and the duplicate-content pass below (one hash per file, at most).
+  const assetDigests = new Map<string, { digest: string } | { error: string }>();
+  const readAssetDigest = (relPath: string): { digest: string } | { error: string } => {
+    const cached = assetDigests.get(relPath);
+    if (cached !== undefined) return cached;
+    let entry: { digest: string } | { error: string };
+    try {
+      entry = { digest: sha256RegularFile(resolve(scan.rootAbs, relPath)) };
+    } catch (error) {
+      entry = { error: (error as Error).message };
+    }
+    assetDigests.set(relPath, entry);
+    return entry;
+  };
+  let sourceDigestPresent = 0;
+  let sourceDigestAbsent = 0;
 
   for (const page of activePages) {
     const slug = page.page.slug;
@@ -1206,6 +1228,36 @@ export async function filehubCheck(
           path: relPath,
           message: `asset pointer targets a ${scanned.kind} object`,
         });
+      }
+      const declaredDigest = page.parsed.fields.source_sha256;
+      if (declaredDigest === undefined || declaredDigest === "") {
+        // Legacy pages predate the field: coverage records the gap, but per-asset
+        // findings stay silent so an un-migrated filehub does not turn noisy.
+        sourceDigestAbsent += 1;
+      } else if (!/^[0-9a-f]{64}$/.test(declaredDigest)) {
+        sourceDigestAbsent += 1;
+        addFinding({
+          code: "filehub.memory.source_digest_invalid",
+          severity: "warning",
+          slug,
+          path: relPath,
+          message: "source_sha256 must be a 64-character lowercase sha256 digest; identity comparison skipped",
+        });
+      } else {
+        sourceDigestPresent += 1;
+        const current = readAssetDigest(relPath);
+        if ("digest" in current && current.digest !== declaredDigest) {
+          addFinding({
+            code: "filehub.memory.source_digest_changed",
+            severity: "warning",
+            slug,
+            path: relPath,
+            message:
+              `source bytes changed since ingest (source_identity=changed, semantic_verification=not_performed): ` +
+              `page records ${declaredDigest.slice(0, 12)}…, current file is ${current.digest.slice(0, 12)}…; ` +
+              "derived summary/extract may be stale — re-verify before reuse",
+          });
+        }
       }
     }
 
@@ -1344,20 +1396,19 @@ export async function filehubCheck(
   let assetContentUnreadable = 0;
   for (const file of scan.files) {
     if (file.kind !== "asset") continue;
-    let digest: string;
-    try {
-      digest = sha256RegularFile(resolve(scan.rootAbs, file.relPath));
-      assetContentHashed += 1;
-    } catch (error) {
+    const read = readAssetDigest(file.relPath);
+    if ("error" in read) {
       assetContentUnreadable += 1;
       addFinding({
         code: "filehub.asset.content_unreadable",
         severity: "unknown",
         path: file.relPath,
-        message: `asset content could not be hashed: ${(error as Error).message}`,
+        message: `asset content could not be hashed: ${read.error}`,
       });
       continue;
     }
+    assetContentHashed += 1;
+    const digest = read.digest;
     if (!assetPathsByHash.has(digest)) assetPathsByHash.set(digest, []);
     assetPathsByHash.get(digest)!.push(file.relPath);
   }
@@ -1473,6 +1524,8 @@ export async function filehubCheck(
     asset_pages: readablePages.length,
     active_asset_pages: activePages.length,
     inactive_asset_pages: inactivePages.length,
+    source_digest_present: sourceDigestPresent,
+    source_digest_absent: sourceDigestAbsent,
   };
 
   const complete =

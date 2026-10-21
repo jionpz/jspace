@@ -11,6 +11,7 @@ owner_kind: <project|area>    # 与 slug/rel_path 的 owner 一致
 tags: [asset, source:session]  # 路由 tag asset + 来源 tag:会话内 source:session / 无头 cron source:cron
                                # 来源 tag 按运行模式选,纪律源见 jspace-use/references/gbrain.md「Provenance tag」
 rel_path: <相对 filehub 根的路径>   # M5 起:机器无关指针标识(见下)
+source_sha256: <64 位小写 sha256>  # Phase B:入库时原件字节摘要,取 journal 的 targetHash;旧页可缺
 ---
 # <语义名>
 
@@ -28,6 +29,21 @@ rel_path: <相对 filehub 根的路径>   # M5 起:机器无关指针标识(见�
 ## Pointer
 <原文件绝对路径>
 ```
+
+## source_sha256(入库字节身份,Phase B)
+
+- **值**:`jspace ingest status <journal-id> --json` 输出的 `targetHash`(归档目标字节的 sha256;
+  journal 已核对 source/target 一致)。
+- **写**:新页 frontmatter 写 `source_sha256`;普通移动不改变它;明确新版写新页并用 `Supersedes`
+  指旧页,不覆盖旧页。
+- **读**:`jspace filehub check` 会把该值与当前 `rel_path` 文件的字节摘要比较;不一致时报
+  `filehub.memory.source_digest_changed`(warning,status=attention,exit 1),message 含
+  `source_identity=changed` 与 `semantic_verification=not_performed`。它只说明“派生可能基于旧
+  原件”,不说明摘要/抽取语义错误。
+- **旧页**:缺该字段时 check 不报单条 finding,只在 `memory` coverage 里计入
+  `source_digest_absent`;不强制迁移。
+- **完成校验**:页含该字段时,`jspace ingest advance <journal-id> --complete` 会读回比对
+  journal `targetHash`,不一致则 blocked。
 
 ## 深度抽取(office)页内纪律
 

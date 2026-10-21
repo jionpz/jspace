@@ -247,7 +247,12 @@ function parseTags(content: string): string[] {
     .filter(Boolean);
 }
 
-function requireAssetMetadata(journal: IngestJournalV2, content: string): string[] {
+interface AssetPageMetadata {
+  tags: string[];
+  sourceSha256?: string;
+}
+
+function requireAssetMetadata(journal: IngestJournalV2, content: string): AssetPageMetadata {
   const fields = parseFrontmatter(content);
   const tags = parseTags(content);
   if (fields.get("project") !== journal.ownerId) {
@@ -260,12 +265,21 @@ function requireAssetMetadata(journal: IngestJournalV2, content: string): string
   if (declaredOwnerKind !== undefined && declaredOwnerKind !== journal.ownerKind) {
     fail(`gbrain page owner_kind must be ${journal.ownerKind}`);
   }
+  const declaredDigest = fields.get("source_sha256");
+  if (declaredDigest !== undefined) {
+    if (!/^[0-9a-f]{64}$/.test(declaredDigest)) {
+      fail("gbrain page source_sha256 must be a 64-character lowercase sha256 digest");
+    }
+    if (declaredDigest !== journal.targetHash) {
+      fail("gbrain page source_sha256 must equal the journal targetHash");
+    }
+  }
   if (!tags.includes("asset")) fail("gbrain asset page tags must include asset");
   const provenance = tags.filter((tag) => tag === "source:session" || tag === "source:cron");
   if (provenance.length !== 1) {
     fail("gbrain asset page tags must include exactly one of source:session or source:cron");
   }
-  return tags;
+  return { tags, ...(declaredDigest !== undefined ? { sourceSha256: declaredDigest } : {}) };
 }
 
 async function verifyGbrainPage(journal: IngestJournalV2, gbrain: GbrainDeps): Promise<IngestGbrainEvidence> {
@@ -293,7 +307,8 @@ async function verifyGbrainPage(journal: IngestJournalV2, gbrain: GbrainDeps): P
     ownerKind: journal.ownerKind,
     ownerId: journal.ownerId,
     relPath: journal.relPath,
-    tags: [...new Set([...page.tags, ...contentTags])],
+    tags: [...new Set([...page.tags, ...contentTags.tags])],
+    ...(contentTags.sourceSha256 !== undefined ? { sourceSha256: contentTags.sourceSha256 } : {}),
   };
 }
 

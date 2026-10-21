@@ -123,7 +123,12 @@ function fakeGbrain(result: (slug: string) => Promise<GbrainPageResult>): Gbrain
   };
 }
 
-function assetPage(relPath: string, ownerId = "foo", ownerKind = "project"): string {
+function assetPage(
+  relPath: string,
+  ownerId = "foo",
+  ownerKind = "project",
+  sourceSha256?: string,
+): string {
   return [
     "---",
     "type: note",
@@ -132,6 +137,7 @@ function assetPage(relPath: string, ownerId = "foo", ownerKind = "project"): str
     `owner_kind: ${ownerKind}`,
     "tags: [asset, source:session]",
     `rel_path: ${relPath}`,
+    ...(sourceSha256 !== undefined ? [`source_sha256: ${sourceSha256}`] : []),
     "---",
     "# Doc",
     "",
@@ -421,4 +427,36 @@ test("status/list expose schema-2 owner and checkpoint evidence", () => {
   expect((status.data as { ownerKind: string }).ownerKind).toBe("project");
   const list = ingestList(workbench, true);
   expect((list.data as { journals: unknown[] }).journals).toHaveLength(1);
+});
+
+test("gbrain readback records the page-declared source digest", async () => {
+  const source = sourceFile();
+  ingestBegin(workbench, args(source));
+  const id = journalId();
+  const targetHash = readJournals(workbench).records[0].targetHash;
+  const page = assetPage("projects/foo/2026-10-18-doc.txt", "foo", "project", targetHash);
+  await ingestAdvance(workbench, id, "gbrain", fakeGbrain(async (slug) => pageFor(slug, page)));
+  expect(readJournals(workbench).records[0].gbrainEvidence?.sourceSha256).toBe(targetHash);
+});
+
+test("gbrain readback rejects a source digest that does not match the staged bytes", async () => {
+  const source = sourceFile();
+  ingestBegin(workbench, args(source));
+  const id = journalId();
+  const page = assetPage("projects/foo/2026-10-18-doc.txt", "foo", "project", "f".repeat(64));
+  await expect(
+    ingestAdvance(workbench, id, "gbrain", fakeGbrain(async (slug) => pageFor(slug, page))),
+  ).rejects.toThrow(/source_sha256 must equal the journal targetHash/);
+  expect(readJournals(workbench).records[0].status).toBe("staged");
+});
+
+test("gbrain readback rejects a malformed source digest", async () => {
+  const source = sourceFile();
+  ingestBegin(workbench, args(source));
+  const id = journalId();
+  const page = assetPage("projects/foo/2026-10-18-doc.txt", "foo", "project", "not-a-digest");
+  await expect(
+    ingestAdvance(workbench, id, "gbrain", fakeGbrain(async (slug) => pageFor(slug, page))),
+  ).rejects.toThrow(/64-character lowercase sha256/);
+  expect(readJournals(workbench).records[0].status).toBe("staged");
 });

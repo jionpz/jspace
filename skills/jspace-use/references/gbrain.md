@@ -279,7 +279,7 @@ jspace pending stage <slug> \
 
 写失败交给原生产者处理；读侧发现缺页/取代链断裂只报告并转交，不顺手改库。
 
-`jspace memory check` 只读给出结构、来源、生命周期、指针、keyset 完整性和 backlink coverage；`checked/pass/issues/partial/unknown` 是机器覆盖结论，历史元数据缺口单列为 unknown，不证明正文语义事实为真。`jspace filehub check` 只读核对现行资产、index 与指针关系；inactive 资产页仅保留历史，index 指向它会报 `filehub.index.page_inactive`。同内容跨路径告警 `filehub.asset.duplicate_content` 只提示人工处置，不自动移动或删除文件。
+`jspace memory check` 只读给出结构、来源、生命周期、指针、keyset 完整性和 backlink coverage；`checked/pass/issues/partial/unknown` 是机器覆盖结论，历史元数据缺口单列为 unknown，不证明正文语义事实为真。`jspace filehub check` 只读核对现行资产、index 与指针关系；inactive 资产页仅保留历史，index 指向它会报 `filehub.index.page_inactive`。同内容跨路径告警 `filehub.asset.duplicate_content` 只提示人工处置，不自动移动或删除文件。asset 页含 `source_sha256` 时，check 还会比较当前 `rel_path` 字节摘要；不一致报 `filehub.memory.source_digest_changed`（warning，message 标注 `source_identity=changed` 与 `semantic_verification=not_performed`，只表示派生可能基于旧原件，不证明语义错误）；旧页缺该字段不报单条 finding，只在 memory coverage 计 `source_digest_absent`。
 
 ## 12. gbrain 版本与健康
 

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import {
   lstatSync,
   mkdirSync,
@@ -550,4 +551,88 @@ test("filehubCheck is read-only for files and gbrain", async () => {
   await filehubCheck(guarded, { root, projects: PROJECTS });
   expect(snapshot()).toEqual(before);
   expect(writes).toBe(0);
+});
+
+function sha256Text(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+function pagesWithDigest(digest: string | undefined): PageSpec[] {
+  const marker = "rel_path: projects/acme/report.md";
+  const content =
+    digest === undefined
+      ? ASSET_PAGE
+      : ASSET_PAGE.replace(marker, `${marker}\nsource_sha256: ${digest}`);
+  return [{ slug: "assets/acme/report", content, tags: ["asset", "source:session"] }];
+}
+
+test("filehubCheck keeps a matching source digest ok and counts coverage", async () => {
+  const digest = sha256Text("report\n");
+  const report = await filehubCheck(fakeGbrain(pagesWithDigest(digest)), {
+    root,
+    projects: PROJECTS,
+  });
+  expect(report.status).toBe("ok");
+  expect(report.findings).toEqual([]);
+  expect(report.coverage.memory.source_digest_present).toBe(1);
+  expect(report.coverage.memory.source_digest_absent).toBe(0);
+});
+
+test("filehubCheck reports a changed source digest as needs-review without claiming semantic failure", async () => {
+  const digest = sha256Text("report\n");
+  writeFileSync(join(root, "projects", "acme", "report.md"), "report changed\n");
+  const report = await filehubCheck(fakeGbrain(pagesWithDigest(digest)), {
+    root,
+    projects: PROJECTS,
+  });
+  expect(report.status).toBe("attention");
+  const finding = report.findings.find((item) => item.code === "filehub.memory.source_digest_changed");
+  expect(finding?.severity).toBe("warning");
+  expect(finding?.slug).toBe("assets/acme/report");
+  expect(finding?.path).toBe("projects/acme/report.md");
+  expect(finding?.message).toContain("source_identity=changed");
+  expect(finding?.message).toContain("semantic_verification=not_performed");
+  expect(report.coverage.memory.source_digest_present).toBe(1);
+  expect(renderFilehubCheck(report).exitCode).toBe(1);
+});
+
+test("a pure move with an unchanged source digest stays ok", async () => {
+  const digest = sha256Text("report\n");
+  writeFileSync(join(root, "projects", "acme", "report-2026.md"), "report\n");
+  rmSync(join(root, "projects", "acme", "report.md"));
+  writeFileSync(
+    join(root, "projects", "acme", "index.md"),
+    INDEX.replace("[[report.md]]", "[[report-2026.md]]"),
+  );
+  const page = ASSET_PAGE.replace(
+    "rel_path: projects/acme/report.md",
+    `rel_path: projects/acme/report-2026.md\nsource_sha256: ${digest}`,
+  );
+  const report = await filehubCheck(
+    fakeGbrain([{ slug: "assets/acme/report", content: page, tags: ["asset", "source:session"] }]),
+    { root, projects: PROJECTS },
+  );
+  expect(report.status).toBe("ok");
+  expect(report.coverage.memory.source_digest_present).toBe(1);
+});
+
+test("legacy pages without source_sha256 stay silent but are counted as absent", async () => {
+  const report = await filehubCheck(fakeGbrain(validPages()), {
+    root,
+    projects: PROJECTS,
+  });
+  expect(report.status).toBe("ok");
+  expect(report.findings).toEqual([]);
+  expect(report.coverage.memory.source_digest_absent).toBe(1);
+});
+
+test("a malformed source_sha256 is a warning and is not compared", async () => {
+  const report = await filehubCheck(fakeGbrain(pagesWithDigest("not-a-digest")), {
+    root,
+    projects: PROJECTS,
+  });
+  expect(report.status).toBe("attention");
+  const finding = report.findings.find((item) => item.code === "filehub.memory.source_digest_invalid");
+  expect(finding?.severity).toBe("warning");
+  expect(report.coverage.memory.source_digest_absent).toBe(1);
 });

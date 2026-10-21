@@ -39,6 +39,9 @@ export interface IngestGbrainEvidence {
   ownerId: string;
   relPath: string;
   tags: string[];
+  /** Optional page-declared digest of the archived source bytes (`source_sha256`).
+   *  When present it must equal the journal targetHash; older pages may omit it. */
+  sourceSha256?: string;
 }
 
 export interface IngestIndexEvidence {
@@ -143,6 +146,22 @@ function readSha256(
   return value;
 }
 
+function readOptionalSha256(
+  obj: Record<string, unknown>,
+  key: string,
+  prefix: string,
+  code: string,
+  issues: IssueCollector,
+): string | undefined {
+  const value = obj[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !SHA256_PATTERN.test(value)) {
+    issues.add(code, `${prefix}.${key}`, "must be a 64-character lowercase sha256 hex digest");
+    return undefined;
+  }
+  return value;
+}
+
 function decodeGbrainEvidence(
   value: unknown,
   journal: Record<string, unknown>,
@@ -156,7 +175,17 @@ function decodeGbrainEvidence(
   const before = issues.issues.length;
   checkNoUnknownFields(
     value,
-    ["verifiedAt", "revision", "contentHash", "slug", "ownerKind", "ownerId", "relPath", "tags"],
+    [
+      "verifiedAt",
+      "revision",
+      "contentHash",
+      "slug",
+      "ownerKind",
+      "ownerId",
+      "relPath",
+      "tags",
+      "sourceSha256",
+    ],
     prefix,
     "ingest.gbrainEvidence.unknown-field",
     issues,
@@ -186,6 +215,13 @@ function decodeGbrainEvidence(
   );
   const ownerId = readRequiredString(value, "ownerId", prefix, "ingest.gbrainEvidence.ownerId.invalid", issues);
   const relPath = readRequiredString(value, "relPath", prefix, "ingest.gbrainEvidence.relPath.invalid", issues);
+  const sourceSha256 = readOptionalSha256(
+    value,
+    "sourceSha256",
+    prefix,
+    "ingest.gbrainEvidence.sourceSha256.invalid",
+    issues,
+  );
 
   const tags: string[] = [];
   if (
@@ -226,6 +262,17 @@ function decodeGbrainEvidence(
   if (journal.slug !== undefined && slug !== undefined && slug !== journal.slug) {
     issues.add("ingest.gbrainEvidence.slug.mismatch", `${prefix}.slug`, "must match the journal slug");
   }
+  if (
+    sourceSha256 !== undefined &&
+    typeof journal.targetHash === "string" &&
+    sourceSha256 !== journal.targetHash
+  ) {
+    issues.add(
+      "ingest.gbrainEvidence.sourceSha256.mismatch",
+      `${prefix}.sourceSha256`,
+      "must match the journal targetHash",
+    );
+  }
 
   if (issues.issues.length !== before) return undefined;
   return {
@@ -237,6 +284,7 @@ function decodeGbrainEvidence(
     ownerId: ownerId as string,
     relPath: relPath as string,
     tags,
+    ...(sourceSha256 !== undefined ? { sourceSha256 } : {}),
   };
 }
 

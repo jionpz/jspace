@@ -375,3 +375,17 @@ test("sha256File is byte-level", () => {
   expect(sha256File(path)).toBe(createHash("sha256").update(bytes).digest("hex"));
   expect(sha256File(path)).not.toBe(createHash("sha256").update(bytes.toString("utf-8")).digest("hex"));
 });
+
+test("refreshed gbrain evidence with a mismatched source digest blocks completion", async () => {
+  const source = sourceFile();
+  const created = beginIngest(root, plan(source), track().ops);
+  expect(created.kind).toBe("created");
+  if (created.kind !== "created") return;
+  await advanceToIndex(created.journal.id);
+  const journal = readJournal(root, created.journal.id);
+  const refreshed = { ...gbrainEvidence(journal), sourceSha256: "f".repeat(64) };
+  expect(() => completeIngest(root, created.journal.id, track().ops, undefined, refreshed)).toThrow(
+    /source_sha256/,
+  );
+  expect(readJournal(root, created.journal.id).status).not.toBe("committed");
+});

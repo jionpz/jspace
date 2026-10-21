@@ -339,6 +339,11 @@ function completeIngestImpl(
   ) {
     throw new Error(`ingest ${id}: refreshed gbrain evidence does not match the journal plan`);
   }
+  if (gbrainEvidence.sourceSha256 !== undefined && gbrainEvidence.sourceSha256 !== journal.targetHash) {
+    throw new Error(
+      `ingest ${id}: refreshed gbrain evidence source_sha256 does not match the journal targetHash`,
+    );
+  }
 
   const block = (reason: string): CompleteResult => {
     const blocked = failedJournal(journal, "index", reason);

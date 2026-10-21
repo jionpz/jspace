@@ -50,6 +50,7 @@ project: acme
 owner_kind: project
 tags: [asset, 报价, source:session]
 rel_path: projects/acme/2026-08-03-供应商报价明细-v1.xlsx
+source_sha256: <journal targetHash,jspace ingest status <journal-id> --json 可读>
 ---
 # 供应商报价明细
 
@@ -122,6 +123,6 @@ jspace ingest advance <journal-id> --complete    # 同一命令幂等收尾
 
 ## 断言清单(照此判"做完没")
 - [ ] `jspace ingest list` 无该 id 的 in-progress(committed 或已 fail)
-- [ ] `gbrain call get_page '{"slug":"assets/acme/供应商报价明细","include_content":true}'` 页在，frontmatter project/owner_kind/tags/rel_path 齐
+- [ ] `gbrain call get_page '{"slug":"assets/acme/供应商报价明细","include_content":true}'` 页在，frontmatter project/owner_kind/tags/rel_path/source_sha256 齐，且 source_sha256 等于 journal targetHash
 - [ ] `gbrain query "<关键数字措辞>"` top-1 == 目标页
 - [ ] `_inbox/` 该文件已移除(committed 后)

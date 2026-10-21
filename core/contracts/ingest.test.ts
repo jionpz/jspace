@@ -154,3 +154,21 @@ test("failed journal requires failedStep and a reason, while non-failed states r
 test("staged journal cannot claim gbrain evidence", () => {
   expectIssue(valid({ gbrainEvidence: gbrainEvidence() }), "ingest.gbrainEvidence.unexpected");
 });
+
+test("gbrain evidence may carry a page source digest that matches the journal target hash", () => {
+  const journal = valid({ status: "gbrain", gbrainEvidence: gbrainEvidence({ sourceSha256: HASH }) });
+  const result = decodeIngestJournal(journal);
+  expect(result.ok).toBe(true);
+  if (result.ok) expect(result.value.gbrainEvidence?.sourceSha256).toBe(HASH);
+});
+
+test("gbrain evidence source digest must be a sha256 and must match the journal target hash", () => {
+  expectIssue(
+    valid({ status: "gbrain", gbrainEvidence: gbrainEvidence({ sourceSha256: "not-a-digest" }) }),
+    "ingest.gbrainEvidence.sourceSha256.invalid",
+  );
+  expectIssue(
+    valid({ status: "gbrain", gbrainEvidence: gbrainEvidence({ sourceSha256: INDEX_HASH }) }),
+    "ingest.gbrainEvidence.sourceSha256.mismatch",
+  );
+});
