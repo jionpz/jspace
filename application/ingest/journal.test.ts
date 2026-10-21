@@ -389,3 +389,20 @@ test("refreshed gbrain evidence with a mismatched source digest blocks completio
   );
   expect(readJournal(root, created.journal.id).status).not.toBe("committed");
 });
+
+test("completion rejects refreshed evidence that drops the recorded source digest", async () => {
+  const source = sourceFile();
+  const created = beginIngest(root, plan(source), track().ops);
+  expect(created.kind).toBe("created");
+  if (created.kind !== "created") return;
+  const journal = readJournal(root, created.journal.id);
+  const withDigest = { ...gbrainEvidence(journal), sourceSha256: journal.targetHash };
+  await advanceIngest(root, created.journal.id, "gbrain", async () => withDigest);
+  indexText = "# Index\n" + journal.indexEntry + "\n";
+  writeFileSync(join(filehub, "projects", "foo", "index.md"), indexText);
+  await advanceIngest(root, created.journal.id, "index", async (current) => indexEvidence(current));
+  expect(() =>
+    completeIngest(root, created.journal.id, track().ops, undefined, gbrainEvidence(journal)),
+  ).toThrow(/recorded gbrain checkpoint/);
+  expect(readJournal(root, created.journal.id).status).not.toBe("committed");
+});

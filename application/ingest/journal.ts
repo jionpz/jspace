@@ -344,6 +344,12 @@ function completeIngestImpl(
       `ingest ${id}: refreshed gbrain evidence source_sha256 does not match the journal targetHash`,
     );
   }
+  const recordedDigest = journal.gbrainEvidence?.sourceSha256;
+  if (recordedDigest !== undefined && gbrainEvidence.sourceSha256 !== recordedDigest) {
+    throw new Error(
+      `ingest ${id}: refreshed gbrain evidence source_sha256 does not match the recorded gbrain checkpoint`,
+    );
+  }
 
   const block = (reason: string): CompleteResult => {
     const blocked = failedJournal(journal, "index", reason);

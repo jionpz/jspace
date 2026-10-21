@@ -78,11 +78,11 @@ jspace ingest begin "<filehub>/_inbox/<file>" \
   --index-line "| <rel_path> | <document|deck|sheet|data|note> | <YYYY-MM-DD> | assets/<owner-id>/<语义名[-vN]> |"
 ```
 
-5. **写 asset 页并读回**:按 `gbrain-write.md` 生成完整页，frontmatter 至少含 `project: <owner-id>`、`tags: [asset, source:session|cron]`、`rel_path: <filehub 相对路径>`、`source: <harness>`、`source_sha256: <journal targetHash>`（从 `jspace ingest status <journal-id> --json` 读）；正文含 Summary、Key Facts、Pointer。调用 `put_page` 后必须 `get_page(include_content:true)` 读回；tags 是合并语义，若新旧来源 tag 同时存在，用 `remove_tag` CAS 清掉旧来源并再次读回。
+5. **写 asset 页并读回**:按 `gbrain-write.md` 生成完整页，frontmatter 至少含 `project: <owner-id>`、`tags: [asset, source:session|cron]`、`rel_path: <filehub 相对路径>`、`source: <harness>`、`source_sha256: <journal targetHash>`（从 `jspace ingest status <journal-id> --json` 读，写 64 位小写 hex；不要带尖括号、注释或命令）；正文含 Summary、Key Facts、Pointer。调用 `put_page` 后必须 `get_page(include_content:true)` 读回；tags 是合并语义，若新旧来源 tag 同时存在，用 `remove_tag` CAS 清掉旧来源并再次读回。
 6. **标 gbrain checkpoint**:只有真实页已读回且 slug/project/rel_path/tags 与 journal 一致，页含 `source_sha256` 时也等于 journal `targetHash`，才运行 `jspace ingest advance <journal-id> --gbrain`。
 7. **登记索引**:编辑 owner `index.md`，加入与 `--index-line` 逐字相同的行；然后 `jspace ingest advance <journal-id> --index`。该命令会真实读取 index，不是登记声明。
-8. **提交与清理**:`jspace ingest advance <journal-id> --complete` 会重新读 gbrain、重算 target/source hash、核对 index line，最后才移除 source；页 `source_sha256` 与 journal `targetHash` 不一致时 blocked。
-9. **验收**:`jspace ingest status <journal-id> --json` 为 committed；`jspace filehub check --json` 对本资产无新增 error/unknown；`memory-recall` 能按关键词命中。
+8. **提交与清理**:`jspace ingest advance <journal-id> --complete` 会重新读 gbrain、重算 target/source hash、核对 index line，最后才移除 source；页 `source_sha256` 与 journal `targetHash` 或已记录 checkpoint 不一致时命令失败（exit 1），journal 停在 `index`，修页后重跑 `--complete`。
+9. **验收**:`jspace ingest status <journal-id> --json` 为 committed；`jspace filehub check --json` 的 status 为 `ok` 且对本资产无新增 finding（含 warning：`source_digest_changed` / `source_digest_invalid` / `source_digest_unreadable`）；`memory-recall` 能按关键词命中。
 
 ### gbrain 写入最小请求
 

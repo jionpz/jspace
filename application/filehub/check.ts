@@ -1237,31 +1237,57 @@ export async function filehubCheck(
       // be able to turn a diagnostics command into a secret reader.
       const digestEligible =
         scanned !== undefined && (scanned.kind === "asset" || scanned.kind === "archive");
-      if (declaredDigest === undefined || declaredDigest === "") {
-        // Legacy pages predate the field. Coverage records the gap; per-asset
-        // findings stay silent so an un-migrated filehub does not turn noisy.
+      if (declaredDigest === undefined) {
+        if (page.parsed.lists.source_sha256 !== undefined) {
+          addFinding({
+            code: "filehub.memory.source_digest_invalid",
+            severity: "warning",
+            slug,
+            path: relPath,
+            message: "source_sha256 must be a scalar sha256 digest, not a list; identity comparison skipped",
+          });
+        }
+        // A missing field is a legacy page: coverage records the gap, but
+        // per-asset findings stay silent so an un-migrated filehub stays quiet.
       } else if (!/^[0-9a-f]{64}$/.test(declaredDigest)) {
         addFinding({
           code: "filehub.memory.source_digest_invalid",
           severity: "warning",
           slug,
           path: relPath,
-          message: "source_sha256 must be a 64-character lowercase sha256 digest; identity comparison skipped",
+          message:
+            declaredDigest === ""
+              ? "source_sha256 is empty; use the 64-character lowercase sha256 of the ingested bytes (empty is not the same as a missing legacy field)"
+              : "source_sha256 must be a 64-character lowercase sha256 digest; identity comparison skipped",
         });
       } else if (digestEligible) {
-        sourceDigestPresent += 1;
         const current = readAssetDigest(relPath);
-        if ("digest" in current && current.digest !== declaredDigest) {
-          addFinding({
-            code: "filehub.memory.source_digest_changed",
-            severity: "warning",
-            slug,
-            path: relPath,
-            message:
-              `source bytes changed since ingest (source_identity=changed, semantic_verification=not_performed): ` +
-              `page records ${declaredDigest.slice(0, 12)}…, current file is ${current.digest.slice(0, 12)}…; ` +
-              "derived summary/extract may be stale — re-verify before reuse",
-          });
+        if ("error" in current) {
+          // Ordinary assets already surface this through the duplicate-content
+          // pass; archived targets have no other consumer, so report here.
+          if (scanned.kind !== "asset") {
+            addFinding({
+              code: "filehub.memory.source_digest_unreadable",
+              severity: "unknown",
+              slug,
+              path: relPath,
+              message: `source_sha256 cannot be compared because the ${scanned.kind} target is unreadable: ${current.error}`,
+            });
+          }
+        } else {
+          sourceDigestPresent += 1;
+          if (current.digest !== declaredDigest) {
+            addFinding({
+              code: "filehub.memory.source_digest_changed",
+              severity: "warning",
+              slug,
+              path: relPath,
+              message:
+                `source bytes changed since ingest (source_identity=changed, semantic_verification=not_performed): ` +
+                `page records ${declaredDigest.slice(0, 12)}…, current file is ${current.digest.slice(0, 12)}…; ` +
+                "derived summary/extract may be stale — re-verify before reuse",
+            });
+          }
         }
       }
     }

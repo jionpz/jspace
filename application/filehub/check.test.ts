@@ -677,3 +677,57 @@ test("coverage counters add up when the page target is missing", async () => {
   expect(report.coverage.memory.source_digest_present).toBe(0);
   expect(report.coverage.memory.source_digest_absent).toBe(1);
 });
+
+test("an empty source_sha256 is invalid, not silently treated as legacy", async () => {
+  const page = ASSET_PAGE.replace(
+    "rel_path: projects/acme/report.md",
+    "rel_path: projects/acme/report.md\nsource_sha256: ",
+  );
+  const report = await filehubCheck(
+    fakeGbrain([{ slug: "assets/acme/report", content: page, tags: ["asset", "source:session"] }]),
+    { root, projects: PROJECTS },
+  );
+  expect(report.status).toBe("attention");
+  const finding = report.findings.find((item) => item.code === "filehub.memory.source_digest_invalid");
+  expect(finding?.severity).toBe("warning");
+  expect(finding?.message).toContain("empty");
+  expect(report.coverage.memory.source_digest_present).toBe(0);
+  expect(report.coverage.memory.source_digest_absent).toBe(1);
+});
+
+test("an unreadable archived target is unknown and never counted as present", async () => {
+  if (typeof process.getuid === "function" && process.getuid() === 0) return;
+  mkdirSync(join(root, "archive", "2026"), { recursive: true });
+  writeFileSync(join(root, "archive", "2026", "old.md"), "archived\n", { mode: 0o000 });
+  const page = `---
+type: note
+source: codex
+project: acme
+owner_kind: project
+rel_path: archive/2026/old.md
+source_sha256: ${"a".repeat(64)}
+tags: [asset, source:session]
+---
+# Old
+`;
+  const report = await filehubCheck(
+    fakeGbrain([{ slug: "assets/acme/old", content: page, tags: ["asset", "source:session"] }]),
+    { root, projects: PROJECTS },
+  );
+  const finding = report.findings.find((item) => item.code === "filehub.memory.source_digest_unreadable");
+  expect(finding?.severity).toBe("unknown");
+  expect(report.coverage.memory.source_digest_present).toBe(0);
+  expect(report.coverage.memory.source_digest_absent).toBe(1);
+});
+
+test("inactive asset pages never produce a digest finding", async () => {
+  writeFileSync(join(root, "projects", "acme", "report.md"), "report changed\n");
+  const page = ASSET_PAGE.replace("tags: [asset, source:session]", "tags: [asset, status:superseded, source:session]");
+  const report = await filehubCheck(
+    fakeGbrain([{ slug: "assets/acme/report", content: page, tags: ["asset", "status:superseded", "source:session"] }]),
+    { root, projects: PROJECTS },
+  );
+  expect(report.findings.some((item) => item.code === "filehub.memory.source_digest_changed")).toBe(false);
+  expect(report.coverage.memory.source_digest_present).toBe(0);
+  expect(report.coverage.memory.source_digest_absent).toBe(0);
+});

@@ -460,3 +460,23 @@ test("gbrain readback rejects a malformed source digest", async () => {
   ).rejects.toThrow(/64-character lowercase sha256/);
   expect(readJournals(workbench).records[0].status).toBe("staged");
 });
+
+test("a page that drops source_sha256 after the gbrain checkpoint is rejected at completion", async () => {
+  const source = sourceFile();
+  ingestBegin(workbench, args(source));
+  const id = journalId();
+  const targetHash = readJournals(workbench).records[0].targetHash;
+  const relPath = "projects/foo/2026-10-18-doc.txt";
+  await ingestAdvance(
+    workbench,
+    id,
+    "gbrain",
+    fakeGbrain(async (slug) => pageFor(slug, assetPage(relPath, "foo", "project", targetHash))),
+  );
+  writeFileSync(join(projectRoot, "index.md"), "# Index\n2026-10-18 | doc.txt | assets/foo/doc\n");
+  await ingestAdvance(workbench, id, "index");
+  await expect(
+    ingestAdvance(workbench, id, "committed", fakeGbrain(async (slug) => pageFor(slug, assetPage(relPath)))),
+  ).rejects.toThrow(/dropped source_sha256/);
+  expect(readJournals(workbench).records[0].status).toBe("index");
+});

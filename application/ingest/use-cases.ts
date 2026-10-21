@@ -274,6 +274,15 @@ function requireAssetMetadata(journal: IngestJournalV2, content: string): AssetP
       fail("gbrain page source_sha256 must equal the journal targetHash");
     }
   }
+  const priorDigest = journal.gbrainEvidence?.sourceSha256;
+  if (priorDigest !== undefined) {
+    if (declaredDigest === undefined) {
+      fail("gbrain page dropped source_sha256 after the gbrain checkpoint");
+    }
+    if (declaredDigest !== priorDigest) {
+      fail("gbrain page source_sha256 changed after the gbrain checkpoint");
+    }
+  }
   if (!tags.includes("asset")) fail("gbrain asset page tags must include asset");
   const provenance = tags.filter((tag) => tag === "source:session" || tag === "source:cron");
   if (provenance.length !== 1) {

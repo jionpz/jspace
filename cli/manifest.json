@@ -74,7 +74,7 @@
     },
     {
       "path": "skills/jspace-use/references/gbrain.md",
-      "sha256": "c547c3f57d253b7138adea32feeafe5e12e92b050f8ac1dab2a9395f6fe9c168",
+      "sha256": "f436bedccccdc4b9ed08f0e3378f9ddca765b1293d19409180a19ede1cf4bc14",
       "ownership": "seed"
     },
     {
@@ -134,7 +134,7 @@
     },
     {
       "path": "skills/asset-ingest/SKILL.md",
-      "sha256": "8c9bcf6a338335a10662b316e1eae628783feb2751051321d8b99e99230ade2d",
+      "sha256": "3b475bdd339ce85f839e4cfd8d7087a12b8dcff199fe64aadc29764f44c8b847",
       "ownership": "seed"
     },
     {
@@ -149,7 +149,7 @@
     },
     {
       "path": "skills/asset-ingest/references/example-ingest.md",
-      "sha256": "ac940c08e51133d53ea03ccee6e2cc07d8a4482efafe599b3d4197d73dd3ddda",
+      "sha256": "fb8c75d5c0e6da2e903a0ceffad912859d08c120cecb6c042e35ebc92514d71c",
       "ownership": "seed"
     },
     {
@@ -159,7 +159,7 @@
     },
     {
       "path": "skills/asset-ingest/references/gbrain-write.md",
-      "sha256": "1250ffb95ba8b72f285f8f2b01995cf787bd0d8b46ee36952e3fa65b16c3fc86",
+      "sha256": "9067c96e58a4e360373805053eb5a0315975ba36cbf1b1e31338c259b23a47e8",
       "ownership": "seed"
     },
     {
