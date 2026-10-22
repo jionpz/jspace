@@ -79,7 +79,7 @@ jobs:
         shell: bash
         run: |
           ./${{ matrix.artifact }} --version
-          ./${{ matrix.artifact }} init --force /tmp/jspace-smoke
+          ./${{ matrix.artifact }} init --dir /tmp/jspace-smoke --force
           ./${{ matrix.artifact }} doctor --dir /tmp/jspace-smoke
 
       # Cron CRUD smoke (B3) — asserts the scheduler write / read-back / uninstall
@@ -104,7 +104,7 @@ jobs:
             sudo apt-get install -y -qq cron
           fi
           rm -rf "$WB"
-          "$BIN" init --force "$WB"
+          "$BIN" init --dir "$WB" --force
           "$BIN" cron add smoke-test --dir "$WB" --schedule "0 21 * * *" --harness claude --prompt "ci cron crud smoke"
 
           before=$("$BIN" doctor --dir "$WB" --json 2>/dev/null)
@@ -147,7 +147,7 @@ jobs:
           $bin = Join-Path $PWD '${{ matrix.artifact }}'
           $wb  = Join-Path $env:RUNNER_TEMP 'jspace-cron-smoke'
           if (Test-Path -LiteralPath $wb) { Remove-Item -LiteralPath $wb -Recurse -Force }
-          & $bin init --force $wb
+          & $bin init --dir $wb --force
           & $bin cron add smoke-test --dir $wb --schedule "0 21 * * *" --harness claude --prompt "ci cron crud smoke"
 
           $before = (& $bin doctor --dir $wb --json) -join "`n"
@@ -207,7 +207,7 @@ jobs:
           BIN="$PWD/${{ matrix.artifact }}"
           WB=/tmp/jspace-cron-smoke
           rm -rf "$WB"
-          "$BIN" init --force "$WB"
+          "$BIN" init --dir "$WB" --force
           "$BIN" cron add smoke-test --dir "$WB" --schedule "0 21 * * *" --harness claude --prompt "ci cron crud smoke"
           plan=$("$BIN" cron install --dry-run --dir "$WB")
           [[ "$plan" == *"[create]"* ]] || { echo "::error::cron install --dry-run planned no create op"; exit 1; }
