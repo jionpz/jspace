@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "bundle_version": "1.0.32",
+  "bundle_version": "1.0.33",
   "files": [
     {
       "path": "templates/workbench/.claude/settings.json",
