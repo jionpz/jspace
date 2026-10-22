@@ -73,9 +73,14 @@ export function crontabLine(
   const dom = d.Day ?? "*";
   const mon = d.Month ?? "*";
   const dow = d.Weekday ?? "*";
+  // The per-cron budget is baked into the line (never recomputed at trigger
+  // time), so it is the only way a cron.json `timeoutSec` can reach the
+  // scheduled run — and parseManagedLine reads it back so a changed budget
+  // reconciles as an update instead of "up to date" forever.
+  const timeout = c.timeoutSec === undefined ? "" : ` --timeout ${c.timeoutSec}`;
   const line =
     `${d.Minute} ${d.Hour} ${dom} ${mon} ${dow}  ` +
-    `cd ${shq(root)} && PATH=${shq(path)} HOME=${shq(home)} ${shq(jspaceBin)} cron run --dir ${shq(root)} --id ${shq(c.id)} ` +
+    `cd ${shq(root)} && PATH=${shq(path)} HOME=${shq(home)} ${shq(jspaceBin)} cron run --dir ${shq(root)} --id ${shq(c.id)}${timeout} ` +
     `>> ${shq(log)} 2>&1  # ${taskIdFor(tag, c.id)}`;
   if (line.length > 1000) fail(`crontab line for ${c.id} exceeds 1000 characters`);
   return line.replace(/%/g, "\\%");
@@ -264,7 +269,13 @@ export function parseManagedLine(line: string, tag: string): InstalledTask | nul
   // `cd … && PATH=… HOME=… '<binary>' cron run …`). Absent (hand-edited line)
   // falls back to no prefix → mismatches desired → update, the safe direction.
   const bin = quotedTokenBeforeRun(line, runAt);
-  const tailArgv = `cron run --id ${id} --dir ${dir}`;
+  // `--timeout <n>` is written unquoted (a bare integer) right after `--id`
+  // (crontabLine); reconstruct it or a budgeted cron would reconcile as an
+  // update on every install. A malformed/absent value reads as no budget — the
+  // same shape a pre-field line has, which then differs from a desired value
+  // and updates, the safe direction.
+  const timeout = tail.match(/--timeout\s+(\d+)(?=\s|$)/)?.[1];
+  const tailArgv = `cron run --id ${id} --dir ${dir}${timeout === undefined ? "" : ` --timeout ${timeout}`}`;
   return { taskId, cronId: id, schedule, argv: bin ? `${bin} ${tailArgv}` : tailArgv, envPath: envPathFromLine(line) };
 }
 

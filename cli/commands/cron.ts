@@ -33,8 +33,15 @@ const cronAddSpec: CommandSpec = {
     { name: "--tools", takesValue: true, help: "override harness default tools (claude/grok only)" },
     { name: "--model", takesValue: true, help: "pin the headless model for this cron (e.g. a free-tier provider so a rate-limited interactive default cannot stall the run)" },
     { name: "--disabled", takesValue: false, help: "add the cron disabled" },
+    {
+      name: "--timeout",
+      takesValue: true,
+      metavar: "SECONDS",
+      validate: (v) => (Number.isInteger(Number(v)) && Number(v) > 0 ? null : "argument --timeout: invalid number"),
+      help: "execution budget for every scheduled run of this cron (default: 1800); `cron run --timeout` still overrides a single run",
+    },
   ],
-  handler: (ctx, args) => cronAdd(ctx.root, s(args.id), s(args.schedule), s(args.harness), s(args.prompt), b(args.disabled), { isInstalled: (id) => cronIsInstalledForRoot(ctx.root, id) }, process.platform, optS(args.tools) || undefined, optS(args.model) || undefined),
+  handler: (ctx, args) => cronAdd(ctx.root, s(args.id), s(args.schedule), s(args.harness), s(args.prompt), b(args.disabled), { isInstalled: (id) => cronIsInstalledForRoot(ctx.root, id) }, process.platform, optS(args.tools) || undefined, optS(args.model) || undefined, optS(args.timeout) === undefined ? undefined : Number(s(args.timeout))),
 };
 
 const cronListSpec: CommandSpec = {
@@ -125,7 +132,7 @@ const cronRunSpec: CommandSpec = {
       takesValue: true,
       metavar: "SECONDS",
       validate: (v) => (Number(v) > 0 ? null : "argument --timeout: invalid number"),
-      help: "per-run timeout (default: 1800)",
+      help: "per-run timeout, overriding the cron's own timeoutSec for THIS run (default: the cron's timeoutSec, else 1800)",
     },
     { name: "--dir", takesValue: true, metavar: "DIR", help: "workbench root (default: current directory; schedulers pass this explicitly)" },
     {
@@ -141,7 +148,11 @@ const cronRunSpec: CommandSpec = {
       {
         cronId: s(args.id),
         dryRun: b(args.dryRun),
-        timeoutSec: Number(s(args.timeout) || "1800"),
+        // Absent when the flag is absent: the precedence (cron definition →
+        // DEFAULT_TIMEOUT_SEC) is resolved in cronRun, which is the only layer
+        // that has the decoded cron. A literal "1800" here would silently
+        // override the definition and re-break the whole feature.
+        timeoutSec: optS(args.timeout) === undefined ? undefined : Number(s(args.timeout)),
         force: b(args.force),
         harnessOverride: optS(args.harness),
       },

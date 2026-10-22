@@ -53,8 +53,25 @@ export interface CronDefinition {
    *  nightly), and the user's model choice for their own sessions is not
    *  jspace's to depend on. Absent = the harness's own resolution. */
   model?: string;
+  /** Optional per-task execution budget in seconds. This is the DEFAULT for
+   *  every scheduled run of this cron; `cron run --timeout N` still overrides
+   *  it for a single run (manual troubleshooting must keep working).
+   *
+   *  It belongs here — not only on the CLI — because the planner (`planReconciliation`)
+   *  is the only thing that can make a changed budget reach the installed
+   *  entry. `--timeout` is a per-run flag the scheduler never sees: the plist
+   *  argv is `cron run --id <id> --dir <root>`, so before this field the
+   *  scheduled path always ate the 1800s default and two months of
+   *  `server-status` timeouts (1915s / 2042s, exit 143) could not be fixed by
+   *  editing cron.json at all.
+   *
+   *  Absent = DEFAULT_TIMEOUT_SEC (1800), byte-identical to pre-field behaviour. */
+  timeoutSec?: number;
   enabled: boolean;
 }
+
+/** Execution budget used when neither the cron definition nor `--timeout` names one. */
+export const DEFAULT_TIMEOUT_SEC = 1800;
 
 export interface CronsFile {
   schema_version: 1;
@@ -65,7 +82,12 @@ export interface CronsFile {
 export interface CronRunInvocation {
   workbench: string; // workbench root (--dir)
   cronId: string;
-  timeoutSec?: number; // default 1800
+  /** Per-run budget written into the scheduler entry. Sourced from the cron
+   *  definition's `timeoutSec` (so a changed budget re-reconciles the entry);
+   *  absent = hold at DEFAULT_TIMEOUT_SEC, and the installed argv then carries
+   *  no `--timeout` — the same bytes a pre-field entry has, so adding this
+   *  field never rewrites every existing schedule on its own. */
+  timeoutSec?: number;
   force?: boolean; // skip today-success
 }
 
@@ -88,7 +110,7 @@ export function decodeCrons(input: unknown, harnessEnum: readonly string[]): Dec
         return;
       }
       const before = issues.issues.length;
-      checkNoUnknownFields(item, ["id", "schedule", "harness", "prompt", "target", "tools", "model", "enabled"], prefix, "cron.entry.unknown-field", issues);
+      checkNoUnknownFields(item, ["id", "schedule", "harness", "prompt", "target", "tools", "model", "timeoutSec", "enabled"], prefix, "cron.entry.unknown-field", issues);
       const id = readRequiredString(item, "id", prefix, "cron.id.invalid", issues);
       const schedule = readRequiredString(item, "schedule", prefix, "cron.schedule.invalid", issues);
       readEnum(issues, "cron.harness.invalid", `${prefix}.harness`, item.harness, harnessEnum);
@@ -127,6 +149,15 @@ export function decodeCrons(input: unknown, harnessEnum: readonly string[]): Dec
         if (typeof item.model === "string" && item.model.trim().length > 0) model = item.model;
         else issues.add("cron.model.invalid", `${prefix}.model`, "model must be a non-empty string (harness model id)");
       }
+      let timeoutSec: number | undefined;
+      if (item.timeoutSec !== undefined) {
+        // A positive whole number of seconds. Reject 0/negative/NaN: a zero budget
+        // kills every run instantly and a float carries no meaning for a wall-clock
+        // kill, so both must fail loud rather than be silently coerced.
+        const t = item.timeoutSec;
+        if (typeof t === "number" && Number.isInteger(t) && t > 0) timeoutSec = t;
+        else issues.add("cron.timeoutSec.invalid", `${prefix}.timeoutSec`, "timeoutSec must be a positive integer (seconds)");
+      }
       if (issues.issues.length === before) {
         crons.push({
           id: id as string,
@@ -136,6 +167,7 @@ export function decodeCrons(input: unknown, harnessEnum: readonly string[]): Dec
           ...(target !== undefined ? { target } : {}),
           ...(tools !== undefined ? { tools } : {}),
           ...(model !== undefined ? { model } : {}),
+          ...(timeoutSec !== undefined ? { timeoutSec } : {}),
           enabled: item.enabled as boolean,
         });
       }

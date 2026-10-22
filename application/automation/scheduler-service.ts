@@ -33,7 +33,14 @@ export function buildDesired(crons: CronDefinition[], tag: string, root: string,
     // comparison key so a stale/diverged path is repaired by install instead of
     // comparing equal forever (2026-10-13: inbox-tidy's plist pointed at a
     // months-old dev build and no install ever noticed).
-    argv: invocationArgv({ cronId: c.id, workbench: root }, env.jspaceBinary).join(" "),
+    // `timeoutSec` rides the installed argv because that is the ONLY channel
+    // launchd/cron/schtasks give a definition to reach the scheduled run: the
+    // entry is argv `cron run --id <id> --dir <root>` and nothing is recomputed
+    // at trigger time. Baking it here also puts it in the reconciliation key
+    // (invocationArgv), so editing the budget produces an update op instead of
+    // reporting "up to date" forever — the PATH (#50) and argv[0] failure mode
+    // for the third time.
+    argv: invocationArgv({ cronId: c.id, workbench: root, ...(c.timeoutSec !== undefined ? { timeoutSec: c.timeoutSec } : {}) }, env.jspaceBinary).join(" "),
     // A platform that ignores env.path declares so by not reading it back
     // (win32's schtasks); leaving the field undefined there keeps the
     // comparison from drifting on a value that was never written.

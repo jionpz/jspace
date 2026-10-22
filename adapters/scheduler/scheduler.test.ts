@@ -12,6 +12,7 @@ import { linuxAdapter, makeLinuxAdapter, crontabBlock, crontabLine, crontabUnava
 import { darwinAdapter, inspectDarwin, plistPath, parsePlistName, plistBelongsToTag, scheduleFromIntervalDict, argvFromPlistStdout, envPathFromPlistStdout } from "./darwin.ts";
 import { schtasksArgs, parseOpContent, parseSchtasksXml, win32Adapter, csvTaskName, cronIdFromTaskName, queryTasksFromOutput } from "./win32.ts";
 import { planReconciliation } from "../../application/automation/scheduler.ts";
+import { buildDesired } from "../../application/automation/scheduler-service.ts";
 import { invocationArgv } from "../../application/automation/invocation.ts";
 import type { CronDefinition } from "../../core/contracts/cron.ts";
 import type { InstalledTask } from "./types.ts";
@@ -854,4 +855,120 @@ test("linux install writes plain 5-field crontab entries — no anacron/@reboot 
   expect(block).not.toContain("@");
   expect(block.toLowerCase()).not.toContain("anacron");
   expect(block.toLowerCase()).not.toContain("run-parts");
+});
+
+// ---- timeoutSec: the per-cron budget is part of the reconciliation key ----
+// A budget is baked into the installed entry at install time and never
+// recomputed at trigger time, so editing cron.json is the ONLY way to change a
+// scheduled run's budget — and that only works if the value is in the
+// comparison key. Without it `cron install` reports "up to date" forever while
+// the entry keeps killing the run at the old budget (the PATH #50 and argv[0]
+// failure mode, third time; observed on server-status: 1915s and 2042s kills
+// against a 1800s default that cron.json could not change).
+
+const TO_CRON = (timeoutSec?: number): CronDefinition => ({
+  id: "inbox",
+  schedule: "0 21 * * *",
+  harness: "claude",
+  prompt: "x",
+  enabled: true,
+  ...(timeoutSec === undefined ? {} : { timeoutSec }),
+});
+
+/** Render a built plist as `plutil -p` does for the two fields inspect() reads,
+ *  so a buildPlist / argvFromPlistStdout drift reds here instead of being
+ *  papered over by a hand-written dump. */
+function plistDump(plistBody: string, root: string): string {
+  const block = plistBody.match(/<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/);
+  expect(block).not.toBeNull();
+  const strs = [...block![1].matchAll(/<string>([^<]*)<\/string>/g)].map((m) => m[1]);
+  return `"ProgramArguments" => [\n${strs.map((s, i) => `    ${i} => "${s}"`).join("\n")}\n]\n"WorkingDirectory" => "${root}"\n`;
+}
+
+/** Read back a written win32 task the way inspect() does, for an arbitrary cron:
+ *  op content (JSON argv array) -> /tr -> schtasks' first-space split -> XML. */
+function win32TaskFrom(tag: string, cron: CronDefinition, content: string): InstalledTask {
+  const args = JSON.parse(content) as string[];
+  const tr = args[args.indexOf("/tr") + 1];
+  let split = -1;
+  let inQuotes = false;
+  for (let i = 0; i < tr.length; i++) {
+    if (tr[i] === '"') inQuotes = !inQuotes;
+    else if (tr[i] === " " && !inQuotes) { split = i; break; }
+  }
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const xml =
+    `<Task xmlns="x"><Triggers><CalendarTrigger><StartBoundary>2026-08-05T21:00:00</StartBoundary>` +
+    `<ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger></Triggers>` +
+    `<Actions><Exec><Command>${esc(tr.slice(0, split))}</Command><Arguments>${esc(tr.slice(split + 1))}</Arguments></Exec></Actions></Task>`;
+  const parsed = parseSchtasksXml(xml)!;
+  return { taskId: win32Adapter.identity(tag, cron.id).taskId, cronId: cron.id, schedule: parsed.schedule, argv: parsed.argv };
+}
+
+test("timeoutSec darwin: budget rides ProgramArguments, round-trips, and a change -> update", () => {
+  const tag = "tagA";
+  const root = "/wb";
+  const env = { jspaceBinary: FR4_BIN, home: "/Users/u", path: "/bin" };
+  const id = darwinAdapter.identity(tag, "inbox");
+  const name = `${id.taskId}.plist`;
+  const readBack = (cron: CronDefinition) =>
+    ({ taskId: id.taskId, cronId: cron.id, schedule: cron.schedule, argv: argvFromPlistStdout(plistDump(darwinAdapter.buildContent(cron, tag, root, env), root), name) });
+
+  const budgeted = buildDesired([TO_CRON(3600)], tag, root, env, darwinAdapter);
+  // the value really is in the installed argv, not just in cron.json
+  expect(budgeted[0].argv).toBe(`${FR4_BIN} cron run --id inbox --dir /wb --timeout 3600`);
+  expect(darwinAdapter.buildContent(TO_CRON(3600), tag, root, env)).toContain("<string>--timeout</string>");
+  expect(planReconciliation(budgeted, [readBack(TO_CRON(3600))])).toEqual([]); // write -> read -> no-op
+
+  // THE acceptance criterion: editing the budget produces an update, not "up to date"
+  const ops = planReconciliation(budgeted, [readBack(TO_CRON(undefined))]);
+  expect(ops).toEqual([{ action: "update", taskId: id.taskId, content: darwinAdapter.buildContent(TO_CRON(3600), tag, root, env) }]);
+  // ...and the applied update converges instead of re-updating on every install
+  expect(planReconciliation(budgeted, [readBack(TO_CRON(3600))])).toEqual([]);
+
+  // absent budget == pre-field bytes: no --timeout, and an old entry still no-ops
+  const plain = buildDesired([TO_CRON(undefined)], tag, root, env, darwinAdapter);
+  expect(plain[0].argv).toBe(`${FR4_BIN} cron run --id inbox --dir /wb`);
+  expect(darwinAdapter.buildContent(TO_CRON(undefined), tag, root, env)).not.toContain("--timeout");
+  expect(planReconciliation(plain, [readBack(TO_CRON(undefined))])).toEqual([]);
+});
+
+test("timeoutSec linux: budget rides the crontab line, round-trips, and a change -> update", () => {
+  const tag = "tagA";
+  const root = "/wb";
+  const env = { jspaceBinary: FR4_BIN, home: "/home/u", path: "/bin" };
+  const taskId = taskIdFor(tag, "inbox");
+  const readBack = (cron: CronDefinition) => parseManagedLine(crontabLine(cron, tag, root, FR4_BIN, "/bin", "/home/u"), tag)!;
+
+  const budgeted = buildDesired([TO_CRON(3600)], tag, root, env, linuxAdapter);
+  expect(budgeted[0].argv).toBe(`${FR4_BIN} cron run --id inbox --dir /wb --timeout 3600`);
+  expect(crontabLine(TO_CRON(3600), tag, root, FR4_BIN, "/bin", "/home/u")).toContain("--timeout 3600");
+  expect(readBack(TO_CRON(3600)).argv).toBe(budgeted[0].argv);
+  expect(planReconciliation(budgeted, [readBack(TO_CRON(3600))])).toEqual([]);
+
+  expect(planReconciliation(budgeted, [readBack(TO_CRON(undefined))])).toEqual([{ action: "update", taskId, content: crontabLine(TO_CRON(3600), tag, root, FR4_BIN, "/bin", "/home/u") }]);
+  expect(planReconciliation(budgeted, [readBack(TO_CRON(3600))])).toEqual([]);
+
+  const plain = buildDesired([TO_CRON(undefined)], tag, root, env, linuxAdapter);
+  expect(plain[0].argv).toBe(`${FR4_BIN} cron run --id inbox --dir /wb`);
+  expect(planReconciliation(plain, [readBack(TO_CRON(undefined))])).toEqual([]);
+});
+
+test("timeoutSec win32: budget rides /tr, round-trips, and a change -> update", () => {
+  const tag = "tagA";
+  const root = "C:\\wb";
+  const env = { jspaceBinary: "C:\\bin\\jspace.exe", home: "C:\\Users\\u", path: "" };
+  const readBack = (cron: CronDefinition) => win32TaskFrom(tag, cron, win32Adapter.buildContent(cron, tag, root, env));
+
+  const budgeted = buildDesired([TO_CRON(3600)], tag, root, env, win32Adapter);
+  expect(budgeted[0].argv).toBe("C:\\bin\\jspace.exe cron run --id inbox --dir C:\\wb --timeout 3600");
+  expect(readBack(TO_CRON(3600)).argv).toBe(budgeted[0].argv);
+  expect(planReconciliation(budgeted, [readBack(TO_CRON(3600))])).toEqual([]);
+
+  expect(planReconciliation(budgeted, [readBack(TO_CRON(undefined))])).toEqual([{ action: "update", taskId: budgeted[0].taskId, content: win32Adapter.buildContent(TO_CRON(3600), tag, root, env) }]);
+  expect(planReconciliation(budgeted, [readBack(TO_CRON(3600))])).toEqual([]);
+
+  const plain = buildDesired([TO_CRON(undefined)], tag, root, env, win32Adapter);
+  expect(plain[0].argv).toBe("C:\\bin\\jspace.exe cron run --id inbox --dir C:\\wb");
+  expect(planReconciliation(plain, [readBack(TO_CRON(undefined))])).toEqual([]);
 });

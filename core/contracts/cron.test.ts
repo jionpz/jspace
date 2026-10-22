@@ -101,6 +101,36 @@ test("non-string / empty model is rejected", () => {
   expectIssue({ schema_version: 1, crons: [{ id: "x", schedule: "0 9 * * *", harness: "claude", model: "   ", prompt: "p", enabled: true }] }, "cron.model.invalid");
 });
 
+test("per-cron timeoutSec decodes; absent stays undefined (pre-field bytes untouched)", () => {
+  const withTimeout = decode({
+    schema_version: 1,
+    crons: [{ id: "server-status", schedule: "0 9 * * *", harness: "claude", prompt: "p", timeoutSec: 3600, enabled: true }],
+  });
+  expect(withTimeout.ok).toBe(true);
+  if (withTimeout.ok) expect(withTimeout.value.crons[0].timeoutSec).toBe(3600);
+  // Absent must stay absent, not default to 1800: the decoder's job is to report
+  // what the file says. Defaulting here would bake 1800 into every entry's
+  // installed argv and rewrite every schedule on the next install.
+  const without = decode({
+    schema_version: 1,
+    crons: [{ id: "server-status", schedule: "0 9 * * *", harness: "claude", prompt: "p", enabled: true }],
+  });
+  expect(without.ok).toBe(true);
+  if (without.ok) expect(without.value.crons[0].timeoutSec).toBeUndefined();
+});
+
+test("timeoutSec must be a positive integer (0 / negative / float / string rejected)", () => {
+  const withTimeout = (timeoutSec: unknown) => ({
+    schema_version: 1,
+    crons: [{ id: "x", schedule: "0 9 * * *", harness: "claude", prompt: "p", timeoutSec, enabled: true }],
+  });
+  expectIssue(withTimeout(0), "cron.timeoutSec.invalid");
+  expectIssue(withTimeout(-60), "cron.timeoutSec.invalid");
+  expectIssue(withTimeout(1.5), "cron.timeoutSec.invalid");
+  expectIssue(withTimeout("3600"), "cron.timeoutSec.invalid");
+  expectIssue(withTimeout(Number.NaN), "cron.timeoutSec.invalid");
+});
+
 test("exactly one of prompt | target is required", () => {
   const neither = { schema_version: 1, crons: [{ id: "x", schedule: "* * * * *", harness: "claude", enabled: true }] };
   expectIssue(neither, "cron.entry.prompt_or_target");

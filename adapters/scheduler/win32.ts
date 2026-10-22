@@ -111,7 +111,11 @@ export function parseSchtasksXml(xml: string): { schedule: string; argv: string 
   // mismatch here would re-update on every install — the exact bug this fixes.
   const rawCmd = cmdEl?.[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
   const bin = rawCmd?.replace(/^"(.*)"$/, "$1");
-  const tailArgv = `cron run --id ${id[1]} --dir ${root[1]}`;
+  // `--timeout "<n>"` is written quoted (schtasksArgs); accept the unquoted
+  // form too so a hand-edited task still reads its real budget. Absent = no
+  // budget, the same shape a pre-field task has.
+  const timeout = args.match(/--timeout\s+"?(\d+)"?/)?.[1];
+  const tailArgv = `cron run --id ${id[1]} --dir ${root[1]}${timeout === undefined ? "" : ` --timeout ${timeout}`}`;
   return { schedule, argv: bin ? `${bin} ${tailArgv}` : tailArgv };
 }
 
@@ -136,7 +140,11 @@ export function schtasksArgs(cron: CronDefinition, jspaceBin: string, root: stri
   // (linux crontab / darwin plist already reject newline/CR/NUL).
   rejectUnsafeSchtasksValues(jspaceBin, root, cron.id, taskName);
   const st = `${String(d.Hour).padStart(2, "0")}:${String(d.Minute).padStart(2, "0")}`;
-  const tr = `"${jspaceBin}" cron run --dir "${root}" --id "${cron.id}"`;
+  // Per-cron budget rides /tr: schtasks stores the run string, so it is the only
+  // channel from cron.json to the scheduled run. parseSchtasksXml reads it back
+  // so a changed budget reconciles as an update rather than "up to date".
+  const timeout = cron.timeoutSec === undefined ? "" : ` --timeout "${cron.timeoutSec}"`;
+  const tr = `"${jspaceBin}" cron run --dir "${root}" --id "${cron.id}"${timeout}`;
   if (tr.length > SCHTASKS_TR_MAX_LEN) {
     fail(`cron ${cron.id}: schtasks /tr exceeds ${SCHTASKS_TR_MAX_LEN} characters (${tr.length}); shorten the workbench or jspace binary path`);
   }

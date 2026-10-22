@@ -16,7 +16,7 @@ import { fail } from "../../core/shared/errors.ts";
 import type { CmdResult } from "../commands/command.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
-import type { CronDefinition } from "../../core/contracts/cron.ts";
+import { DEFAULT_TIMEOUT_SEC, type CronDefinition } from "../../core/contracts/cron.ts";
 import { spawnProcess, cronSpawnEnv } from "../../adapters/process/spawn.ts";
 import { loadCrons, resolveCronPrompt, type SkillTargetContext } from "./definitions.ts";
 import { skillRel, skillRoot } from "../fs.ts";
@@ -85,7 +85,12 @@ export interface ExecuteDeps {
 export interface CronRunOptions {
   cronId: string;
   dryRun: boolean;
-  timeoutSec: number;
+  /** Per-RUN override. Absent (the normal scheduled case) → the cron
+   *  definition's own `timeoutSec` → DEFAULT_TIMEOUT_SEC. Precedence lives here,
+   *  not in the CLI, because only this function has the decoded cron: the
+   *  scheduled entry carries `--timeout <n>` from the definition, and a manual
+   *  `jspace cron run --timeout N` must still be able to exceed it once. */
+  timeoutSec?: number;
   force: boolean;
   /** Override the cron definition's harness (e.g. `jspace cron run --harness grok`
    *  to probe a new harness argv without editing cron.json). Falls back to the
@@ -205,6 +210,11 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   if (!cron.enabled) {
     return { lines: [`jspace: ok: cron ${opts.cronId} is disabled, skipping`] };
   }
+  // Single resolution point for the execution budget: explicit --timeout (one
+  // run) > the cron's own timeoutSec (every scheduled run) > the default. Both
+  // the lock staleness and the spawn kill derive from this one value, so they
+  // can never disagree about how long the run is allowed to live.
+  const timeoutSec = opts.timeoutSec ?? cron.timeoutSec ?? DEFAULT_TIMEOUT_SEC;
   const skillCtx: SkillTargetContext = {
     skillsManifest: deps.skillsManifest,
     bundleManifest: deps.bundleManifest,
@@ -234,7 +244,7 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   const lockPath = join(root, ".jspace", "logs", "cron", `${opts.cronId}.lock`);
   mkdirSync(join(lockPath, ".."), { recursive: true });
   const token = `${process.pid}:${crypto.randomUUID()}`;
-  const lock = acquireLockWithClock(lockPath, token, opts.timeoutSec * LOCK_STALE_MS_PER_TIMEOUT_SEC, deps.now);
+  const lock = acquireLockWithClock(lockPath, token, timeoutSec * LOCK_STALE_MS_PER_TIMEOUT_SEC, deps.now);
   if (lock === null) {
     return { lines: [`jspace: skip: cron ${opts.cronId} already running (lock ${lockPath})`] };
   }
@@ -246,7 +256,7 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
     // taken after it is the END instant (see RunTiming).
     const startedAt = localStamp();
     const startedAtMs = Date.now();
-    const spawned = await spawnProcess(argv, { cwd: root, platform: deps.platform, timeoutMs: opts.timeoutSec * 1000, env: cronSpawnEnv(deps.platform, harness) });
+    const spawned = await spawnProcess(argv, { cwd: root, platform: deps.platform, timeoutMs: timeoutSec * 1000, env: cronSpawnEnv(deps.platform, harness) });
     const timing: RunTiming = { startedAt, durationSec: Math.max(0, Math.round((Date.now() - startedAtMs) / 1000)) };
     const exited = spawned.exit;
     const output = spawned.output;

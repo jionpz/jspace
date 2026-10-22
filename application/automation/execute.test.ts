@@ -147,6 +147,50 @@ test.skipIf(process.platform === "win32")("lock staleness: threshold is timeoutS
   expect(stale.lines[0]).toContain("(exit 0)"); // executed for real after taking over
 });
 
+test.skipIf(process.platform === "win32")("timeout precedence: --timeout > cron.timeoutSec > DEFAULT_TIMEOUT_SEC", async () => {
+  // win32 skip: the fixture harness is a POSIX /bin/sh script and deps.platform pins the linux spawn path.
+  // The whole point of per-cron timeoutSec is that the SCHEDULED path (which
+  // passes no --timeout) uses the cron's own budget, while a manual
+  // `cron run --timeout N` still overrides it for one run. Both directions are
+  // observable through the lock staleness, which is derived from the same
+  // resolved value as the spawn kill.
+  writeFileSync(join(root, ".jspace", "cron.json"), JSON.stringify({
+    schema_version: 1,
+    crons: [
+      { id: "weekly", schedule: "0 9 * * 1", harness: "claude", prompt: "report", timeoutSec: 1800, enabled: true },
+      { id: "budgetless", schedule: "0 9 * * 1", harness: "claude", prompt: "report", enabled: true },
+    ],
+  }));
+  const slow = join(root, "slow-harness");
+  writeFileSync(slow, "#!/bin/sh\nsleep 30\nexit 0\n");
+  chmodSync(slow, 0o755);
+
+  // (a) no --timeout, cron defines 1800 -> threshold 1800*2000ms: a 3.6s-old
+  // lock is FRESH. Under the old CLI default this passed too, so the decisive
+  // case is (b): a manual override BELOW the definition must shorten it.
+  const lockPath = join(root, ".jspace", "logs", "cron", "weekly.lock");
+  writeFileSync(lockPath, "99999");
+  const mtime = statSync(lockPath).mtimeMs;
+  const fromDefinition = await cronRun(root, { cronId: "weekly", force: false, dryRun: false }, deps({ harnessBin: slow, now: () => mtime + 3_600 }));
+  expect(fromDefinition.lines[0]).toContain("already running"); // 1h stale window, 3.6s-old lock
+
+  // (b) a cron with NO timeoutSec and no --timeout falls back to 1800s: a
+  // 3.6s-old lock is fresh, proving the default is still 1800 and not "no
+  // timeout" (a 0/undefined threshold would steal the lock immediately).
+  const lockPath2 = join(root, ".jspace", "logs", "cron", "budgetless.lock");
+  writeFileSync(lockPath2, "99999");
+  const mtime2 = statSync(lockPath2).mtimeMs;
+  const fromDefault = await cronRun(root, { cronId: "budgetless", force: false, dryRun: false }, deps({ harnessBin: slow, now: () => mtime2 + 3_600 }));
+  expect(fromDefault.lines[0]).toContain("already running");
+
+  // (c) explicit --timeout 1 against a cron that defines 1800 -> the OVERRIDE
+  // wins, so the staleness window collapses to 2s and the 3.6s-old lock is
+  // taken over (the run then really executes and is killed at 1s).
+  const override = await cronRun(root, { cronId: "weekly", timeoutSec: 1, force: false, dryRun: false }, deps({ harnessBin: slow, now: () => mtime + 3_600 }));
+  expect(override.lines[0]).not.toContain("already running");
+  expect(override.lines[0]).toContain("failed");
+});
+
 test.skipIf(process.platform === "win32")("suspect: exit 0 with no output", async () => {
   // win32 skip: the fixture harness is a POSIX /bin/sh script and deps.platform pins the linux spawn path.
   const d = deps({ harnessBin: silentHarness });

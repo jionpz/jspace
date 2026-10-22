@@ -26,8 +26,16 @@ function rejectControlChars(...vals: string[]): void {
   }
 }
 
+/** The `--timeout <n>` pair as ProgramArguments entries, or [] when the cron
+ *  defines no budget. Emitted as two array elements (launchd execs argv
+ *  verbatim — no shell to split a joined string), and the read-back below
+ *  reconstructs the same pair, so the value is part of the reconciliation key. */
+function timeoutArgs(timeoutSec: number | undefined): string[] {
+  return timeoutSec === undefined ? [] : ["--timeout", String(timeoutSec)];
+}
+
 /** launchd plist body; Label carries the workbench tag (cross-workbench safety). */
-export function buildPlist(id: string, tag: string, schedule: ScheduleDict, root: string, jspaceBin: string, home: string, path: string): string {
+export function buildPlist(id: string, tag: string, schedule: ScheduleDict, root: string, jspaceBin: string, home: string, path: string, timeoutSec?: number): string {
   const launchdDir = join(root, ".jspace", "logs", "cron");
   const keys = ["Minute", "Hour", "Day", "Month", "Weekday"] as const;
   const dict = keys.filter((k) => schedule[k] !== undefined)
@@ -35,6 +43,7 @@ export function buildPlist(id: string, tag: string, schedule: ScheduleDict, root
     .join("\n");
   const taskId = taskIdFor(tag, id);
   rejectControlChars(id, tag, root, jspaceBin, home, path);
+  const timeoutXml = timeoutArgs(timeoutSec).map((a) => `    <string>${xmlEscape(a)}</string>`).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -46,7 +55,7 @@ export function buildPlist(id: string, tag: string, schedule: ScheduleDict, root
     <string>cron</string>
     <string>run</string>
     <string>--id</string>
-    <string>${xmlEscape(id)}</string>
+    <string>${xmlEscape(id)}</string>${timeoutXml === "" ? "" : `\n${timeoutXml}`}
   </array>
   <key>StartCalendarInterval</key>
   <dict>
@@ -129,7 +138,12 @@ export function argvFromPlistStdout(stdout: string, name: string): string {
   // binary. Absent/unparseable (hand-edited plist) falls back to no prefix, which
   // mismatches desired and therefore produces an update — the safe direction.
   const bin = stdout.match(/"ProgramArguments"\s*=>\s*\[\s*0\s*=>\s*"((?:[^"\\]|\\.)*)"/);
-  const tail = `cron run --id ${id} --dir ${wd}`;
+  // `--timeout <n>` is baked into ProgramArguments (see buildPlist) and must be
+  // reconstructed here or every install would report an update forever on a
+  // cron that has a budget. Read it from the SAME dump: the value the scheduler
+  // will actually pass, not what cron.json currently says.
+  const timeout = stdout.match(/"--timeout"\s+\d+\s*=>\s*"(\d+)"/);
+  const tail = `cron run --id ${id} --dir ${wd}${timeout ? ` --timeout ${timeout[1]}` : ""}`;
   return bin ? `${bin[1]} ${tail}` : tail;
 }
 
@@ -223,7 +237,7 @@ export const darwinAdapter: SchedulerAdapter = {
   },
 
   buildContent(cron: CronDefinition, tag: string, root: string, env: SchedulerEnv): string {
-    return buildPlist(cron.id, tag, parseSchedule(cron.schedule), root, env.jspaceBinary, env.home, env.path);
+    return buildPlist(cron.id, tag, parseSchedule(cron.schedule), root, env.jspaceBinary, env.home, env.path, cron.timeoutSec);
   },
 
   inspect(tag: string, env: SchedulerEnv): InstalledTask[] {

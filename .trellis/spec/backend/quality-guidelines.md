@@ -248,6 +248,16 @@ was already correct; only the *fact* was missing. Guarded by
   (darwin plist `EnvironmentVariables.PATH`, linux crontab line `PATH='…'`); compare the dimension
   **only when both sides define it** — `undefined` means "platform stores no PATH (win32) or the
   read failed", and treating that as drift would re-update on every install.
+  - Third instance, 2026-10-22: the per-cron **execution budget** (`cron.json` `timeoutSec`) lives in
+    the same class of value. `buildDesired` must pass it into `invocationArgv` (which already
+    serialized `--timeout`; nothing called it with a value), and every adapter must emit it into the
+    entry **and** reconstruct it on read-back (`ProgramArguments`, the crontab line, `/tr` in the
+    schtasks XML). Before this, `cron.json` had no such field at all and the scheduled path always
+    ate the 1800s default — `server-status` was killed at 1915s and 2042s and no edit to cron.json
+    could change it. Absence must stay byte-identical to pre-field output (no `--timeout` emitted,
+    none reconstructed) so adding the field never rewrites every installed schedule.
+  - The rule generalizes: when adding a cron field, ask "does this reach the scheduler, or only the
+    manual `cron run` path?" A field that only the CLI reads is a per-run flag, not a definition.
 
 ### 3. Validation & Error Matrix
 
@@ -257,6 +267,10 @@ was already correct; only the *fact* was missing. Guarded by
 | `cron.json` entry without `model` | argv byte-identical to pre-feature output (backward compatible) |
 | `model: ""` / non-string | `cron.model.invalid` decoder issue |
 | `model` set, harness declares no `argv_flags.model` | fail loud at `cron run` (before spawn) |
+| `cron.json` entry with `timeoutSec` | installed entry gains `--timeout <n>`; changing the value yields `[update]` |
+| `cron.json` entry without `timeoutSec` | no `--timeout` in the entry, byte-identical to pre-field output; effective budget 1800 |
+| `timeoutSec: 0` / negative / float / string | `cron.timeoutSec.invalid` decoder issue; `cron add --timeout` rejects at add time |
+| `cron run --timeout N` on a cron with its own `timeoutSec` | N wins for that single run (lock staleness and spawn kill both use N) |
 | Installed task points at a different binary | `cron install` reports `[update] <taskId>` |
 | Installed entry carries a stale PATH (both sides define one) | `cron install` reports `[update] <taskId>` |
 | Platform stores no PATH (win32) or the read-back failed | comparison skips the dimension — no drift |
@@ -289,7 +303,7 @@ the per-platform PATH round-trip tests.
 
 ## Testing Requirements
 
-- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 892 tests across 74 files).
+- Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 1052 tests across 84 files).
 - New function → unit test; bug fix → regression test; changed behavior → update existing tests.
 - Fault-injection via injected deps (ingest journal fs ops, pending envelope gbrain stub).
 - Contract round-trip + decode-issue tests for every decoder.

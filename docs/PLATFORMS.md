@@ -35,6 +35,8 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 
 **PATH 是调和键的一部分(2026-10-16 起)**:`DesiredTask` / `InstalledTask` 各带可选 `envPath`,darwin 从 plist 的 `EnvironmentVariables.PATH` 读回、linux 从 crontab 行的 `PATH='…'` 读回、win32 不读(schtasks 忽略 `env.path`,保持 `undefined`)。比较**仅当两侧都已定义**时进行 —— `undefined` 表示「该平台不存 PATH,或读回失败」,此时跳过该维度而非判为漂移(否则 win32 与读回失败会变成每次 install 都 update)。有此键,闭包放宽后**已装条目会被自动修复**;没有它,条目一旦写入就永远保持旧 PATH(`cron install` 报 `up to date` 而实际未闭合)。修完需跑一次 `jspace cron install` 让既有条目落地。
 
+**`timeoutSec` 同理是调和键的一部分(2026-10-22 起)**:`cron.json` 条目可写 `"timeoutSec": 3600`(正整数秒),它是该 cron **每次定时运行**的执行预算;`cron run --timeout N` 仍是**单次**覆盖,优先级 `--timeout` > `timeoutSec` > 1800。之所以必须进调和键:预算在**安装期烘焙**进条目(plist 的 `ProgramArguments`、crontab 行的 `--timeout <n>`、schtasks 的 `/tr`),运行期不再重算 —— 若只写 json 而不进比较键,`cron install` 会永远报 `up to date`,定时运行继续按旧预算被杀(实测 `server-status` 两次 143:1915s / 2042s,而 cron.json 改不动它)。三平台读回侧(plist dump / crontab 行 / schtasks XML)各自重建 `--timeout <n>` 才不产生永久 update。缺省(不写该字段)与旧版字节一致:条目里没有 `--timeout`,既有安装不会因为新增字段被整体重写。
+
 
 ## 运行状态与 incidents（结构化，M3）
 

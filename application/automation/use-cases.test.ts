@@ -168,6 +168,23 @@ test("cronAdd on win32 rejects non-installable schedules (issue #9 #9-05)", () =
   rmSync(wb, { recursive: true, force: true });
 });
 
+test("cronAdd persists --timeout as timeoutSec; a non-positive-integer budget is rejected", () => {
+  const wb = makeWorkbench([]);
+  const deps = { isInstalled: () => false };
+  cronAdd(wb, "server-status", "0 9 * * *", "claude", "check", false, deps, "linux", undefined, undefined, 3600);
+  const data = JSON.parse(readFileSync(join(wb, ".jspace", "cron.json"), "utf-8"));
+  expect(data.crons[0].timeoutSec).toBe(3600);
+  // Rejected at add time, not left in cron.json to fail the next decode (which
+  // would break EVERY cron command in this workbench, not just this one).
+  expect(() => cronAdd(wb, "zero", "0 9 * * *", "claude", "x", false, deps, "linux", undefined, undefined, 0)).toThrow(/positive integer/);
+  expect(() => cronAdd(wb, "frac", "0 9 * * *", "claude", "x", false, deps, "linux", undefined, undefined, 1.5)).toThrow(/positive integer/);
+  // absent stays absent — no 1800 materialized into the file
+  cronAdd(wb, "plain", "0 9 * * *", "claude", "x", false, deps, "linux");
+  const after = JSON.parse(readFileSync(join(wb, ".jspace", "cron.json"), "utf-8"));
+  expect(after.crons.find((c: { id: string }) => c.id === "plain").timeoutSec).toBeUndefined();
+  rmSync(wb, { recursive: true, force: true });
+});
+
 test("cronAdd isInstalled hint fires when the cron id is installed", () => {
   const wb = makeWorkbench([]);
   const r = cronAdd(wb, "inbox-tidy", "0 21 * * *", "claude", "tidy", false, { isInstalled: () => true });

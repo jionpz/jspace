@@ -26,9 +26,10 @@ export function cronAdd(
   platform: NodeJS.Platform = process.platform,
   tools?: string,
   model?: string,
+  timeoutSec?: number,
 ): CmdResult {
   return withWorkbenchMutationLock(root, () =>
-    cronAddImpl(root, id, schedule, harness, prompt, disabled, deps, platform, tools, model),
+    cronAddImpl(root, id, schedule, harness, prompt, disabled, deps, platform, tools, model, timeoutSec),
   );
 }
 
@@ -43,6 +44,7 @@ function cronAddImpl(
   platform: NodeJS.Platform = process.platform,
   tools?: string,
   model?: string,
+  timeoutSec?: number,
 ): CmdResult {
   const data = loadCrons(root);
   if (!isId(id)) fail(`invalid cron id: ${id} (lowercase letters, digits, hyphens)`);
@@ -55,6 +57,12 @@ function cronAddImpl(
   assertHarnessSupportsTools(harness, tools);
   assertHarnessSupportsModel(harness, model);
   parseSchedule(schedule); // validate
+  // Same positivity rule as the decoder: a 0/negative/float budget would be
+  // written to cron.json and then rejected on the next load, leaving a workbench
+  // whose every cron command fails. Reject at add time instead.
+  if (timeoutSec !== undefined && (!Number.isInteger(timeoutSec) || timeoutSec <= 0)) {
+    fail(`cron ${id}: --timeout must be a positive integer (seconds), got ${timeoutSec}`);
+  }
   // Same boundary as `cron install`: win32 only schedules DAILY/WEEKLY (month=*).
   // Reject at add time instead of letting a non-installable cron through to a
   // later install failure (PLATFORMS.md over-sell fix, issue #9 #9-05).
@@ -69,6 +77,7 @@ function cronAddImpl(
     enabled: !disabled,
     ...(tools !== undefined ? { tools } : {}),
     ...(model !== undefined ? { model } : {}),
+    ...(timeoutSec !== undefined ? { timeoutSec } : {}),
   });
   saveCrons(root, data);
   const lines = [`jspace: ok: added cron: ${id} (${schedule}, ${harness}, ${disabled ? "disabled" : "enabled"})`];
@@ -86,7 +95,10 @@ export function cronList(root: string, json: boolean): CmdResult {
   if (data.crons.length === 0) {
     return { lines: ["jspace: ok: no crons defined (add one with: jspace cron add <id> --schedule ... )"] };
   }
-  return { lines: data.crons.map((c) => `${c.enabled ? "" : "[disabled] "}${c.id}  ${c.schedule}  ${c.harness}`) };
+  // timeoutSec is shown only when set: an unset budget IS the default, and
+  // printing "1800" for every legacy cron would blur the difference between
+  // "this cron was given a budget" and "this cron inherits one".
+  return { lines: data.crons.map((c) => `${c.enabled ? "" : "[disabled] "}${c.id}  ${c.schedule}  ${c.harness}${c.timeoutSec === undefined ? "" : `  timeout=${c.timeoutSec}s`}`) };
 }
 
 export function cronRemove(root: string, id: string, deps: CronInstalledCheck): CmdResult {
