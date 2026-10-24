@@ -79,13 +79,13 @@ test("inboxStatus listing and JSON count apply the same exclusions", () => {
   writeFileSync(join(fh, "_inbox", "todo.pdf"), "x");
   writeFileSync(join(wb, ".jspace", "local.json"), JSON.stringify({ schema_version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
 
-  const text = inboxStatus(wb, false);
+  const text = inboxStatus(wb, false, []);
   const lines = text.lines ?? [];
   expect(lines.some((l) => l.includes("1 file(s)"))).toBe(true);
   expect(lines.some((l) => l.includes("todo.pdf"))).toBe(true);
   expect(lines.some((l) => l.includes("README.md") || l.includes("exempted"))).toBe(false);
 
-  const json = inboxStatus(wb, true);
+  const json = inboxStatus(wb, true, []);
   const data = json.data as { count: number; files: { name: string }[] };
   expect(data.count).toBe(1);
   expect(data.files.map((f) => f.name)).toEqual(["todo.pdf"]);

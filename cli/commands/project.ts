@@ -3,7 +3,8 @@
 import type { CommandSpec } from "../../application/commands/command.ts";
 import { filehubInit, filehubUpgrade } from "../../application/registry/filehub.ts";
 import { filehubRefresh } from "../../application/filehub/refresh.ts";
-import { inboxStatus } from "../../application/registry/inbox.ts";
+import { inboxBlock, inboxRetry, inboxStatus } from "../../application/registry/inbox.ts";
+import { readJournals } from "../../application/ingest/journal.ts";
 import { projectAdd, projectList, projectListStatus, projectSetStatus } from "../../application/registry/project.ts";
 import { expandTilde, filehubReadme, devRoot } from "../embed.ts";
 import { resolvePath } from "../paths.ts";
@@ -136,14 +137,66 @@ export const filehubSpec: CommandSpec = {
 
 const inboxStatusSpec: CommandSpec = {
   name: "status",
-  summary: "list files waiting in the inbox (read-only)",
+  summary: "list inbox files with blocker freshness and retained-source status (read-only)",
   features: { json: true, dir: true },
-  handler: (ctx, args) => inboxStatus(ctx.root, b(args.json)),
+  handler: (ctx, args) => inboxStatus(ctx.root, b(args.json), readJournals(ctx.root).records),
+};
+
+const inboxBlockSpec: CommandSpec = {
+  name: "block",
+  summary: "record why an inbox entry cannot be decided (no ingest or file write)",
+  positionals: [{ name: "entry", required: true, help: "exact top-level inbox entry name" }],
+  features: { dir: true, dryRun: true, json: true },
+  options: [
+    {
+      name: "--reason",
+      takesValue: true,
+      required: true,
+      metavar: "CODE",
+      help: "owner_ambiguous or source_unverified",
+    },
+    {
+      name: "--missing",
+      takesValue: true,
+      required: true,
+      help: "short description of the evidence gap",
+    },
+    {
+      name: "--candidates",
+      takesValue: true,
+      help: "comma-separated project:<id>/area:<id> candidates (owner_ambiguous only)",
+    },
+  ],
+  handler: (ctx, args) =>
+    inboxBlock(
+      ctx.root,
+      s(args.entry),
+      s(args.reason),
+      s(args.missing),
+      args.candidates === undefined
+        ? undefined
+        : s(args.candidates)
+            .split(",")
+            .map((candidate) => candidate.trim())
+            .filter((candidate) => candidate.length > 0),
+      b(args.dryRun),
+      b(args.json),
+      readJournals(ctx.root).records,
+    ),
+};
+
+const inboxRetrySpec: CommandSpec = {
+  name: "retry",
+  summary: "clear one cached blocker decision so the next pass decides again",
+  positionals: [{ name: "entry", required: true, help: "exact top-level inbox entry name" }],
+  features: { dir: true, dryRun: true, json: true },
+  handler: (ctx, args) =>
+    inboxRetry(ctx.root, s(args.entry), b(args.dryRun), b(args.json), readJournals(ctx.root).records),
 };
 
 export const inboxSpec: CommandSpec = {
   name: "inbox",
-  summary: "inspect files waiting in the inbox",
+  summary: "inspect and annotate files waiting in the inbox",
   commandArgName: "inbox_command",
-  children: [inboxStatusSpec],
+  children: [inboxStatusSpec, inboxBlockSpec, inboxRetrySpec],
 };

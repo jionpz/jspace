@@ -61,7 +61,7 @@ test("resource list --json schema includes binding resolution", () => {
 });
 
 test("inbox status --json schema (no filehub -> inbox null)", () => {
-  const { data } = inboxStatus(root, true);
+  const { data } = inboxStatus(root, true, []);
   expect(data).toEqual({ inbox: null, count: 0, files: [] });
 });
 

@@ -9,7 +9,7 @@ import type { RegistryDiagnostic } from "../../core/contracts/diagnostics.ts";
 import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
 import { inspectWorkbench, INVALID_JSON, type InspectEnv } from "../../core/registry/inspect.ts";
 import { isFile } from "../fs.ts";
-import { checkInbox, checkFilehubContract, checkPending, checkIngest, checkDomains } from "./checks/inbox.ts";
+import { checkInbox, checkInboxBlockers, checkFilehubContract, checkPending, checkIngest, checkDomains } from "./checks/inbox.ts";
 import { checkSkills } from "./checks/skills.ts";
 import { checkCrons } from "./checks/crons.ts";
 import { checkGBrain, checkCursorSkills } from "./checks/gbrain.ts";
@@ -44,6 +44,7 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps, verbose = fa
   const diags: RegistryDiagnostic[] = [
     ...inspectWorkbench(env),
     ...checkInbox(reads),
+    ...checkInboxBlockers(root),
     ...checkFilehubContract(reads),
     ...checkPending(root),
     ...checkIngest(root),

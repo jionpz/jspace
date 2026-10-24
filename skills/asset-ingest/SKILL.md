@@ -27,7 +27,15 @@ triggers:
 - 已检查 `profile/filing-prefs`、owner index、已有目录与同类资产；文件名和扩展名只能作线索。
 - 已知目标 `rel_path`、`assets/<owner>/<semantic>` slug 与将被写入 index 的完整 line。
 
-归属证据优先级固定为:本次用户明确指令 → registry/index/layout → 内容与既有资产交叉印证 → 已确认的归位偏好 → 历史纠正。仍无唯一 owner 时保留原件并报告缺什么，不猜。
+归属证据优先级固定为:本次用户明确指令 → registry/index/layout → 内容与既有资产交叉印证 → 已确认的归位偏好 → 历史纠正。仍无唯一 owner 时保留原件并报告缺什么，不猜；用显式阻塞记录，不创建任何 target、journal 或 pending：
+
+```bash
+jspace inbox block <entry> --reason owner_ambiguous \
+  --missing "<缺什么证据>" --candidates project:<id>,area:<id>
+jspace inbox block <entry> --reason source_unverified --missing "<为什么无法验证>"
+```
+
+`block` 支持 `--dry-run` / `--json`，重复同一原因是幂等的。`jspace inbox status` 的 `freshness` 只有 `current` 才可复用上次结论；`stale` / `unknown` 必须重判。
 
 ## 权威引用
 
@@ -53,7 +61,7 @@ triggers:
 
 | 字段 | 内容 |
 |---|---|
-| 结果 | committed / staged / duplicate / conflict / skipped / failed |
+| 结果 | committed / staged / duplicate / conflict / blocked / archived(source_retained) / skipped / failed |
 | owner | `project:<id>` 或 `area:<id>` |
 | 本体 | filehub 相对路径 + 内容 hash 前缀 |
 | 记忆 | asset slug + revision |
@@ -119,7 +127,7 @@ jspace ingest begin "<filehub>/_inbox/<dir>" --bundle --entry "<包内入口文�
 - 页 frontmatter 额外写 `asset_kind: bundle`、`bundle_root`、`bundle_manifest`(journal 的包外受管路径)、`bundle_sha256`(=journal `aggregateSha256`)、`bundle_manifest_sha256`;`source_sha256` 仍是 journal `targetHash`(入口摘要)。
 - 复制和整树校验在 ingest 长锁外;`--gbrain` / `--index` checkpoint 仍以真实读回为准。
 - 复制中断:journal 停在 failed/copying 且 copier 已退出时,用 `jspace ingest advance <id> --resume-copy`;不要重新 `begin`。
-- `--complete` 会重验 manifest、整树、index 当前行;成功后 journal 为 committed,但 **source 按 retain 保留在 inbox**。报告里不能写"原件已清理"。
+- `--complete` 会重验 manifest、整树、index 当前行;成功后 journal 为 committed,但 **source 按 retain 保留在 inbox**。`jspace inbox status` 会把它标为 `archived/source_retained`：业务副本已提交，inbox 原件待清理，不是待归位项。报告里不能写"原件已清理"或"再次 filed"；`block` / `retry` 会拒绝它并提示 cleanup。
 - `jspace ingest rollback` 只删除 journal 能证明且字节未变的包文件;用户改动或额外文件保留并报告。已写 gbrain/index 之后不能伪称原子回滚。
 - 受限路径、符号链接、特殊文件或超预算(10,000 成员 / 2 GiB / 深度 32)整包拒绝;不得跳过成员继续入库。
 - 验收:`jspace filehub check --json` 的 `verified_bundles` 计入该包,成员不产生 unindexed/duplicate;任一成员增删改都会报 `filehub.bundle.tree_mismatch`。
@@ -132,6 +140,15 @@ jspace ingest begin "<filehub>/_inbox/<dir>" --bundle --entry "<包内入口文�
 - 明确“修订/新版/替代” → 新文件名 `-vN`、新 slug、新页正文 `Supersedes: [[<old-slug>]]`，旧页正文不改并按 CAS 追加 `status:superseded`。
 - 仅移动文件、内容 hash 不变 → 修正现有 asset 页的 `rel_path` / Pointer，使用读到的 revision 做条件替换，不创建新版本。
 - 无头模式遇到歧义 → 留在 inbox，报告 owner/命名/版本缺口，不等待、不猜。
+
+## 阻塞、重试与保留原件
+
+- **阻塞**：`jspace inbox block` 只记录明确证据缺口，不移动/复制/入库，也不写 pending。各类原因与缺口保持可见；同一原因重复记录幂等。
+- **复用规则**：`jspace inbox status` 只有 `freshness: current`（内容指纹与路由摘要都完整且一致）才可沿用旧结论。`stale` 表示内容、owner 规则或绑定已变；`unknown` 表示证据不可验证。两者都必须重判，size/mtime 相同不算证据。
+- **重试**：用户补齐证据后用 `jspace inbox retry <entry>` 清掉缓存裁决，再回到主流程重新判断。retry 不搬家、不入库、不验证，也不宣告完成。
+- **损坏快照**：blocker state 损坏时 status 显示覆盖不可用，文件仍可列出；`block` / `retry` 拒绝覆盖损坏字节，需要人工检查修复。
+- **保留原件**：`archived/source_retained` 只在 committed bundle 的源路径、计划、manifest/整树身份与注册 target 全部核对通过时成立。它不是 owner ambiguity，不得重新入库或当普通未决项重试；CLI 不删除原件，清理交给用户确认 target 后的文件流程。
+- **计数口径**：blocked 与 `archived/source_retained` 都不算 filed；批量汇总和执行日志（追加写）必须单列它们，不能把 inbox 文件数未减少解释成失败或已归位。
 
 ## 索引的三种语义
 
@@ -169,7 +186,7 @@ jspace pending apply
 - target 存在且哈希等于 journal 的 source/target 身份；
 - index 含精确计划行，target 与 slug 归属一致；
 - gbrain page 可读回，revision/标签/owner/rel_path 与 evidence 一致；
-- journal 为 `committed`，且 source 已按 hash 核对后清理；
+- journal 为 `committed`，且 source 已按 hash 核对后清理；bundle 按 `sourcePolicy: retain` 保留时为 `archived/source_retained`，这是已提交而非再次 filed，禁止宣称已清理；
 - 报告中的本体、index、slug 三者可互相定位。
 
 任一缺失只能报 `staged`、`partial`、`conflict`、`cleanup-pending` 或 `failed`。

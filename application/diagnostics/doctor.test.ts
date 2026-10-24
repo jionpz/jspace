@@ -277,6 +277,53 @@ test("filehub registered with unfiled _inbox -> filehub.inbox_unfiled", () => {
   expect(codes(r)).toContain("filehub.inbox_unfiled");
 });
 
+test("damaged inbox blocker snapshot -> visible warning, not 'no blockers'", () => {
+  writeFileSync(
+    join(root, ".jspace", "hub.json"),
+    JSON.stringify({
+      schema_version: 1,
+      domains: [{ id: "files", path: "workspace/files" }],
+      resources: [{ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] }],
+      projects: [],
+    }),
+  );
+  const fh = join(root, "filehub");
+  mkdirSync(join(fh, "_inbox"), { recursive: true });
+  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ schema_version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
+  mkdirSync(join(root, ".jspace", "state"), { recursive: true });
+  writeFileSync(join(root, ".jspace", "state", "inbox-blockers.json"), "{ not json");
+
+  const r = doctorWorkbench(root, stubDeps());
+  expect(codes(r)).toContain("filehub.inbox_blockers_damaged");
+  expect(severityOf(r, "filehub.inbox_blockers_damaged")).toBe("warning");
+  expect(messageOf(r, "filehub.inbox_blockers_damaged")).toContain("refuse to overwrite");
+});
+
+test("blocker snapshot for another inbox root -> info mismatch, decisions not applied", () => {
+  writeFileSync(
+    join(root, ".jspace", "hub.json"),
+    JSON.stringify({
+      schema_version: 1,
+      domains: [{ id: "files", path: "workspace/files" }],
+      resources: [{ id: "filehub", type: "filehub", domain: "files", entrypoints: [{ id: "path", kind: "path", binding: "filehub-path", primary: true }] }],
+      projects: [],
+    }),
+  );
+  const fh = join(root, "filehub");
+  mkdirSync(join(fh, "_inbox"), { recursive: true });
+  writeFileSync(join(root, ".jspace", "local.json"), JSON.stringify({ schema_version: 1, installation_id: "i", bindings: { "filehub-path": fh } }));
+  mkdirSync(join(root, ".jspace", "state"), { recursive: true });
+  writeFileSync(
+    join(root, ".jspace", "state", "inbox-blockers.json"),
+    JSON.stringify({ schema_version: 1, inboxRoot: "/tmp/another-filehub/_inbox", entries: [] }),
+  );
+
+  const r = doctorWorkbench(root, stubDeps());
+  expect(codes(r)).toContain("filehub.inbox_blockers_inbox_mismatch");
+  expect(severityOf(r, "filehub.inbox_blockers_inbox_mismatch")).toBe("info");
+  expect(messageOf(r, "filehub.inbox_blockers_inbox_mismatch")).toContain("not applied");
+});
+
 test("nested _inbox dir counts as ONE item (top-level semantics; single countInbox impl)", () => {
   // _inbox/sub/ with 3 files + top.pdf: recursive counting would report 4,
   // top-level counting reports 2. doctor must agree with `jspace inbox status`

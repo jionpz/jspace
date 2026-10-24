@@ -4,7 +4,8 @@ import { join } from "node:path";
 import type { RegistryDiagnostic } from "../../../core/contracts/diagnostics.ts";
 import type { readWorkbenchState } from "../../../adapters/fs/workbench-state.ts";
 import { primaryPathForResourceType, resolveEffectiveRegistry } from "../../../core/registry/effective.ts";
-import { countInbox } from "../../registry/inbox.ts";
+import { countInbox, locateInbox } from "../../registry/inbox.ts";
+import { inboxBlockersPath, readInboxBlockers } from "../../registry/inbox-state.ts";
 import { readEnvelopes } from "../../pending/envelope.ts";
 import { readJournals } from "../../ingest/journal.ts";
 import type { HubV1 } from "../../../core/contracts/hub.ts";
@@ -193,6 +194,34 @@ export function checkInbox(reads: WorkbenchReads): RegistryDiagnostic[] {
         message: `filehub: freshness scan hit its ${ACTIVITY_SCAN_BUDGET}-entry budget and covered ${scanned} of ${dirs.length} project(s); the remaining ones were not checked — rerun doctor later or archive in bulk (see jspace-use 8.6)`,
       });
     }
+  }
+  return diags;
+}
+
+/** Damaged/mis-bound blocker snapshots are visible degradation, not "no
+ *  blockers". Read-only, bounded (no tree hashing), and never throws. */
+export function checkInboxBlockers(root: string): RegistryDiagnostic[] {
+  const diags: RegistryDiagnostic[] = [];
+  const read = readInboxBlockers(root);
+  if (read.state === "missing") return diags;
+  const path = inboxBlockersPath(root);
+  if (read.state === "damaged") {
+    diags.push({
+      severity: "warning",
+      code: "filehub.inbox_blockers_damaged",
+      path: `filehub.state.inbox_blockers`,
+      message: `inbox blocker snapshot is damaged (${read.detail}); blocking coverage is unavailable — inspect/fix ${path} by hand; "jspace inbox block/retry" refuse to overwrite it`,
+    });
+    return diags;
+  }
+  const inbox = locateInbox(root);
+  if (inbox !== null && read.snapshot.inboxRoot !== inbox) {
+    diags.push({
+      severity: "info",
+      code: "filehub.inbox_blockers_inbox_mismatch",
+      path: `filehub.state.inbox_blockers`,
+      message: `inbox blocker snapshot belongs to another inbox root (${read.snapshot.inboxRoot}), not ${inbox}; its cached decisions are not applied`,
+    });
   }
   return diags;
 }
