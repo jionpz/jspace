@@ -5,7 +5,7 @@
 > 本目录可被 Obsidian 作为 vault 打开。AI 只写纯 md 与相对链接,不依赖任何插件——哪天换工具,资料一点不坏。
 
 <!-- JSPACE:FILEHUB:START -->
-> filehub-contract-version: 4
+> filehub-contract-version: 5
 
 ## 归档契约
 
@@ -14,25 +14,20 @@
 ```text
 filehub/
   _inbox/             # 新文件先落这里,等待整理
-  projects/<项目>/    # index.md + 扁平文件,或单一稳定组织轴下的子目录
-  areas/<领域>/       # 长期职责域,不按文件格式分目录
+  projects/<项目>/    # index.md + 资产,可按真实浏览需要局部组织
+  areas/<领域>/       # 长期职责域;必须有 index.md 才能接收入库
   archive/<年>/       # 结项与冷资料
 ```
 
 ### 项目组织
 
-每个项目必须有 `index.md`,并在 frontmatter 声明一种组织方式:
+每个项目必须有 `index.md`:登记资产、说明收录范围。目录如何分层由归属和真实浏览需要决定:
 
-```yaml
-layout: flat | workstream | period
-```
-
-- `flat`: 文件较少时直接放项目根。
-- `workstream`: 按稳定工作流/阶段分组,如 `kickoff/`、`delivery/`、`合同/`。
-- `period`: 按稳定周期分组,如 `2026-Q3/`。
-- 同一层级只能使用一种组织轴;不得同时混用工作流、周期或文件格式。
-- 不为单个文件机械建目录。只有同一稳定组已形成明显集合,或直接子项过多影响浏览时,才创建语义目录。
-- **保留目录名(禁止用作目录)**:`docs`、`decks`、`data`、`notes` 四个名字在 filehub 内一律不得作为目录名(它们描述文件形态,不描述归属或稳定阶段)。类型写入 `index.md`,不写进路径;`jspace doctor` 检测它们。
+- 文件少时直接放项目根;某一类资料形成稳定集合、或直接子项过多时,再建语义子目录。
+- 同一层级只用一种组织轴(工作流/阶段、年份、周期),不要同层混用。
+- 完整的工程套件可以保留内部结构;由 `index.md` 指向其入口,不为了"看起来整齐"拆散带自身引用、配置和代码入口的套件。
+- 旧 `layout: flat | workstream | period` 字段仍可读,作为布局说明;不再是必填声明,也不再限制目录形状。未知值仍会报错。
+- 目录按归属和用途起名,不按文件格式起名;但已有的历史目录名不会因此被判定为错误或自动移动。
 
 ### 类型与索引
 
@@ -42,7 +37,7 @@ layout: flat | workstream | period
 |---|---|---|---|
 | `<相对路径>` | `document / deck / sheet / data / note` | `YYYY-MM-DD` | `assets/...` |
 
-跨项目引用用链接,不复制文件本体。
+跨项目引用用链接,不复制文件本体。引用资料用普通链接单列,不要写进上面的拥有表。
 
 项目内的套件、Agent 治理和运行支撑文件不是独立资产。由 owner `index.md` 的
 `support_paths` 显式声明(相对 owner 根,可指向文件或整个稳定目录):
@@ -55,16 +50,22 @@ support_paths:
 
 支撑路径仍受 owner 边界、存在性与 index 登记冲突检查;不能用它隐藏普通资料或跨 owner 排除文件。
 
-### 旧结构迁移
+### 旧结构
 
-已有 `docs/ decks/ data/ notes/` 不会被自动移动。先运行 `jspace doctor` 获取只读提示,再按 `asset-ingest/references/migration.md` 逐文件确认、移动并更新 `index.md` 与 gbrain 指针。迁移必须用户确认,可逐文件回滚。
+历史目录名(如 docs、decks、data、notes)不再被判定为违规,也不会被自动移动。需要整理时按 `asset-ingest/references/migration.md` 显式、逐文件处理,可回滚。
+
+### 结项
+
+用 `jspace project set-status <id> --status archived` 原地结束:资产路径、文件和 gbrain 页保持有效,项目从活跃导航移出。恢复用 `--status active`。物理移入 `archive/<年>/` 是单独的显式迁移,不在关闭动作里自动执行。
 <!-- JSPACE:FILEHUB:END -->
 
 ## 命名
 
-`YYYY-MM-DD-语义名-vN.ext` —— 机器可排序、人可扫读。
+建议 `YYYY-MM-DD-语义名-vN.ext` —— 机器可排序、人可扫读。
 
 例:`2026-08-02-acme-kickoff-v1.pptx`、`2026-07-31-概率论第三章-v2.pdf`
+
+原生制品、上游版本号、工程包内部路径保持原名,不强制改写。
 
 ## 项目 index.md 模板
 
@@ -74,12 +75,15 @@ support_paths:
 ---
 type: project-index
 project: <id>
-layout: flat
 support_paths: []
 tags: []
 created: YYYY-MM-DD
 ---
 # <项目名>
+
+## 收录范围
+- 收:...
+- 不收:...
 
 ## 现状
 ...
@@ -93,10 +97,28 @@ created: YYYY-MM-DD
 - [ ] ...
 ```
 
+## area index.md 模板
+
+每个 area 必须有 `index.md`,说明它收什么、不收什么。没有可读 index 的 area 不能接收入库:
+
+```markdown
+---
+type: area-index
+owner: <area-id>
+tags: []
+---
+# <领域名>
+
+## 收录范围
+- 收:...
+- 不收:...
+```
+
 ## 结项归档
 
-项目结项时,把 `projects/<x>/` 整个移入 `archive/<年>/`,并更新所属域 README 的挂接行。
-**必须用户确认**——涉及移动文件,不自动执行。判定与动线见 `~/.agents/skills/jspace-use/SKILL.md` 第 8.6 节「退役与回收」;`jspace doctor` 的 `filehub.project_stale`(120 天未动)会提示候选。
+优先用 `jspace project set-status <id> --status archived` 原地关闭。
+确需物理归档时,把 `projects/<x>/` 整体移入 `archive/<年>/` 并同步更新 registry 与索引;
+这是显式迁移,**必须用户确认**,不自动执行。`jspace doctor` 的 `filehub.project_stale`(120 天未动)会提示候选。
 
 ## 同步与维护
 
@@ -107,5 +129,5 @@ created: YYYY-MM-DD
 ## 使用
 
 1. 把第一个文件丢进 `_inbox/`。
-2. 说一句「整理一下 inbox」——AI 会改名、按 `layout` 归位、登记 index、写入记忆。
+2. 说一句「整理一下 inbox」——AI 会定归属、改名、登记 index、写入记忆。
 3. 想查什么直接问,AI 会打开对应文件核对并给出处。

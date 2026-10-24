@@ -140,6 +140,42 @@ test("filehubCheck returns ok for a fully registered and cross-linked flat proje
   expect(report.findings).toEqual([]);
 });
 
+test("a project index without layout is complete; only an unknown value is an error", async () => {
+  writeFileSync(
+    join(root, "projects", "acme", "index.md"),
+    `---
+type: project-index
+project: acme
+tags: []
+---
+# Acme
+
+| 文件 | 类型 | 日期 | gbrain slug |
+|---|---|---|---|
+| [报告](./report.md) | document | 2026-10-18 | \`assets/acme/report\` |
+`,
+  );
+  const noLayout = await filehubCheck(fakeGbrain(validPages()), { root, projects: PROJECTS });
+  expect(noLayout.findings).toEqual([]);
+
+  writeFileSync(
+    join(root, "projects", "acme", "index.md"),
+    `---
+type: project-index
+project: acme
+layout: by-format
+tags: []
+---
+# Acme
+`,
+  );
+  const unknown = await filehubCheck(fakeGbrain(validPages()), { root, projects: PROJECTS });
+  const codes = unknown.findings.map((f) => f.code);
+  expect(codes).toContain("filehub.index.layout_invalid");
+  // the removed mandatory-layout rule must not sneak back in any form
+  expect(codes).not.toContain("filehub.index.layout_missing");
+});
+
 test("filehubCheck parses relative Markdown links and backticked index cells", async () => {
   writeFileSync(
     join(root, "projects", "acme", "index.md"),

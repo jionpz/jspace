@@ -11,9 +11,9 @@ import {
   constants as fsConstants,
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
-  statSync,
   unlinkSync,
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -117,14 +117,47 @@ function resolveOwner(
   }
 
   const ownerRootRel = `areas/${ownerId}`;
-  const ownerRoot = confinedWithin(join(fh, ownerRootRel), fh);
+  const ownerRootPath = join(fh, ownerRootRel);
+  const ownerRoot = confinedWithin(ownerRootPath, fh);
   if (!ownerRoot) fail(`area root escapes the filehub: ${ownerRootRel}`);
+  let rootStat: ReturnType<typeof lstatSync>;
   try {
-    if (!statSync(ownerRoot).isDirectory()) fail(`area root is not a directory: ${ownerRootRel}`);
+    rootStat = lstatSync(ownerRootPath);
   } catch {
     fail(`no existing area: ${ownerRootRel}; create/confirm the area before filing into it`);
   }
-  return { ownerRootRel, indexPath: `${ownerRootRel}/index.md` };
+  if (rootStat.isSymbolicLink()) fail(`area root must not be a symlink: ${ownerRootRel}`);
+  if (!rootStat.isDirectory()) fail(`area root is not a directory: ${ownerRootRel}`);
+
+  // The owner index is the area's write prerequisite: without a readable,
+  // regular, non-symlinked index there is nowhere to register the asset, so we
+  // fail before the target or a journal exists.
+  const indexPath = `${ownerRootRel}/index.md`;
+  const indexAbs = join(fh, indexPath);
+  let indexStat: ReturnType<typeof lstatSync>;
+  try {
+    indexStat = lstatSync(indexAbs);
+  } catch {
+    fail(`area index is missing: ${indexPath}; create it before filing into ${ownerRootRel}`);
+  }
+  if (indexStat.isSymbolicLink()) fail(`area index must not be a symlink: ${indexPath}`);
+  if (!indexStat.isFile()) fail(`area index is not a regular file: ${indexPath}`);
+  let indexRaw: string;
+  try {
+    indexRaw = readFileSync(indexAbs, "utf-8");
+  } catch (error) {
+    fail(`area index is unreadable: ${indexPath}: ${(error as Error).message}`);
+  }
+  const fields = parseFrontmatter(indexRaw);
+  const declaredType = (fields.get("type") ?? "").trim();
+  if (declaredType !== "" && declaredType !== "area-index") {
+    fail(`area index type must be "area-index" or omitted: ${indexPath} declares ${declaredType}`);
+  }
+  const declaredOwner = (fields.get("owner") ?? fields.get("area") ?? "").trim();
+  if (declaredOwner !== "" && declaredOwner !== ownerId) {
+    fail(`area index owner must be ${ownerId}: ${indexPath} declares ${declaredOwner}`);
+  }
+  return { ownerRootRel, indexPath };
 }
 
 export function ingestBegin(root: string, args: IngestBeginArgs): CmdResult {

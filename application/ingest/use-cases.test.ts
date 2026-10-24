@@ -195,6 +195,67 @@ test("missing area is rejected rather than silently creating a new taxonomy", ()
   ).toThrow(/no existing area/);
 });
 
+test("area without an index is rejected before any target or journal exists", () => {
+  const source = sourceFile();
+  rmSync(join(filehub, "areas", "books", "index.md"));
+  expect(() =>
+    ingestBegin(
+      workbench,
+      args(source, {
+        ownerKind: "area",
+        ownerId: "books",
+        target: "areas/books/topics/doc.txt",
+        slug: "assets/books/doc",
+        indexLine: "2026-10-18 | doc.txt | assets/books/doc",
+      }),
+    ),
+  ).toThrow(/area index is missing/);
+  expect(existsSync(join(filehub, "areas/books/topics/doc.txt"))).toBe(false);
+  expect(readJournals(workbench).records).toHaveLength(0);
+});
+
+test("area index must be a regular file, not a symlink", () => {
+  const source = sourceFile();
+  const outside = join(workbench, "outside-index.md");
+  writeFileSync(outside, "# outside\n");
+  rmSync(join(filehub, "areas", "books", "index.md"));
+  symlinkSync(outside, join(filehub, "areas", "books", "index.md"));
+  expect(() =>
+    ingestBegin(
+      workbench,
+      args(source, {
+        ownerKind: "area",
+        ownerId: "books",
+        target: "areas/books/topics/doc.txt",
+        slug: "assets/books/doc",
+        indexLine: "2026-10-18 | doc.txt | assets/books/doc",
+      }),
+    ),
+  ).toThrow(/area index must not be a symlink/);
+});
+
+test("area index metadata must agree with the area id", () => {
+  const source = sourceFile();
+  const index = join(filehub, "areas", "books", "index.md");
+  const attempt = () =>
+    ingestBegin(
+      workbench,
+      args(source, {
+        ownerKind: "area",
+        ownerId: "books",
+        target: "areas/books/topics/doc.txt",
+        slug: "assets/books/doc",
+        indexLine: "2026-10-18 | doc.txt | assets/books/doc",
+      }),
+    );
+  writeFileSync(index, "---\ntype: area-index\nowner: other\n---\n");
+  expect(attempt).toThrow(/owner must be books/);
+  writeFileSync(index, "---\ntype: project-index\n---\n");
+  expect(attempt).toThrow(/type must be "area-index"/);
+  writeFileSync(index, "---\ntype: area-index\nowner: books\n---\n");
+  expect(attempt().lines.some((line) => line.includes("ingest staged"))).toBe(true);
+});
+
 test("target must stay inside the declared project/area root", () => {
   const source = sourceFile();
   expect(() =>

@@ -7,14 +7,15 @@
 - **新东西一律走 inbox**:`_inbox/` → 批量整理(`~/.agents/skills/asset-ingest/references/batch.md`)。
 - **存量按需收编**:旧资料按项目/领域,用户点名时收,不默认全量搬。
 - **收编 = 复用 asset-ingest 纪律**(归位/命名/查重/入脑/登记/自检),本 runbook 只补「存量从哪里来、怎么分」的边界,不另造第二套流程。
-- **类型不是目录**:物理位置只按归属 + 项目 `layout`(flat/workstream/period)决定;禁止把 `docs`、`decks`、`data`、`notes` 等文件形态当作归档目录。
+- **类型不是目录**:物理位置由归属和真实浏览需要决定;不要按文件形态新建目录。
 - 重资产不进工作台 git;文件本体永远留在资产层;gbrain 只存事实与指针。
 
 ## 何时用
 
 - 用户说「把某项目旧资料收进来」「这些旧文件整理进文件中心」。
 - 项目开启/结项时,把散落旧文件归位到 `projects/<项目>/` 或 `archive/<年>/`。
-- `jspace filehub check --json` 报告旧格式目录或指针/索引问题，用户要求处理旧 `docs`、`decks`、`data`、`notes` 格式目录结构。
+- 用户要求整理旧式格式目录(如 docs、decks、data、notes);`doctor` / `filehub check` 不再按目录名报错,迁移是可选的整理动作。
+- `jspace filehub check --json` 报告指针/索引缺口,用户要求处理。
 
 ## A. 外部存量收编
 
@@ -22,11 +23,11 @@
 - 明确源目录(Documents / Downloads / 桌面 / 旧盘 / 网盘 / 聊天记录导出…),列出候选文件清单。
 - 估量:份数、类型、体积。大体积(如 GB 级)先跟用户确认是否本轮收、收多少。
 
-### 1. 归属与 layout(增量、按需)
-- 属某进行中项目 → 读 `projects/<项目>/index.md`,按已声明的 `layout` 选择项目根或稳定子目录。
-- 长期领域资料(书籍/资料,无明确终点) → `areas/<领域>/` 下的稳定主题,不按格式建目录。
+### 1. 归属与目录(增量、按需)
+- 属某进行中项目 → 读 `projects/<项目>/index.md` 的收录范围与现有目录,选择项目根或语义子目录。
+- 长期领域资料(书籍/资料,无明确终点) → `areas/<领域>/` 下的稳定主题;该 area 必须已有 `index.md`。
 - 结项/冷资料 → `archive/<年>/`。
-- **归属或 layout 不明 → 列疑问问用户,不猜**。
+- **归属不明 → 列疑问问用户,不猜**。
 
 ### 2. 命名 + 查重(复用 filing.md)
 - 命名:`YYYY-MM-DD-语义名-vN.ext`(入库日期 + 语义名 + 版本)。
@@ -41,7 +42,7 @@
 - excel/ppt 关键数字需要时可走深度抽取(`~/.agents/skills/asset-ingest/references/deep-extract.md`)。
 
 ### 5. 登记
-- 项目 `index.md` 挂一行(文件 + 类型 + 日期 + gbrain slug);areas 是否建 index 按使用涌现。
+- 项目 `index.md` 挂一行(文件 + 类型 + 日期 + gbrain slug);area 必须有 `index.md`(`type: area-index`,`owner` 与目录名一致)才能入库。
 
 ### 6. 召回自检(必做)
 - `gbrain query <关键词>` 确认命中;未命中 → 查 slug / tags / embedding。
@@ -51,7 +52,7 @@
 
 ## B. 旧格式分类结构迁移(非破坏)
 
-适用:项目内已有 `docs`、`decks`、`data`、`notes` 等格式目录。**不自动批处理**,每次只处理明确点名或 doctor 报告的范围。
+适用:项目内已有 docs、decks、data、notes 等格式目录,**且用户希望整理**。这类目录不再被自动判错;仍是**不自动批处理**,每次只处理明确点名的范围。
 
 ### 1. 只读盘点
 - 记录旧 `rel_path`、文件大小/哈希、项目 index 登记、gbrain asset 页候选。

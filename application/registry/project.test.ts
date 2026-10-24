@@ -1,7 +1,8 @@
 // application/registry/project.test.ts — `jspace project` use cases.
 // Run: bun test application/registry/project.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initWorkbench } from "../workspace/init.ts";
@@ -12,7 +13,7 @@ import { BUNDLE_MANIFEST } from "../../cli/manifest.generated.ts";
 import { mutationLockPath } from "../lock.ts";
 import { domainAdd } from "./domain.ts";
 import { resourceAdd } from "./resource.ts";
-import { projectAdd, projectList, projectListStatus } from "./project.ts";
+import { projectAdd, projectList, projectListStatus, projectSetStatus } from "./project.ts";
 import { ingestBegin } from "../ingest/use-cases.ts";
 import { parse, type CmdContext, type CommandSpec } from "../commands/command.ts";
 import { COMMANDS } from "../../cli/commands/registry.ts";
@@ -315,4 +316,96 @@ test("project list --status: an unreadable card body keeps the card and lowers c
   const r = await projectListStatus(root, false, gbrain);
   expect(r.lines.join("\n")).toContain("jspace");
   expect(r.lines.at(-1)).toContain("盘点不完整");
+});
+
+test("set-status dry-run reports the change without writing the hub", () => {
+  domainAdd(root, "files", undefined, undefined, undefined, false);
+  projectAdd(root, "books", undefined, undefined, false);
+  const hubPath = join(root, ".jspace", "hub.json");
+  const before = readFileSync(hubPath, "utf-8");
+  const r = projectSetStatus(root, "books", "archived", true, false);
+  expect(r.lines[0]).toContain("active -> archived");
+  expect(r.lines[0]).toContain("dry-run");
+  expect(readFileSync(hubPath, "utf-8")).toBe(before);
+  expect(loadHub(root).projects[0].status).toBe("active");
+});
+
+test("set-status archives and restores in place; repeats are no-ops", () => {
+  domainAdd(root, "files", undefined, undefined, undefined, false);
+  projectAdd(root, "books", "files", "projects/book-shelf", false);
+  const before = loadHub(root).projects[0];
+  // a real asset under the owner root: closing must not move or rewrite it
+  const asset = join(root, "filehub", "projects", "book-shelf", "sample.txt");
+  mkdirSync(join(root, "filehub", "projects", "book-shelf"), { recursive: true });
+  writeFileSync(asset, "asset bytes");
+  const hash = () => createHash("sha256").update(readFileSync(asset)).digest("hex");
+  const hashBefore = hash();
+
+  projectSetStatus(root, "books", "archived", false, false);
+  const archived = loadHub(root).projects[0];
+  expect(archived.status).toBe("archived");
+  expect(archived.asset_rel_path).toBe("projects/book-shelf");
+  expect(hash()).toBe(hashBefore);
+
+  const again = projectSetStatus(root, "books", "archived", false, false);
+  expect(again.lines[0]).toContain("already archived");
+
+  projectSetStatus(root, "books", "active", false, false);
+  const restored = loadHub(root).projects[0];
+  expect(restored).toEqual(before);
+  expect(hash()).toBe(hashBefore);
+});
+
+test("set-status --json reports before/after/changed", () => {
+  domainAdd(root, "files", undefined, undefined, undefined, false);
+  projectAdd(root, "books", undefined, undefined, false);
+  const r = projectSetStatus(root, "books", "archived", false, true);
+  expect(r.lines).toEqual([]);
+  expect(r.data).toEqual({
+    id: "books",
+    before: "active",
+    after: "archived",
+    changed: true,
+    dryRun: false,
+  });
+});
+
+test("set-status rejects an unknown project or status", () => {
+  domainAdd(root, "files", undefined, undefined, undefined, false);
+  projectAdd(root, "books", undefined, undefined, false);
+  expect(() => projectSetStatus(root, "missing", "archived", false, false)).toThrow(/no such project/);
+  expect(() => projectSetStatus(root, "books", "paused", false, false)).toThrow(/invalid project status/);
+});
+
+test("archived project refuses ingest; restoring allows it again", () => {
+  domainAdd(root, "files", undefined, undefined, undefined, false);
+  const fh = join(root, "filehub");
+  resourceAdd(root, "filehub", "files", "filehub", fh, undefined, undefined, undefined, false);
+  for (const d of ["_inbox", "projects/books"]) mkdirSync(join(fh, d), { recursive: true });
+  const src = join(fh, "_inbox", "sample.txt");
+  writeFileSync(src, "test content");
+  projectAdd(root, "books", undefined, undefined, false);
+
+  projectSetStatus(root, "books", "archived", false, false);
+  expect(() =>
+    ingestBegin(root, {
+      file: src,
+      target: "projects/books/sample.txt",
+      slug: "assets/books/sample",
+      ownerKind: "project",
+      ownerId: "books",
+      indexLine: "2026-10-18 | sample | assets/books/sample",
+    }),
+  ).toThrow(/is archived/);
+
+  projectSetStatus(root, "books", "active", false, false);
+  const restored = ingestBegin(root, {
+    file: src,
+    target: "projects/books/sample.txt",
+    slug: "assets/books/sample",
+    ownerKind: "project",
+    ownerId: "books",
+    indexLine: "2026-10-18 | sample | assets/books/sample",
+  });
+  expect(restored.lines.some((line) => line.includes("ingest staged"))).toBe(true);
 });

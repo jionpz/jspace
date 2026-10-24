@@ -8,11 +8,13 @@
 
 ## 命名
 
-`YYYY-MM-DD-语义名-vN.ext`(GOAL.md 规范)
+建议 `YYYY-MM-DD-语义名-vN.ext`(机器可排序、人可扫读):
 
 - `YYYY-MM-DD`:入库日期(机器可排序)
 - `语义名`:可扫读短名(中文或 kebab-case)
 - `-vN`:版本号,同语义资料二版起递增(重名去重的机制)
+
+原生制品、上游版本号、工程包内部路径保持原名,不强制改写。
 
 ## 归档两步:先定归属,再定处理方式
 
@@ -24,7 +26,7 @@
 
 | 这份资料…… | 归到 | 目录细节 |
 |---|---|---|
-| 明确服务某个项目(进行中或已交付) | `projects/<项目>/` | 读该项目 `index.md` 的 `layout`,决定放项目根还是稳定工作流/周期子目录 |
+| 明确服务某个项目(进行中或已交付) | `projects/<项目>/` | 读该项目 `index.md` 的收录范围与现有目录,决定放项目根还是语义子目录 |
 | 多个项目共用、或长期不随项目结项(书籍 / 行业资料 / 领域参考) | `areas/<领域>/<稳定主题>/` | 按稳定主题组织;不用格式词做主题名 |
 | 已结项 / 不再活跃的冷资料 | `archive/<年>/` | |
 | 拿不准 | — | 先补查 owner index、项目规范与相关资产；仍无唯一归属则留原件，报告缺什么，不猜 |
@@ -39,9 +41,12 @@
 | excel / ppt | 常规:摘要 + 指针;用户要求时深度抽取(逐表/逐页 → 伴生 `.extract.md` + 页内 Key Facts 含关键数字),见 `~/.agents/skills/asset-ingest/references/deep-extract.md` |
 | 视频 / 音频 / 截图 | 路由到 gbrain `media-ingest` 深入路径;MVP 范围外 |
 
-### 保留目录名
+### 目录名不参与判定
 
-`docs`、`decks`、`data`、`notes` 四个裸名字在 filehub 内**一律不得作为目录名**——它们描述文件形态,不描述归属或稳定阶段,正是"同一份资料说不清该放哪"的来源。类型写进项目 `index.md` 的类型列与 gbrain,不写进路径。`jspace doctor` 的 `filehub.legacy_taxonomy` 检测它们,迁移流程见 `migration.md`。
+目录按归属和用途起名,不按文件形态起名;但历史目录名(docs、decks、data、notes 一类)
+不再被 `jspace doctor` / `filehub check` 判为违规,也不会自动移动。
+判断标准是:归属清楚、入口可达、工程套件内部结构保真、登记覆盖完整。
+需要整理旧目录时按 `migration.md` 显式处理,可回滚。
 
 > 例:项目合同若是 pdf —— **归属**判定为"服务 acme 项目" → `projects/acme/合同/`;**格式**只决定它要不要深度抽取。格式不参与选目录。
 
@@ -50,8 +55,8 @@
 ```
 filehub/
   _inbox/           # 新资料先落这里(M2 后)
-  projects/<项目>/  # index.md + flat 文件,或单一稳定组织轴下的子目录
-  areas/<领域>/     # 长期领域资料,按稳定主题组织
+  projects/<项目>/  # index.md + 资产,按真实浏览需要局部组织
+  areas/<领域>/     # 长期领域资料;必须有 index.md 才能接收入库
   archive/<年>/     # 结项/冷资料
 ```
 
@@ -64,29 +69,23 @@ filehub/
 
 豁免目录里的文件不会被自动归位;要整理它,先删掉标记再走正常流程。
 
-### 项目目录:归属/阶段唯一轴,不按文件格式
+### 项目目录:先归属,再按真实浏览需要局部组织
 
-项目 `index.md` 的 frontmatter 必须声明一种 `layout`:
+项目 `index.md` 必须存在并登记资产;目录形状不再由枚举约束:
 
-- `flat`:文件较少,直接放项目根。
-- `workstream`:按稳定工作流/阶段分组,如 `kickoff/`、`delivery/`、`合同/`。
-- `period`:按稳定周期分组,如 `2026-Q3/`。
+1. 文件少时直接放项目根;某一类资料形成稳定集合、或直接子项过多影响浏览时,再建语义子目录。
+2. 同一层级只用一种组织轴(工作流/阶段、年份/周期),不要同层混用。
+3. 不为单个文件机械建目录。
+4. 一个文件只有一个规范位置;跨项目引用用链接,不复制。
+5. 完整的工程套件保留内部结构,由 `index.md` 指向其入口;不为了整齐而整包拆散。
+6. 旧 `layout: flat | workstream | period` 字段仍可读,作为布局说明,不再是必填声明。
 
-规则:
-
-1. **先读项目 `index.md` 的 `layout`**,不得每轮另发明分类轴。
-2. 同一层级只能使用一种组织轴,不得混用工作流、周期或文件格式。
-3. 不为单个文件机械建目录;只有稳定同类集合形成、或直接子项过多影响浏览时才建目录。
-4. **禁止** `docs`、`decks`、`data`、`notes` 等文件形态目录。类型写入 index,不写进路径。
-5. 一个文件只有一个规范位置;跨项目引用用链接,不复制。
-6. 已有旧式格式目录不自然获得合法性:只按原位置增量接收会持续制造漂移;先按 migration.md 的显式迁移流程处理,或明确保留为待迁移区,不再新增格式目录。
-
-**示例(同一项目只能选用一种组织方式)**
+**示例(每层选用一种组织轴;不是强制形状)**
 
 ```
 # 方式 A:workstream(稳定工作流/阶段)
 projects/acme/
-  index.md              # layout: workstream
+  index.md              # 可选:layout: workstream
   kickoff/
     2026-08-01-kickoff-v1.pptx
   合同/
@@ -96,7 +95,7 @@ projects/acme/
 
 # 方式 B:period(长跑项目按周期)
 projects/acme/
-  index.md              # layout: period
+  index.md              # 可选:layout: period
   2026-Q3/
     2026-08-01-kickoff-v1.pptx
     2026-08-03-报价单-v1.xlsx
@@ -105,12 +104,12 @@ projects/acme/
 
 # 方式 C:flat(文件少)
 projects/acme/
-  index.md              # layout: flat
+  index.md              # 可选:layout: flat
   2026-08-01-kickoff-v1.pptx
   2026-08-03-报价单-v1.xlsx
 ```
 
-`profile/filing-prefs` 只能帮助选择 `flat` / `workstream` / `period` 或具体稳定主题,不能恢复格式目录。
+`profile/filing-prefs` 帮助选择具体稳定主题或局部组织方式,不能用来恢复"按文件格式建目录"。
 
 ### 归位偏好学习(消除反复猜错)
 
@@ -162,7 +161,7 @@ source: claude
 
 ## 项目 index.md
 
-- `projects/<项目>/index.md` 必须在 frontmatter 声明 `layout: flat | workstream | period`。
+- `projects/<项目>/index.md` 必须存在并登记资产;旧 `layout` 字段可读,但不再必填。
 - 每份归位文件必须登记一行:文件 + 类型 + 日期 + gbrain slug(人机共用的 dashboard)。
 - 随项目保存的 Agent 治理、构建配置、运行骨架和模板不是独立资产;在该 index 的
   `support_paths` 中按 owner 相对路径显式声明(文件或稳定目录),例如:
@@ -173,4 +172,4 @@ source: claude
   ```
   路径必须位于 owner 根内且真实存在;不能把普通资料登记为 support 来绕过 asset 指针,
   也不能用 support 路径隐藏 cross-owner 文件。
-- `areas/` 是否维护 index 由真实使用涌现,但同样禁止按文件格式分目录。
+- `areas/<id>/index.md` 是入库前置:必须存在、可读、非 symlink 常规文件,`type: area-index`,`owner` 与目录名一致;index 要写清收录与排除范围。

@@ -148,3 +148,74 @@ function projectAddImpl(
   writeHubAtomic(root, hub);
   return { lines: [`jspace: ok: added project: ${id} (domain=${domain})`] };
 }
+
+export type ProjectStatus = "active" | "archived";
+
+interface ProjectStatusChange {
+  id: string;
+  before: string;
+  after: ProjectStatus;
+  changed: boolean;
+  dryRun: boolean;
+}
+
+/** Close or reopen a project in place. Only `status` changes: asset paths,
+ *  files and gbrain pages keep working, and no navigation refresh is attempted
+ *  inside this transaction (the caller is told to refresh explicitly). */
+export function projectSetStatus(
+  root: string,
+  id: string,
+  status: string,
+  dryRun: boolean,
+  json: boolean,
+): CmdResult {
+  return dryRun
+    ? projectSetStatusImpl(root, id, status, dryRun, json)
+    : withWorkbenchMutationLock(root, () => projectSetStatusImpl(root, id, status, dryRun, json));
+}
+
+function projectSetStatusImpl(
+  root: string,
+  id: string,
+  status: string,
+  dryRun: boolean,
+  json: boolean,
+): CmdResult {
+  if (!isId(id)) {
+    fail(`invalid project id: ${id} (lowercase letters, digits, and hyphens)`);
+  }
+  if (status !== "active" && status !== "archived") {
+    fail(`invalid project status: ${status} (active or archived)`);
+  }
+  const after: ProjectStatus = status;
+  const hub = loadHub(root);
+  const project = hub.projects.find((candidate) => candidate.id === id);
+  if (!project) fail(`no such project: ${id}; run "jspace project add ${id}" first`);
+  const before = project.status;
+  const changed = before !== after;
+  const data: ProjectStatusChange = { id, before, after, changed, dryRun };
+
+  if (dryRun || !changed) {
+    if (json) return { lines: [], data };
+    return {
+      lines: [
+        changed
+          ? `jspace: ok: would set project ${id}: ${before} -> ${after} (dry-run)`
+          : `jspace: ok: project ${id} already ${after}`,
+      ],
+    };
+  }
+
+  project.status = after;
+  const check = decodeHub(hub);
+  if (!check.ok) fail(check.issues.map((i) => i.message).join("; "));
+  writeHubAtomic(root, hub);
+  if (json) return { lines: [], data };
+  return {
+    lines: [
+      `jspace: ok: project ${id}: ${before} -> ${after}`,
+      "  asset paths, files and gbrain pages are unchanged",
+      '  next: run "jspace filehub refresh" to update derived navigation',
+    ],
+  };
+}

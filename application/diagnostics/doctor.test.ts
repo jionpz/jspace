@@ -742,7 +742,7 @@ function withFilehub(projects: unknown[]): string {
   return fh;
 }
 
-// ---- filehub.contract_stale / filehub.legacy_taxonomy (read-only doctor) ----
+// ---- filehub.contract_stale / no name-based taxonomy (read-only doctor) ----
 
 
 test("filehub without a README -> filehub.contract_stale warning (non-blocking)", () => {
@@ -794,34 +794,24 @@ test("compliant filehub (current block + flat project) -> no contract diagnostic
   expect(c).not.toContain("filehub.legacy_taxonomy");
 });
 
-test("legacy format dirs under a registered project -> filehub.legacy_taxonomy", () => {
+test("format-named directories are no longer judged by name (project)", () => {
   const fh = withFilehub([{ id: "acme", domain: "files", asset_rel_path: "projects/acme", status: "active" }]);
   writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
   mkdirSync(join(fh, "projects", "acme", "docs"), { recursive: true });
   mkdirSync(join(fh, "projects", "acme", "delivery"), { recursive: true });
   const r = doctorWorkbench(root, stubDeps());
-  const d = (r.data as { diagnostics: { code: string; severity: string; message: string }[] }).diagnostics.find(
-    (x) => x.code === "filehub.legacy_taxonomy",
-  );
-  expect(d?.severity).toBe("warning");
-  expect(d!.message).toContain("docs");
-  expect(d!.message).not.toContain("delivery");
-  expect(d!.message).toContain("migration.md");
+  expect(codes(r)).not.toContain("filehub.legacy_taxonomy");
   expect(r.exitCode ?? 0).toBe(0);
 });
 
-test("legacy format dir under areas/<domain> -> filehub.legacy_taxonomy", () => {
+test("format-named directories are no longer judged by name (areas)", () => {
   const fh = withFilehub([]);
   writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
   mkdirSync(join(fh, "areas", "books", "data"), { recursive: true });
-  const diags = (doctorWorkbench(root, stubDeps()).data as { diagnostics: { code: string; message: string }[] }).diagnostics;
-  const d = diags.find((x) => x.code === "filehub.legacy_taxonomy");
-  expect(d).toBeDefined();
-  expect(d!.message).toContain("areas/books");
-  expect(d!.message).toContain("data");
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("filehub.legacy_taxonomy");
 });
 
-test("legacy taxonomy scan is one level only (semantic dir may contain a docs/ folder)", () => {
+test("a semantic group may contain a docs/ folder without a finding", () => {
   const fh = withFilehub([{ id: "acme", domain: "files", asset_rel_path: "projects/acme", status: "active" }]);
   writeFileSync(join(fh, "README.md"), embeddedFilehubReadme());
   mkdirSync(join(fh, "projects", "acme", "delivery", "docs"), { recursive: true });
@@ -945,16 +935,17 @@ test("a large filehub collapses per-project fan-out into capped lines + a total"
   expect(r.exitCode ?? 0).toBe(0);
 });
 
-test("legacy format dirs in many locations collapse into one counted warning", () => {
+test("many format-named directories stay silent (no name-based taxonomy)", () => {
   const fh = withFilehub([]);
   for (let i = 0; i < 12; i++) {
     mkdirSync(join(fh, "areas", `a${i}`, "docs"), { recursive: true });
   }
-  const diags = (doctorWorkbench(root, stubDeps()).data as { diagnostics: { code: string; path: string; message: string }[] }).diagnostics;
-  const legacy = diags.filter((d) => d.code === "filehub.legacy_taxonomy");
-  expect(legacy).toHaveLength(6); // 5 concrete roots + 1 aggregate
-  expect(legacy[5].path).toBe("filehub");
-  expect(legacy[5].message).toContain("12 location(s)");
+  const r = doctorWorkbench(root, stubDeps());
+  const legacy = (r.data as { diagnostics: { code: string }[] }).diagnostics.filter(
+    (d) => d.code === "filehub.legacy_taxonomy",
+  );
+  expect(legacy).toHaveLength(0);
+  expect(r.exitCode ?? 0).toBe(0);
 });
 
 test("an exhausted scan budget is reported instead of guessing at staleness", () => {

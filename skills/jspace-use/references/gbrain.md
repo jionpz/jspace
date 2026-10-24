@@ -132,7 +132,7 @@ embed_skip: true
 
 - 项目任务、bug、迭代和完整历史不写入 gbrain；state 只留简短现状和“执行层”入口。
 - 项目 lesson 只有在第二个项目实际采用并有产物后才晋升到 `knowledge/`；“看起来通用”或重复出现不构成晋升。
-- 资产目录由 owner/layout 决定，不由文件格式决定。资产指针必须含 `rel_path`，本体留在 filehub。
+- 资产目录由 owner 与归属决定，不由文件格式决定。资产指针必须含 `rel_path`，本体留在 filehub。
 - 资产“同内容”只报告重复并跳过，不覆盖；“不同内容”只有明确新版关系时才写 `-vN` 新 slug + 新页，正文声明 `Supersedes: [[old]]`，旧页另做一次完整页 + revision 的 CAS 生命周期更新。绝不通过覆盖错页来“修好”现有页。
 - `status:superseded` / `deprecated` / `archived` 的资产页是历史指针，不参与当前 `rel_path`、owner、index 注册和重复指针判定；owner index 只能指向非 inactive 的现行页。旧页保留，由新页和生命周期证明取代关系。
 - `entity/*` 尚未授权；真实实体事实先放 `knowledge/<domain>/<topic>` 并加 `kind:*`。

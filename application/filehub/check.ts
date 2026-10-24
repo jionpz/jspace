@@ -121,7 +121,6 @@ const SUPPORT_EXTENSIONS = new Set([
   "yml",
   "zsh",
 ]);
-const LEGACY_TAXONOMY = new Set(["docs", "decks", "data", "notes"]);
 
 export interface FilehubRegistryProject {
   id: string;
@@ -801,14 +800,6 @@ function validateIndexes(
         message: `layout must be flat, workstream or period: ${layout}`,
       });
     }
-    if (index.ownerKind === "project" && (layout === undefined || layout === "")) {
-      addFinding({
-        code: "filehub.index.layout_missing",
-        severity: "error",
-        path: index.relPath,
-        message: "project index frontmatter must declare layout",
-      });
-    }
     const seenSlugs = new Map<string, number>();
     for (const row of index.rows) {
       rows += 1;
@@ -1482,41 +1473,6 @@ export async function filehubCheck(
         severity: "warning",
         path: file.relPath,
         message: "companion extract must not be registered as an independent asset",
-      });
-    }
-  }
-
-  for (const file of scan.files) {
-    if (file.kind !== "asset") continue;
-    const owner = pathOwner(file.relPath, input.projects);
-    if (owner === null) continue;
-    const indexPath =
-      owner.kind === "project" ? `${owner.root}/index.md` : `areas/${owner.id}/index.md`;
-    const index = scan.indexes.get(indexPath);
-    const layout = index?.parsed.fields.layout;
-    const withinOwner = file.relPath.slice(owner.root.length + 1);
-    const segments = withinOwner.split("/");
-    if (segments.some((segment) => LEGACY_TAXONOMY.has(segment))) {
-      addFinding({
-        code: "filehub.layout.legacy_taxonomy",
-        severity: "warning",
-        path: file.relPath,
-        message: "format-oriented directory is not a stable ownership axis",
-      });
-    }
-    if (layout === "flat" && segments.length > 1) {
-      addFinding({
-        code: "filehub.layout.flat_nested",
-        severity: "warning",
-        path: file.relPath,
-        message: "flat layout keeps ordinary assets at the owner root",
-      });
-    } else if ((layout === "workstream" || layout === "period") && segments.length === 1) {
-      addFinding({
-        code: "filehub.layout.root_asset",
-        severity: "warning",
-        path: file.relPath,
-        message: `${layout} layout expects ordinary assets inside a stable semantic group`,
       });
     }
   }

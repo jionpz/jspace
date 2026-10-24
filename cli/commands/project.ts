@@ -3,7 +3,7 @@
 import type { CommandSpec } from "../../application/commands/command.ts";
 import { filehubInit, filehubUpgrade } from "../../application/registry/filehub.ts";
 import { inboxStatus } from "../../application/registry/inbox.ts";
-import { projectAdd, projectList, projectListStatus } from "../../application/registry/project.ts";
+import { projectAdd, projectList, projectListStatus, projectSetStatus } from "../../application/registry/project.ts";
 import { expandTilde, filehubReadme, devRoot } from "../embed.ts";
 import { resolvePath } from "../paths.ts";
 import { b, s } from "./helpers.ts";
@@ -51,11 +51,29 @@ const projectAddSpec: CommandSpec = {
     ),
 };
 
+const projectSetStatusSpec: CommandSpec = {
+  name: "set-status",
+  summary: "close or reopen a project in place (asset paths and pages stay valid)",
+  features: { json: true, dir: true, dryRun: true },
+  positionals: [{ name: "id", required: true, help: "project id" }],
+  options: [
+    {
+      name: "--status",
+      takesValue: true,
+      required: true,
+      metavar: "STATUS",
+      help: "active or archived",
+    },
+  ],
+  handler: (ctx, args) =>
+    projectSetStatus(ctx.root, s(args.id), s(args.status), b(args.dryRun), b(args.json)),
+};
+
 export const projectSpec: CommandSpec = {
   name: "project",
   summary: "manage workbench projects",
   commandArgName: "project_command",
-  children: [projectListSpec, projectAddSpec],
+  children: [projectListSpec, projectAddSpec, projectSetStatusSpec],
 };
 
 const filehubInitSpec: CommandSpec = {

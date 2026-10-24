@@ -197,45 +197,14 @@ export function checkInbox(reads: WorkbenchReads): RegistryDiagnostic[] {
   return diags;
 }
 
-/** Legacy format vocabulary: directory names that describe file shape, not
- *  ownership/stage. Never recommended; detected read-only so a real migration
- *  can be planned (see asset-ingest/references/migration.md). */
-export const LEGACY_TAXONOMY_DIRS: readonly string[] = ["docs", "decks", "data", "notes"];
-
 const UPGRADE_HINT = "jspace filehub upgrade";
-
-function isDir(p: string): boolean {
-  try {
-    return statSync(p).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-/** One-level scan of `dir` for legacy format child directories. Permission /
- *  race errors degrade to "nothing found" — doctor must never throw. */
-function legacyChildren(dir: string): string[] {
-  try {
-    if (!statSync(dir).isDirectory()) return [];
-    const hits: string[] = [];
-    for (const name of readdirSync(dir)) {
-      if (name.startsWith(".")) continue;
-      if (!LEGACY_TAXONOMY_DIRS.includes(name)) continue;
-      if (isDir(join(dir, name))) hits.push(name);
-    }
-    return hits.sort();
-  } catch {
-    return [];
-  }
-}
 
 /** Read-only filehub content contract checks:
  *  - `filehub.contract_stale`: README missing / no managed block / damaged
  *    markers / missing or outdated contract version.
- *  - `filehub.legacy_taxonomy`: exact `docs|decks|data|notes` child dirs under a
- *    registered project asset root or an `areas/*` directory.
- *  Warning-level only (never blocks) and bounded: no recursive walk of the
- *  asset tree, so a large filehub stays cheap. */
+ *  Warning-level only (never blocks) and bounded: no walk of the asset tree,
+ *  so a large filehub stays cheap. Directory names are not judged by shape:
+ *  ownership and reachability are the contract (see filehub README). */
 export function checkFilehubContract(reads: WorkbenchReads): RegistryDiagnostic[] {
   const diags: RegistryDiagnostic[] = [];
   const fhRoot = resolveFhRoot(reads);
@@ -329,50 +298,6 @@ export function checkFilehubContract(reads: WorkbenchReads): RegistryDiagnostic[
     }
   }
 
-  const hub = reads.hub.status === "ok" ? reads.hub.value : null;
-  const scanRoots: { abs: string; rel: string }[] = [];
-  for (const project of hub?.projects ?? []) {
-    scanRoots.push({ abs: join(fhRoot, project.asset_rel_path), rel: project.asset_rel_path });
-  }
-  const areasDir = join(fhRoot, "areas");
-  const areaNames = probeDir(areasDir) === "dir" ? safeReaddir(areasDir) : null;
-  if (areaNames !== null) {
-    for (const name of areaNames) {
-      if (name.startsWith(".")) continue;
-      const abs = join(areasDir, name);
-      // Areas are discovered by name (nobody declared them), so a symlinked
-      // entry must never widen the scan outside the filehub. Registered project
-      // roots are explicitly declared and keep their follow-link behaviour.
-      let st: ReturnType<typeof lstatSync>;
-      try {
-        st = lstatSync(abs);
-      } catch {
-        continue;
-      }
-      if (st.isSymbolicLink()) continue;
-      if (st.isDirectory()) scanRoots.push({ abs, rel: `areas/${name}` });
-    }
-  }
-
-  const offenders = scanRoots
-    .map(({ abs, rel }) => ({ rel, hits: legacyChildren(abs) }))
-    .filter(({ hits }) => hits.length > 0);
-  pushCapped(
-    diags,
-    offenders,
-    ({ rel, hits }) => ({
-      severity: "warning",
-      code: "filehub.legacy_taxonomy",
-      path: `filehub.${rel}`,
-      message: `legacy format director${hits.length === 1 ? "y" : "ies"} under ${rel}: ${hits.join(", ")}; format names must not be archive directories — migrate per asset-ingest/references/migration.md (explicit, per-file, rollback-able)`,
-    }),
-    (shown, total) => ({
-      severity: "warning",
-      code: "filehub.legacy_taxonomy",
-      path: "filehub",
-      message: `filehub: ${total} location(s) still use legacy format directories docs/ decks/ data/ notes/ (the first ${shown} are listed above); migrate per asset-ingest/references/migration.md (explicit, per-file, rollback-able)`,
-    }),
-  );
   return diags;
 }
 

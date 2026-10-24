@@ -99,14 +99,18 @@ test("embedded README carries a current JSPACE:FILEHUB contract block", () => {
   expect(parseFilehubContractVersion(block!)).toBe(FILEHUB_CONTRACT_VERSION);
 });
 
-test("embedded contract keeps types as metadata and forbids format directories", () => {
+test("embedded contract keeps types as metadata and does not judge directory names", () => {
   const block = extractFilehubContractBlock(embeddedFilehubReadme());
   expect(block).not.toBeNull();
   expect(block!).toContain("layout: flat | workstream | period");
   expect(block!).toContain("类型只做元数据");
-  expect(block!).toMatch(/禁止.*docs/);
-  // no recommendation of the legacy vocabulary as an archive target
-  expect(block!).not.toMatch(/推荐.*(docs|decks|data|notes)\//);
+  // v5: historical names are neither errors nor auto-moved
+  expect(block!).toMatch(/历史目录名.*不再被判定为违规/);
+  expect(block!).not.toMatch(/不得作为目录名/);
+  // an area must carry its own index before it can receive ingest
+  expect(block!).toContain("必须有 index.md 才能接收入库");
+  // lifecycle is in place, not a physical move
+  expect(block!).toContain("project set-status");
 });
 
 // ---- `jspace filehub upgrade` ----

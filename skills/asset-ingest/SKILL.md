@@ -23,7 +23,7 @@ triggers:
 
 - filehub 根已注册，source 位于 `<filehub>/_inbox/`。
 - owner 唯一:已注册的 active project，或已存在且有 `index.md` 的 `areas/<id>/`。
-- owner 的 `index.md` 可读；project 必须有 `layout: flat|workstream|period`，area 可沿用已有布局。
+- owner 的 `index.md` 可读且能登记资产；area 的 index 还必须是非 symlink 常规文件。旧 `layout` 字段可读，但不再是必填声明。
 - 已检查 `profile/filing-prefs`、owner index、已有目录与同类资产；文件名和扩展名只能作线索。
 - 已知目标 `rel_path`、`assets/<owner>/<semantic>` slug 与将被写入 index 的完整 line。
 
@@ -65,7 +65,7 @@ triggers:
 ## 主流程
 
 1. **读上下文**:读 owner `index.md`、`areas/*/index.md`、`gbrain` 中的 `profile/filing-prefs`（如存在）和既有目录。用 `jspace filehub check --json` 获取机械缺口。
-2. **判 owner 与目录**:先定归属，再按该 owner 单一组织轴选根目录或稳定语义子目录。格式只进类型元数据，绝不创建 `docs`、`decks`、`data`、`notes` 一类形态目录。
+2. **判 owner 与目录**:先定归属，再按真实浏览需要选根目录或稳定语义子目录；同一层级只用一种组织轴。格式只进类型元数据，不按格式起名。area 必须有可读的 `index.md`（`type: area-index`，`owner` 与 area id 一致）才能接收入库；project 必须已注册且 `active`。
 3. **定身份**:语义名稳定、可扫读；同内容先查重；不同内容不覆盖。明确版本关系才使用 `-vN` 和新 slug，无法确认则 conflict。
 4. **暂存本体**:source 留在 inbox，CLI 独占复制并生成 journal。
 
