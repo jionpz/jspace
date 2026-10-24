@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -137,6 +138,17 @@ describe("filehubRefresh", () => {
     expect(readFileSync(join(root, "README.md"), "utf-8")).toContain("extra note");
     expect(readFileSync(join(root, "projects", "README.md"), "utf-8")).toContain("tail note");
   });
+
+  test.skipIf(process.getuid?.() === 0 || process.platform === "win32")(
+    "an unreadable owner index is a gap, not a link",
+    () => {
+      chmodSync(join(root, "projects", "acme", "index.md"), 0o000);
+      run();
+      const rootReadme = readFileSync(join(root, "README.md"), "utf-8");
+      expect(rootReadme).toContain("- acme — 待补 `projects/acme/index.md`");
+      expect(rootReadme).not.toContain("(projects/acme/index.md)");
+    },
+  );
 
   test("a malformed block in either file blocks both writes", () => {
     writeFileSync(join(root, "projects", "README.md"), `${NAV_PROJECTS_BLOCK_START}\n`);

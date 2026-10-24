@@ -270,11 +270,12 @@ export function parseOwnerIndex(raw: string): ParsedOwnerIndex {
       fence = open;
       continue;
     }
-    // A comment may open and close on the same line; only multi-line comment
-    // bodies are skipped. Marker lines were already consumed above.
+    // Marker lines were already consumed. Any other HTML comment is an
+    // example, never a row: a same-line comment is skipped whole, and an
+    // unterminated one starts a multi-line skip.
     const commentAt = rawLine.indexOf("<!--");
-    if (commentAt >= 0 && !rawLine.slice(commentAt).includes("-->")) {
-      inComment = true;
+    if (commentAt >= 0) {
+      if (!rawLine.slice(commentAt).includes("-->")) inComment = true;
       continue;
     }
     if (trimmed.startsWith(">")) continue;

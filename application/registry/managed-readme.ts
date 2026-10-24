@@ -200,7 +200,16 @@ export function planManagedBlock(
  *  a write the apply would refuse. Returns an error string instead of throwing. */
 export function checkWritable(plan: BlockPlan): string | null {
   if (plan.action === "conflict") return plan.conflict ?? "conflict";
-  if (plan.identity === null) return null;
+  if (plan.identity === null) {
+    // A create plan must still be absent at write time: another process (or a
+    // sync client) may have materialized the file since planning.
+    try {
+      lstatSync(plan.path);
+      return "file appeared while planning (concurrent create); re-run to merge with it";
+    } catch {
+      return null;
+    }
+  }
   try {
     accessSync(plan.path, constants.W_OK);
   } catch {

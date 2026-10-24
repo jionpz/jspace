@@ -170,6 +170,15 @@ describe("checkWritable", () => {
     expect(checkWritable(planManagedBlock(path, START, END, BLOCK))).toContain("malformed");
   });
 
+  test("a create plan refuses a file that appeared after planning", () => {
+    const path = join(dir, "README.md");
+    const plan = planManagedBlock(path, START, END, BLOCK);
+    expect(plan.action).toBe("create");
+    expect(checkWritable(plan)).toBeNull();
+    writeFileSync(path, "# someone else\n");
+    expect(checkWritable(plan)).toContain("appeared while planning");
+  });
+
   test("detects a file that turned into a symlink", () => {
     const path = join(dir, "README.md");
     writeFileSync(path, "# Doc\n");

@@ -46,6 +46,14 @@ describe("current ownership rows", () => {
     expect(parsed.current.map((row) => row.slug)).toEqual(["assets/acme/report"]);
   });
 
+  test("a same-line HTML comment is skipped whole", () => {
+    const parsed = parseOwnerIndex(
+      `# Acme\n<!-- | commented.md | document | 2026-10-18 | assets/acme/commented | -->\n`,
+    );
+    expect(parsed.current).toEqual([]);
+    expect(parsed.unmarkedLinks).toBe(0);
+  });
+
   test("a three-column row is not a current ownership row", () => {
     const parsed = parseOwnerIndex("# Acme\n| 2026-10-18 | doc.txt | assets/acme/doc |\n");
     expect(parsed.current).toEqual([]);

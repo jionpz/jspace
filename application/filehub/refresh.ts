@@ -8,7 +8,7 @@
 // a mid-way failure leaves the root entry pointing at an already-complete view
 // instead of a file that does not exist yet.
 
-import { lstatSync, mkdirSync, readdirSync } from "node:fs";
+import { accessSync, constants, lstatSync, mkdirSync, readdirSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import type { CmdResult } from "../commands/command.ts";
 import { fail } from "../../core/shared/errors.ts";
@@ -45,10 +45,12 @@ interface FileResult {
   error?: string;
 }
 
-function hasRegularFile(path: string): boolean {
+function readableIndex(path: string): boolean {
   try {
     const st = lstatSync(path);
-    return st.isFile() && !st.isSymbolicLink();
+    if (!st.isFile() || st.isSymbolicLink()) return false;
+    accessSync(path, constants.R_OK);
+    return true;
   } catch {
     return false;
   }
@@ -80,12 +82,12 @@ function navInput(root: string, wbRoot: string): NavInput {
     id: project.id,
     status: project.status,
     assetRelPath: project.asset_rel_path.replace(/\\/g, "/").replace(/\/+$/, ""),
-    hasIndex: hasRegularFile(join(root, project.asset_rel_path, "index.md")),
+    hasIndex: readableIndex(join(root, project.asset_rel_path, "index.md")),
   }));
 
   const areas: NavArea[] = directDirectories(join(root, "areas")).map((id) => ({
     id,
-    hasIndex: hasRegularFile(join(root, "areas", id, "index.md")),
+    hasIndex: readableIndex(join(root, "areas", id, "index.md")),
   }));
 
   const registered = projects.map((project) => project.assetRelPath);
