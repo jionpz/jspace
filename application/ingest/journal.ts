@@ -14,9 +14,10 @@ import { join } from "node:path";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import {
-  decodeIngestJournal,
+  decodeIngestJournalRecord,
   type IngestGbrainEvidence,
   type IngestIndexEvidence,
+  type IngestJournal,
   type IngestJournalV2,
   type IngestStep,
 } from "../../core/contracts/ingest.ts";
@@ -86,37 +87,46 @@ function dir(root: string): string {
   return join(root, INGEST_STATE_DIR);
 }
 
-export function writeJournal(root: string, journal: IngestJournalV2): void {
-  const decoded = decodeIngestJournal(journal);
+export function writeJournal(root: string, journal: IngestJournal): void {
+  const decoded = decodeIngestJournalRecord(journal);
   if (!decoded.ok) {
     throw new Error(`refusing to write invalid ingest journal: ${decoded.issues.map((i) => i.message).join("; ")}`);
   }
   writeBytesAtomic(join(dir(root), `${journal.id}.json`), JSON.stringify(journal, null, 2) + "\n");
 }
 
-export function readJournals(root: string): { records: IngestJournalV2[]; issues: ContractIssue[] } {
+export function readJournals(root: string): { records: IngestJournal[]; issues: ContractIssue[] } {
   return readJsonRecords(dir(root), {
     ext: ".json",
-    decode: decodeIngestJournal,
+    decode: decodeIngestJournalRecord,
     sort: (a, b) => a.createdAt.localeCompare(b.createdAt),
   });
 }
 
-export function readJournal(root: string, id: string): IngestJournalV2 {
+export function readJournal(root: string, id: string): IngestJournal {
   const journal = readJournals(root).records.find((candidate) => candidate.id === id);
   if (!journal) throw new Error(`no ingest journal: ${id}`);
   return journal;
 }
 
-export function isCleanupPending(journal: IngestJournalV2): boolean {
-  return journal.status === "failed" && journal.failedStep === "committed";
+/** The single-file state machine only ever operates on a v2 record. */
+export function readJournalV2(root: string, id: string): IngestJournalV2 {
+  const journal = readJournal(root, id);
+  if (journal.schema_version !== 2) {
+    throw new Error(`ingest ${id}: this command only accepts a schema-2 single-file journal`);
+  }
+  return journal;
+}
+
+export function isCleanupPending(journal: IngestJournal): boolean {
+  return journal.schema_version === 2 && journal.status === "failed" && journal.failedStep === "committed";
 }
 
 export function completeRetryCommand(id: string): string {
   return `jspace ingest advance ${id} --complete`;
 }
 
-function withStamp(journal: IngestJournalV2): IngestJournalV2 {
+function withStamp<T extends IngestJournal>(journal: T): T {
   return { ...journal, updatedAt: localStamp() };
 }
 
@@ -159,7 +169,9 @@ export function beginIngest(root: string, plan: IngestPlan, ops: IngestFileOps):
 function beginIngestImpl(root: string, plan: IngestPlan, ops: IngestFileOps): BeginResult {
   if (!existsSync(plan.source)) throw new Error(`ingest: source not found: ${plan.source}`);
   const sourceHash = sha256File(plan.source);
-  const journals = readJournals(root).records;
+  const journals = readJournals(root).records.filter(
+    (journal): journal is IngestJournalV2 => journal.schema_version === 2,
+  );
 
   const committed = journals.find(
     (journal) => journal.status === "committed" && journal.sourceHash === sourceHash,
@@ -260,7 +272,7 @@ export async function advanceIngest(
   verify: IngestVerifier,
 ): Promise<IngestJournalV2> {
   return withIngestMutationLockAsync(root, async () => {
-    const journal = readJournal(root, id);
+    const journal = readJournalV2(root, id);
     assertAdvanceable(journal, step);
     const evidence = await verify(journal);
     const updated = withStamp({
@@ -322,7 +334,7 @@ function completeIngestImpl(
   write: JournalWriter,
   refreshedGbrainEvidence: IngestGbrainEvidence | undefined,
 ): CompleteResult {
-  const journal = readJournal(root, id);
+  const journal = readJournalV2(root, id);
   const cleanupPending = isCleanupPending(journal);
   if (journal.status !== "index" && !cleanupPending) {
     throw new Error(
@@ -459,7 +471,7 @@ function failIngestImpl(
   reason: string,
   ops: IngestFileOps,
 ): IngestJournalV2 {
-  const journal = readJournal(root, id);
+  const journal = readJournalV2(root, id);
   if (journal.status === "committed") throw new Error(`ingest ${id} is already committed`);
   if (isCleanupPending(journal)) {
     throw new Error(`ingest ${id}: source cleanup pending; run "${completeRetryCommand(id)}" first`);
@@ -483,7 +495,7 @@ export function rollbackIngest(root: string, id: string, ops: IngestFileOps): In
 }
 
 function rollbackIngestImpl(root: string, id: string, ops: IngestFileOps): IngestJournalV2 {
-  const journal = readJournal(root, id);
+  const journal = readJournalV2(root, id);
   if (journal.status === "committed") throw new Error(`ingest ${id} is already committed`);
   if (isCleanupPending(journal)) {
     throw new Error(`ingest ${id}: source cleanup pending; run "${completeRetryCommand(id)}" first`);
@@ -506,7 +518,8 @@ function rollbackIngestImpl(root: string, id: string, ops: IngestFileOps): Inges
 }
 
 export function resumableJournals(root: string): IngestJournalV2[] {
-  return readJournals(root).records.filter((journal) => {
+  return readJournals(root).records.filter((journal): journal is IngestJournalV2 => {
+    if (journal.schema_version !== 2) return false;
     if (journal.status !== "staged" && journal.status !== "gbrain" && journal.status !== "index") return false;
     if (!existsSync(journal.source)) return false;
     try {

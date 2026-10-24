@@ -27,6 +27,7 @@ import {
   failIngest,
   isCleanupPending,
   readJournal,
+  readJournalV2,
   readJournals,
   resumableJournals,
   rollbackIngest,
@@ -382,7 +383,7 @@ test("refreshed gbrain evidence with a mismatched source digest blocks completio
   expect(created.kind).toBe("created");
   if (created.kind !== "created") return;
   await advanceToIndex(created.journal.id);
-  const journal = readJournal(root, created.journal.id);
+  const journal = readJournalV2(root, created.journal.id);
   const refreshed = { ...gbrainEvidence(journal), sourceSha256: "f".repeat(64) };
   expect(() => completeIngest(root, created.journal.id, track().ops, undefined, refreshed)).toThrow(
     /source_sha256/,
@@ -395,7 +396,7 @@ test("completion rejects refreshed evidence that drops the recorded source diges
   const created = beginIngest(root, plan(source), track().ops);
   expect(created.kind).toBe("created");
   if (created.kind !== "created") return;
-  const journal = readJournal(root, created.journal.id);
+  const journal = readJournalV2(root, created.journal.id);
   const withDigest = { ...gbrainEvidence(journal), sourceSha256: journal.targetHash };
   await advanceIngest(root, created.journal.id, "gbrain", async () => withDigest);
   indexText = "# Index\n" + journal.indexEntry + "\n";

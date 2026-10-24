@@ -5,7 +5,7 @@
 > 本目录可被 Obsidian 作为 vault 打开。AI 只写纯 md 与相对链接,不依赖任何插件——哪天换工具,资料一点不坏。
 
 <!-- JSPACE:FILEHUB:START -->
-> filehub-contract-version: 6
+> filehub-contract-version: 7
 
 ## 归档契约
 
@@ -50,6 +50,18 @@ support_paths:
 
 支撑路径仍受 owner 边界、存在性与 index 登记冲突检查;不能用它隐藏普通资料或跨 owner 排除文件。
 
+### 资料包 (bundle)
+
+一组必须保持内部引用与成员字节的资料(工程套件、图表集合)可以整体入库,而不是拆成独立资产:
+
+- 入口是一个包内常规文件(如 `README.md`),同时是 gbrain 页的 `rel_path` 与 owner index 的登记目标;当前表该行类型写 `bundle`。
+- manifest 在包外,由 JSpace 管理:`<owner 根>/.jspace/bundles/<sha256(slug)>.json`。不要手改或移动;它记录按 UTF-8 字节序排序的成员、大小、摘要、可执行位与整树聚合 `aggregateSha256`。
+- asset 页除 `rel_path` 外还写 `asset_kind: bundle`、`bundle_root`、`bundle_manifest`、`bundle_sha256`、`bundle_manifest_sha256`;`source_sha256` 仍是入口文件摘要。
+- 只有 manifest 身份、入口摘要与整棵树逐成员双向比较全部通过,包内文件才豁免普通无索引/重复内容检查;任一失败(多文件、少文件、改字节、manifest 损坏)整包退回普通扫描并报错,不能只报"包存在"。
+- 入库拒绝符号链接、特殊文件、受限路径(密钥/凭据)与超过固定预算的包(10,000 成员、2 GiB 文件字节、深度 32);拒绝时不回显敏感成员路径。
+- 完成后 `_inbox` 原件保留(`sourcePolicy: retain`),待用户显式清理;同一身份重复入库返回 duplicate,不产生第二份。
+- 引用锁 `bundle-sha256:<aggregate>` 只有在指向已验证包时才比较;没有已验证包覆盖时明确标 unverified。
+
 ### 历史与引用
 
 `index.md` 的当前表回答"这个 owner 现在拥有什么"。曾经拥有和只是引用别处资料的两类条目,分别写进独立受管块,不混进当前表:
@@ -65,7 +77,7 @@ support_paths:
 ```
 
 - **历史**:本 owner 曾经持有、现在退场的资产。每条必须是一个本地 Markdown 链接 + 一个反引号包住的严格 `assets/<owner>/<语义名>` slug;对应 gbrain 页必须是非现行状态(`status:superseded|deprecated|archived`)且 `rel_path` 指向同一文件。只有完整验证过的历史行才豁免该路径的"无索引"提示;页仍活跃、路径不符、文件缺失或只是普通链接都不算证明。
-- **引用**:资料由别处拥有,这里只导航。引用永不提供 ownership,也永不豁免"无索引"。本地目标必须存在,不可经 symlink 逃逸或指向受限路径;可选的 `<slug> + sha256` 锁证明引用时看到的字节,`bundle-sha256` 暂不验证并会明确报未验证;外部 URL 不抓取,只标 unverified。块外的普通链接仍可读,但只算部分引用覆盖。
+- **引用**:资料由别处拥有,这里只导航。引用永不提供 ownership,也永不豁免"无索引"。本地目标必须存在,不可经 symlink 逃逸或指向受限路径;可选的 `<slug> + sha256` 锁证明引用时看到的字节;`bundle-sha256` 仅在目标被已验证资料包覆盖时与整树聚合比较,否则明确报未验证;外部 URL 不抓取,只标 unverified。块外的普通链接仍可读,但只算部分引用覆盖。
 - 同一路径或 slug 不能同时出现在当前表与历史块。
 
 ### 派生导航

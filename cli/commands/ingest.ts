@@ -13,10 +13,12 @@ import { b, s } from "./helpers.ts";
 
 const ingestBeginSpec: CommandSpec = {
   name: "begin",
-  summary: "stage a file into the filehub and start an ingest journal",
+  summary: "stage a file or bundle into the filehub and start an ingest journal",
   features: { dir: true },
-  positionals: [{ name: "file", required: true, help: "inbox file to ingest" }],
+  positionals: [{ name: "file", required: true, help: "inbox file, or inbox directory with --bundle" }],
   options: [
+    { name: "--bundle", takesValue: false, help: "treat the positional as an inbox directory and stage a verified bundle" },
+    { name: "--entry", takesValue: true, metavar: "PATH", help: "bundle-relative regular entry file (required with --bundle)" },
     { name: "--target", takesValue: true, required: true, metavar: "PATH", help: "staged target path under the declared owner" },
     { name: "--slug", takesValue: true, required: true, metavar: "SLUG", help: "gbrain slug assets/<owner-id>/<semantic>" },
     {
@@ -38,24 +40,38 @@ const ingestBeginSpec: CommandSpec = {
       ownerKind: s(args.owner_kind) as IngestOwnerKind,
       ownerId: s(args.owner_id),
       indexLine: s(args.index_line),
+      bundle: b(args.bundle),
+      ...(args.entry !== undefined ? { entry: s(args.entry) } : {}),
     }),
 };
 
 const ingestAdvanceSpec: CommandSpec = {
   name: "advance",
-  summary: "mark the next mechanical step done (gbrain/index/committed)",
+  summary: "mark the next mechanical step done (gbrain/index/committed/resume-copy)",
   features: { dir: true },
   positionals: [{ name: "id", required: true, help: "ingest journal id" }],
   options: [
     { name: "--gbrain", takesValue: false, help: "gbrain page written" },
     { name: "--index", takesValue: false, help: "project index updated" },
-    { name: "--complete", takesValue: false, help: "remove source + mark committed (idempotent cleanup recovery)" },
+    { name: "--complete", takesValue: false, help: "verify + mark committed (single-file cleanup; bundles retain source)" },
+    { name: "--resume-copy", takesValue: false, help: "resume an interrupted bundle copy after its copier is dead" },
   ],
   groups: [
-    { id: "step", members: ["--gbrain", "--index", "--complete"], required: true, message: "one of --gbrain --index --complete is required" },
+    {
+      id: "step",
+      members: ["--gbrain", "--index", "--complete", "--resume-copy"],
+      required: true,
+      message: "one of --gbrain --index --complete --resume-copy is required",
+    },
   ],
   handler: (ctx, args) => {
-    const step: IngestStep = b(args.complete) ? "committed" : b(args.index) ? "index" : "gbrain";
+    const step: IngestStep | "resume-copy" = b(args.complete)
+      ? "committed"
+      : b(args.index)
+        ? "index"
+        : b(args.resume_copy)
+          ? "resume-copy"
+          : "gbrain";
     return ingestAdvance(ctx.root, s(args.id), step);
   },
 };

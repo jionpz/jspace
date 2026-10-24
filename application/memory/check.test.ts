@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import {
   mkdirSync,
   mkdtempSync,
@@ -7,7 +8,15 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { scanBundleTree } from "../filehub/bundle.ts";
+import {
+  aggregateForMembers,
+  bundleManifestRelPath,
+  serializeAssetBundleManifest,
+  type AssetBundleManifestV1,
+  type BundleMember,
+} from "../../core/contracts/asset-bundle.ts";
 import type {
   GbrainBacklinksResult,
   GbrainDeps,
@@ -612,4 +621,110 @@ test("memoryCheck treats a symlinked asset as unknown coverage, never verified i
   } finally {
     rmSync(outside, { recursive: true, force: true });
   }
+});
+
+const BUNDLE_SLUG = "assets/acme/bundle";
+const BUNDLE_ROOT = "projects/acme/bundle";
+
+interface MemoryBundleFixture {
+  page: PageSpec;
+  manifestRel: string;
+  manifestText: string;
+}
+
+function memoryBundleFixture(): MemoryBundleFixture {
+  mkdirSync(join(root, BUNDLE_ROOT, "notes"), { recursive: true });
+  writeFileSync(join(root, BUNDLE_ROOT, "README.md"), "entry\n");
+  writeFileSync(join(root, BUNDLE_ROOT, "notes", "a.txt"), "a\n");
+  const scan = scanBundleTree(join(root, BUNDLE_ROOT));
+  if (scan.state !== "ok") throw new Error(scan.detail);
+  const members: BundleMember[] = [
+    ...scan.directories.map((path) => ({ path, kind: "dir" as const })),
+    ...scan.files.map((file) => ({
+      path: file.path,
+      kind: "file" as const,
+      size: file.size,
+      sha256: file.sha256,
+      executable: file.executable,
+    })),
+  ].sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)));
+  const manifest: AssetBundleManifestV1 = {
+    schema_version: 1,
+    kind: "asset-bundle",
+    ownerKind: "project",
+    ownerId: "acme",
+    slug: BUNDLE_SLUG,
+    rootRelPath: BUNDLE_ROOT,
+    entry: "README.md",
+    source: { label: "inbox/bundle" },
+    members,
+    aggregateSha256: aggregateForMembers(members),
+  };
+  const manifestText = serializeAssetBundleManifest(manifest);
+  const manifestRel = bundleManifestRelPath("projects/acme", BUNDLE_SLUG);
+  mkdirSync(dirname(join(root, manifestRel)), { recursive: true });
+  writeFileSync(join(root, manifestRel), manifestText);
+  const entry = members.find((member) => member.path === "README.md");
+  if (entry === undefined || entry.kind !== "file") throw new Error("entry member missing");
+  const page: PageSpec = {
+    slug: BUNDLE_SLUG,
+    content: markdown({
+      project: "acme",
+      tags: ["asset", "source:session"],
+      extra:
+        `owner_kind: project\nasset_kind: bundle\n` +
+        `rel_path: ${BUNDLE_ROOT}/README.md\nbundle_root: ${BUNDLE_ROOT}\n` +
+        `bundle_manifest: ${manifestRel}\nbundle_sha256: ${manifest.aggregateSha256}\n` +
+        `bundle_manifest_sha256: ${createHash("sha256").update(manifestText).digest("hex")}\n` +
+        `source_sha256: ${entry.sha256}\n`,
+      body: "# Bundle\n",
+    }),
+    tags: ["asset", "source:session"],
+  };
+  return { page, manifestRel, manifestText };
+}
+
+test("memoryCheck verifies bundle scalars, manifest identity and the entry digest", async () => {
+  const fixture = memoryBundleFixture();
+  const report = await memoryCheck(fakeGbrain([fixture.page]), root);
+  expect(report.findings).toEqual([]);
+  expect(report.counts.by_role.asset).toBe(1);
+});
+
+test("memoryCheck reports bundle metadata, manifest and entry mismatches", async () => {
+  const fixture = memoryBundleFixture();
+  const mismatched = {
+    ...fixture.page,
+    content: fixture.page.content.replace(
+      `source_sha256: ${/source_sha256: ([0-9a-f]{64})/.exec(fixture.page.content)![1]}`,
+      `source_sha256: ${"e".repeat(64)}`,
+    ),
+  };
+  const digest = await memoryCheck(fakeGbrain([mismatched]), root);
+  expect(digest.findings).toContainEqual(
+    expect.objectContaining({ code: "memory.asset.bundle_source_digest_mismatch" }),
+  );
+
+  writeFileSync(join(root, fixture.manifestRel), `${fixture.manifestText}\n`);
+  const manifestChanged = await memoryCheck(fakeGbrain([fixture.page]), root);
+  expect(manifestChanged.findings).toContainEqual(
+    expect.objectContaining({ code: "memory.asset.bundle_manifest_changed" }),
+  );
+
+  writeFileSync(join(root, fixture.manifestRel), fixture.manifestText);
+  const noKind = {
+    ...fixture.page,
+    content: fixture.page.content.replace("asset_kind: bundle", "asset_kind: document"),
+  };
+  const fields = await memoryCheck(fakeGbrain([noKind]), root);
+  expect(fields.findings).toContainEqual(
+    expect.objectContaining({ code: "memory.asset.bundle_fields_unexpected" }),
+  );
+});
+
+test("memoryCheck does not claim whole-tree proof for a bundle", async () => {
+  const fixture = memoryBundleFixture();
+  writeFileSync(join(root, BUNDLE_ROOT, "notes", "extra.txt"), "extra\n");
+  const report = await memoryCheck(fakeGbrain([fixture.page]), root);
+  expect(report.findings).toEqual([]);
 });

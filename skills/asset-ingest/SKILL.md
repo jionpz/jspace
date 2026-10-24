@@ -102,6 +102,28 @@ gbrain call get_page "$(jq -cn --arg slug "assets/<owner-id>/<语义名>" '{slug
 
 `content_origin` 按事实选择 `user_said` / `tool_output` / `inferred`；摘要推断不能标成 `user_said`。
 
+### 资料包 (bundle) 入库
+
+目录本身是一份资料(工程套件、图表集合、带内部相对引用的资料集)时走 bundle,不拆成员:
+
+```bash
+jspace ingest begin "<filehub>/_inbox/<dir>" --bundle --entry "<包内入口文件>" \
+  --target "<owner-root>/<稳定目录>" \
+  --slug "assets/<owner-id>/<语义名>" \
+  --owner-kind <project|area> \
+  --owner-id "<owner-id>" \
+  --index-line "| <rel_path,指向入口文件> | bundle | <YYYY-MM-DD> | assets/<owner-id>/<语义名> |"
+```
+
+- `--entry` 必须是包内常规文件;index 行、页 `rel_path` 与 manifest entry 三者指向同一入口。
+- 页 frontmatter 额外写 `asset_kind: bundle`、`bundle_root`、`bundle_manifest`(journal 的包外受管路径)、`bundle_sha256`(=journal `aggregateSha256`)、`bundle_manifest_sha256`;`source_sha256` 仍是 journal `targetHash`(入口摘要)。
+- 复制和整树校验在 ingest 长锁外;`--gbrain` / `--index` checkpoint 仍以真实读回为准。
+- 复制中断:journal 停在 failed/copying 且 copier 已退出时,用 `jspace ingest advance <id> --resume-copy`;不要重新 `begin`。
+- `--complete` 会重验 manifest、整树、index 当前行;成功后 journal 为 committed,但 **source 按 retain 保留在 inbox**。报告里不能写"原件已清理"。
+- `jspace ingest rollback` 只删除 journal 能证明且字节未变的包文件;用户改动或额外文件保留并报告。已写 gbrain/index 之后不能伪称原子回滚。
+- 受限路径、符号链接、特殊文件或超预算(10,000 成员 / 2 GiB / 深度 32)整包拒绝;不得跳过成员继续入库。
+- 验收:`jspace filehub check --json` 的 `verified_bundles` 计入该包,成员不产生 unindexed/duplicate;任一成员增删改都会报 `filehub.bundle.tree_mismatch`。
+
 ## 自动归位与版本
 
 - 同一 owner、组织轴明确、无查重冲突 → 自主选择或创建语义子目录，不逐件追问。
@@ -117,7 +139,9 @@ owner `index.md` 只有当前表提供 ownership;另外两类必须放进独立�
 
 - **当前表**:`| 相对路径 | 类型 | 日期 | assets/<owner>/<语义名> |` 四列,表示本 owner 现在拥有。继续指向 inactive 页会报 `filehub.index.page_inactive`。
 - **历史块**(`JSPACE:ASSET-HISTORY`):本 owner 曾拥有、现已退场。每条 = 一个本地链接 + 一个反引号严格 slug;对应页必须 inactive 且 `rel_path` 指向同一文件。只有完整验证的历史行才豁免该路径的 `asset.unindexed`。
-- **引用块**(`JSPACE:ASSET-REFERENCES`):资料归别处,本 owner 只导航。永不提供 ownership,也永不豁免 unindexed;本地目标必须存在且不经 symlink 逃逸,`sha256` 锁会与当前字节比较,`bundle-sha256` 暂不验证,外部 URL 只标 unverified。
+- **引用块**(`JSPACE:ASSET-REFERENCES`):资料归别处,本 owner 只导航。永不提供 ownership,也永不豁免 unindexed;本地目标必须存在且不经 symlink 逃逸,`sha256` 锁会与当前字节比较,`bundle-sha256` 只在目标被已验证资料包覆盖时与整树聚合比较(否则未验证),外部 URL 只标 unverified。
+
+资料包的 index 行类型写 `bundle`,`rel_path` 指向入口文件而不是包目录。
 
 同一路径/slug 不能同时出现在当前表与历史块。引用和历史的详细判定以 `jspace filehub check` 输出为准,不靠 agent 声明。
 

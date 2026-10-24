@@ -111,6 +111,17 @@ projects/acme/
 
 `profile/filing-prefs` 帮助选择具体稳定主题或局部组织方式,不能用来恢复"按文件格式建目录"。
 
+### 资料包:整个目录作为一个资产
+
+当目录里的成员互为引用、拆开就失去意义(工程套件、图表集合、带相对链接的资料集)时,按 bundle 整包入库,而不是逐个成员建立独立页:
+
+- 选一个包内常规文件作入口(通常是 `README.md`),它同时是页 `rel_path` 与 owner index 的登记目标;index 行类型写 `bundle`。
+- 包根仍是 owner 根下的稳定语义目录,不能是 owner 根本身,也不能落在 `.jspace/` 里。
+- 成员不需要逐个进 index;整包通过 manifest 校验后,成员不再按普通资产要求登记。但包内不得再包含另一个独立 asset page,包与包也不能重叠。
+- 包根下不要放 `.jspace/bundles/`:manifest 由 CLI 写在 `<owner 根>/.jspace/bundles/<sha256(slug)>.json`,属于受管元数据。
+- 一个目录里同时有"可独立引用的大文件"和"必须保持结构的套件"时,优先拆成独立资产 + 一个小包;只有确实共享内部引用时才整包。
+- 包内容受限路径(密钥/凭据)、符号链接、特殊文件或超出预算时整包拒绝;不要为了入库而剔除成员或改结构。
+
 ### 归位偏好学习(消除反复猜错)
 
 AI 归位文件被用户纠正时,**必须**把纠正写成 gbrain `profile/filing-prefs` 页(覆盖),下次归位前先读这一页:
@@ -177,7 +188,7 @@ source: claude
   ```
 
   - history = 本 owner 曾拥有、现已退场;页面必须 inactive 且 `rel_path` 一致。缺 slug、页仍活跃、路径不符都按错误或未验证处理,不能证明退场。
-  - references = 别处拥有;永不提供 ownership,也永不豁免 `asset.unindexed`。本地目标必须存在,不可 escape owner/filehub 或经 symlink;`sha256` 与当前字节比较,`bundle-sha256` 暂不验证,外部 URL 只标 unverified。
+  - references = 别处拥有;永不提供 ownership,也永不豁免 `asset.unindexed`。本地目标必须存在,不可 escape owner/filehub 或经 symlink;`sha256` 与当前字节比较,`bundle-sha256` 只在目标被已验证资料包覆盖时与整树聚合比较,否则明确未验证;外部 URL 只标 unverified。
   - 块外普通链接仍可读,但只算部分引用覆盖。
 - 入库完成后运行 `jspace filehub refresh`,让根 README 与 `projects/README.md` 的派生导航反映 registry;导航块由命令维护,不手改。
 - 随项目保存的 Agent 治理、构建配置、运行骨架和模板不是独立资产;在该 index 的

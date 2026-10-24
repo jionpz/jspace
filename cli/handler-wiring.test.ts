@@ -89,6 +89,40 @@ test("ingest list --json on a fresh workbench is a stable empty shape", () => {
   expect(shape.journals).toHaveLength(0);
 });
 
+test("ingest bundle flags reach the handler arguments", () => {
+  const began = parse(
+    [
+      "ingest",
+      "begin",
+      "_inbox/bundle",
+      "--bundle",
+      "--entry",
+      "README.md",
+      "--target",
+      "projects/acme/bundle",
+      "--slug",
+      "assets/acme/bundle",
+      "--owner-kind",
+      "project",
+      "--owner-id",
+      "acme",
+      "--index-line",
+      "| [[bundle/README.md]] | bundle | 2026-10-24 | assets/acme/bundle |",
+    ],
+    ROOT,
+  );
+  if (began.kind !== "run") throw new Error("expected run");
+  const args = (began as { args: Record<string, unknown> }).args;
+  expect(args.bundle).toBe(true);
+  expect(args.entry).toBe("README.md");
+  expect(args.owner_kind).toBe("project");
+
+  const advanced = parse(["ingest", "advance", "id-1", "--resume-copy"], ROOT);
+  if (advanced.kind !== "run") throw new Error("expected run");
+  expect((advanced as { args: Record<string, unknown> }).args.resume_copy).toBe(true);
+  expect((advanced as { spec: CommandSpec }).spec.name).toBe("advance");
+});
+
 test("memory period --json is the parser-wired reporting clock", () => {
   const { data, exitCode } = run([
     "memory",

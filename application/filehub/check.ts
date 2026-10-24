@@ -55,6 +55,21 @@ import {
   type NavInput,
   type NavProject,
 } from "./navigation.ts";
+import { isRestrictedPath } from "./path-policy.ts";
+import {
+  entryMember,
+  manifestIdentityIssues,
+  readBundleManifest,
+  scanBundleTree,
+  compareBundleTree,
+  bundleMetadataFromFields,
+  type BundlePageMetadata,
+  type BundleTreeScan,
+} from "./bundle.ts";
+import {
+  bundleManifestRelPath,
+  type AssetBundleManifestV1,
+} from "../../core/contracts/asset-bundle.ts";
 
 const DEFAULT_PAGE_LIMIT = 100;
 const DEFAULT_MAX_LIST_PAGES = 50;
@@ -176,6 +191,12 @@ export interface FilehubCheckReport {
       restricted_files: number;
       asset_content_hashed: number;
       asset_content_unreadable: number;
+      /** Bundles whose manifest and entire target tree verified on this run. */
+      verified_bundles: number;
+      /** Files under verified bundle roots, excluded from ordinary classification. */
+      bundle_files: number;
+      /** Active bundle pages whose bundle could not be verified. */
+      bundle_unverified: number;
     };
     registry: CheckCoverage;
     references: {
@@ -258,6 +279,17 @@ interface LoadedAssetPage {
   slugOwner?: string;
 }
 
+interface VerifiedBundle {
+  page: LoadedAssetPage;
+  metadata: BundlePageMetadata;
+  manifest: AssetBundleManifestV1;
+  scan: BundleTreeScan;
+  rootRel: string;
+  entryRel: string;
+  ownerKind: "project" | "area";
+  ownerId: string;
+}
+
 interface ScanResult {
   rootAbs: string;
   files: ScannedFile[];
@@ -292,20 +324,6 @@ function resolvedIndexPath(index: IndexDocument, row: { path: string }): string 
     return rawPath;
   }
   return normalizeRel(`${index.ownerRoot}/${rawPath}`);
-}
-
-function isRestrictedPath(relPath: string): boolean {
-  const segments = relPath.toLowerCase().split("/");
-  if (segments.some((segment) => segment === "secrets" || segment === "credentials")) return true;
-  const base = segments.at(-1) ?? "";
-  return (
-    base === ".env" ||
-    base.startsWith(".env.") ||
-    /\.(pem|key|p12|pfx)$/.test(base) ||
-    /^id_(rsa|ed25519)/.test(base) ||
-    base.includes("credential") ||
-    base.includes("secret")
-  );
 }
 
 function isCompanion(relPath: string): boolean {
@@ -747,6 +765,7 @@ function validateIndexes(
   scan: ScanResult,
   projects: readonly FilehubRegistryProject[] | null,
   addFinding: (finding: CheckFinding) => void,
+  verifiedBundleEntries: ReadonlySet<string> = new Set(),
 ): {
   rows: number;
   rowsByPath: Map<string, IndexedRow[]>;
@@ -840,7 +859,7 @@ function validateIndexes(
         });
       }
       const target = scan.files.find((file) => file.relPath === path);
-      if (target?.kind === "support") {
+      if (target?.kind === "support" && !verifiedBundleEntries.has(path)) {
         addFinding({
           code: "filehub.index.support_registered",
           severity: "error",
@@ -1068,14 +1087,8 @@ function validateIndexes(
       }
       if (row.digest !== undefined) {
         if (row.digest.algorithm === "bundle-sha256") {
-          // Bundle identity verification lands with bundle ingest; until then a
-          // claimed bundle digest stays explicitly unverified, never a pass.
-          addFinding({
-            code: "filehub.reference.bundle_unverified",
-            severity: "unknown",
-            path: index.relPath,
-            message: `line ${row.line}: bundle-sha256 cannot be verified yet (bundle ingest not available)`,
-          });
+          // Verified bundles are resolved in a later pass, after gbrain pages
+          // and manifests have been read. Never treat the claim as a pass here.
           continue;
         }
         if (!st.isFile()) {
@@ -1253,6 +1266,273 @@ function sha256RegularFile(path: string): string {
   return hash.digest("hex");
 }
 
+function insideBundle(relPath: string, roots: readonly string[]): boolean {
+  return roots.some((root) => relPath === root || relPath.startsWith(`${root}/`));
+}
+
+/** A declared bundle is exempted from ordinary classification only after the
+ *  page scalars, manifest identity and the complete target tree agree. Any
+ *  failure leaves its files in the ordinary scan rather than hiding them. */
+function verifyBundles(
+  scan: ScanResult,
+  activePages: readonly LoadedAssetPage[],
+  projects: readonly FilehubRegistryProject[] | null,
+  addFinding: (finding: CheckFinding) => void,
+): { verified: VerifiedBundle[]; unverifiedPages: number } {
+  const candidates: VerifiedBundle[] = [];
+  let unverifiedPages = 0;
+  for (const page of activePages) {
+    if (page.parsed.fields.asset_kind !== "bundle") continue;
+    const slug = page.page.slug;
+    const fail = (code: string, message: string, severity: "error" | "unknown" = "error"): void => {
+      unverifiedPages += 1;
+      addFinding({ code, severity, slug, ...(page.relPath !== undefined ? { path: page.relPath } : {}), message });
+    };
+
+    const relPath = page.relPath;
+    if (relPath === undefined || relPath === "") {
+      fail("filehub.bundle.rel_path_missing", "bundle page requires rel_path naming its entry file");
+      continue;
+    }
+    const parsed = bundleMetadataFromFields(page.parsed.fields);
+    if (!parsed.ok) {
+      fail("filehub.bundle.metadata_invalid", parsed.detail);
+      continue;
+    }
+    const metadata = parsed.metadata;
+    const ownerByPath = pathOwner(relPath, projects);
+    if (ownerByPath === null) {
+      fail("filehub.bundle.owner_unresolved", "bundle entry is outside a registered project, area or archive");
+      continue;
+    }
+    if (ownerByPath.kind === "project" && relPath.startsWith("archive/")) {
+      fail("filehub.bundle.owner_unresolved", "bundle entry is in an archive and has no live owner root");
+      continue;
+    }
+    if (
+      metadata.bundleRoot === ownerByPath.root ||
+      !metadata.bundleRoot.startsWith(`${ownerByPath.root}/`) ||
+      metadata.bundleRoot.includes("/.jspace/") ||
+      metadata.bundleRoot.endsWith("/.jspace")
+    ) {
+      fail(
+        "filehub.bundle.root_invalid",
+        `bundle_root must be a directory strictly inside ${ownerByPath.root}/ and outside .jspace: ${metadata.bundleRoot}`,
+      );
+      continue;
+    }
+    const expectedManifest = bundleManifestRelPath(ownerByPath.root, slug);
+    if (metadata.bundleManifest !== expectedManifest) {
+      fail(
+        "filehub.bundle.manifest_path",
+        `bundle_manifest must be the derived managed path ${expectedManifest}: ${metadata.bundleManifest}`,
+      );
+      continue;
+    }
+    const read = readBundleManifest(scan.rootAbs, metadata.bundleManifest);
+    if (read.state !== "ok" || read.manifest === undefined || read.manifestSha256 === undefined) {
+      fail(
+        read.state === "symlink" || read.state === "unreadable" ? "filehub.bundle.manifest_unreadable" : "filehub.bundle.manifest_invalid",
+        read.detail ?? `bundle manifest is ${read.state}`,
+        read.state === "symlink" || read.state === "unreadable" ? "unknown" : "error",
+      );
+      continue;
+    }
+    if (read.manifestSha256 !== metadata.bundleManifestSha256) {
+      fail("filehub.bundle.manifest_changed", "bundle_manifest_sha256 does not match the manifest bytes");
+      continue;
+    }
+    const manifest = read.manifest;
+    const entry = entryMember(manifest);
+    if (entry === null) {
+      fail("filehub.bundle.entry_invalid", "manifest entry is not a regular member file");
+      continue;
+    }
+    const entryRel = `${metadata.bundleRoot}/${manifest.entry}`;
+    const identity = manifestIdentityIssues(manifest, {
+      ownerKind: ownerByPath.kind,
+      ownerId: ownerByPath.id,
+      slug,
+      rootRelPath: metadata.bundleRoot,
+      entry: manifest.entry,
+    });
+    if (identity.length > 0) {
+      fail("filehub.bundle.manifest_identity", identity.join("; "));
+      continue;
+    }
+    if (entryRel !== relPath) {
+      fail("filehub.bundle.entry_mismatch", `page rel_path ${relPath} must equal ${entryRel}`);
+      continue;
+    }
+    if (manifest.aggregateSha256 !== metadata.bundleSha256) {
+      fail("filehub.bundle.aggregate_mismatch", "bundle_sha256 does not match the manifest aggregate");
+      continue;
+    }
+    const declaredEntry = page.parsed.fields.source_sha256;
+    if (declaredEntry === undefined) {
+      fail("filehub.bundle.source_digest_missing", "bundle page requires source_sha256 equal to the entry digest");
+      continue;
+    }
+    if (declaredEntry !== entry.sha256) {
+      fail("filehub.bundle.source_digest_mismatch", "source_sha256 does not match the manifest entry digest");
+      continue;
+    }
+
+    const tree = scanBundleTree(resolve(scan.rootAbs, metadata.bundleRoot));
+    if (tree.state !== "ok") {
+      const unknown = tree.code === "unreadable";
+      fail(
+        "filehub.bundle.tree_unverified",
+        tree.detail ?? "bundle target tree is not verifiable",
+        unknown ? "unknown" : "error",
+      );
+      continue;
+    }
+    const comparison = compareBundleTree(manifest, tree);
+    if (
+      tree.aggregateSha256 !== manifest.aggregateSha256 ||
+      comparison.missing.length > 0 ||
+      comparison.extra.length > 0 ||
+      comparison.changed.length > 0
+    ) {
+      fail(
+        "filehub.bundle.tree_mismatch",
+        `bundle target does not match its manifest (missing ${comparison.missing.length}, extra ${comparison.extra.length}, changed ${comparison.changed.length})`,
+      );
+      continue;
+    }
+    if (!tree.executableVerified) {
+      addFinding({
+        code: "filehub.bundle.executable_unverified",
+        severity: "unknown",
+        slug,
+        path: metadata.bundleRoot,
+        message: "executable bits cannot be verified on this platform; whole-tree fidelity is partial",
+      });
+    }
+    candidates.push({
+      page,
+      metadata,
+      manifest,
+      scan: tree,
+      rootRel: metadata.bundleRoot,
+      entryRel,
+      ownerKind: ownerByPath.kind,
+      ownerId: ownerByPath.id,
+    });
+  }
+
+  // A verified bundle must not overlap another bundle or swallow another
+  // independently registered asset/page. Such a bundle loses its exemption.
+  const rejected = new Set<VerifiedBundle>();
+  for (let i = 0; i < candidates.length; i++) {
+    for (let j = i + 1; j < candidates.length; j++) {
+      const a = candidates[i]!;
+      const b = candidates[j]!;
+      if (insideBundle(a.rootRel, [b.rootRel]) || insideBundle(b.rootRel, [a.rootRel])) {
+        rejected.add(a);
+        rejected.add(b);
+        addFinding({
+          code: "filehub.bundle.overlap",
+          severity: "error",
+          slug: a.page.page.slug,
+          path: a.rootRel,
+          message: `bundle roots overlap: ${a.rootRel} and ${b.rootRel}`,
+        });
+      }
+    }
+  }
+  for (const bundle of candidates) {
+    for (const page of activePages) {
+      if (page === bundle.page || page.relPath === undefined) continue;
+      if (insideBundle(page.relPath, [bundle.rootRel]) && !rejected.has(bundle)) {
+        rejected.add(bundle);
+        addFinding({
+          code: "filehub.bundle.overlap_page",
+          severity: "error",
+          slug: bundle.page.page.slug,
+          path: bundle.rootRel,
+          message: `bundle root contains another active asset page: ${page.page.slug} -> ${page.relPath}`,
+        });
+      }
+    }
+    for (const index of scan.indexes.values()) {
+      for (const row of index.rows) {
+        const rowPath = resolvedIndexPath(index, row);
+        if (rowPath === bundle.entryRel) {
+          if (row.type.trim().toLowerCase() !== "bundle") {
+            addFinding({
+              code: "filehub.bundle.index_type",
+              severity: "error",
+              path: index.relPath,
+              message: `bundle entry row type must be bundle, found ${row.type || "<empty>"}: ${rowPath}`,
+            });
+          }
+          continue;
+        }
+        if (insideBundle(rowPath, [bundle.rootRel]) && !rejected.has(bundle)) {
+          rejected.add(bundle);
+          addFinding({
+            code: "filehub.bundle.member_registered",
+            severity: "error",
+            slug: bundle.page.page.slug,
+            path: bundle.rootRel,
+            message: `a bundle member is registered as an independent asset: ${rowPath}`,
+          });
+        }
+      }
+    }
+  }
+
+  const verified = candidates.filter((bundle) => !rejected.has(bundle));
+  unverifiedPages += rejected.size;
+  return { verified, unverifiedPages };
+}
+
+function verifyBundleReferences(
+  scan: ScanResult,
+  verified: readonly VerifiedBundle[],
+  addFinding: (finding: CheckFinding) => void,
+): void {
+  for (const index of scan.indexes.values()) {
+    for (const row of index.references) {
+      if (row.digest?.algorithm !== "bundle-sha256") continue;
+      const escaped = row.target.trim();
+      if (row.kind !== "relative" || isAbsolute(escaped) || escaped.startsWith("~")) continue;
+      const abs = resolve(scan.rootAbs, dirname(index.relPath), escaped);
+      if (!within(abs, scan.rootAbs)) continue;
+      const rel = normalizeRel(relative(scan.rootAbs, abs));
+      const bundle = verified.find((candidate) => insideBundle(rel, [candidate.rootRel]));
+      if (bundle === undefined) {
+        addFinding({
+          code: "filehub.reference.bundle_unverified",
+          severity: "unknown",
+          path: index.relPath,
+          message: `line ${row.line}: no verified bundle covers this target, so bundle-sha256 remains unverified: ${row.target}`,
+        });
+        continue;
+      }
+      if (row.slug !== undefined && row.slug !== bundle.page.page.slug) {
+        addFinding({
+          code: "filehub.reference.bundle_slug_mismatch",
+          severity: "error",
+          path: index.relPath,
+          message: `line ${row.line}: locked bundle slug ${row.slug} does not own ${bundle.rootRel}`,
+        });
+        continue;
+      }
+      if (row.digest.value !== bundle.manifest.aggregateSha256) {
+        addFinding({
+          code: "filehub.reference.digest_changed",
+          severity: "error",
+          path: index.relPath,
+          message: `line ${row.line}: locked bundle-sha256 no longer matches ${bundle.rootRel}`,
+        });
+      }
+    }
+  }
+}
+
 function renderFilehubCheck(report: FilehubCheckReport): { lines: string[]; exitCode?: number } {
   const f = report.counts.findings;
   const unhashed =
@@ -1262,6 +1542,7 @@ function renderFilehubCheck(report: FilehubCheckReport): { lines: string[]; exit
   const lines = [
     `jspace: filehub check: ${report.status} (${report.coverage.files.scanned_objects} object(s); ${f.error} error, ${f.warning} warning, ${f.unknown} unknown)`,
     `  files: ${report.coverage.files.state} (${report.coverage.files.asset_files} asset, ${report.coverage.files.indexes} index, ${report.coverage.files.companions} companion, ${report.coverage.files.support_files} support, ${report.coverage.files.archived_files} archive; ${report.coverage.files.asset_content_hashed} content hashed${unhashed})`,
+    `  bundles: ${report.coverage.files.verified_bundles} verified (${report.coverage.files.bundle_files} member file(s) excluded; ${report.coverage.files.bundle_unverified} unverified declaration(s))`,
     `  registry: ${report.coverage.registry.state}`,
     `  references: ${report.coverage.references.state} (${report.coverage.references.structured_rows} structured row(s), ${report.coverage.references.unmarked_rows} unmarked link(s))`,
     `  memory: ${report.coverage.memory.state} (${report.coverage.memory.active_asset_pages} active + ${report.coverage.memory.inactive_asset_pages} inactive asset page(s), ${report.coverage.memory.list_calls} list call(s); source digests: ${report.coverage.memory.source_digest_present} present / ${report.coverage.memory.source_digest_absent} absent)`,
@@ -1307,16 +1588,6 @@ export async function filehubCheck(
       message: "no filehub is registered for this workbench; filesystem consistency is unknown",
     });
   }
-
-  const registryCoverage = validateRegistry(scan, input.projects, addFinding);
-  if (input.registryIssue !== undefined) {
-    addFinding({
-      code: "filehub.registry.unreadable",
-      severity: "unknown",
-      message: input.registryIssue,
-    });
-  }
-  const indexRows = validateIndexes(scan, input.projects, addFinding);
 
   // Derived navigation is compared read-only; rebuilding it belongs to refresh.
   if (input.root !== null && input.projects !== null) {
@@ -1390,6 +1661,26 @@ export async function filehubCheck(
       activePagesByRel.get(page.relPath)!.push(page);
     }
   }
+
+  const bundleCheck = verifyBundles(scan, readablePages, input.projects, addFinding);
+  const verifiedBundles = bundleCheck.verified;
+  const bundleRoots = verifiedBundles.map((bundle) => bundle.rootRel);
+  // A verified bundle entry is the asset, even when its name classifies as a
+  // support file (README.md is the natural entry). Membership and bytes were
+  // proven above, so the ordinary support rules must not reclassify it.
+  const verifiedEntryRels = new Set(verifiedBundles.map((bundle) => bundle.entryRel));
+  const verifiedBundleBySlug = new Map(verifiedBundles.map((bundle) => [bundle.page.page.slug, bundle]));
+  verifyBundleReferences(scan, verifiedBundles, addFinding);
+
+  const registryCoverage = validateRegistry(scan, input.projects, addFinding);
+  if (input.registryIssue !== undefined) {
+    addFinding({
+      code: "filehub.registry.unreadable",
+      severity: "unknown",
+      message: input.registryIssue,
+    });
+  }
+  const indexRows = validateIndexes(scan, input.projects, addFinding, verifiedEntryRels);
 
   // Content digests are read once per asset and shared by the page identity
   // check and the duplicate-content pass below (one hash per file, at most).
@@ -1533,7 +1824,15 @@ export async function filehubCheck(
       });
     } else {
       const scanned = scan.files.find((file) => file.relPath === relPath);
-      if (scanned !== undefined && scanned.kind !== "asset" && scanned.kind !== "archive" && scanned.kind !== "restricted") {
+      const bundle = verifiedBundleBySlug.get(slug);
+      const verifiedEntry = bundle !== undefined && bundle.entryRel === relPath;
+      if (
+        scanned !== undefined &&
+        scanned.kind !== "asset" &&
+        scanned.kind !== "archive" &&
+        scanned.kind !== "restricted" &&
+        !verifiedEntry
+      ) {
         addFinding({
           code: "filehub.memory.target_not_asset",
           severity: "error",
@@ -1573,6 +1872,11 @@ export async function filehubCheck(
               ? "source_sha256 is empty; use the 64-character lowercase sha256 of the ingested bytes (empty is not the same as a missing legacy field)"
               : "source_sha256 must be a 64-character lowercase sha256 digest; identity comparison skipped",
         });
+      } else if (verifiedEntry) {
+        // verifyBundles already matched source_sha256 against the manifest
+        // entry and the whole tree, so do not re-read a support-classified
+        // entry from disk here.
+        sourceDigestPresent += 1;
       } else if (digestEligible) {
         const current = readAssetDigest(relPath);
         if ("error" in current) {
@@ -1798,6 +2102,7 @@ export async function filehubCheck(
 
   for (const file of scan.files) {
     if (file.kind !== "asset") continue;
+    if (insideBundle(file.relPath, bundleRoots)) continue;
     const pages = activePagesByRel.get(file.relPath) ?? [];
     const rows = indexRows.rowsByPath.get(file.relPath) ?? [];
     const hasCurrentRow = rows.some(
@@ -1827,6 +2132,7 @@ export async function filehubCheck(
   let assetContentUnreadable = 0;
   for (const file of scan.files) {
     if (file.kind !== "asset") continue;
+    if (insideBundle(file.relPath, bundleRoots)) continue;
     const read = readAssetDigest(file.relPath);
     if ("error" in read) {
       assetContentUnreadable += 1;
@@ -1856,6 +2162,7 @@ export async function filehubCheck(
 
   for (const file of scan.files) {
     if (file.kind !== "companion") continue;
+    if (insideBundle(file.relPath, bundleRoots)) continue;
     const base = file.relPath.slice(0, -".extract.md".length);
     const hasExactBase = existsSync(resolve(scan.rootAbs, base));
     const hasStemBase = scan.files.some(
@@ -1899,14 +2206,23 @@ export async function filehubCheck(
         }
       : {}),
     scanned_objects: scan.scannedObjects,
-    asset_files: scan.files.filter((file) => file.kind === "asset").length,
+    asset_files: scan.files.filter(
+      (file) => file.kind === "asset" && !insideBundle(file.relPath, bundleRoots),
+    ).length,
     indexes: scan.files.filter((file) => file.kind === "index").length,
-    companions: scan.files.filter((file) => file.kind === "companion").length,
-    support_files: scan.files.filter((file) => file.kind === "support").length,
+    companions: scan.files.filter(
+      (file) => file.kind === "companion" && !insideBundle(file.relPath, bundleRoots),
+    ).length,
+    support_files: scan.files.filter(
+      (file) => file.kind === "support" && !insideBundle(file.relPath, bundleRoots),
+    ).length,
     archived_files: scan.files.filter((file) => file.kind === "archive").length,
     restricted_files: scan.files.filter((file) => file.kind === "restricted").length,
     asset_content_hashed: assetContentHashed,
     asset_content_unreadable: assetContentUnreadable,
+    verified_bundles: verifiedBundles.length,
+    bundle_files: scan.files.filter((file) => insideBundle(file.relPath, bundleRoots)).length,
+    bundle_unverified: bundleCheck.unverifiedPages,
   };
   let referenceStructured = 0;
   let referenceUnmarked = 0;

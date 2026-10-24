@@ -133,10 +133,11 @@ embed_skip: true
 - 项目任务、bug、迭代和完整历史不写入 gbrain；state 只留简短现状和“执行层”入口。
 - 项目 lesson 只有在第二个项目实际采用并有产物后才晋升到 `knowledge/`；“看起来通用”或重复出现不构成晋升。
 - 资产目录由 owner 与归属决定，不由文件格式决定。资产指针必须含 `rel_path`，本体留在 filehub。
+- 整包资产（工程套件、图表集合）走 bundle：`rel_path` 指向包内入口文件，页额外写 `asset_kind: bundle`、`bundle_root`、`bundle_manifest`、`bundle_sha256`、`bundle_manifest_sha256`；`source_sha256` 仍是入口摘要。owner index 的入口行类型写 `bundle`。只有 `filehub check` 的 manifest + 整树双向校验通过才豁免成员的无索引/重复检查；`memory check` 只验标量、manifest 与入口，两个 checker 的结论不能互相替代。完成入库后原件按 `retain` 留在 inbox。
 - 资产“同内容”只报告重复并跳过，不覆盖；“不同内容”只有明确新版关系时才写 `-vN` 新 slug + 新页，正文声明 `Supersedes: [[old]]`，旧页另做一次完整页 + revision 的 CAS 生命周期更新。绝不通过覆盖错页来“修好”现有页。
 - `status:superseded` / `deprecated` / `archived` 的资产页是历史指针，不参与当前 `rel_path`、owner、index 注册和重复指针判定；owner index 的当前表只能指向非 inactive 的现行页。旧页保留，由新页和生命周期证明取代关系。
 - 退场资产可以登记在 owner index 的 history 受管块（`JSPACE:ASSET-HISTORY`）：本地链接 + 严格 slug，页必须 inactive 且 `rel_path` 一致。只有完整验证的 history 行才豁免该路径的 `asset.unindexed`；页仍活跃、路径不符或只是普通链接都不算证明。
-- 跨 owner 资料写 references 受管块（`JSPACE:ASSET-REFERENCES`）：只导航、不提供 ownership，也永不豁免 unindexed。本地目标必须存在且不经 symlink/受限路径逃逸；可选 `sha256` 锁与当前字节比较，`bundle-sha256` 暂不验证，外部 URL 只标 unverified。块外普通链接只算部分引用覆盖。
+- 跨 owner 资料写 references 受管块（`JSPACE:ASSET-REFERENCES`）：只导航、不提供 ownership，也永不豁免 unindexed。本地目标必须存在且不经 symlink/受限路径逃逸；可选 `sha256` 锁与当前字节比较；`bundle-sha256` 只在目标被已验证资料包覆盖时与整树聚合比较，否则明确未验证；外部 URL 只标 unverified。块外普通链接只算部分引用覆盖。
 - `entity/*` 尚未授权；真实实体事实先放 `knowledge/<domain>/<topic>` 并加 `kind:*`。
 
 ## 6. 项目认知卡
@@ -281,7 +282,7 @@ jspace pending stage <slug> \
 
 写失败交给原生产者处理；读侧发现缺页/取代链断裂只报告并转交，不顺手改库。
 
-导航只是 registry 的视图：`jspace filehub refresh` 重算根 `README.md` 与 `projects/README.md` 的两个 `JSPACE:FILEHUB:NAV:*` 块（稳定排序、无时间戳、块外文字保留）；`filehub check` 只读报告 missing/stale/malformed，`filehub upgrade` 只维护归档契约块。`jspace memory check` 只读给出结构、来源、生命周期、指针、keyset 完整性和 backlink coverage；`checked/pass/issues/partial/unknown` 是机器覆盖结论，历史元数据缺口单列为 unknown，不证明正文语义事实为真。`jspace filehub check` 只读核对现行资产、index 与指针关系；inactive 资产页仅保留历史，index 指向它会报 `filehub.index.page_inactive`。同内容跨路径告警 `filehub.asset.duplicate_content` 只提示人工处置，不自动移动或删除文件。asset 页含 `source_sha256` 时，check 还会比较当前 `rel_path` 字节摘要；不一致报 `filehub.memory.source_digest_changed`（warning，message 标注 `source_identity=changed` 与 `semantic_verification=not_performed`，只表示派生可能基于旧原件，不证明语义错误）；空值/非 64 位 hex/列表报 `source_digest_invalid`，目标不可读报 `source_digest_unreadable`（unknown）；旧页缺字段不报单条 finding，只在 memory coverage 计 `source_digest_absent`（非法值也计入 absent；空值 ≠ 缺失）。
+导航只是 registry 的视图：`jspace filehub refresh` 重算根 `README.md` 与 `projects/README.md` 的两个 `JSPACE:FILEHUB:NAV:*` 块（稳定排序、无时间戳、块外文字保留）；`filehub check` 只读报告 missing/stale/malformed，`filehub upgrade` 只维护归档契约块。`jspace memory check` 只读给出结构、来源、生命周期、指针、keyset 完整性和 backlink coverage；`checked/pass/issues/partial/unknown` 是机器覆盖结论，历史元数据缺口单列为 unknown，不证明正文语义事实为真。`jspace filehub check` 只读核对现行资产、index 与指针关系；inactive 资产页仅保留历史，index 指向它会报 `filehub.index.page_inactive`。同内容跨路径告警 `filehub.asset.duplicate_content` 只提示人工处置，不自动移动或删除文件。已验证 bundle 的入口行与成员不再按普通 support/asset 分类重复报错，但其整树一致性只由 `filehub check` 证明，`memory check` 不扫描成员树。asset 页含 `source_sha256` 时，check 还会比较当前 `rel_path` 字节摘要；不一致报 `filehub.memory.source_digest_changed`（warning，message 标注 `source_identity=changed` 与 `semantic_verification=not_performed`，只表示派生可能基于旧原件，不证明语义错误）；空值/非 64 位 hex/列表报 `source_digest_invalid`，目标不可读报 `source_digest_unreadable`（unknown）；旧页缺字段不报单条 finding，只在 memory coverage 计 `source_digest_absent`（非法值也计入 absent；空值 ≠ 缺失）。
 
 ## 12. gbrain 版本与健康
 

@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import type {
   GbrainDeps,
   GbrainListOptions,
@@ -32,6 +32,14 @@ import {
   type NavArea,
   type NavInput,
 } from "./navigation.ts";
+import { scanBundleTree } from "./bundle.ts";
+import {
+  aggregateForMembers,
+  bundleManifestRelPath,
+  serializeAssetBundleManifest,
+  type AssetBundleManifestV1,
+  type BundleMember,
+} from "../../core/contracts/asset-bundle.ts";
 
 interface PageSpec {
   slug: string;
@@ -1059,5 +1067,170 @@ describe("derived navigation", () => {
     expect(report.findings).toContainEqual(
       expect.objectContaining({ code: "filehub.nav.malformed", path: "projects/README.md" }),
     );
+  });
+});
+
+const BUNDLE_SLUG = "assets/acme/bundle";
+const BUNDLE_ROOT = "projects/acme/bundle";
+
+interface BundleFixture {
+  page: PageSpec;
+  manifestRel: string;
+  manifestText: string;
+  aggregate: string;
+}
+
+function treeMembers(scanRoot: string): BundleMember[] {
+  const scan = scanBundleTree(scanRoot);
+  if (scan.state !== "ok") throw new Error(scan.detail);
+  return [
+    ...scan.directories.map((path) => ({ path, kind: "dir" as const })),
+    ...scan.files.map((file) => ({
+      path: file.path,
+      kind: "file" as const,
+      size: file.size,
+      sha256: file.sha256,
+      executable: file.executable,
+    })),
+  ].sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path)));
+}
+
+function writeBundleFixture(): BundleFixture {
+  mkdirSync(join(root, BUNDLE_ROOT, "notes"), { recursive: true });
+  writeFileSync(join(root, BUNDLE_ROOT, "README.md"), "entry\n");
+  writeFileSync(join(root, BUNDLE_ROOT, "notes", "a.txt"), "a\n");
+  const members = treeMembers(join(root, BUNDLE_ROOT));
+  const manifest: AssetBundleManifestV1 = {
+    schema_version: 1,
+    kind: "asset-bundle",
+    ownerKind: "project",
+    ownerId: "acme",
+    slug: BUNDLE_SLUG,
+    rootRelPath: BUNDLE_ROOT,
+    entry: "README.md",
+    source: { label: "inbox/bundle" },
+    members,
+    aggregateSha256: aggregateForMembers(members),
+  };
+  const manifestText = serializeAssetBundleManifest(manifest);
+  const manifestRel = bundleManifestRelPath("projects/acme", BUNDLE_SLUG);
+  mkdirSync(dirname(join(root, manifestRel)), { recursive: true });
+  writeFileSync(join(root, manifestRel), manifestText);
+  const entry = members.find((member) => member.path === "README.md");
+  if (entry === undefined || entry.kind !== "file") throw new Error("entry member missing");
+  const page: PageSpec = {
+    slug: BUNDLE_SLUG,
+    content: `---
+type: note
+title: Bundle
+source: codex
+project: acme
+owner_kind: project
+asset_kind: bundle
+rel_path: ${BUNDLE_ROOT}/README.md
+bundle_root: ${BUNDLE_ROOT}
+bundle_manifest: ${manifestRel}
+bundle_sha256: ${manifest.aggregateSha256}
+bundle_manifest_sha256: ${createHash("sha256").update(manifestText).digest("hex")}
+source_sha256: ${entry.sha256}
+tags: [asset, source:session]
+---
+`,
+    tags: ["asset", "source:session"],
+  };
+  writeFileSync(
+    join(root, "projects", "acme", "index.md"),
+    `${INDEX}| [[bundle/README.md]] | bundle | 2026-10-24 | ${BUNDLE_SLUG} |\n`,
+  );
+  return { page, manifestRel, manifestText, aggregate: manifest.aggregateSha256 };
+}
+
+describe("bundle verification", () => {
+  test("a manifest-backed bundle verifies once and its files leave ordinary classification", async () => {
+    const fixture = writeBundleFixture();
+    const report = await filehubCheck(fakeGbrain([...validPages(), fixture.page]), {
+      root,
+      projects: PROJECTS,
+    });
+    expect(report.findings).toEqual([]);
+    expect(report.coverage.files.verified_bundles).toBe(1);
+    expect(report.coverage.files.bundle_files).toBe(2);
+    expect(report.coverage.files.bundle_unverified).toBe(0);
+    expect(renderFilehubCheck(report).lines).toContain(
+      "  bundles: 1 verified (2 member file(s) excluded; 0 unverified declaration(s))",
+    );
+  });
+
+  test("a changed or extra member loses the exemption and surfaces tree mismatches", async () => {
+    const fixture = writeBundleFixture();
+    writeFileSync(join(root, BUNDLE_ROOT, "notes", "a.txt"), "changed\n");
+    const changed = await filehubCheck(fakeGbrain([...validPages(), fixture.page]), {
+      root,
+      projects: PROJECTS,
+    });
+    expect(changed.findings).toContainEqual(
+      expect.objectContaining({ code: "filehub.bundle.tree_mismatch", slug: BUNDLE_SLUG }),
+    );
+    expect(changed.coverage.files.verified_bundles).toBe(0);
+    expect(changed.findings).toContainEqual(
+      expect.objectContaining({ code: "filehub.asset.unindexed", path: `${BUNDLE_ROOT}/notes/a.txt` }),
+    );
+
+    writeFileSync(join(root, BUNDLE_ROOT, "notes", "a.txt"), "a\n");
+    writeFileSync(join(root, BUNDLE_ROOT, "notes", "extra.txt"), "extra\n");
+    const extra = await filehubCheck(fakeGbrain([...validPages(), fixture.page]), {
+      root,
+      projects: PROJECTS,
+    });
+    expect(extra.findings).toContainEqual(
+      expect.objectContaining({ code: "filehub.bundle.tree_mismatch", slug: BUNDLE_SLUG }),
+    );
+    expect(extra.coverage.files.verified_bundles).toBe(0);
+  });
+
+  test("bundle-sha256 references resolve only against the verified aggregate", async () => {
+    const fixture = writeBundleFixture();
+    writeFileSync(
+      join(root, "projects", "acme", "index.md"),
+      `${INDEX}| [[bundle/README.md]] | bundle | 2026-10-24 | ${BUNDLE_SLUG} |\n${REFERENCES_START}\n- [bundle](bundle/README.md) \`${BUNDLE_SLUG}\` \`bundle-sha256:${fixture.aggregate}\`\n${REFERENCES_END}\n`,
+    );
+    const matched = await filehubCheck(fakeGbrain([...validPages(), fixture.page]), {
+      root,
+      projects: PROJECTS,
+    });
+    expect(matched.findings.map((finding) => finding.code)).not.toContain("filehub.reference.bundle_unverified");
+    expect(matched.findings.map((finding) => finding.code)).not.toContain("filehub.reference.digest_changed");
+
+    writeFileSync(
+      join(root, "projects", "acme", "index.md"),
+      `${INDEX}| [[bundle/README.md]] | bundle | 2026-10-24 | ${BUNDLE_SLUG} |\n${REFERENCES_START}\n- [bundle](bundle/README.md) \`${BUNDLE_SLUG}\` \`bundle-sha256:${"d".repeat(64)}\`\n${REFERENCES_END}\n`,
+    );
+    const changed = await filehubCheck(fakeGbrain([...validPages(), fixture.page]), {
+      root,
+      projects: PROJECTS,
+    });
+    expect(changed.findings).toContainEqual(
+      expect.objectContaining({ code: "filehub.reference.digest_changed", severity: "error" }),
+    );
+  });
+
+  test("an active page inside the tree blocks the exemption", async () => {
+    const fixture = writeBundleFixture();
+    const inside: PageSpec = {
+      slug: "assets/acme/bundle-note",
+      content: ASSET_PAGE.replace(
+        "rel_path: projects/acme/report.md",
+        `rel_path: ${BUNDLE_ROOT}/notes/a.txt`,
+      ),
+      tags: ["asset", "source:session"],
+    };
+    const report = await filehubCheck(fakeGbrain([...validPages(), fixture.page, inside]), {
+      root,
+      projects: PROJECTS,
+    });
+    expect(report.findings).toContainEqual(
+      expect.objectContaining({ code: "filehub.bundle.overlap_page", slug: BUNDLE_SLUG }),
+    );
+    expect(report.coverage.files.verified_bundles).toBe(0);
   });
 });

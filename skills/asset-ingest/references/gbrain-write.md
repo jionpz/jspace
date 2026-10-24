@@ -31,6 +31,23 @@ source_sha256: <64 位小写 hex>
 <原文件绝对路径>
 ```
 
+## 资料包页 (bundle)
+
+整包入库时,页在模板上补以下标量;`rel_path` 指向包内入口文件,不是包目录:
+
+```yaml
+asset_kind: bundle
+bundle_root: <owner-root>/<包目录>              # 严格在 owner 根内、且不在 .jspace/
+bundle_manifest: <owner-root>/.jspace/bundles/<sha256(slug)>.json
+bundle_sha256: <journal aggregateSha256>        # 整树聚合,不是入口摘要
+bundle_manifest_sha256: <manifest 字节 sha256>
+source_sha256: <journal targetHash>             # 入口文件摘要
+```
+
+- `bundle_manifest` 由 CLI 派生,调用者不能自定义;手改路径或内容会让 `filehub check` / `memory check` 报 manifest 身份或摘要错误。
+- `jspace filehub check` 会把 manifest、入口与整棵树逐成员双向比较(含额外文件);只有全部通过才把该包计为 verified 并豁免成员的无索引/重复内容提示。`memory check` 只验标量、manifest 与入口,不声称整树完整,两者结论不能互相替代。
+- 包完成后 source 仍在 inbox(`retain`),不要写“已清理”;rollback 只删除可证明且未变的包文件。
+
 ## source_sha256(入库字节身份,Phase B)
 
 - **值**:`jspace ingest status <journal-id> --json` 输出的 `targetHash`(归档目标字节的 sha256;

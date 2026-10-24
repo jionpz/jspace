@@ -27,6 +27,13 @@ import {
 import { portabilityIssues } from "../../core/contracts/paths.ts";
 import { listPageInventory } from "../gbrain/page-inventory.ts";
 import { mapLimit } from "../concurrency.ts";
+import {
+  bundleMetadataFromFields,
+  entryMember,
+  manifestIdentityIssues,
+  readBundleManifest,
+} from "../filehub/bundle.ts";
+import { bundleManifestRelPath } from "../../core/contracts/asset-bundle.ts";
 
 const DEFAULT_PAGE_LIMIT = 100;
 const DEFAULT_MAX_LIST_PAGES = 50;
@@ -158,6 +165,175 @@ function projectIdForSlug(slug: string): string | undefined {
 function assetOwnerForSlug(slug: string): string | undefined {
   const match = slug.match(/^assets\/([^/]+)\//);
   return match?.[1];
+}
+
+/** Validate bundle page scalars, manifest identity and entry membership. This
+ *  deliberately does not walk the target tree; filehub check owns tree proof. */
+function verifyBundlePageMetadata(
+  loaded: LoadedPage,
+  ownerId: string,
+  filehubPath: string | null,
+  addFinding: (finding: CheckFinding) => void,
+): void {
+  const slug = loaded.page.slug;
+  const fields = loaded.parsed.fields;
+  const bundleFields = [
+    "bundle_root",
+    "bundle_manifest",
+    "bundle_sha256",
+    "bundle_manifest_sha256",
+  ].filter((field) => fields[field] !== undefined);
+  if (fields.asset_kind !== "bundle") {
+    if (bundleFields.length > 0) {
+      addFinding({
+        code: "memory.asset.bundle_fields_unexpected",
+        severity: "error",
+        slug,
+        message: `bundle fields require asset_kind: bundle (found ${bundleFields.join(", ")})`,
+      });
+    }
+    return;
+  }
+  const parsed = bundleMetadataFromFields(fields);
+  if (!parsed.ok) {
+    addFinding({
+      code: "memory.asset.bundle_metadata_invalid",
+      severity: "error",
+      slug,
+      message: parsed.detail,
+    });
+    return;
+  }
+  const metadata = parsed.metadata;
+  const ownerKind = metadata.bundleRoot.startsWith("areas/") ? "area" : "project";
+  const ownerPrefix = `${ownerKind === "area" ? "areas" : "projects"}/${ownerId}`;
+  if (
+    metadata.bundleRoot === ownerPrefix ||
+    !metadata.bundleRoot.startsWith(`${ownerPrefix}/`)
+  ) {
+    addFinding({
+      code: "memory.asset.bundle_root_owner",
+      severity: "error",
+      slug,
+      path: metadata.bundleRoot,
+      message: `bundle_root must be a directory strictly inside ${ownerPrefix}/`,
+    });
+  }
+  const manifestMatch = metadata.bundleManifest.match(/\/\.jspace\/bundles\/([0-9a-f]{64})\.json$/);
+  const expectedManifestName = bundleManifestRelPath("owner", slug).split("/").at(-1);
+  if (
+    manifestMatch === null ||
+    !metadata.bundleManifest.startsWith(`${ownerPrefix}/`) ||
+    `${manifestMatch[1]}.json` !== expectedManifestName
+  ) {
+    addFinding({
+      code: "memory.asset.bundle_manifest_path",
+      severity: "error",
+      slug,
+      path: metadata.bundleManifest,
+      message: "bundle_manifest must be the managed <ownerRoot>/.jspace/bundles/<sha256(slug)>.json path",
+    });
+    return;
+  }
+  const relPath = fields.rel_path;
+  if (relPath === undefined || !relPath.startsWith(`${metadata.bundleRoot}/`)) {
+    addFinding({
+      code: "memory.asset.bundle_entry_outside",
+      severity: "error",
+      slug,
+      path: relPath,
+      message: "bundle page rel_path must be a file inside bundle_root",
+    });
+    return;
+  }
+  if (filehubPath === null) return;
+
+  const read = readBundleManifest(filehubPath, metadata.bundleManifest);
+  if (read.state !== "ok" || read.manifest === undefined || read.manifestSha256 === undefined) {
+    addFinding({
+      code: "memory.asset.bundle_manifest_unreadable",
+      severity: "unknown",
+      slug,
+      path: metadata.bundleManifest,
+      message: `bundle manifest cannot be verified here: ${read.detail ?? read.state}`,
+    });
+    return;
+  }
+  if (read.manifestSha256 !== metadata.bundleManifestSha256) {
+    addFinding({
+      code: "memory.asset.bundle_manifest_changed",
+      severity: "error",
+      slug,
+      path: metadata.bundleManifest,
+      message: "bundle_manifest_sha256 does not match the manifest bytes",
+    });
+    return;
+  }
+  if (read.manifest.aggregateSha256 !== metadata.bundleSha256) {
+    addFinding({
+      code: "memory.asset.bundle_aggregate_changed",
+      severity: "error",
+      slug,
+      path: metadata.bundleManifest,
+      message: "bundle_sha256 does not match the manifest aggregate",
+    });
+  }
+  const manifestEntry = read.manifest.entry;
+  const expectedEntry = relPath.slice(metadata.bundleRoot.length + 1);
+  const identity = manifestIdentityIssues(read.manifest, {
+    ownerKind,
+    ownerId,
+    slug,
+    rootRelPath: metadata.bundleRoot,
+    entry: manifestEntry,
+  });
+  if (identity.length > 0) {
+    addFinding({
+      code: "memory.asset.bundle_manifest_identity",
+      severity: "error",
+      slug,
+      path: metadata.bundleManifest,
+      message: identity.join("; "),
+    });
+  }
+  if (manifestEntry !== expectedEntry) {
+    addFinding({
+      code: "memory.asset.bundle_entry_mismatch",
+      severity: "error",
+      slug,
+      path: relPath,
+      message: `manifest entry ${manifestEntry} does not match rel_path ${relPath}`,
+    });
+  }
+  const entry = entryMember(read.manifest);
+  if (entry === null) {
+    addFinding({
+      code: "memory.asset.bundle_entry_invalid",
+      severity: "error",
+      slug,
+      path: relPath,
+      message: "manifest entry is not a regular member file",
+    });
+    return;
+  }
+  const sourceDigest = fields.source_sha256;
+  if (sourceDigest === undefined) {
+    addFinding({
+      code: "memory.asset.bundle_source_digest_missing",
+      severity: "error",
+      slug,
+      path: relPath,
+      message: "bundle page requires source_sha256 equal to the entry digest",
+    });
+  } else if (/^[0-9a-f]{64}$/.test(sourceDigest) && sourceDigest !== entry.sha256) {
+    addFinding({
+      code: "memory.asset.bundle_source_digest_mismatch",
+      severity: "error",
+      slug,
+      path: relPath,
+      message: "source_sha256 does not match the manifest entry digest",
+    });
+  }
 }
 
 export async function memoryCheck(
@@ -479,6 +655,7 @@ export async function memoryCheck(
           message: `frontmatter project ${fields.project ?? "<missing>"} must equal asset owner ${ownerId ?? "<missing>"}`,
         });
       }
+      verifyBundlePageMetadata(loaded, ownerId ?? "", filehubPath, addFinding);
       const relPath = fields.rel_path;
       if (!relPath) {
         addFinding({
