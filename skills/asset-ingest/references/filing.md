@@ -76,7 +76,7 @@ filehub/
 1. 文件少时直接放项目根;某一类资料形成稳定集合、或直接子项过多影响浏览时,再建语义子目录。
 2. 同一层级只用一种组织轴(工作流/阶段、年份/周期),不要同层混用。
 3. 不为单个文件机械建目录。
-4. 一个文件只有一个规范位置;跨项目引用用链接,不复制。
+4. 一个文件只有一个规范位置;跨项目引用写 owner index 的 references 受管块并链到原 filehub 路径,不复制本体。
 5. 完整的工程套件保留内部结构,由 `index.md` 指向其入口;不为了整齐而整包拆散。
 6. 旧 `layout: flat | workstream | period` 字段仍可读,作为布局说明,不再是必填声明。
 
@@ -156,13 +156,30 @@ source: claude
 - 入库前检查目标目录同名/同语义文件，并用 `gbrain call get_page '{"slug":"assets/<owner>/<语义名>","include_content":true}'` 查页。
 - 同内容已存在 → 报告已有位置并跳过，不创建第二份物理副本；`jspace filehub check --json` 的 `filehub.asset.duplicate_content` 可提示跨路径同内容，但它不自动移动或删除文件。
 - 同名/同语义但内容不同 → 默认 conflict，不覆盖。只有明确“修订/新版/替代”证据时才写 `-vN` 新 slug / 新页，新页正文声明 `Supersedes: [[old]]`，旧页另做完整页 + revision 的 CAS 生命周期更新。
-- 旧页被标记 `status:superseded|deprecated|archived` 后是历史指针，不再参与当前 owner、`rel_path`、index 或重复指针校验；owner index 必须改指现行页，继续指向旧页会被 `filehub check` 报 `filehub.index.page_inactive`。
+- 旧页被标记 `status:superseded|deprecated|archived` 后是历史指针，不再参与当前 owner、`rel_path`、index 或重复指针校验；owner index 的当前表必须改指现行页，继续指向旧页会被 `filehub check` 报 `filehub.index.page_inactive`。
+- 退场文件不再出现在当前表时，把链接和严格 slug 写进 owner index 的 history 受管块；对应页必须仍是非现行状态且 `rel_path` 指向该文件。只有完整验证的历史行才让该路径免报 `asset.unindexed`。
 - 没有覆盖错页这种修复路径；错误页需要新页取代并保留历史。
 
 ## 项目 index.md
 
 - `projects/<项目>/index.md` 必须存在并登记资产;旧 `layout` 字段可读,但不再必填。
-- 每份归位文件必须登记一行:文件 + 类型 + 日期 + gbrain slug(人机共用的 dashboard)。
+- 每份归位文件必须在当前表登记一行:文件 + 类型 + 日期 + gbrain slug(人机共用的 dashboard)。
+- 历史与引用不写当前表:
+
+  ```markdown
+  <!-- JSPACE:ASSET-HISTORY:START -->
+  - [旧文件](旧文件.pdf) — `assets/<owner>/<语义名>`
+  <!-- JSPACE:ASSET-HISTORY:END -->
+
+  <!-- JSPACE:ASSET-REFERENCES:START -->
+  - [别处资料](../<other-owner>/doc.pdf) — `assets/<owner>/<语义名>` `sha256:<64 hex>`(可选)
+  <!-- JSPACE:ASSET-REFERENCES:END -->
+  ```
+
+  - history = 本 owner 曾拥有、现已退场;页面必须 inactive 且 `rel_path` 一致。缺 slug、页仍活跃、路径不符都按错误或未验证处理,不能证明退场。
+  - references = 别处拥有;永不提供 ownership,也永不豁免 `asset.unindexed`。本地目标必须存在,不可 escape owner/filehub 或经 symlink;`sha256` 与当前字节比较,`bundle-sha256` 暂不验证,外部 URL 只标 unverified。
+  - 块外普通链接仍可读,但只算部分引用覆盖。
+- 入库完成后运行 `jspace filehub refresh`,让根 README 与 `projects/README.md` 的派生导航反映 registry;导航块由命令维护,不手改。
 - 随项目保存的 Agent 治理、构建配置、运行骨架和模板不是独立资产;在该 index 的
   `support_paths` 中按 owner 相对路径显式声明(文件或稳定目录),例如:
   ```yaml

@@ -7,6 +7,7 @@
 // - gbrain/index checkpoints require real readback before journal advance;
 // - source cleanup is guarded by content hashes and exact index evidence.
 import { createHash } from "node:crypto";
+import { isCurrentOwnershipLine } from "../filehub/index-parse.ts";
 import {
   constants as fsConstants,
   copyFileSync,
@@ -361,8 +362,10 @@ function verifyIndex(journal: IngestJournalV2, ops: IngestFileOps): IngestIndexE
   } catch (error) {
     fail(`index readback failed for ${journal.indexPath}: ${(error as Error).message}`);
   }
-  if (!content.split(/\r?\n/).includes(journal.indexEntry)) {
-    fail(`index ${journal.indexPath} does not contain the exact planned line: ${journal.indexEntry}`);
+  if (!isCurrentOwnershipLine(content, journal.indexEntry)) {
+    fail(
+      `index ${journal.indexPath} does not contain the exact planned line as a current ownership row: ${journal.indexEntry}`,
+    );
   }
   return {
     verifiedAt: localStamp(),

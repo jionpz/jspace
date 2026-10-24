@@ -71,7 +71,7 @@ excel / ppt 走深度抽取(`~/.agents/skills/asset-ingest/references/deep-extra
 ## slug 派生
 
 - 规则:`assets/<project|area>/<语义名>`(与文件语义名绑定,不随手发明)。
-- **版本化**:明确新版资产写**新页**,slug 含版本——`assets/<project|area>/<语义名>-vN`；新页正文写 `Supersedes: [[<旧 slug>]]`，旧页正文不改，另以完整页 + revision 的 CAS 只保留一个当前 `status:superseded`。旧页从此只作历史，不再参与当前 `rel_path`、owner、index 和重复指针校验；index 必须改指新页。
+- **版本化**:明确新版资产写**新页**,slug 含版本——`assets/<project|area>/<语义名>-vN`；新页正文写 `Supersedes: [[<旧 slug>]]`，旧页正文不改，另以完整页 + revision 的 CAS 只保留一个当前 `status:superseded`。旧页从此只作历史，不再参与当前 `rel_path`、owner、index 和重复指针校验；index 当前表必须改指新页，旧文件留在历史受管块（`JSPACE:ASSET-HISTORY`，页 inactive + `rel_path` 一致才有效）。
 - 写页前用 `gbrain call get_page '{"slug":"<slug>","include_content":true}'` 查重；`page_not_found` 才新建。已存在且同内容 → 报告已有页并跳过；不同内容但无新版依据 → conflict；只有明确新版关系才升 `-vN`。
 - 注:`assets/` 前缀为本 skill 命名空间,与 gbrain 文件资产路径不冲突(实证确认);若后续碰撞,在 M2 落地时检查。
 

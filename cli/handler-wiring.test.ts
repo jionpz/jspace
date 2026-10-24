@@ -5,7 +5,7 @@
 // this layer as almost entirely unexercised.
 // Run: bun test cli/handler-wiring.test.ts
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initWorkbench } from "../application/workspace/init.ts";
@@ -62,6 +62,24 @@ test("cron list --json returns the crons via the parser (b() coercion)", () => {
 
 test("unknown cron subcommand fails at the parser (ArgError, not a handler crash)", () => {
   expect(() => parse(["cron", "nope"], ROOT)).toThrow();
+});
+
+test("filehub refresh is parser-wired and rebuilds only derived navigation", () => {
+  const fh = join(wb, "filehub");
+  run(["filehub", "init", fh, "--register"]);
+  mkdirSync(join(fh, "projects", "acme"), { recursive: true });
+  writeFileSync(join(fh, "projects", "acme", "index.md"), "# Acme\n");
+
+  const first = run(["filehub", "refresh"]);
+  expect(first.exitCode).toBeUndefined();
+  expect(existsSync(join(fh, "README.md"))).toBe(true);
+  expect(existsSync(join(fh, "projects", "README.md"))).toBe(true);
+
+  const second = run(["filehub", "refresh", "--json"]);
+  expect(second.exitCode).toBeUndefined();
+  expect((second.data as { changed: boolean }).changed).toBe(false);
+  // the static contract block is untouched by refresh
+  expect(readFileSync(join(fh, "README.md"), "utf-8")).toContain("filehub-contract-version:");
 });
 
 test("ingest list --json on a fresh workbench is a stable empty shape", () => {

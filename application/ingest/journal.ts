@@ -8,6 +8,7 @@
 // - compensation removes a staged target only when its bytes still match the
 //   exact copy this journal created.
 import { createHash } from "node:crypto";
+import { isCurrentOwnershipLine } from "../filehub/index-parse.ts";
 import { closeSync, existsSync, openSync, readSync } from "node:fs";
 import { join } from "node:path";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
@@ -294,9 +295,10 @@ function verifyIndexLine(journal: IngestJournalV2, ops: IngestFileOps): { conten
   } catch (error) {
     throw new Error(`index ${journal.indexPath} is not readable: ${(error as Error).message}`);
   }
-  const lines = content.split(/\r?\n/);
-  if (!lines.includes(journal.indexEntry)) {
-    throw new Error(`index ${journal.indexPath} does not contain the exact planned line: ${journal.indexEntry}`);
+  if (!isCurrentOwnershipLine(content, journal.indexEntry)) {
+    throw new Error(
+      `index ${journal.indexPath} does not contain the exact planned line as a current ownership row: ${journal.indexEntry}`,
+    );
   }
   return { contentHash: createHash("sha256").update(content).digest("hex") };
 }

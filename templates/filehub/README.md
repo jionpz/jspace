@@ -5,7 +5,7 @@
 > 本目录可被 Obsidian 作为 vault 打开。AI 只写纯 md 与相对链接,不依赖任何插件——哪天换工具,资料一点不坏。
 
 <!-- JSPACE:FILEHUB:START -->
-> filehub-contract-version: 5
+> filehub-contract-version: 6
 
 ## 归档契约
 
@@ -49,6 +49,36 @@ support_paths:
 ```
 
 支撑路径仍受 owner 边界、存在性与 index 登记冲突检查;不能用它隐藏普通资料或跨 owner 排除文件。
+
+### 历史与引用
+
+`index.md` 的当前表回答"这个 owner 现在拥有什么"。曾经拥有和只是引用别处资料的两类条目,分别写进独立受管块,不混进当前表:
+
+```markdown
+<!-- JSPACE:ASSET-HISTORY:START -->
+- [2026-07-31-概率论第三章-v2.pdf](2026-07-31-概率论第三章-v2.pdf) — `assets/<owner>/<语义名>`
+<!-- JSPACE:ASSET-HISTORY:END -->
+
+<!-- JSPACE:ASSET-REFERENCES:START -->
+- [外部资料](./other/doc.pdf) — `assets/<owner>/<语义名>` `sha256:<64 位小写 hex>`
+<!-- JSPACE:ASSET-REFERENCES:END -->
+```
+
+- **历史**:本 owner 曾经持有、现在退场的资产。每条必须是一个本地 Markdown 链接 + 一个反引号包住的严格 `assets/<owner>/<语义名>` slug;对应 gbrain 页必须是非现行状态(`status:superseded|deprecated|archived`)且 `rel_path` 指向同一文件。只有完整验证过的历史行才豁免该路径的"无索引"提示;页仍活跃、路径不符、文件缺失或只是普通链接都不算证明。
+- **引用**:资料由别处拥有,这里只导航。引用永不提供 ownership,也永不豁免"无索引"。本地目标必须存在,不可经 symlink 逃逸或指向受限路径;可选的 `<slug> + sha256` 锁证明引用时看到的字节,`bundle-sha256` 暂不验证并会明确报未验证;外部 URL 不抓取,只标 unverified。块外的普通链接仍可读,但只算部分引用覆盖。
+- 同一路径或 slug 不能同时出现在当前表与历史块。
+
+### 派生导航
+
+根 `README.md` 与 `projects/README.md` 各有一个由 registry 生成的受管块(`JSPACE:FILEHUB:NAV:*`):活跃项目、长期主题、完整项目目录(含"待补归属")。它们只是视图:
+
+```bash
+jspace filehub refresh [--dir <workbench>] [--dry-run] [--json]
+```
+
+- 只重算这两个块,按 UTF-8 字节序稳定排序,不写时间戳;块外用户文字逐字节保留。
+- 先预检两个文件(坏标记、symlink、非 UTF-8、并发修改全部拒绝),通过后才写;`projects/README.md` 先写、根 README 最后写。
+- `jspace filehub check` 只读比较并报告 missing / stale / malformed;`filehub upgrade` 只维护归档契约块,永不碰导航块。
 
 ### 旧结构
 

@@ -2,6 +2,7 @@
 // families (registry-adjacent asset-layer commands, small enough to share one file).
 import type { CommandSpec } from "../../application/commands/command.ts";
 import { filehubInit, filehubUpgrade } from "../../application/registry/filehub.ts";
+import { filehubRefresh } from "../../application/filehub/refresh.ts";
 import { inboxStatus } from "../../application/registry/inbox.ts";
 import { projectAdd, projectList, projectListStatus, projectSetStatus } from "../../application/registry/project.ts";
 import { expandTilde, filehubReadme, devRoot } from "../embed.ts";
@@ -115,11 +116,22 @@ const filehubUpgradeSpec: CommandSpec = {
     }, b(args.dryRun)),
 };
 
+const filehubRefreshSpec: CommandSpec = {
+  name: "refresh",
+  summary: "rebuild the derived navigation blocks (registry view only)",
+  description:
+    "Recomputes the managed navigation blocks in the filehub README and " +
+    "projects/README.md from hub.json and owner entries. Never touches assets, " +
+    "index tables, hub.json or gbrain; text outside each managed block is kept.",
+  features: { dir: true, dryRun: true, json: true },
+  handler: (ctx, args) => filehubRefresh({ wbRoot: ctx.root }, b(args.dryRun), b(args.json)),
+};
+
 export const filehubSpec: CommandSpec = {
   name: "filehub",
   summary: "manage the file management center (asset layer)",
   commandArgName: "filehub_command",
-  children: [filehubInitSpec, filehubUpgradeSpec, filehubCheckSpec],
+  children: [filehubInitSpec, filehubUpgradeSpec, filehubCheckSpec, filehubRefreshSpec],
 };
 
 const inboxStatusSpec: CommandSpec = {

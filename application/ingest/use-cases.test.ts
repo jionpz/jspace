@@ -79,7 +79,7 @@ function args(source: string, over: Partial<IngestBeginArgs> = {}): IngestBeginA
     slug: "assets/foo/doc",
     ownerKind: "project",
     ownerId: "foo",
-    indexLine: "2026-10-18 | doc.txt | assets/foo/doc",
+    indexLine: "| projects/foo/2026-10-18-doc.txt | document | 2026-10-18 | assets/foo/doc |",
     ...over,
   };
 }
@@ -173,7 +173,7 @@ test("area owner uses an existing area and its derived index", () => {
       ownerId: "books",
       target: "areas/books/topics/doc.txt",
       slug: "assets/books/doc",
-      indexLine: "2026-10-18 | doc.txt | assets/books/doc",
+      indexLine: "| areas/books/2026-10-18-doc.txt | document | 2026-10-18 | assets/books/doc |",
     }),
   );
   expect(result.lines.some((line) => line.includes("owner=area:books"))).toBe(true);
@@ -206,7 +206,7 @@ test("area without an index is rejected before any target or journal exists", ()
         ownerId: "books",
         target: "areas/books/topics/doc.txt",
         slug: "assets/books/doc",
-        indexLine: "2026-10-18 | doc.txt | assets/books/doc",
+        indexLine: "| areas/books/2026-10-18-doc.txt | document | 2026-10-18 | assets/books/doc |",
       }),
     ),
   ).toThrow(/area index is missing/);
@@ -228,7 +228,7 @@ test("area index must be a regular file, not a symlink", () => {
         ownerId: "books",
         target: "areas/books/topics/doc.txt",
         slug: "assets/books/doc",
-        indexLine: "2026-10-18 | doc.txt | assets/books/doc",
+        indexLine: "| areas/books/2026-10-18-doc.txt | document | 2026-10-18 | assets/books/doc |",
       }),
     ),
   ).toThrow(/area index must not be a symlink/);
@@ -245,7 +245,7 @@ test("area index metadata must agree with the area id", () => {
         ownerId: "books",
         target: "areas/books/topics/doc.txt",
         slug: "assets/books/doc",
-        indexLine: "2026-10-18 | doc.txt | assets/books/doc",
+        indexLine: "| areas/books/2026-10-18-doc.txt | document | 2026-10-18 | assets/books/doc |",
       }),
     );
   writeFileSync(index, "---\ntype: area-index\nowner: other\n---\n");
@@ -369,7 +369,7 @@ test("index checkpoint requires the exact line in the derived index", async () =
   await expect(ingestAdvance(workbench, id, "index")).rejects.toThrow(/does not contain/);
   expect(readJournals(workbench).records[0].status).toBe("gbrain");
 
-  writeFileSync(join(projectRoot, "index.md"), "# Index\n2026-10-18 | doc.txt | assets/foo/doc\n");
+  writeFileSync(join(projectRoot, "index.md"), "# Index\n| projects/foo/2026-10-18-doc.txt | document | 2026-10-18 | assets/foo/doc |\n");
   const advanced = await ingestAdvance(workbench, id, "index");
   expect(advanced.lines[0]).toContain("-> index");
   const journal = readJournals(workbench).records[0];
@@ -387,7 +387,7 @@ test("full chain removes source only after verified gbrain and index checkpoints
     "gbrain",
     fakeGbrain(async (slug) => pageFor(slug, assetPage("projects/foo/2026-10-18-doc.txt"))),
   );
-  writeFileSync(join(projectRoot, "index.md"), "# Index\n2026-10-18 | doc.txt | assets/foo/doc\n");
+  writeFileSync(join(projectRoot, "index.md"), "# Index\n| projects/foo/2026-10-18-doc.txt | document | 2026-10-18 | assets/foo/doc |\n");
   await ingestAdvance(workbench, id, "index");
   const complete = await ingestAdvance(
     workbench,
@@ -417,7 +417,7 @@ test("source change before complete preserves both materials", async () => {
     "gbrain",
     fakeGbrain(async (slug) => pageFor(slug, assetPage("projects/foo/2026-10-18-doc.txt"))),
   );
-  writeFileSync(join(projectRoot, "index.md"), "# Index\n2026-10-18 | doc.txt | assets/foo/doc\n");
+  writeFileSync(join(projectRoot, "index.md"), "# Index\n| projects/foo/2026-10-18-doc.txt | document | 2026-10-18 | assets/foo/doc |\n");
   await ingestAdvance(workbench, id, "index");
   writeFileSync(source, "changed before cleanup\n");
   const result = await ingestAdvance(
@@ -442,7 +442,7 @@ test("completion re-reads gbrain and preserves the inbox if the page disappeared
     "gbrain",
     fakeGbrain(async (slug) => pageFor(slug, assetPage("projects/foo/2026-10-18-doc.txt"))),
   );
-  writeFileSync(join(projectRoot, "index.md"), "# Index\n2026-10-18 | doc.txt | assets/foo/doc\n");
+  writeFileSync(join(projectRoot, "index.md"), "# Index\n| projects/foo/2026-10-18-doc.txt | document | 2026-10-18 | assets/foo/doc |\n");
   await ingestAdvance(workbench, id, "index");
   await expect(
     ingestAdvance(
@@ -471,7 +471,7 @@ test("fail at staged compensates, while rollback is restricted to staged", () =>
     args(source2, {
       target: "projects/foo/doc2.txt",
       slug: "assets/foo/doc2",
-      indexLine: "2026-10-18 | doc2.txt | assets/foo/doc2",
+      indexLine: "| projects/foo/2026-10-18-doc2.txt | document | 2026-10-18 | assets/foo/doc2 |",
     }),
   );
   const secondId = readJournals(workbench).records.find((journal) => journal.relPath.endsWith("doc2.txt"))!.id;
@@ -534,7 +534,7 @@ test("a page that drops source_sha256 after the gbrain checkpoint is rejected at
     "gbrain",
     fakeGbrain(async (slug) => pageFor(slug, assetPage(relPath, "foo", "project", targetHash))),
   );
-  writeFileSync(join(projectRoot, "index.md"), "# Index\n2026-10-18 | doc.txt | assets/foo/doc\n");
+  writeFileSync(join(projectRoot, "index.md"), "# Index\n| projects/foo/2026-10-18-doc.txt | document | 2026-10-18 | assets/foo/doc |\n");
   await ingestAdvance(workbench, id, "index");
   await expect(
     ingestAdvance(workbench, id, "committed", fakeGbrain(async (slug) => pageFor(slug, assetPage(relPath)))),

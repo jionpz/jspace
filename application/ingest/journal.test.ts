@@ -70,7 +70,7 @@ function plan(source: string, over: Partial<IngestPlan> = {}): IngestPlan {
     ownerId: "foo",
     slug: "assets/foo/doc",
     indexPath: "projects/foo/index.md",
-    indexEntry: "2026-10-18 | doc | assets/foo/doc",
+    indexEntry: "| projects/foo/2026-10-18-doc.txt | document | 2026-10-18 | assets/foo/doc |",
     ...over,
   };
 }
@@ -169,7 +169,7 @@ test("same inbox path with new bytes is not treated as a committed duplicate", a
     target: join(filehub, "projects", "foo", "2026-10-18-doc-v2.txt"),
     relPath: "projects/foo/2026-10-18-doc-v2.txt",
     slug: "assets/foo/doc-v2",
-    indexEntry: "2026-10-18 | doc-v2 | assets/foo/doc-v2",
+    indexEntry: "| projects/foo/2026-10-18-doc-v2.txt | document | 2026-10-18 | assets/foo/doc-v2 |",
   });
   const second = beginIngest(root, secondPlan, track().ops);
   expect(second.kind).toBe("created");
@@ -187,7 +187,7 @@ test("same content resumes from the same plan but a different plan is not silent
       target: join(filehub, "projects", "foo", "different.txt"),
       relPath: "projects/foo/different.txt",
       slug: "assets/foo/different",
-      indexEntry: "2026-10-18 | different | assets/foo/different",
+      indexEntry: "| projects/foo/2026-10-18-different.txt | document | 2026-10-18 | assets/foo/different |",
     }),
     track().ops,
   );
@@ -296,7 +296,7 @@ test("changed staged target is never deleted by fail or rollback", () => {
       target: join(filehub, "projects", "foo", "doc2.txt"),
       relPath: "projects/foo/doc2.txt",
       slug: "assets/foo/doc2",
-      indexEntry: "2026-10-18 | doc2 | assets/foo/doc2",
+      indexEntry: "| projects/foo/2026-10-18-doc2.txt | document | 2026-10-18 | assets/foo/doc2 |",
     }),
     track().ops,
   );

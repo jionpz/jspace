@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   symlinkSync,
   unlinkSync,
@@ -23,6 +25,13 @@ import {
   renderFilehubCheck,
   type FilehubRegistryProject,
 } from "./check.ts";
+import {
+  NAV_PROJECTS_BLOCK_START,
+  renderProjectsNavBlock,
+  renderRootNavBlock,
+  type NavArea,
+  type NavInput,
+} from "./navigation.ts";
 
 interface PageSpec {
   slug: string;
@@ -117,11 +126,48 @@ function fakeGbrain(pages: PageSpec[], overrides: GbrainOverrides = {}): GbrainD
 }
 
 let root: string;
+
+function directDirs(path: string): string[] {
+  if (!existsSync(path)) return [];
+  return readdirSync(path).filter((name) => {
+    try {
+      const st = lstatSync(join(path, name));
+      return st.isDirectory() && !st.isSymbolicLink() && !name.startsWith(".");
+    } catch {
+      return false;
+    }
+  });
+}
+
+/** Write the derived navigation a real refresh would produce, so tests about
+ *  ownership do not also carry nav warnings. */
+function syncNav(projects: readonly FilehubRegistryProject[] = PROJECTS): void {
+  const navProjects = projects.map((project) => ({
+    id: project.id,
+    status: project.status,
+    assetRelPath: project.asset_rel_path,
+    hasIndex: existsSync(join(root, project.asset_rel_path, "index.md")),
+  }));
+  const areas: NavArea[] = directDirs(join(root, "areas")).map((id) => ({
+    id,
+    hasIndex: existsSync(join(root, "areas", id, "index.md")),
+  }));
+  const owners = navProjects.map((project) => project.assetRelPath);
+  const unregistered = directDirs(join(root, "projects"))
+    .map((name) => `projects/${name}`)
+    .filter((rel) => !owners.some((owner) => owner === rel || owner.startsWith(`${rel}/`)));
+  const input: NavInput = { projects: navProjects, areas, unregistered };
+  mkdirSync(join(root, "projects"), { recursive: true });
+  writeFileSync(join(root, "README.md"), `${renderRootNavBlock(input)}\n`);
+  writeFileSync(join(root, "projects", "README.md"), `${renderProjectsNavBlock(input)}\n`);
+}
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "jspace-filehub-check-"));
   mkdirSync(join(root, "projects", "acme"), { recursive: true });
   writeFileSync(join(root, "projects", "acme", "index.md"), INDEX);
   writeFileSync(join(root, "projects", "acme", "report.md"), "report\n");
+  syncNav();
 });
 afterEach(() => {
   rmSync(root, { recursive: true, force: true });
@@ -232,6 +278,7 @@ tags: []
 `,
   );
   writeFileSync(join(root, "areas", "AI服务商", "tool-stack.md"), "tool stack\n");
+  syncNav([]);
   const report = await filehubCheck(
     fakeGbrain([
       {
@@ -496,6 +543,8 @@ test("filehubCheck honours support, companion, archive and restricted boundaries
   mkdirSync(join(root, "archive", "2026"), { recursive: true });
   writeFileSync(join(root, "archive", "2026", "cold.md"), "cold\n");
   writeFileSync(join(root, "projects", "acme", ".env"), "SECRET=not-logged\n");
+  writeFileSync(join(root, "README.md"), "# filehub\n");
+  syncNav();
 
   const report = await filehubCheck(fakeGbrain(validPages()), { root, projects: PROJECTS });
   expect(report.status).toBe("ok");
@@ -523,7 +572,8 @@ test("owner index support_paths isolate project kit files from asset coverage", 
   const report = await filehubCheck(fakeGbrain(validPages()), { root, projects: PROJECTS });
   expect(report.findings).toEqual([]);
   expect(report.status).toBe("ok");
-  expect(report.coverage.files.support_files).toBe(3);
+  // 1 project-context + mcp.json.example + server.py + 2 managed navigation READMEs
+  expect(report.coverage.files.support_files).toBe(5);
 });
 
 test("support_paths rejects missing paths and support files registered as assets", async () => {
@@ -766,4 +816,248 @@ test("inactive asset pages never produce a digest finding", async () => {
   expect(report.findings.some((item) => item.code === "filehub.memory.source_digest_changed")).toBe(false);
   expect(report.coverage.memory.source_digest_present).toBe(0);
   expect(report.coverage.memory.source_digest_absent).toBe(0);
+});
+
+const HISTORY_START = "<!-- JSPACE:ASSET-HISTORY:START -->";
+const HISTORY_END = "<!-- JSPACE:ASSET-HISTORY:END -->";
+const REFERENCES_START = "<!-- JSPACE:ASSET-REFERENCES:START -->";
+const REFERENCES_END = "<!-- JSPACE:ASSET-REFERENCES:END -->";
+
+function indexWithoutCurrent(extra: string): string {
+  return INDEX.replace("| [[report.md]] | document | 2026-10-18 | assets/acme/report |\n", `${extra}\n`);
+}
+
+const INACTIVE_PAGE = ASSET_PAGE.replace(
+  "tags: [asset, source:session]",
+  "tags: [asset, status:superseded, source:session]",
+);
+
+describe("history sections", () => {
+  test("verified history covers an otherwise unindexed file", async () => {
+    writeFileSync(
+      join(root, "projects", "acme", "index.md"),
+      indexWithoutCurrent(`${HISTORY_START}\n- [report.md](report.md) — \`assets/acme/report\`\n${HISTORY_END}`),
+    );
+    const report = await filehubCheck(
+      fakeGbrain([
+        {
+          slug: "assets/acme/report",
+          content: INACTIVE_PAGE,
+          tags: ["asset", "status:superseded", "source:session"],
+        },
+      ]),
+      { root, projects: PROJECTS },
+    );
+    expect(report.findings.map((finding) => finding.code)).not.toContain("filehub.asset.unindexed");
+    expect(report.findings.map((finding) => finding.code)).not.toContain("filehub.history.page_active");
+  });
+
+  test("history pointing at an active page is an error and does not cover the file", async () => {
+    writeFileSync(
+      join(root, "projects", "acme", "index.md"),
+      indexWithoutCurrent(`${HISTORY_START}\n- [report.md](report.md) — \`assets/acme/report\`\n${HISTORY_END}`),
+    );
+    const report = await filehubCheck(fakeGbrain(validPages()), { root, projects: PROJECTS });
+    const codes = report.findings.map((finding) => finding.code);
+    expect(codes).toContain("filehub.history.page_active");
+  });
+
+  test("a history row must agree with the page's rel_path", async () => {
+    writeFileSync(
+      join(root, "projects", "acme", "index.md"),
+      indexWithoutCurrent(`${HISTORY_START}\n- [report.md](report.md) — \`assets/acme/report\`\n${HISTORY_END}`),
+    );
+    const page = INACTIVE_PAGE.replace("rel_path: projects/acme/report.md", "rel_path: projects/acme/other.md");
+    const report = await filehubCheck(
+      fakeGbrain([
+        {
+          slug: "assets/acme/report",
+          content: page,
+          tags: ["asset", "status:superseded", "source:session"],
+        },
+      ]),
+      { root, projects: PROJECTS },
+    );
+    const codes = report.findings.map((finding) => finding.code);
+    expect(codes).toContain("filehub.history.rel_path_mismatch");
+    expect(codes).toContain("filehub.asset.unindexed");
+  });
+
+  test("current and history may not claim the same path", async () => {
+    writeFileSync(
+      join(root, "projects", "acme", "index.md"),
+      `${INDEX}${HISTORY_START}\n- [report.md](report.md) — \`assets/acme/report\`\n${HISTORY_END}\n`,
+    );
+    const report = await filehubCheck(fakeGbrain(validPages()), { root, projects: PROJECTS });
+    expect(report.findings.map((finding) => finding.code)).toContain(
+      "filehub.index.current_history_conflict",
+    );
+  });
+
+  test("a changed history digest is a warning, not proof of tampering", async () => {
+    writeFileSync(
+      join(root, "projects", "acme", "index.md"),
+      indexWithoutCurrent(`${HISTORY_START}\n- [report.md](report.md) — \`assets/acme/report\`\n${HISTORY_END}`),
+    );
+    const page = INACTIVE_PAGE.replace(
+      "rel_path: projects/acme/report.md",
+      `rel_path: projects/acme/report.md\nsource_sha256: ${"b".repeat(64)}`,
+    );
+    const report = await filehubCheck(
+      fakeGbrain([
+        {
+          slug: "assets/acme/report",
+          content: page,
+          tags: ["asset", "status:superseded", "source:session"],
+        },
+      ]),
+      { root, projects: PROJECTS },
+    );
+    const finding = report.findings.find(
+      (item) => item.code === "filehub.history.source_digest_changed",
+    );
+    expect(finding?.severity).toBe("warning");
+  });
+
+  test("an incomplete inventory leaves history unverified rather than accepted", async () => {
+    writeFileSync(
+      join(root, "projects", "acme", "index.md"),
+      indexWithoutCurrent(`${HISTORY_START}\n- [report.md](report.md) — \`assets/acme/report\`\n${HISTORY_END}`),
+    );
+    const report = await filehubCheck(fakeGbrain(validPages(), {
+      list: () => ({
+        ok: false,
+        code: "timeout",
+        message: "inventory unavailable",
+      }),
+    }), { root, projects: PROJECTS });
+    expect(report.findings.map((finding) => finding.code)).toContain("filehub.history.page_unverified");
+    // The inventory gap already prevents an unindexed verdict; history must not
+    // turn the uncertainty into acceptance either.
+  });
+
+  test("rows inside a fence never register ownership", async () => {
+    writeFileSync(
+      join(root, "projects", "acme", "index.md"),
+      INDEX.replace(
+        "| [[report.md]] | document | 2026-10-18 | assets/acme/report |",
+        "```md\n| [[report.md]] | document | 2026-10-18 | assets/acme/report |\n```",
+      ),
+    );
+    const report = await filehubCheck(fakeGbrain(validPages()), { root, projects: PROJECTS });
+    expect(report.counts.index_rows).toBe(0);
+    expect(report.findings.map((finding) => finding.code)).toContain("filehub.index.asset_unregistered");
+  });
+});
+
+describe("reference sections", () => {
+  test("a matching sha256 lock is verified and never owns the target", async () => {
+    const digest = createHash("sha256").update("report\n").digest("hex");
+    writeFileSync(
+      join(root, "projects", "acme", "index.md"),
+      INDEX.replace(
+        "| [[report.md]] | document | 2026-10-18 | assets/acme/report |\n",
+        "",
+      ) +
+        `${REFERENCES_START}\n- [report.md](report.md) \`assets/acme/report\` \`sha256:${digest}\`\n${REFERENCES_END}\n`,
+    );
+    // A newer physical file must not change what the pinned reference locks.
+    writeFileSync(join(root, "projects", "acme", "report-v2.md"), "newer bytes\n");
+    const report = await filehubCheck(
+      fakeGbrain([
+        {
+          slug: "assets/acme/report",
+          content: INACTIVE_PAGE,
+          tags: ["asset", "status:superseded", "source:session"],
+        },
+      ]),
+      { root, projects: PROJECTS },
+    );
+    expect(report.findings.map((finding) => finding.code)).not.toContain(
+      "filehub.reference.digest_changed",
+    );
+    // references never cover the file: it still has no owner
+    expect(report.findings.map((finding) => finding.code)).toContain("filehub.asset.unindexed");
+    expect(report.coverage.references).toMatchObject({ structured_rows: 1, unmarked_rows: 0 });
+  });
+
+  test("a changed lock, a missing target and an escape are errors", async () => {
+    writeFileSync(
+      join(root, "projects", "acme", "index.md"),
+      `${INDEX}${REFERENCES_START}\n- [report.md](report.md) \`assets/acme/report\` \`sha256:${"c".repeat(64)}\`\n- [gone](gone.md)\n- [up](../../../outside.md)\n${REFERENCES_END}\n`,
+    );
+    const report = await filehubCheck(fakeGbrain(validPages()), { root, projects: PROJECTS });
+    const codes = report.findings.map((finding) => finding.code);
+    expect(codes).toContain("filehub.reference.digest_changed");
+    expect(codes).toContain("filehub.reference.target_missing");
+    expect(codes).toContain("filehub.reference.target_escape");
+  });
+
+  test("an external target stays explicitly unverified", async () => {
+    writeFileSync(
+      join(root, "projects", "acme", "index.md"),
+      `${INDEX}${REFERENCES_START}\n- [site](https://example.com/report)\n${REFERENCES_END}\n`,
+    );
+    const report = await filehubCheck(fakeGbrain(validPages()), { root, projects: PROJECTS });
+    expect(report.findings).toContainEqual(
+      expect.objectContaining({ code: "filehub.reference.external_unverified", severity: "unknown" }),
+    );
+  });
+
+  test("a bundle digest is reported as not yet verifiable", async () => {
+    writeFileSync(
+      join(root, "projects", "acme", "index.md"),
+      `${INDEX}${REFERENCES_START}\n- [report.md](report.md) \`assets/acme/report\` \`bundle-sha256:${"d".repeat(64)}\`\n${REFERENCES_END}\n`,
+    );
+    const report = await filehubCheck(fakeGbrain(validPages()), { root, projects: PROJECTS });
+    expect(report.findings).toContainEqual(
+      expect.objectContaining({ code: "filehub.reference.bundle_unverified", severity: "unknown" }),
+    );
+  });
+
+  test("plain lists outside a section make reference coverage partial", async () => {
+    writeFileSync(
+      join(root, "projects", "acme", "index.md"),
+      `${INDEX}- [report.md](report.md)\n`,
+    );
+    const report = await filehubCheck(fakeGbrain(validPages()), { root, projects: PROJECTS });
+    expect(report.coverage.references).toEqual({
+      state: "partial",
+      detail: "1 plain link(s) outside a reference section are not verified",
+      structured_rows: 0,
+      unmarked_rows: 1,
+    });
+  });
+});
+
+describe("derived navigation", () => {
+  test("reports a missing block but not a stale one", async () => {
+    rmSync(join(root, "README.md"));
+    const report = await filehubCheck(fakeGbrain(validPages()), { root, projects: PROJECTS });
+    expect(report.findings).toContainEqual(
+      expect.objectContaining({ code: "filehub.nav.missing", path: "README.md" }),
+    );
+    expect(report.findings.map((finding) => finding.code)).not.toContain("filehub.nav.stale");
+  });
+
+  test("reports a stale block after the registry changes", async () => {
+    const report = await filehubCheck(fakeGbrain(validPages()), {
+      root,
+      projects: [{ id: "acme", asset_rel_path: "projects/acme", status: "archived" }],
+    });
+    expect(report.findings).toContainEqual(
+      expect.objectContaining({ code: "filehub.nav.stale", path: "README.md" }),
+    );
+    expect(report.findings).toContainEqual(
+      expect.objectContaining({ code: "filehub.nav.stale", path: "projects/README.md" }),
+    );
+  });
+
+  test("reports damaged markers instead of guessing", async () => {
+    writeFileSync(join(root, "projects", "README.md"), `${NAV_PROJECTS_BLOCK_START}\n`);
+    const report = await filehubCheck(fakeGbrain(validPages()), { root, projects: PROJECTS });
+    expect(report.findings).toContainEqual(
+      expect.objectContaining({ code: "filehub.nav.malformed", path: "projects/README.md" }),
+    );
+  });
 });

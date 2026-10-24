@@ -16,7 +16,7 @@ import {
   statSync,
   type Dirent,
 } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { GbrainDeps, GbrainPage } from "../../core/contracts/gbrain.ts";
 import {
   checkStatus,
@@ -36,6 +36,25 @@ import {
 import { portabilityIssues } from "../../core/contracts/paths.ts";
 import { mapLimit } from "../concurrency.ts";
 import { listPageInventory } from "../gbrain/page-inventory.ts";
+import {
+  parseOwnerIndex,
+  type CurrentRow,
+  type HistoryRow,
+  type IndexIssue,
+  type ReferenceRow,
+} from "./index-parse.ts";
+import { decodeUtf8Strict, inspectManagedBlock } from "../registry/managed-readme.ts";
+import {
+  NAV_BLOCK_END,
+  NAV_BLOCK_START,
+  NAV_PROJECTS_BLOCK_END,
+  NAV_PROJECTS_BLOCK_START,
+  renderProjectsNavBlock,
+  renderRootNavBlock,
+  type NavArea,
+  type NavInput,
+  type NavProject,
+} from "./navigation.ts";
 
 const DEFAULT_PAGE_LIMIT = 100;
 const DEFAULT_MAX_LIST_PAGES = 50;
@@ -159,6 +178,12 @@ export interface FilehubCheckReport {
       asset_content_unreadable: number;
     };
     registry: CheckCoverage;
+    references: {
+      state: CheckCoverage["state"];
+      detail?: string;
+      structured_rows: number;
+      unmarked_rows: number;
+    };
     memory: CheckCoverage & {
       scanned_rows: number;
       list_calls: number;
@@ -180,27 +205,36 @@ export interface FilehubCheckReport {
 
 type FileKind = "asset" | "companion" | "support" | "index" | "archive" | "restricted";
 
-interface IndexRow {
-  path: string;
-  type: string;
-  date: string;
-  slug: string;
-  line: number;
-}
+interface IndexRow extends CurrentRow {}
 
 interface IndexedRow extends IndexRow {
   indexPath: string;
   ownerRoot: string;
 }
 
-interface IndexDocument {
+interface IndexedHistoryRow extends HistoryRow {
+  indexPath: string;
+  ownerRoot: string;
+  ownerId: string;
+  /** Static checks passed; only such a row may be verified against gbrain. */
+  candidate: boolean;
+}
+
+interface IndexOwner {
   relPath: string;
   ownerKind: "project" | "area";
   ownerId: string;
   ownerRoot: string;
+}
+
+interface IndexDocument extends IndexOwner {
   parsed: ParsedMemoryMarkdown;
   supportPaths: string[];
   rows: IndexRow[];
+  history: HistoryRow[];
+  references: ReferenceRow[];
+  issues: IndexIssue[];
+  unmarkedLinks: number;
 }
 
 interface PathOwner {
@@ -247,58 +281,7 @@ function shortError(error: { code: string; message: string }): string {
   return `${error.code}: ${error.message}`;
 }
 
-function cleanCell(value: string): string {
-  let cleaned = value.trim();
-  const codeSpan = cleaned.match(/^(`+)([\s\S]*)\1$/);
-  if (codeSpan !== null) cleaned = codeSpan[2].trim();
-
-  const wiki = cleaned.match(/^\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]+)?\]\]$/);
-  if (wiki !== null) return wiki[1].trim();
-
-  const markdown = cleaned.match(
-    /^\[[^\]]*\]\((?:<([^>]+)>|([^)\s]+))(?:\s+["'][^"']*["'])?\)$/,
-  );
-  if (markdown !== null) {
-    cleaned = (markdown[1] ?? markdown[2] ?? "").trim();
-  }
-  return cleaned.replace(/^<|>$/g, "").trim();
-}
-
-function tableCells(line: string): string[] | null {
-  const trimmed = line.trim();
-  if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) return null;
-  const cells: string[] = [];
-  let current = "";
-  let squareDepth = 0;
-  let parenDepth = 0;
-  let escaped = false;
-  for (const char of trimmed.slice(1, -1)) {
-    if (escaped) {
-      current += char;
-      escaped = false;
-      continue;
-    }
-    if (char === "\\") {
-      current += char;
-      escaped = true;
-      continue;
-    }
-    if (char === "[") squareDepth++;
-    if (char === "]") squareDepth = Math.max(0, squareDepth - 1);
-    if (char === "(") parenDepth++;
-    if (char === ")") parenDepth = Math.max(0, parenDepth - 1);
-    if (char === "|" && squareDepth === 0 && parenDepth === 0) {
-      cells.push(current.trim());
-      current = "";
-      continue;
-    }
-    current += char;
-  }
-  cells.push(current.trim());
-  return cells;
-}
-
-function resolvedIndexPath(index: IndexDocument, row: IndexRow): string {
+function resolvedIndexPath(index: IndexDocument, row: { path: string }): string {
   const rawPath = normalizeRel(row.path);
   if (
     rawPath.startsWith(`${index.ownerRoot}/`) ||
@@ -309,27 +292,6 @@ function resolvedIndexPath(index: IndexDocument, row: IndexRow): string {
     return rawPath;
   }
   return normalizeRel(`${index.ownerRoot}/${rawPath}`);
-}
-
-function parseIndexRows(raw: string): IndexRow[] {
-  const rows: IndexRow[] = [];
-  raw.split(/\r?\n/).forEach((line, index) => {
-    const cells = tableCells(line);
-    if (cells === null || cells.length !== 4) return;
-    const path = cleanCell(cells[0] ?? "");
-    const type = cleanCell(cells[1] ?? "");
-    const date = cleanCell(cells[2] ?? "");
-    const slug = cleanCell(cells[3] ?? "");
-    if (path === "" || !/^assets\/[^/]+\/[^/]+$/.test(slug)) return;
-    rows.push({
-      path,
-      type,
-      date,
-      slug,
-      line: index + 1,
-    });
-  });
-  return rows;
 }
 
 function isRestrictedPath(relPath: string): boolean {
@@ -373,7 +335,7 @@ function knownProjectIndexes(projects: readonly FilehubRegistryProject[] | null)
 function indexOwner(
   relPath: string,
   projects: readonly FilehubRegistryProject[] | null,
-): Omit<IndexDocument, "parsed" | "supportPaths" | "rows"> | null {
+): IndexOwner | null {
   for (const project of projects ?? []) {
     const root = normalizeRel(project.asset_rel_path);
     if (relPath === `${root}/index.md`) {
@@ -561,11 +523,16 @@ function scanFilehub(
       continue;
     }
     const parsed = parseMemoryMarkdown(raw);
+    const index = parseOwnerIndex(raw);
     indexes.set(file.relPath, {
       ...owner,
       parsed,
       supportPaths: parsed.lists.support_paths ?? [],
-      rows: parseIndexRows(parsed.body),
+      rows: index.current,
+      history: index.history,
+      references: index.references,
+      issues: index.issues,
+      unmarkedLinks: index.unmarkedLinks,
     });
   }
 
@@ -780,11 +747,26 @@ function validateIndexes(
   scan: ScanResult,
   projects: readonly FilehubRegistryProject[] | null,
   addFinding: (finding: CheckFinding) => void,
-): { rows: number; rowsByPath: Map<string, IndexedRow[]>; rowsBySlug: Map<string, IndexedRow[]> } {
+): {
+  rows: number;
+  rowsByPath: Map<string, IndexedRow[]>;
+  rowsBySlug: Map<string, IndexedRow[]>;
+  history: IndexedHistoryRow[];
+} {
   let rows = 0;
+  const history: IndexedHistoryRow[] = [];
   const rowsByPath = new Map<string, IndexedRow[]>();
   const rowsBySlug = new Map<string, IndexedRow[]>();
   for (const index of scan.indexes.values()) {
+    for (const issue of index.issues) {
+      const marker = issue.code.startsWith("marker_");
+      addFinding({
+        code: `filehub.index.${issue.code}`,
+        severity: marker ? "error" : "unknown",
+        path: index.relPath,
+        message: `line ${issue.line}: ${issue.message}`,
+      });
+    }
     const layout = index.parsed.fields.layout;
     if (
       layout !== undefined &&
@@ -902,6 +884,233 @@ function validateIndexes(
     }
   }
 
+  // ---- history: retired assets this owner used to hold ------------------
+  for (const index of scan.indexes.values()) {
+    for (const row of index.history) {
+      const path = resolvedIndexPath(index, row);
+      const normalized: IndexedHistoryRow = {
+        ...row,
+        path,
+        indexPath: index.relPath,
+        ownerRoot: index.ownerRoot,
+        ownerId: index.ownerId,
+        candidate: true,
+      };
+      history.push(normalized);
+
+      const pathIssues = portabilityIssues(normalizeRel(row.path));
+      if (pathIssues.length > 0) {
+        normalized.candidate = false;
+        addFinding({
+          code: "filehub.index.path_invalid",
+          severity: "error",
+          path: index.relPath,
+          message: `history line ${row.line}: ${row.path}: ${pathIssues.join("; ")}`,
+        });
+      } else if (!path.startsWith(`${index.ownerRoot}/`)) {
+        normalized.candidate = false;
+        addFinding({
+          code: "filehub.index.path_owner_mismatch",
+          severity: "error",
+          path: index.relPath,
+          message: `history row path must stay under ${index.ownerRoot}/: ${path}`,
+        });
+      }
+      if (memoryRole(row.slug) !== "asset") {
+        normalized.candidate = false;
+        addFinding({
+          code: "filehub.index.slug_invalid",
+          severity: "error",
+          path: index.relPath,
+          message: `history row slug must match assets/<owner>/<semantic>: ${row.slug}`,
+        });
+      } else if (!memoryOwnerEquals(assetSlugOwner(row.slug), index.ownerId)) {
+        normalized.candidate = false;
+        addFinding({
+          code: "filehub.index.slug_owner_mismatch",
+          severity: "error",
+          path: index.relPath,
+          message: `index owner ${index.ownerId} must match history slug owner ${assetSlugOwner(row.slug) ?? "<missing>"}: ${row.slug}`,
+        });
+      }
+      if (rowsByPath.has(path) || rowsBySlug.has(row.slug)) {
+        normalized.candidate = false;
+        addFinding({
+          code: "filehub.index.current_history_conflict",
+          severity: "error",
+          path: index.relPath,
+          message: `current and history sections both register ${path} / ${row.slug}`,
+        });
+      }
+      if (isRestrictedPath(path)) {
+        normalized.candidate = false;
+        addFinding({
+          code: "filehub.index.history_restricted",
+          severity: "error",
+          path: index.relPath,
+          message: `history row points at a restricted path: ${path}`,
+        });
+        continue;
+      }
+      const abs = resolve(scan.rootAbs, path);
+      if (!within(abs, scan.rootAbs)) {
+        normalized.candidate = false;
+        addFinding({
+          code: "filehub.index.path_escape",
+          severity: "error",
+          path: index.relPath,
+          message: `history row path escapes the registered filehub: ${path}`,
+        });
+        continue;
+      }
+      const state = byLstat(abs);
+      if ("error" in state) {
+        normalized.candidate = false;
+        addFinding({
+          code: "filehub.index.history_file_missing",
+          severity: "error",
+          path: index.relPath,
+          message: `history row points to a missing file: ${path}`,
+        });
+      } else if (state.kind === "symlink") {
+        normalized.candidate = false;
+        addFinding({
+          code: "filehub.index.history_file_symlink",
+          severity: "unknown",
+          path: path,
+          message: "history row target is a symlink; identity is unverified",
+        });
+      } else if (state.kind !== "file") {
+        normalized.candidate = false;
+        addFinding({
+          code: "filehub.index.history_target_not_file",
+          severity: "error",
+          path: index.relPath,
+          message: `history row target is not a regular file: ${path}`,
+        });
+      }
+    }
+  }
+
+  // ---- references: navigation only, never ownership ---------------------
+  for (const index of scan.indexes.values()) {
+    for (const row of index.references) {
+      if (row.kind === "anchor") continue;
+      if (row.kind === "external") {
+        addFinding({
+          code: "filehub.reference.external_unverified",
+          severity: "unknown",
+          path: index.relPath,
+          message: `line ${row.line}: external target is not fetched or verified: ${row.target}`,
+        });
+        continue;
+      }
+      const escaped = row.target.trim();
+      if (isAbsolute(escaped) || escaped.startsWith("~")) {
+        addFinding({
+          code: "filehub.reference.external_unverified",
+          severity: "unknown",
+          path: index.relPath,
+          message: `line ${row.line}: machine-absolute target is outside the filehub and unverified: ${row.target}`,
+        });
+        continue;
+      }
+      const base = dirname(index.relPath);
+      const abs = resolve(scan.rootAbs, base, escaped);
+      if (!within(abs, scan.rootAbs)) {
+        addFinding({
+          code: "filehub.reference.target_escape",
+          severity: "error",
+          path: index.relPath,
+          message: `line ${row.line}: reference target escapes the filehub: ${row.target}`,
+        });
+        continue;
+      }
+      const rel = normalizeRel(relative(scan.rootAbs, abs));
+      if (isRestrictedPath(rel)) {
+        addFinding({
+          code: "filehub.reference.target_restricted",
+          severity: "unknown",
+          path: index.relPath,
+          message: `line ${row.line}: reference target is restricted and was not read: ${row.target}`,
+        });
+        continue;
+      }
+      let st: ReturnType<typeof lstatSync>;
+      try {
+        st = lstatSync(abs);
+      } catch {
+        addFinding({
+          code: "filehub.reference.target_missing",
+          severity: "error",
+          path: index.relPath,
+          message: `line ${row.line}: referenced target does not exist: ${row.target}`,
+        });
+        continue;
+      }
+      if (st.isSymbolicLink()) {
+        addFinding({
+          code: "filehub.reference.target_symlink",
+          severity: "unknown",
+          path: index.relPath,
+          message: `line ${row.line}: reference resolves to a symlink and is not followed: ${row.target}`,
+        });
+        continue;
+      }
+      if (!st.isFile() && !st.isDirectory()) {
+        addFinding({
+          code: "filehub.reference.target_not_file",
+          severity: "error",
+          path: index.relPath,
+          message: `line ${row.line}: reference target is neither a file nor a directory: ${row.target}`,
+        });
+        continue;
+      }
+      if (row.digest !== undefined) {
+        if (row.digest.algorithm === "bundle-sha256") {
+          // Bundle identity verification lands with bundle ingest; until then a
+          // claimed bundle digest stays explicitly unverified, never a pass.
+          addFinding({
+            code: "filehub.reference.bundle_unverified",
+            severity: "unknown",
+            path: index.relPath,
+            message: `line ${row.line}: bundle-sha256 cannot be verified yet (bundle ingest not available)`,
+          });
+          continue;
+        }
+        if (!st.isFile()) {
+          addFinding({
+            code: "filehub.reference.digest_invalid_target",
+            severity: "error",
+            path: index.relPath,
+            message: `line ${row.line}: a sha256 lock must point at a regular file: ${row.target}`,
+          });
+          continue;
+        }
+        let actual: string;
+        try {
+          actual = sha256RegularFile(abs);
+        } catch (error) {
+          addFinding({
+            code: "filehub.reference.target_unreadable",
+            severity: "unknown",
+            path: index.relPath,
+            message: `line ${row.line}: cannot hash the locked target: ${(error as Error).message}`,
+          });
+          continue;
+        }
+        if (actual !== row.digest.value) {
+          addFinding({
+            code: "filehub.reference.digest_changed",
+            severity: "error",
+            path: index.relPath,
+            message: `line ${row.line}: locked sha256 no longer matches ${row.target}`,
+          });
+        }
+      }
+    }
+  }
+
   for (const [path, refs] of rowsByPath) {
     const indexPaths = new Set(refs.map((row) => row.indexPath));
     if (indexPaths.size > 1) {
@@ -913,7 +1122,105 @@ function validateIndexes(
       });
     }
   }
-  return { rows, rowsByPath, rowsBySlug };
+  return { rows, rowsByPath, rowsBySlug, history };
+}
+
+/** Navigation inputs are derived strictly from the registry snapshot and owner
+ *  entries already in `scan`: no project plan, gbrain page or mtime is read. */
+function navInputFor(
+  scan: ScanResult,
+  projects: readonly FilehubRegistryProject[] | null,
+): NavInput {
+  const navProjects: NavProject[] = (projects ?? []).map((project) => {
+    const rel = normalizeRel(project.asset_rel_path).replace(/\/+$/, "");
+    return {
+      id: project.id,
+      status: project.status,
+      assetRelPath: rel,
+      hasIndex: scan.indexes.has(`${rel}/index.md`),
+    };
+  });
+  const areas: NavArea[] = scan.directories
+    .map((dir) => /^areas\/([^/]+)$/.exec(dir))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .map((match) => ({
+      id: match[1] as string,
+      hasIndex: scan.indexes.has(`areas/${match[1]}/index.md`),
+    }));
+  const registered = navProjects.map((project) => project.assetRelPath);
+  const unregistered = scan.directories
+    .map((dir) => /^projects\/([^/]+)$/.exec(dir))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .map((match) => `projects/${match[1]}`)
+    .filter((rel) => !registered.some((owner) => owner === rel || owner.startsWith(`${rel}/`)));
+  return { projects: navProjects, areas, unregistered };
+}
+
+/** Compare one derived block against the file on disk. Read-only: a stale or
+ *  missing view is reported, never rebuilt from check. */
+function checkNavFile(
+  scan: ScanResult,
+  rel: string,
+  start: string,
+  end: string,
+  expected: string,
+  addFinding: (finding: CheckFinding) => void,
+): void {
+  let raw: string;
+  try {
+    const decoded = decodeUtf8Strict(readFileSync(join(scan.rootAbs, rel)));
+    if (decoded === null) {
+      addFinding({
+        code: "filehub.nav.unreadable",
+        severity: "unknown",
+        path: rel,
+        message: `derived navigation is not valid UTF-8; fix the file, then run "jspace filehub refresh" (${rel})`,
+      });
+      return;
+    }
+    raw = decoded;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
+      addFinding({
+        code: "filehub.nav.missing",
+        severity: "warning",
+        path: rel,
+        message: `derived navigation is missing; run "jspace filehub refresh" (${rel})`,
+      });
+    } else {
+      addFinding({
+        code: "filehub.nav.unreadable",
+        severity: "unknown",
+        path: rel,
+        message: `derived navigation could not be read: ${(error as Error).message}`,
+      });
+    }
+    return;
+  }
+  const state = inspectManagedBlock(raw, start, end);
+  if (state.kind === "none") {
+    addFinding({
+      code: "filehub.nav.missing",
+      severity: "warning",
+      path: rel,
+      message: `derived navigation block is missing; run "jspace filehub refresh" (${rel})`,
+    });
+  } else if (state.kind === "malformed") {
+    addFinding({
+      code: "filehub.nav.malformed",
+      severity: "warning",
+      path: rel,
+      message: `derived navigation markers are damaged (${state.reason}); fix them, then run "jspace filehub refresh"`,
+    });
+  } else if (state.block !== expected) {
+    addFinding({
+      code: "filehub.nav.stale",
+      severity: "warning",
+      path: rel,
+      message: `derived navigation is stale; run "jspace filehub refresh" (${rel})`,
+    });
+  }
 }
 
 function byLstat(path: string): { kind: "file" | "symlink" | "other" } | { error: string } {
@@ -956,6 +1263,7 @@ function renderFilehubCheck(report: FilehubCheckReport): { lines: string[]; exit
     `jspace: filehub check: ${report.status} (${report.coverage.files.scanned_objects} object(s); ${f.error} error, ${f.warning} warning, ${f.unknown} unknown)`,
     `  files: ${report.coverage.files.state} (${report.coverage.files.asset_files} asset, ${report.coverage.files.indexes} index, ${report.coverage.files.companions} companion, ${report.coverage.files.support_files} support, ${report.coverage.files.archived_files} archive; ${report.coverage.files.asset_content_hashed} content hashed${unhashed})`,
     `  registry: ${report.coverage.registry.state}`,
+    `  references: ${report.coverage.references.state} (${report.coverage.references.structured_rows} structured row(s), ${report.coverage.references.unmarked_rows} unmarked link(s))`,
     `  memory: ${report.coverage.memory.state} (${report.coverage.memory.active_asset_pages} active + ${report.coverage.memory.inactive_asset_pages} inactive asset page(s), ${report.coverage.memory.list_calls} list call(s); source digests: ${report.coverage.memory.source_digest_present} present / ${report.coverage.memory.source_digest_absent} absent)`,
   ];
   for (const finding of report.findings) {
@@ -1009,6 +1317,20 @@ export async function filehubCheck(
     });
   }
   const indexRows = validateIndexes(scan, input.projects, addFinding);
+
+  // Derived navigation is compared read-only; rebuilding it belongs to refresh.
+  if (input.root !== null && input.projects !== null) {
+    const nav = navInputFor(scan, input.projects);
+    checkNavFile(
+      scan,
+      "projects/README.md",
+      NAV_PROJECTS_BLOCK_START,
+      NAV_PROJECTS_BLOCK_END,
+      renderProjectsNavBlock(nav),
+      addFinding,
+    );
+    checkNavFile(scan, "README.md", NAV_BLOCK_START, NAV_BLOCK_END, renderRootNavBlock(nav), addFinding);
+  }
 
   const inventory = await listPageInventory(gbrain, {
     limit: opts.pageLimit ?? DEFAULT_PAGE_LIMIT,
@@ -1333,6 +1655,82 @@ export async function filehubCheck(
   // two counters always add up to active_asset_pages.
   sourceDigestAbsent = activePages.length - sourceDigestPresent;
 
+  // ---- history verification: the page must genuinely be retired ----------
+  // A history row is only trustworthy when gbrain agrees: the same slug resolves
+  // to an inactive asset page whose rel_path is that same file. Only fully
+  // verified rows may cover an otherwise unindexed file below.
+  const verifiedHistoryPaths = new Set<string>();
+  for (const row of indexRows.history) {
+    if (!row.candidate) continue;
+    if (!inventoryComplete || unreadableSlugs.has(row.slug)) {
+      addFinding({
+        code: "filehub.history.page_unverified",
+        severity: "unknown",
+        path: row.indexPath,
+        message: `line ${row.line}: history page could not be inspected (${row.slug}); history is not proof of retirement`,
+      });
+      continue;
+    }
+    const page = pagesBySlug.get(row.slug);
+    if (page === undefined) {
+      addFinding({
+        code: "filehub.history.page_missing",
+        severity: "error",
+        path: row.indexPath,
+        message: `line ${row.line}: history slug has no gbrain asset page: ${row.slug}`,
+      });
+      continue;
+    }
+    if (page.lifecycle !== "inactive") {
+      addFinding({
+        code: "filehub.history.page_active",
+        severity: "error",
+        path: row.indexPath,
+        message: `line ${row.line}: history slug is an active asset page; move the row to the current table: ${row.slug}`,
+      });
+      continue;
+    }
+    if (page.relPath === undefined || page.relPath === "") {
+      addFinding({
+        code: "filehub.history.rel_path_missing",
+        severity: "error",
+        slug: row.slug,
+        message: "history page requires rel_path so the retired file can be identified",
+      });
+      continue;
+    }
+    if (page.relPath !== row.path) {
+      addFinding({
+        code: "filehub.history.rel_path_mismatch",
+        severity: "error",
+        path: row.indexPath,
+        message: `line ${row.line}: history page records ${page.relPath}, expected ${row.path}`,
+      });
+      continue;
+    }
+    verifiedHistoryPaths.add(row.path);
+    const declared = page.parsed.fields.source_sha256;
+    if (declared === undefined || !/^[0-9a-f]{64}$/.test(declared)) continue;
+    const current = readAssetDigest(row.path);
+    if ("error" in current) {
+      addFinding({
+        code: "filehub.history.source_digest_unreadable",
+        severity: "unknown",
+        path: row.path,
+        message: `history source_sha256 cannot be compared: ${current.error}`,
+      });
+    } else if (current.digest !== declared) {
+      addFinding({
+        code: "filehub.history.source_digest_changed",
+        severity: "warning",
+        path: row.path,
+        message:
+          `history file bytes changed since retire: page records ${declared.slice(0, 12)}…, ` +
+          `current file is ${current.digest.slice(0, 12)}…`,
+      });
+    }
+  }
+
   for (const [relPath, pages] of activePagesByRel) {
     if (pages.length > 1) {
       addFinding({
@@ -1405,7 +1803,13 @@ export async function filehubCheck(
     const hasCurrentRow = rows.some(
       (row) => pagesBySlug.get(row.slug)?.lifecycle !== "inactive",
     );
-    if (scan.complete && inventoryComplete && pages.length === 0 && !hasCurrentRow) {
+    if (
+      scan.complete &&
+      inventoryComplete &&
+      pages.length === 0 &&
+      !hasCurrentRow &&
+      !verifiedHistoryPaths.has(file.relPath)
+    ) {
       addFinding({
         code: "filehub.asset.unindexed",
         severity: "warning",
@@ -1504,6 +1908,26 @@ export async function filehubCheck(
     asset_content_hashed: assetContentHashed,
     asset_content_unreadable: assetContentUnreadable,
   };
+  let referenceStructured = 0;
+  let referenceUnmarked = 0;
+  for (const index of scan.indexes.values()) {
+    referenceStructured += index.references.length;
+    referenceUnmarked += index.unmarkedLinks;
+  }
+  const referencesCoverage: FilehubCheckReport["coverage"]["references"] = {
+    state:
+      input.root === null
+        ? "unknown"
+        : referenceUnmarked > 0
+          ? "partial"
+          : "complete",
+    ...(referenceUnmarked > 0
+      ? { detail: `${referenceUnmarked} plain link(s) outside a reference section are not verified` }
+      : {}),
+    structured_rows: referenceStructured,
+    unmarked_rows: referenceUnmarked,
+  };
+
   const memoryComplete =
     inventoryComplete &&
     unreadableSlugs.size === 0 &&
@@ -1533,6 +1957,7 @@ export async function filehubCheck(
     coverage: {
       files: filesCoverage,
       registry: registryCoverage,
+      references: referencesCoverage,
       memory: memoryCoverage,
     },
     counts: {

@@ -5,7 +5,9 @@ import { join } from "node:path";
 import type { CmdContext } from "../../application/commands/command.ts";
 import type { WorkbenchStateReads } from "../../adapters/fs/workbench-state.ts";
 import type { GbrainDeps } from "../../core/contracts/gbrain.ts";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { filehubCheckCommand } from "./filehub.ts";
+import { renderProjectsNavBlock, renderRootNavBlock } from "../../application/filehub/navigation.ts";
 
 let root: string | undefined;
 afterEach(() => {
@@ -16,6 +18,13 @@ afterEach(() => {
 function ctx(json: boolean): CmdContext {
   root = mkdtempSync(join(tmpdir(), "jspace-filehub-cli-"));
   return { root, cwd: root, dir: root, json, dryRun: false };
+}
+
+function emptyNav(workbench: string): void {
+  const input = { projects: [], areas: [], unregistered: [] };
+  mkdirSync(join(workbench, "projects"), { recursive: true });
+  writeFileSync(join(workbench, "README.md"), `${renderRootNavBlock(input)}\n`);
+  writeFileSync(join(workbench, "projects", "README.md"), `${renderProjectsNavBlock(input)}\n`);
 }
 
 function emptyGbrain(): GbrainDeps {
@@ -48,6 +57,7 @@ function emptyState(workbench: string): WorkbenchStateReads {
 
 test("filehubCheckCommand returns structured JSON and exits zero for a complete empty filehub", async () => {
   const c = ctx(true);
+  emptyNav(c.root);
   const result = await filehubCheckCommand(c, {
     gbrain: emptyGbrain,
     filehubRoot: () => c.root,
@@ -58,7 +68,7 @@ test("filehubCheckCommand returns structured JSON and exits zero for a complete 
     schema_version: 1,
     status: "ok",
     coverage: {
-      files: { state: "complete", scanned_objects: 0 },
+      files: { state: "complete", scanned_objects: 3 },
       registry: { state: "complete" },
       memory: { state: "complete" },
     },

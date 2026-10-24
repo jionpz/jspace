@@ -43,7 +43,7 @@ triggers:
 
 ## 写集
 
-- 可写:filehub 目标文件及父级语义目录、owner `index.md` 的一行、gbrain asset page、必要的伴生 `.extract.md`、ingest journal、pending envelope。
+- 可写:filehub 目标文件及父级语义目录、owner `index.md` 的当前表一行或历史/引用受管块条目、gbrain asset page、必要的伴生 `.extract.md`、ingest journal、pending envelope。
 - 不写:项目 state、项目任务系统、其他 owner 目录、跨项目复制、用户根治理文档、官方 skill 源码。
 - 归位纠正属于 `profile/filing-prefs`，由 `memory-writeback` 写入；本 skill 只提交纠正事实并转交。
 
@@ -110,6 +110,16 @@ gbrain call get_page "$(jq -cn --arg slug "assets/<owner-id>/<语义名>" '{slug
 - 明确“修订/新版/替代” → 新文件名 `-vN`、新 slug、新页正文 `Supersedes: [[<old-slug>]]`，旧页正文不改并按 CAS 追加 `status:superseded`。
 - 仅移动文件、内容 hash 不变 → 修正现有 asset 页的 `rel_path` / Pointer，使用读到的 revision 做条件替换，不创建新版本。
 - 无头模式遇到歧义 → 留在 inbox，报告 owner/命名/版本缺口，不等待、不猜。
+
+## 索引的三种语义
+
+owner `index.md` 只有当前表提供 ownership;另外两类必须放进独立受管块(filing.md 有完整语法):
+
+- **当前表**:`| 相对路径 | 类型 | 日期 | assets/<owner>/<语义名> |` 四列,表示本 owner 现在拥有。继续指向 inactive 页会报 `filehub.index.page_inactive`。
+- **历史块**(`JSPACE:ASSET-HISTORY`):本 owner 曾拥有、现已退场。每条 = 一个本地链接 + 一个反引号严格 slug;对应页必须 inactive 且 `rel_path` 指向同一文件。只有完整验证的历史行才豁免该路径的 `asset.unindexed`。
+- **引用块**(`JSPACE:ASSET-REFERENCES`):资料归别处,本 owner 只导航。永不提供 ownership,也永不豁免 unindexed;本地目标必须存在且不经 symlink 逃逸,`sha256` 锁会与当前字节比较,`bundle-sha256` 暂不验证,外部 URL 只标 unverified。
+
+同一路径/slug 不能同时出现在当前表与历史块。引用和历史的详细判定以 `jspace filehub check` 输出为准,不靠 agent 声明。
 
 ## pending 交接
 
