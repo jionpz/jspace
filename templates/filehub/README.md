@@ -5,7 +5,7 @@
 > 本目录可被 Obsidian 作为 vault 打开。AI 只写纯 md 与相对链接,不依赖任何插件——哪天换工具,资料一点不坏。
 
 <!-- JSPACE:FILEHUB:START -->
-> filehub-contract-version: 7
+> filehub-contract-version: 8
 
 ## 归档契约
 
@@ -91,6 +91,16 @@ jspace filehub refresh [--dir <workbench>] [--dry-run] [--json]
 - 只重算这两个块,按 UTF-8 字节序稳定排序,不写时间戳;块外用户文字逐字节保留。
 - 先预检两个文件(坏标记、symlink、非 UTF-8、并发修改全部拒绝),通过后才写;`projects/README.md` 先写、根 README 最后写。
 - `jspace filehub check` 只读比较并报告 missing / stale / malformed;`filehub upgrade` 只维护归档契约块,永不碰导航块。
+
+### 周期产物
+
+周报默认 `areas/周报/<Monday>-周报.md`,slug 为 `assets/周报/<Monday>`;`areas/周报/index.md`
+是该 area 的 owner index,同周只保留一行登记。位置先由
+`jspace filehub weekly-path --week <Monday> --json` 裁决:
+
+- `default`:没有既有记录,用默认路径(首次先把 area index 建好)。
+- `reuse`:index 已登记唯一的年份位置(如 `areas/周报/<year>/...`)时复用,不按运行日期另开。
+- `conflict`:根/年双份、索引与文件不一致、索引损坏或同名文件未登记时停止并报告,不再写第三份。
 
 ### 旧结构
 

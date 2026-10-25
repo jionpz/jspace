@@ -107,6 +107,15 @@ function weekday(value: string): number {
   return new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
 }
 
+/** True when `value` is a real YYYY-MM-DD calendar date that falls on Monday. */
+export function isMondayDate(value: string): boolean {
+  try {
+    return weekday(value) === 1;
+  } catch {
+    return false;
+  }
+}
+
 function mondayOf(parts: DateParts): string {
   const date = ymd(parts);
   return addDays(date, -((weekday(date) + 6) % 7));

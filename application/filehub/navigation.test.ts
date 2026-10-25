@@ -51,6 +51,19 @@ describe("root navigation", () => {
     const block = renderRootNavBlock({ projects: [], areas: [], unregistered: [] });
     expect(block.match(/- （无）/g)).toHaveLength(2);
   });
+
+  test("an existing archive root is reachable, without inventing a project status", () => {
+    const linked = renderRootNavBlock({ ...INPUT, hasArchive: true, hasArchiveIndex: true });
+    expect(linked).toContain("[归档（已结束 / 冷资料）](archive/README.md)");
+    expect(linked).not.toMatch(/archive.*status/);
+
+    const headline = renderRootNavBlock({ ...INPUT, hasArchive: true, hasArchiveIndex: false });
+    expect(headline).toContain("- `archive/` — 物理目录（尚无 README 入口）");
+    expect(headline).not.toContain("(archive/README.md)");
+
+    const absent = renderRootNavBlock(INPUT);
+    expect(absent).not.toContain("archive");
+  });
 });
 
 describe("projects navigation", () => {

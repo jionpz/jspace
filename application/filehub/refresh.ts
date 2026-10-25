@@ -95,7 +95,22 @@ function navInput(root: string, wbRoot: string): NavInput {
     .map((name) => `projects/${name}`)
     .filter((rel) => !registered.some((owner) => owner === rel || owner.startsWith(`${rel}/`)));
 
-  return { projects, areas, unregistered };
+  const archivePath = join(root, "archive");
+  let hasArchive = false;
+  try {
+    const st = lstatSync(archivePath);
+    hasArchive = st.isDirectory() && !st.isSymbolicLink();
+  } catch {
+    // no archive root: the view stays without a dead link
+  }
+
+  return {
+    projects,
+    areas,
+    unregistered,
+    hasArchive,
+    hasArchiveIndex: hasArchive && readableIndex(join(archivePath, "README.md")),
+  };
 }
 
 /** `jspace filehub refresh [--dry-run] [--json]`. */

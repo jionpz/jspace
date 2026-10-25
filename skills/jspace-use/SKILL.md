@@ -97,6 +97,7 @@ jspace workspace diff --json
 jspace memory period --json
 jspace memory check --json
 jspace filehub check --json
+jspace filehub weekly-path --week <Monday> --json
 jspace cron failures --json
 jspace ingest list --json
 jspace pending list --json
@@ -104,6 +105,7 @@ jspace pending list --json
 
 - `memory check` / `filehub check` 是显式只读审计,不放进每次 hook。
 - `memory period` 是只读周期时钟;补跑用 `--week <Monday>`,固定取证用 `--now <ISO-8601>`。
+- `filehub weekly-path` 只读裁决同周周报的唯一位置:`default`(无既有记录)、`reuse`(已登记年份位置)或 `conflict`(根/年双份、索引与文件不一致、损坏索引),冲突时 exit 1,不生成第三份。
 - `cron failures` 聚合未 ack incident、actionable pending 和各 cron 状态;非 0 表示需要关注,不表示命令本身坏了。
 - pending 位于 `.jspace/state/pending/*.APPLY.json`;`staged`、journal checkpoint、exit 0 和提醒次数都不等于业务完成。
 - gbrain 查询、读页和写页主路径使用结构化 `gbrain call`;来源计数见 `gbrain.md`。

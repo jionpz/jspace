@@ -54,12 +54,12 @@
     },
     {
       "path": "templates/filehub/README.md",
-      "sha256": "a60de7413f73842c6f86974098af336ed99cdbdb3c91c43018048bc22b592f7c",
+      "sha256": "aeb0253acbd2ec1bd5384beddc50e06ed3803c56667731615b50a0b8283f49fe",
       "ownership": "managed"
     },
     {
       "path": "skills/jspace-use/SKILL.md",
-      "sha256": "0f95f364c840c9bf3cb026f35e74ff3c0e4caf331ba821965cc9c34106714b5d",
+      "sha256": "15cdb92d656ddde5ada16ddc1eb3c2d1f8e3405e3ff1550a1bff3a8996a779e2",
       "ownership": "seed"
     },
     {
@@ -74,7 +74,7 @@
     },
     {
       "path": "skills/jspace-use/references/gbrain.md",
-      "sha256": "de368c869c52397621bc6bdf61de2d4755d8a172fd1e78cac3cef1247ec9b811",
+      "sha256": "22512b660a9418f8106e0291accbe80522167c8057946313b1874d7f887ba8e5",
       "ownership": "seed"
     },
     {
@@ -234,7 +234,7 @@
     },
     {
       "path": "skills/weekly-report/SKILL.md",
-      "sha256": "f49bf6d45193260dc8a0d5d8a7cbfa3dcb08470dd7c9608b59a5e615ab080138",
+      "sha256": "a4ebc6034add60db5fa487520f232e3840867603590f29cc2b0184a65df927c3",
       "ownership": "seed"
     },
     {

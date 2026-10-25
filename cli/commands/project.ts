@@ -1,8 +1,10 @@
 // cli/commands/project.ts — `jspace project` / `filehub` / `inbox` command
 // families (registry-adjacent asset-layer commands, small enough to share one file).
-import type { CommandSpec } from "../../application/commands/command.ts";
+import type { CmdContext, CmdResult, CommandSpec } from "../../application/commands/command.ts";
 import { filehubInit, filehubUpgrade } from "../../application/registry/filehub.ts";
 import { filehubRefresh } from "../../application/filehub/refresh.ts";
+import { renderWeeklyPath, resolveWeeklyPath } from "../../application/filehub/weekly-path.ts";
+import { weeklyPeriod } from "../../core/contracts/weekly-period.ts";
 import { inboxBlock, inboxRetry, inboxStatus } from "../../application/registry/inbox.ts";
 import { readJournals } from "../../application/ingest/journal.ts";
 import { projectAdd, projectList, projectListStatus, projectSetStatus } from "../../application/registry/project.ts";
@@ -128,11 +130,60 @@ const filehubRefreshSpec: CommandSpec = {
   handler: (ctx, args) => filehubRefresh({ wbRoot: ctx.root }, b(args.dryRun), b(args.json)),
 };
 
+function filehubWeeklyPathCommand(
+  ctx: CmdContext,
+  args: Record<string, unknown>,
+): CmdResult {
+  const monday =
+    args.week === undefined ? weeklyPeriod(new Date()).week_start : s(args.week);
+  const resolved = resolveWeeklyPath(ctx.root, monday);
+  if (!resolved.ok) {
+    return {
+      exitCode: 1,
+      lines: [`jspace: error: ${resolved.error}`],
+      errors: [resolved.error],
+    };
+  }
+  const value = resolved.value;
+  const json = b(args.json);
+  return {
+    lines: json ? [] : renderWeeklyPath(value),
+    data: value,
+    ...(value.state === "conflict" ? { exitCode: 1 } : {}),
+  };
+}
+
+const filehubWeeklyPathSpec: CommandSpec = {
+  name: "weekly-path",
+  summary: "resolve the one existing weekly-report location (read-only, conflict-aware)",
+  description:
+    "Reads the 周报 owner index and the weekly area only. The default " +
+    "areas/周报/<Monday>-周报.md is used when no record exists; a registered " +
+    "areas/周报/<year>/... location is reused; root/year duplicates, damaged " +
+    "indexes or an index/file mismatch exit 1 so the caller never writes a third copy.",
+  features: { dir: true, json: true },
+  options: [
+    {
+      name: "--week",
+      takesValue: true,
+      metavar: "MONDAY",
+      help: "target Monday (YYYY-MM-DD); default: the current local week",
+    },
+  ],
+  handler: filehubWeeklyPathCommand,
+};
+
 export const filehubSpec: CommandSpec = {
   name: "filehub",
   summary: "manage the file management center (asset layer)",
   commandArgName: "filehub_command",
-  children: [filehubInitSpec, filehubUpgradeSpec, filehubCheckSpec, filehubRefreshSpec],
+  children: [
+    filehubInitSpec,
+    filehubUpgradeSpec,
+    filehubCheckSpec,
+    filehubRefreshSpec,
+    filehubWeeklyPathSpec,
+  ],
 };
 
 const inboxStatusSpec: CommandSpec = {

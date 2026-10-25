@@ -34,6 +34,10 @@ export interface NavInput {
   areas: readonly NavArea[];
   /** Direct `projects/*` directories that no registered project owns. */
   unregistered: readonly string[];
+  /** `archive/` exists as a real directory (a physical entry, not a status). */
+  hasArchive?: boolean;
+  /** `archive/README.md` is a readable regular file, so linking it is honest. */
+  hasArchiveIndex?: boolean;
 }
 
 function cmpBytes(a: string, b: string): number {
@@ -96,12 +100,15 @@ export function renderRootNavBlock(input: NavInput): string {
     }
   }
 
-  lines.push(
-    "",
-    "## 完整项目目录",
-    entryLink("projects/README.md", "全部项目（活跃 / 已结束）"),
-    NAV_BLOCK_END,
-  );
+  lines.push("", "## 完整项目目录", entryLink("projects/README.md", "全部项目（活跃 / 已结束）"));
+  if (input.hasArchive === true) {
+    lines.push(
+      input.hasArchiveIndex === true
+        ? entryLink("archive/README.md", "归档（已结束 / 冷资料）")
+        : "- `archive/` — 物理目录（尚无 README 入口）",
+    );
+  }
+  lines.push(NAV_BLOCK_END);
   return lines.join("\n");
 }
 

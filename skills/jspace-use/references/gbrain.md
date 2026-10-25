@@ -236,6 +236,8 @@ jspace memory period --json --week <Monday>   # 补跑
 - `<filehub>/areas/周报/<Monday>-周报.md`：人读周报本体。
 - `assets/周报/<Monday>`：周报指针（area 资产），`tags: [asset, weekly, <source>]`，`project: 周报`，`owner_kind: area`，`rel_path` 指向周报本体。
 
+同周物理位置先由 `jspace filehub weekly-path --week <Monday> --json` 裁决：无既有记录用默认路径；`areas/周报/index.md` 已登记的年份位置返回 `reuse`；根/年双份、未登记文件、索引与文件不一致或索引损坏返回 `conflict`（exit 1），停止写入而不是再生成一份。索引同周只保留一行，重跑更新该行。
+
 周报的当前事实来自目标窗口内的原始页、项目 state 和资产证据。同窗口的 consolidate 只在引用可核对时作索引，不是不可替代的事实权威，也不能拿上一周期报告改标题冒充本周期。
 
 ## 9. 检索与现行性
