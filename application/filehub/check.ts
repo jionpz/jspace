@@ -3,6 +3,7 @@
 // file, rewrites an index or bumps a gbrain revision.
 import { createHash } from "node:crypto";
 import {
+  accessSync,
   closeSync,
   constants,
   existsSync,
@@ -1166,7 +1167,21 @@ function navInputFor(
     .filter((match): match is RegExpExecArray => match !== null)
     .map((match) => `projects/${match[1]}`)
     .filter((rel) => !registered.some((owner) => owner === rel || owner.startsWith(`${rel}/`)));
-  return { projects: navProjects, areas, unregistered };
+
+  // The root view advertises archive/ only when the real directory exists, and
+  // links archive/README.md only when it is readable. Keep this in lockstep with
+  // refresh's navInput, or a freshly refreshed block is reported stale.
+  const hasArchive = scan.directories.includes("archive");
+  let hasArchiveIndex = false;
+  if (hasArchive && scan.files.some((file) => file.relPath === "archive/README.md")) {
+    try {
+      accessSync(join(scan.rootAbs, "archive", "README.md"), constants.R_OK);
+      hasArchiveIndex = true;
+    } catch {
+      hasArchiveIndex = false;
+    }
+  }
+  return { projects: navProjects, areas, unregistered, hasArchive, hasArchiveIndex };
 }
 
 /** Compare one derived block against the file on disk. Read-only: a stale or

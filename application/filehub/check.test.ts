@@ -164,7 +164,15 @@ function syncNav(projects: readonly FilehubRegistryProject[] = PROJECTS): void {
   const unregistered = directDirs(join(root, "projects"))
     .map((name) => `projects/${name}`)
     .filter((rel) => !owners.some((owner) => owner === rel || owner.startsWith(`${rel}/`)));
-  const input: NavInput = { projects: navProjects, areas, unregistered };
+  const archive = join(root, "archive");
+  const hasArchive = existsSync(archive) && lstatSync(archive).isDirectory();
+  const input: NavInput = {
+    projects: navProjects,
+    areas,
+    unregistered,
+    hasArchive,
+    hasArchiveIndex: hasArchive && existsSync(join(archive, "README.md")),
+  };
   mkdirSync(join(root, "projects"), { recursive: true });
   writeFileSync(join(root, "README.md"), `${renderRootNavBlock(input)}\n`);
   writeFileSync(join(root, "projects", "README.md"), `${renderProjectsNavBlock(input)}\n`);
@@ -1059,6 +1067,18 @@ describe("derived navigation", () => {
     expect(report.findings).toContainEqual(
       expect.objectContaining({ code: "filehub.nav.stale", path: "projects/README.md" }),
     );
+  });
+
+  test("archive entry is part of the derived view", async () => {
+    mkdirSync(join(root, "archive"), { recursive: true });
+    syncNav();
+    let report = await filehubCheck(fakeGbrain(validPages()), { root, projects: PROJECTS });
+    expect(report.findings.map((finding) => finding.code)).not.toContain("filehub.nav.stale");
+
+    writeFileSync(join(root, "archive", "README.md"), "# 归档\n");
+    syncNav();
+    report = await filehubCheck(fakeGbrain(validPages()), { root, projects: PROJECTS });
+    expect(report.findings.map((finding) => finding.code)).not.toContain("filehub.nav.stale");
   });
 
   test("reports damaged markers instead of guessing", async () => {
