@@ -1,21 +1,22 @@
-// cli/commands/skills.ts — `jspace skills install` — materialize the official
-// skills (workbench + machine-global, issue #37) into the user-level
-// `~/.agents/skills/` directory. This is the multi-harness uniform location
-// (Claude/Grok/Pi/OpenCode read user-level paths; `~` expands per machine,
-// machine-agnostic, no harness-specific var). Inside a workbench the workbench
-// skills become thin directory links to its SSOT (.jspace/skills, issue #39);
-// machine-global skills and no-workbench runs materialize per-file copies.
+// cli/commands/skills.ts — `jspace skills install` — materialize the
+// MACHINE-GLOBAL official skills (manifest.global, issue #37) into the
+// user-level `~/.agents/skills/` directory, the multi-harness uniform location
+// that must work with no workbench and from any cwd (`~` expands per machine,
+// no harness-specific var). Workbench-scoped skills are NOT installed here:
+// they are discovered from their workbench (@see skill-scope.ts), and proven
+// leftovers of older bundles are pruned by the same run.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
 import type { CommandSpec, CmdContext, CmdResult } from "../../application/commands/command.ts";
 import { installSkills, type InstallDeps, type InstallResult } from "../../application/skills/install.ts";
-import { classifyUserSkillLink, ensureUserSkillLink, removeRetiredUserSkills } from "../../application/workspace/projections.ts";
+import { removeRetiredUserSkills } from "../../application/workspace/projections.ts";
 import { ASSETS } from "../assets.generated.ts";
 import { GLOBAL_SKILLS } from "../global-skills.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
 import { expandTilde } from "../embed.ts";
 import { b } from "./helpers.ts";
+import { pruneWorkbenchSkillsFromUserLevel, summarizePrune } from "./skill-scope.ts";
 
 export function userSkillsRoot(): string {
   return expandTilde("~/.agents/skills");
@@ -47,25 +48,13 @@ export function embeddedSkillAssets(): Pick<InstallDeps, "assetKeys" | "assetCon
   };
 }
 
-const installDeps = (dryRun: boolean, wbRoot?: string): InstallDeps => ({
+const installDeps = (dryRun: boolean): InstallDeps => ({
   ...embeddedSkillAssets(),
   userSkillsRoot,
   writeFile: writeWithDirs,
   exists: existsSync,
   readFile: readFileOrNull,
   dryRun,
-  workbenchSkillDir: (name) => {
-    if (wbRoot === undefined) return null;
-    const p = join(wbRoot, ".jspace", "skills", name);
-    return existsSync(p) ? p : null;
-  },
-  // dry-run must never mutate: classify only, reporting what WOULD happen.
-  ensureSkillDirLink: dryRun
-    ? (entry, ssot) => {
-        const a = classifyUserSkillLink(entry, ssot);
-        return { mode: "link", changed: a !== "no-op", divergent: a === "converge" };
-      }
-    : ensureUserSkillLink,
 });
 
 /** `skills install` handler — exported for tests with injected deps (write
@@ -73,16 +62,32 @@ const installDeps = (dryRun: boolean, wbRoot?: string): InstallDeps => ({
 export function installHandler(
   ctx: CmdContext,
   args: { refresh?: unknown },
-  deps: InstallDeps = installDeps(ctx.dryRun, ctx.root),
+  deps: InstallDeps = installDeps(ctx.dryRun),
 ): CmdResult {
   try {
-    const names = [...SKILLS_MANIFEST.workbench, ...SKILLS_MANIFEST.global].map((s) => s.name);
+    // Scope convergence: only MACHINE-GLOBAL skills are installed at the user
+    // level. Workbench skills are discovered from their workbench (@see
+    // skill-scope.ts); older bundles put them here and the prune below removes
+    // the proven-official leftovers.
+    const names = SKILLS_MANIFEST.global.map((s) => s.name);
     const r = installSkills(deps, names, { refresh: b(args?.refresh) });
-    const root = userSkillsRoot();
+    // Every path in this handler goes through the injected root: a stubbed
+    // install must never read or prune the operator's real ~/.agents/skills.
+    const root = deps.userSkillsRoot();
     const lines = summarizeInstall(r, root, ctx.dryRun);
+    const pruned = pruneWorkbenchSkillsFromUserLevel({
+      // deps.userSkillsRoot(), NOT the module default: the injected root is the
+      // only thing tests may touch, and a stubbed install must never prune the
+      // real ~/.agents/skills.
+      userRoot: deps.userSkillsRoot(),
+      workbenchRoot: ctx.root,
+      names: SKILLS_MANIFEST.workbench.map((s) => s.name),
+      dryRun: ctx.dryRun,
+    });
+    lines.push(...summarizePrune(pruned, root, ctx.dryRun));
     // Official skills are fully managed: a renamed/deleted skill must not linger
     // in ~/.agents/skills and keep being discovered by harnesses.
-    const retired = removeRetiredUserSkills(root, names, ctx.dryRun);
+    const retired = removeRetiredUserSkills(root, [...names, ...SKILLS_MANIFEST.workbench.map((s) => s.name)], ctx.dryRun);
     for (const name of retired.removed) {
       lines.push(
         ctx.dryRun
@@ -103,10 +108,10 @@ export function installHandler(
 
 const installSpec: CommandSpec = {
   name: "install",
-  summary: "materialize official skills (workbench + machine-global) into ~/.agents/skills/ (multi-harness uniform location)",
+  summary: "materialize machine-global skills into ~/.agents/skills/ and prune workbench skills from it",
   features: { dryRun: true },
   options: [
-    { name: "--refresh", dest: "refresh", takesValue: false, help: "refresh changed official files (hash-compare; default: fill gaps only, preserve local edits)" },
+    { name: "--refresh", dest: "refresh", takesValue: false, help: "refresh changed machine-global files (hash-compare; default: fill gaps only, preserve local edits)" },
   ],
   handler: installHandler,
 };
@@ -147,12 +152,14 @@ function summarizeInstall(r: InstallResult, root: string, dryRun: boolean): stri
 
 export const skillsSpec: CommandSpec = {
   name: "skills",
-  summary: "manage official skills (workbench + machine-global) in the user-level ~/.agents/skills/",
+  summary: "manage the machine-global official skills in the user-level ~/.agents/skills/",
   description:
-    "The user-level ~/.agents/skills/ is the multi-harness uniform location (Claude/Grok/Pi/OpenCode " +
-    "all read user-level paths). `skills install` materializes the official skills there — the " +
-    "workbench skills plus the machine-global ones (manifest.global, e.g. harness-config, issue #37) — " +
-    "filling gaps without overwriting local edits (idempotent, like harness-config).",
+    "Skill scope: `global` skills (manifest.global, e.g. harness-config, jspace-adopt) are the only " +
+    "ones installed at the user-level ~/.agents/skills/ — the multi-harness uniform location that must " +
+    "work with no workbench and from any cwd. `workbench` skills belong to one workbench and are " +
+    "discovered there (`.jspace/skills/` and its `.<harness>/skills/` projections); `skills install` " +
+    "prunes proven-official leftovers of those names from the user level and never touches a " +
+    "user-authored copy.",
   features: { dir: true },
   children: [installSpec],
 };

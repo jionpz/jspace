@@ -17,10 +17,10 @@ const tmp = "/tmp/jspace-error-semantics"; // never written to — deps are stub
 const ctx = (over: Partial<CmdContext> = {}): CmdContext => ({ json: false, dryRun: false, dir: undefined, root: tmp, cwd: tmp, ...over });
 
 test("skills install: write failure -> errors + exit 1, not a silent warning", () => {
-  // handler iterates the REAL bundled skill names (SKILLS_MANIFEST), so the
-  // injected asset key must match one of them for installSkills to reach writeFile.
+  // handler iterates the REAL machine-global names (SKILLS_MANIFEST.global), so
+  // the injected asset key must match one of them for installSkills to reach writeFile.
   const deps: InstallDeps = {
-    assetKeys: () => ["skills/jspace-use/SKILL.md"],
+    assetKeys: () => ["skills/harness-config/SKILL.md"],
     assetContent: () => "# test",
     userSkillsRoot: () => join(tmp, ".agents", "skills"),
     exists: () => false,
@@ -39,7 +39,7 @@ test("skills install: write failure -> errors + exit 1, not a silent warning", (
 
 test("skills install: dry-run success path has no errors/warnings", () => {
   const deps: InstallDeps = {
-    assetKeys: () => ["skills/jspace-use/SKILL.md"],
+    assetKeys: () => ["skills/harness-config/SKILL.md"],
     assetContent: () => "# test",
     userSkillsRoot: () => join(tmp, ".agents", "skills"),
     exists: () => false,

@@ -1,11 +1,11 @@
 // cli/commands/workspace.ts — `jspace workspace` + `update` command families.
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { CommandSpec } from "../../application/commands/command.ts";
 import { workspaceDiff, workspaceUpgrade } from "../../application/workspace/workspace.ts";
 import { doctorWorkbench, type CronHealthDeps } from "../../application/diagnostics/doctor.ts";
 import { installSkills, type InstallDeps } from "../../application/skills/install.ts";
-import { ensureUserSkillLink, removeRetiredUserSkills } from "../../application/workspace/projections.ts";
+import { removeRetiredUserSkills } from "../../application/workspace/projections.ts";
+import { pruneWorkbenchSkillsFromUserLevel, summarizePrune } from "./skill-scope.ts";
 import { resolveFilehubRoot } from "../../application/registry/filehub-lookup.ts";
 import { cmdUpdate } from "../update.ts";
 import { writeBytesAtomic } from "../../adapters/fs/workbench-state.ts";
@@ -34,36 +34,29 @@ function refreshExternalSkills(wbRoot: string): string[] {
         return null;
       }
     },
-    workbenchSkillDir: (name) => {
-      const p = join(wbRoot, ".jspace", "skills", name);
-      return existsSync(p) ? p : null;
-    },
-    ensureSkillDirLink: ensureUserSkillLink,
   };
-  const names = [...SKILLS_MANIFEST.workbench, ...SKILLS_MANIFEST.global].map((skill) => skill.name);
+  // Scope convergence: the user level carries MACHINE-GLOBAL skills only. The
+  // workbench's own skills are refreshed by workspaceUpgrade in .jspace/skills/
+  // and stay there (their projections follow via the thin-link plan).
+  const names = SKILLS_MANIFEST.global.map((skill) => skill.name);
   const r = installSkills(deps, names, { refresh: true });
   const lines: string[] = [];
+  const pruned = pruneWorkbenchSkillsFromUserLevel({
+    userRoot: userSkillsRoot(),
+    workbenchRoot: wbRoot,
+    names: SKILLS_MANIFEST.workbench.map((skill) => skill.name),
+  });
+  lines.push(...summarizePrune(pruned, userSkillsRoot(), false));
   const updated = r.skills.flatMap((skill) => skill.updated.map((rel) => `${skill.name}/${rel}`));
-  // Count real links only: a copy fallback is not "following the SSOT", and
-  // over-claiming it was exactly the misleading "dir link(s) active" line.
-  const linked = r.skills.filter((s) => s.link !== undefined && s.link.mode !== "copy").length;
-  const copies = r.skills.filter((s) => s.link?.mode === "copy").length;
-  for (const s of r.skills) {
-    if (s.link?.action === "replaced-divergent") {
-      lines.push(`jspace: info: ~/.agents/skills/${s.name} held a divergent copy; replaced by a dir link to the workbench SSOT (official skills are managed)`);
-    }
-  }
-  if (updated.length === 0 && linked > 0) {
-    lines.push(`jspace: ok: user-level skills follow the workbench SSOT (${linked} dir link(s) active${copies > 0 ? `, ${copies} copy fallback(s)` : ""})`);
-  } else if (updated.length === 0) {
-    lines.push("jspace: ok: user-level skills up to date (~/.agents/skills)");
+  if (updated.length === 0) {
+    lines.push("jspace: ok: machine-global skills up to date (~/.agents/skills)");
   } else {
     const shown = updated.slice(0, 5).join(", ");
-    lines.push(`jspace: ok: refreshed ${updated.length} user-level skill file(s) in ~/.agents/skills: ${shown}${updated.length > 5 ? " …" : ""}`);
+    lines.push(`jspace: ok: refreshed ${updated.length} machine-global user-level skill file(s) in ~/.agents/skills: ${shown}${updated.length > 5 ? " …" : ""}`);
   }
   // A renamed/deleted official skill must not linger in ~/.agents/skills where
   // harnesses still discover it (that is how a stale contract survives an upgrade).
-  const retired = removeRetiredUserSkills(userSkillsRoot(), names);
+  const retired = removeRetiredUserSkills(userSkillsRoot(), [...names, ...SKILLS_MANIFEST.workbench.map((skill) => skill.name)]);
   for (const name of retired.removed) {
     lines.push(`jspace: info: removed retired official skill ~/.agents/skills/${name} (no longer shipped by jspace)`);
   }

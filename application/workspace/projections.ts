@@ -463,3 +463,89 @@ export function classifyUserSkillLink(
 ): LinkOp["action"] {
   return classifyEntry(entryAbs, ssotDirAbs);
 }
+
+/** Why a user-level entry under an official WORKBENCH skill name is there.
+ *  Scope convergence: workbench skills must never be discovered from
+ *  `~/.agents/skills/` (one user-level name can only point at one workbench,
+ *  and the contract references workbench-relative state), so every class here
+ *  except `absent` is machine state to clean up or report. */
+export type MisplacedEntryClass =
+  | "absent"
+  | "link-local" // symlink -> THIS workbench's .jspace/skills/<name>
+  | "link-foreign" // symlink -> another workbench's .jspace/skills/<name>
+  | "link-dangling" // symlink whose target is gone (user_link_broken owns it)
+  | "link-other" // symlink that points somewhere unrelated
+  | "copy-official" // real dir, byte-identical to the bundle (Windows copy fallback)
+  | "user-owned"; // real dir with local edits, or a non-dir entry
+
+export function classifyMisplacedEntry(
+  entryAbs: string,
+  ownSsotAbs: string | null,
+  isOfficialCopy: (entryAbs: string, name: string) => boolean,
+  name: string,
+): MisplacedEntryClass {
+  let lst;
+  try {
+    lst = lstatSync(entryAbs);
+  } catch {
+    return "absent";
+  }
+  if (lst.isSymbolicLink()) {
+    let real: string;
+    try {
+      real = realpathSync(entryAbs);
+    } catch {
+      return "link-dangling";
+    }
+    if (ownSsotAbs !== null) {
+      try {
+        if (real === realpathSync(ownSsotAbs)) return "link-local";
+      } catch {
+        // own SSOT missing: fall through, the link still points into a workbench
+      }
+    }
+    // `<any workbench>/.jspace/skills/<name>` — a projection of ANOTHER
+    // workbench. Structural proof, no content read needed.
+    const parts = real.split(/[\\/]/);
+    const n = parts.length;
+    if (n >= 3 && parts[n - 3] === ".jspace" && parts[n - 2] === "skills" && parts[n - 1] === name) {
+      return "link-foreign";
+    }
+    return "link-other";
+  }
+  if (!lst.isDirectory()) return "user-owned";
+  return isOfficialCopy(entryAbs, name) ? "copy-official" : "user-owned";
+}
+
+export interface MisplacedCleanup {
+  /** Proven official projections — removed (or, in dry-run, would be). */
+  removed: Array<{ name: string; class: MisplacedEntryClass }>;
+  /** Content differs from the bundle: possibly the user's own skill. Kept. */
+  preserved: Array<{ name: string; class: MisplacedEntryClass }>;
+  /** Left alone for a different diagnostic (dangling link, unrelated target). */
+  skipped: Array<{ name: string; class: MisplacedEntryClass }>;
+}
+
+/** Remove workbench-scoped official skills from the USER-level root. Only
+ *  entries proven to be official projections are deleted (a symlink into a
+ *  workbench SSOT, or a byte-identical copy); anything with local content is
+ *  preserved and reported. Mirrors removeRetiredUserSkills' ownership stance. */
+export function removeMisplacedUserSkills(
+  userRoot: string,
+  names: readonly string[],
+  classify: (name: string) => MisplacedEntryClass,
+  dryRun = false,
+): MisplacedCleanup {
+  const out: MisplacedCleanup = { removed: [], preserved: [], skipped: [] };
+  for (const name of names) {
+    const cls = classify(name);
+    if (cls === "link-local" || cls === "link-foreign" || cls === "copy-official") {
+      if (!dryRun) rmSync(join(userRoot, name), { recursive: true, force: true });
+      out.removed.push({ name, class: cls });
+      continue;
+    }
+    if (cls === "user-owned") out.preserved.push({ name, class: cls });
+    else if (cls !== "absent") out.skipped.push({ name, class: cls });
+  }
+  return out;
+}
