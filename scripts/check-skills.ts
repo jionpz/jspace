@@ -1,8 +1,10 @@
 // scripts/check-skills.ts — skill-tree health checks (dev-side; not materialized).
 // Run: bun run scripts/check-skills.ts
 //
-//   C1 references: every relative reference (references/x.md, ../<skill>/references/x.md)
-//                  from SKILL.md / references/*.md resolves on disk.
+//   C1 references: every skill-root-relative reference (references/x.md,
+//                  $SKILL_DIR/x.md, ../<skill>/references/x.md) resolves on
+//                  disk; `~/.agents/skills/<skill>/...` is rejected because it
+//                  only resolves when that skill is installed at user level.
 //   C2 render:     AGENTS.md "Brain operations" rows == SKILL.md frontmatter `triggers`
 //                  (render output must equal what gen-assets would produce).
 //   C3 routing:    "Brain operations" / "Skill Governance" skill sets == skills-manifest

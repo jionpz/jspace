@@ -26,9 +26,10 @@ triggers:
 
 ## 权威引用
 
-- 周期、页 envelope、来源和状态规则:`~/.agents/skills/jspace-use/references/gbrain.md`
-- 写回分类与晋升纪律:`~/.agents/skills/memory-writeback/references/writeback.md`
-- 人读汇总边界:`~/.agents/skills/weekly-report/SKILL.md`
+- 本 skill 内引用一律以 skill 根为基准(`$SKILL_DIR` 指本 skill 目录);跨 skill 用 `../<skill>/...`。
+- 周期、页 envelope、来源和状态规则:`../jspace-use/references/gbrain.md`
+- 写回分类与晋升纪律:`../memory-writeback/references/writeback.md`
+- 人读汇总边界:`../weekly-report/SKILL.md`
 
 ## 写集
 

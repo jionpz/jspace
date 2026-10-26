@@ -29,9 +29,10 @@ triggers:
 
 ## 权威引用
 
-- 唯一记忆契约、页 envelope、生命周期、`Supersedes` 和 pending:`~/.agents/skills/jspace-use/references/gbrain.md`
-- 分类树、slug 派生、晋升和取代细则:`~/.agents/skills/memory-writeback/references/writeback.md`
-- Golden run:`~/.agents/skills/memory-writeback/references/example-writeback.md`
+- 本 skill 内引用一律以 skill 根为基准(`$SKILL_DIR` 指本 skill 目录);跨 skill 用 `../<skill>/...`。
+- 唯一记忆契约、页 envelope、生命周期、`Supersedes` 和 pending:`../jspace-use/references/gbrain.md`
+- 分类树、slug 派生、晋升和取代细则:`references/writeback.md`
+- Golden run:`references/example-writeback.md`
 
 ## 写集
 

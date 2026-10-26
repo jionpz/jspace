@@ -29,10 +29,11 @@ triggers:
 
 ## 权威引用
 
-- 逐 harness 接线、路径和生命周期矩阵:`~/.agents/skills/harness-config/references/harnesses.md`
-- 治理文档骨架、分层和回滚:`~/.agents/skills/harness-config/references/governance.md`
-- Golden run:`~/.agents/skills/harness-config/references/example-harness-config.md`
-- JSpace 工作台侧接线:`~/.agents/skills/jspace-use/references/harnesses.md`
+- 本 skill 内引用一律以 skill 根为基准(`$SKILL_DIR` 指本 skill 目录);跨 skill 用 `../<skill>/...`。
+- 逐 harness 接线、路径和生命周期矩阵:`references/harnesses.md`
+- 治理文档骨架、分层和回滚:`references/governance.md`
+- Golden run:`references/example-harness-config.md`
+- JSpace 工作台侧接线:在**当前工作台根**读 `.jspace/skills/jspace-use/references/harnesses.md`(以 cwd 为准)。本 skill 是机器级的,不假设工作台 skill 与自己同目录;无工作台时跳过工作台侧核对。
 
 ## 写集
 

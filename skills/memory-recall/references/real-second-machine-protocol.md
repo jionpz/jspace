@@ -1,13 +1,13 @@
 # 真实第二机演练协议(REAL-SECOND-MACHINE)
 
 > 可复跑的**换机验证**协议:在**真实物理第二机**上证明「记忆可移植 + 指针可解析」,而不是再跑一遍本机模拟。
-> 定位:`~/.agents/skills/memory-recall/references/memory-acceptance.md`「换机解析扩展(M5)」的**真机执行面**——指针语义、断言链、通过标准全部沿用,本协议只加真机前置、降级分级与回写字段,不另造第二套语义。
+> 定位:`references/memory-acceptance.md`「换机解析扩展(M5)」的**真机执行面**——指针语义、断言链、通过标准全部沿用,本协议只加真机前置、降级分级与回写字段,不另造第二套语义。
 > 本文件为**中性版**(`<A>` / `<B>` = 两台机器、`<filehubA>` / `<filehubB>` = 各自文件中心根、`<export>` = 导出目录、`<date>` = `YYYY-MM-DD`)。真实主机名、绝对路径、查询分数留在本机证据台账,**不回填本文件**。
 
 ## 红线(先读,三条)
 
 1. **B 必须是另一台物理机**。同机第二目录、`GBRAIN_HOME` 旁路、容器、CI、Cloud Agent 都**不得**用来关闭「真实第二机」跟踪项——它们的效力等同 M5 本机模拟(同机 / 同 OS / 同 embedding 可达),已被 M5 覆盖,再跑一遍不产生新信息。旁路只可作调试手段。
-2. **不封装 gbrain、不自研同步**。全部动作走既有 CLI:gbrain Tier 3(`export` / `import` / `embed --all` / `models doctor`,见 `~/.agents/skills/jspace-use/references/gbrain.md`)+ `jspace init` / `filehub init --register` / `doctor`;资产走既有分层同步(网盘 / Obsidian Sync / 手工拷贝)。**不**新增「一键换机」命令。
+2. **不封装 gbrain、不自研同步**。全部动作走既有 CLI:gbrain Tier 3(`export` / `import` / `embed --all` / `models doctor`,见 `../jspace-use/references/gbrain.md`)+ `jspace init` / `filehub init --register` / `doctor`;资产走既有分层同步(网盘 / Obsidian Sync / 手工拷贝)。**不**新增「一键换机」命令。
 3. **不伪造证据**。export 页数、`test -f` 结果、top-1 slug 一律以真实终端输出为准;真机未跑完前 `eco.verdict` 留空,不写 `confirmed`,也不用「协议已发行」冒充「真机已验证」。
 
 ## 角色与「真的是第二机吗」判据
@@ -50,8 +50,8 @@ gbrain call get_page '{"slug":"<slug>","include_content":true}'  # 抽样确认 
 gbrain query "<规范查询>"             # 记录 top-1 slug 与相对次序(≥2 条)
 ```
 
-- 规范查询集:复用 `~/.agents/skills/memory-recall/references/memory-acceptance.md` 的 Q1 / Q1' / Q2 / Q2'(或当前语料的等价集,**逐字固定**并写进台账),含变体与负对照。
-- 目标页缺 `rel_path` → 先按 `~/.agents/skills/asset-ingest/references/gbrain-write.md`「rel_path」补写(`rel_path` = Pointer 减去 filehub 根前缀),补完再导出。**不要**带着缺字段的页进 P1。
+- 规范查询集:复用 `references/memory-acceptance.md` 的 Q1 / Q1' / Q2 / Q2'(或当前语料的等价集,**逐字固定**并写进台账),含变体与负对照。
+- 目标页缺 `rel_path` → 先按 `../asset-ingest/references/gbrain-write.md`「rel_path」补写(`rel_path` = Pointer 减去 filehub 根前缀),补完再导出。**不要**带着缺字段的页进 P1。
 - 记录 A 侧 filehub 根绝对路径(只进本机台账,不进本文件)。
 
 ## P1 · A 导出
@@ -60,7 +60,7 @@ gbrain query "<规范查询>"             # 记录 top-1 slug 与相对次序(�
 gbrain export --dir <export>
 ```
 
-- 在 **serve 停泊窗口**内执行(gbrain serve 是某 harness 会话的 stdio 子进程;禁 `kill`、禁独立重启,见 `~/.agents/skills/memory-recall/references/discipline.md` §1)。
+- 在 **serve 停泊窗口**内执行(gbrain serve 是某 harness 会话的 stdio 子进程;禁 `kill`、禁独立重启,见 `references/discipline.md` §1)。
 - probe 产物形态:md 页(slug 路径 + frontmatter)。抽查任一 asset 页,确认 `rel_path` 字段在导出物里**原样保留**。
 - 边 / backlink:有互链语料 → 记录导出物里是否有独立边文件,留待 P3 验回灌;无互链语料 → 台账记 `n/a-no-wikilinks`(与 M5 一致,不阻塞主结论)。
 - 台账记:导出目录、页数、导出时刻。
@@ -75,7 +75,7 @@ jspace doctor --dir <wbB>
 
 - `<filehubB>` 的绝对路径**必须**与 A 不同(判据 2)。
 - 资产按既有同步策略落到 `<filehubB>`,且**相对布局与 `rel_path` 一致**——即 `<filehubB>/<rel_path>` 必须指到同一份文件本体。同步方式(iCloud / Obsidian Sync / 手工拷贝 / 移动硬盘)如实记进台账。
-- B 侧缺文件(只同步了一部分)→ 走 `~/.agents/skills/asset-ingest/references/migration.md` 的增量收编策略,**不要**把「搬文件」做成 jspace 新命令,也不要为了让断言过而在 B 上凭空造同名文件。
+- B 侧缺文件(只同步了一部分)→ 走 `../asset-ingest/references/migration.md` 的增量收编策略,**不要**把「搬文件」做成 jspace 新命令,也不要为了让断言过而在 B 上凭空造同名文件。
 - 通过信号:`jspace doctor` 无 filehub 致命项;抽样 `test -f "<filehubB>/<rel_path>"` 成立。
 
 ## P3 · B brain(独立记忆库重建)
@@ -102,7 +102,7 @@ test -f "<filehubB>/<rel_path>"                    # ③ 本机 Pointer 存在
 grep -c "<事实关键词>" "<filehubB>/<rel_path>"      # ④(可选)找到那个数
 ```
 
-- **不得**直接信任页内旧机绝对 `Pointer`——换机解析规则见 `~/.agents/skills/memory-recall/references/discipline.md` §8。
+- **不得**直接信任页内旧机绝对 `Pointer`——换机解析规则见 `references/discipline.md` §8。
 - 台账记:抽样条数 N、通过条数、以及「旧 Pointer ≠ 新 Pointer 而 `rel_path` 相同」这一对照。
 - 失败处置(按 §5 诊断,不自愈):`rel_path` 缺失 → 写侧纪律缺口(点名 slug);根读不到 → hub / binding 未配;文件缺失 → 资产未同步。三种都**报告用户**,不改 gbrain、不静默改 Pointer、不为了让断言过而手工编页。
 
@@ -113,13 +113,13 @@ gbrain query "<规范查询>"            # hybrid
 gbrain search "<关键词>"             # 关键词对照(双路径留证)
 ```
 
-- canonical 面 = CLI,serve 停泊窗口内(与 `~/.agents/skills/memory-recall/references/discipline.md` §1 一致);A / B 两侧必须同一面,否则证据不可比。
+- canonical 面 = CLI,serve 停泊窗口内(与 `references/discipline.md` §1 一致);A / B 两侧必须同一面,否则证据不可比。
 - 通过标准:P0 声明的最小查询集在 B 侧 top-1 与 A 一致,变体查询保持 top-1,负对照不串台。
-- 不一致 → 按 `~/.agents/skills/memory-recall/references/memory-acceptance.md` 校准循环(≤3 轮)诊断,并区分「B 侧 embedding 配置不同」与「记忆内容丢失」——前者是环境差异,后者才动摇可移植结论。
+- 不一致 → 按 `references/memory-acceptance.md` 校准循环(≤3 轮)诊断,并区分「B 侧 embedding 配置不同」与「记忆内容丢失」——前者是环境差异,后者才动摇可移植结论。
 
 ## P6 · 问一句闭环(产品句)
 
-在 B 上按 `~/.agents/skills/memory-recall/SKILL.md` 走完整读侧流程:query → 四连(① `gbrain call get_page` ② 用**重解析后**的 `rel_path`/Pointer `test -f` ③ grep 找数 ④ top-1 slug 一致)→ 作答。
+在 B 上按 `SKILL.md` 走完整读侧流程:query → 四连(① `gbrain call get_page` ② 用**重解析后**的 `rel_path`/Pointer `test -f` ③ grep 找数 ④ top-1 slug 一致)→ 作答。
 
 - 通过标准:答案引用 **B 机绝对路径** + slug;不得只报「页里有」。
 - 这是唯一一条同时压住指针腿与记忆腿的端到端断言,P4 / P5 都过了才有意义。
@@ -176,8 +176,8 @@ gbrain search "<关键词>"             # 关键词对照(双路径留证)
 
 | 文档 | 它管什么 | 本协议的关系 |
 |---|---|---|
-| `~/.agents/skills/memory-recall/references/memory-acceptance.md` | 可复跑验收协议 + 「换机解析扩展(M5)」通过标准 | 断言与通过标准的**唯一源**;本协议是它的真机执行面 |
-| `~/.agents/skills/memory-recall/references/discipline.md` §8 | 换机解析规则(根 + `rel_path` → 本机 Pointer) | P4 直接引用,不复述规则 |
-| `~/.agents/skills/asset-ingest/references/gbrain-write.md` | `rel_path` 定义 / 计算 / 存量补写 | P0 补字段依据 |
-| `~/.agents/skills/asset-ingest/references/migration.md` | 存量资产增量收编 | P2 缺文件时的处置路径 |
-| `~/.agents/skills/jspace-use/references/gbrain.md` | 后端契约分层(Tier 3 = `export` / `import` / `embed --all`) | P1/P3 命令面的能力边界(Tier 3 可选;缺则迁移走手工) |
+| `references/memory-acceptance.md` | 可复跑验收协议 + 「换机解析扩展(M5)」通过标准 | 断言与通过标准的**唯一源**;本协议是它的真机执行面 |
+| `references/discipline.md` §8 | 换机解析规则(根 + `rel_path` → 本机 Pointer) | P4 直接引用,不复述规则 |
+| `../asset-ingest/references/gbrain-write.md` | `rel_path` 定义 / 计算 / 存量补写 | P0 补字段依据 |
+| `../asset-ingest/references/migration.md` | 存量资产增量收编 | P2 缺文件时的处置路径 |
+| `../jspace-use/references/gbrain.md` | 后端契约分层(Tier 3 = `export` / `import` / `embed --all`) | P1/P3 命令面的能力边界(Tier 3 可选;缺则迁移走手工) |

@@ -11,7 +11,7 @@
 
 ## 2. 二进制解析与接线
 
-skill / CLI 页操作按 `$GBRAIN_BIN` -> PATH 上的 `gbrain` 解析；`jspace harness wire` 写 MCP 绝对路径时沿用其自身的 `$GBRAIN_BIN` -> PATH -> `~/.bun/bin/gbrain` 回退（见 `~/.agents/skills/jspace-use/references/harnesses.md`）。
+skill / CLI 页操作按 `$GBRAIN_BIN` -> PATH 上的 `gbrain` 解析；`jspace harness wire` 写 MCP 绝对路径时沿用其自身的 `$GBRAIN_BIN` -> PATH -> `~/.bun/bin/gbrain` 回退（见 `references/harnesses.md`）。
 
 - 工作台接 harness：`jspace harness wire --harness <claude|grok|opencode|cursor|pi> --dir <工作台>`。
 - 机器级多 harness 治理：`harness-config` skill。

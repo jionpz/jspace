@@ -28,10 +28,11 @@ triggers:
 
 ## 权威引用
 
-- 六条检查、判定阈值和报告骨架:`~/.agents/skills/workbench-retro/references/checks.md`
-- 写回和来源 tag:`~/.agents/skills/memory-writeback/references/writeback.md`、`~/.agents/skills/jspace-use/references/gbrain.md`
-- 周期、取代链和页 envelope:`~/.agents/skills/jspace-use/references/gbrain.md`
-- Golden run:`~/.agents/skills/workbench-retro/references/example-retro.md`
+- 本 skill 内引用一律以 skill 根为基准(`$SKILL_DIR` 指本 skill 目录);跨 skill 用 `../<skill>/...`。
+- 六条检查、判定阈值和报告骨架:`references/checks.md`
+- 写回和来源 tag:`../memory-writeback/references/writeback.md`、`../jspace-use/references/gbrain.md`
+- 周期、取代链和页 envelope:`../jspace-use/references/gbrain.md`
+- Golden run:`references/example-retro.md`
 
 ## 写集
 

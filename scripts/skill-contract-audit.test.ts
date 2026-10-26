@@ -35,30 +35,60 @@ describe("skill reference integrity", () => {
   test("checks every reference on a line, not only the first", () => {
     const root = fixtureRoot();
     try {
+      mkdirSync(join(root, "skills", "memory-recall", "references"), { recursive: true });
+      writeFileSync(join(root, "skills", "memory-recall", "references", "discipline.md"), "# d\n");
       const result = auditSkillDoc(
         "skills/jspace-use/SKILL.md",
         validEntrypoint().replace(
           "Use `gbrain call",
-          "See `~/.agents/skills/jspace-use/references/gbrain.md` and `~/.agents/skills/missing/references/nope.md`. Use `gbrain call",
+          "See `references/gbrain.md` and `../memory-recall/references/nope.md`. Use `gbrain call",
         ),
         { repoRoot: root },
       );
       expect(result.checkedReferences).toBe(2);
-      expect(result.failures).toContainEqual(expect.stringContaining("skills/missing/references/nope.md"));
+      expect(result.failures).toContainEqual(expect.stringContaining("skills/memory-recall/references/nope.md"));
       expect(result.failures.some((failure) => failure.includes("jspace-use/references/gbrain.md"))).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 
-  test("rejects all stale relative references on one line", () => {
+  test("resolves references against the skill root, not the referencing file's dir", () => {
+    const root = fixtureRoot();
+    try {
+      mkdirSync(join(root, "skills", "memory-recall", "references"), { recursive: true });
+      writeFileSync(join(root, "skills", "memory-recall", "SKILL.md"), "# sibling\n");
+      writeFileSync(join(root, "skills", "memory-recall", "references", "discipline.md"), "# d\n");
+      const result = auditSkillDoc(
+        "skills/jspace-use/references/example.md",
+        "`references/gbrain.md` and `$SKILL_DIR/references/gbrain.md` and `../memory-recall/SKILL.md`\n",
+        { repoRoot: root },
+      );
+      expect(result.checkedReferences).toBe(3);
+      expect(result.failures).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects user-level references in every scope", () => {
     const result = auditSkillDoc(
       "skills/jspace-use/references/example.md",
-      "`references/gbrain.md` and `../memory-recall/references/discipline.md`\n",
+      "`~/.agents/skills/jspace-use/references/gbrain.md` and `~/.agents/skills/memory-recall/SKILL.md`\n",
       { repoRoot: "/repo", exists: () => true },
     );
     expect(result.checkedReferences).toBe(2);
-    expect(result.failures.filter((failure) => failure.includes("stale relative reference"))).toHaveLength(2);
+    expect(result.failures.filter((failure) => failure.includes("user-level reference"))).toHaveLength(2);
+  });
+
+  test("allows a bare machine-global install dir as prose", () => {
+    const result = auditSkillDoc(
+      "skills/harness-config/references/harnesses.md",
+      "本 skill 安装到 `~/.agents/skills/harness-config/`。\n",
+      { repoRoot: "/repo", exists: () => true },
+    );
+    expect(result.checkedReferences).toBe(0);
+    expect(result.failures).toEqual([]);
   });
 });
 

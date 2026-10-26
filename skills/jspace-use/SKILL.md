@@ -39,12 +39,13 @@ triggers:
 
 ## 权威引用
 
-- gbrain 安装、页契约、生命周期、周期和 pending:`~/.agents/skills/jspace-use/references/gbrain.md`
-- registry schema、binding 和 drift:`~/.agents/skills/jspace-use/references/registry.md`
-- harness 能力与接线:`~/.agents/skills/jspace-use/references/harnesses.md`
-- 各 harness 接线细节:`~/.agents/skills/jspace-use/references/harness-{claude,grok,opencode,cursor,pi,codex}.md`
-- 无头运维:`~/.agents/skills/jspace-use/references/headless-ops.md`
-- 首次启用、使用里程和台账:`~/.agents/skills/jspace-use/references/example-first-use.md`、`~/.agents/skills/jspace-use/references/usage-mileage.md`、`~/.agents/skills/jspace-use/references/usage-mileage-ledger-template.md`
+- 本 skill 内引用一律以 skill 根为基准(`$SKILL_DIR` 指本 skill 目录);跨 skill 用 `../<skill>/...`。
+- gbrain 安装、页契约、生命周期、周期和 pending:`references/gbrain.md`
+- registry schema、binding 和 drift:`references/registry.md`
+- harness 能力与接线:`references/harnesses.md`
+- 各 harness 接线细节:`references/harness-{claude,grok,opencode,cursor,pi,codex}.md`
+- 无头运维:`references/headless-ops.md`
+- 首次启用、使用里程和台账:`references/example-first-use.md`、`references/usage-mileage.md`、`references/usage-mileage-ledger-template.md`
 
 ## 写集
 

@@ -76,7 +76,7 @@ jspace cron run --id workbench-retro --dir <wb>
 
 ## R2 - 连续两周 `source:session` 取证
 
-计数口径与 `~/.agents/skills/workbench-retro/references/checks.md` 检查 1 同源。
+计数口径与 `../workbench-retro/references/checks.md` 检查 1 同源。
 
 ### 页级取证
 

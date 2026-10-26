@@ -70,7 +70,7 @@
 
 ### 真实第二机(Eco)
 
-上节的 M5 结论产自**本机模拟**双机(同机 / 同 OS / 同 embedding 可达),效力有限。要在**另一台物理机**上验证同一结论,按 `~/.agents/skills/memory-recall/references/real-second-machine-protocol.md` 执行:P0–P7 步骤、命令、断言、降级分级与 `eco.*` 证据台账都在那里,本节不重复。
+上节的 M5 结论产自**本机模拟**双机(同机 / 同 OS / 同 embedding 可达),效力有限。要在**另一台物理机**上验证同一结论,按 `references/real-second-machine-protocol.md` 执行:P0–P7 步骤、命令、断言、降级分级与 `eco.*` 证据台账都在那里,本节不重复。
 
 三条边界(其余细则见该协议):
 

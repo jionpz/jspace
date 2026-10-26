@@ -44,8 +44,9 @@ function refsOf(body: string): string[] {
 function resolve(key: string, ref: string): string | null {
   const clean = ref.split("#")[0].split("?")[0].trim().replace(/\/$/, "");
   if (!clean) return null;
-  // <placeholder> patterns (e.g. skills/<jspace-skill>/) are not real paths
-  if (clean.includes("<") || clean.includes(">")) return null;
+  // <placeholder> / {a,b} patterns (e.g. skills/<jspace-skill>/,
+  // references/harness-{claude,grok}.md) are not real paths
+  if (clean.includes("<") || clean.includes(">") || clean.includes("{") || clean.includes("}")) return null;
   // Workbench materialized skills: `.jspace/skills/<name>/…` maps to the
   // bundled `skills/<name>/…` (same bytes after init/upgrade).
   if (clean.startsWith(".jspace/skills/")) return clean.replace(/^\.jspace\//, "");

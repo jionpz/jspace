@@ -38,7 +38,7 @@
 | 格式 | 处理方式 |
 |---|---|
 | pdf / txt / md | 先摘要 + 指针,按需加深 |
-| excel / ppt | 常规:摘要 + 指针;用户要求时深度抽取(逐表/逐页 → 伴生 `.extract.md` + 页内 Key Facts 含关键数字),见 `~/.agents/skills/asset-ingest/references/deep-extract.md` |
+| excel / ppt | 常规:摘要 + 指针;用户要求时深度抽取(逐表/逐页 → 伴生 `.extract.md` + 页内 Key Facts 含关键数字),见 `references/deep-extract.md` |
 | 视频 / 音频 / 截图 | 路由到 gbrain `media-ingest` 深入路径;MVP 范围外 |
 
 ### 目录名不参与判定

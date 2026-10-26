@@ -28,10 +28,11 @@ triggers:
 
 ## 权威引用
 
-- 记忆角色、生命周期、`Supersedes`、`rel_path` 与来源语义:`~/.agents/skills/jspace-use/references/gbrain.md`
-- 断言链、变体查询、终止条件和换机解析:`~/.agents/skills/memory-recall/references/discipline.md`
-- 回归验收和真实第二机协议:`~/.agents/skills/memory-recall/references/memory-acceptance.md`、`~/.agents/skills/memory-recall/references/real-second-machine-protocol.md`
-- 端到端示例:`~/.agents/skills/memory-recall/references/example-recall.md`
+- 本 skill 内引用一律以 skill 根为基准(`$SKILL_DIR` 指本 skill 目录);跨 skill 用 `../<skill>/...`。
+- 记忆角色、生命周期、`Supersedes`、`rel_path` 与来源语义:`../jspace-use/references/gbrain.md`
+- 断言链、变体查询、终止条件和换机解析:`references/discipline.md`
+- 回归验收和真实第二机协议:`references/memory-acceptance.md`、`references/real-second-machine-protocol.md`
+- 端到端示例:`references/example-recall.md`
 
 ## 写集
 

@@ -39,13 +39,14 @@ jspace inbox block <entry> --reason source_unverified --missing "<为什么无�
 
 ## 权威引用
 
-- 归位、命名、布局、偏好与冲突: `~/.agents/skills/asset-ingest/references/filing.md`
-- asset 页结构、rel_path、版本与 embedding: `~/.agents/skills/asset-ingest/references/gbrain-write.md`
-- 第 1/2/3 层证据与 CLI 证明: `~/.agents/skills/asset-ingest/references/filing.md`
-- 批量与无头: `~/.agents/skills/asset-ingest/references/batch.md`
-- office 抽取: `~/.agents/skills/asset-ingest/references/deep-extract.md`
-- 存量移动: `~/.agents/skills/asset-ingest/references/migration.md`
-- 共同记忆契约: `~/.agents/skills/jspace-use/references/gbrain.md`
+- 本 skill 内引用一律以 skill 根为基准(`$SKILL_DIR` 指本 skill 目录);跨 skill 用 `../<skill>/...`。
+- 归位、命名、布局、偏好与冲突: `references/filing.md`
+- asset 页结构、rel_path、版本与 embedding: `references/gbrain-write.md`
+- 第 1/2/3 层证据与 CLI 证明: `references/filing.md`
+- 批量与无头: `references/batch.md`
+- office 抽取: `references/deep-extract.md`
+- 存量移动: `references/migration.md`
+- 共同记忆契约: `../jspace-use/references/gbrain.md`
 
 入口只保留主流程；字段级规则以引用为准，不在这里维护第二套 schema。
 
@@ -210,10 +211,10 @@ jspace pending apply
 
 ## 按需深入
 
-- Golden run: `~/.agents/skills/asset-ingest/references/example-ingest.md`
-- 批量: `~/.agents/skills/asset-ingest/references/batch.md`
-- 抽取: `~/.agents/skills/asset-ingest/references/deep-extract.md`
-- 存量迁移: `~/.agents/skills/asset-ingest/references/migration.md`
+- Golden run: `references/example-ingest.md`
+- 批量: `references/batch.md`
+- 抽取: `references/deep-extract.md`
+- 存量迁移: `references/migration.md`
 
 ## 自检
 

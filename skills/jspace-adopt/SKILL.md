@@ -31,10 +31,11 @@ triggers:
 
 ## 权威引用
 
-- 只读盘点矩阵:`~/.agents/skills/jspace-adopt/references/inventory.md`
-- 映射、冲突与所有权:`~/.agents/skills/jspace-adopt/references/migration-map.md`
-- 执行、验证与恢复:`~/.agents/skills/jspace-adopt/references/apply-and-verify.md`
-- 临时 fixture golden run:`~/.agents/skills/jspace-adopt/references/example-legacy-adoption.md`
+- 本 skill 内引用一律以 skill 根为基准(`$SKILL_DIR` 指本 skill 目录);跨 skill 用 `../<skill>/...`。
+- 只读盘点矩阵:`references/inventory.md`
+- 映射、冲突与所有权:`references/migration-map.md`
+- 执行、验证与恢复:`references/apply-and-verify.md`
+- 临时 fixture golden run:`references/example-legacy-adoption.md`
 
 ## 写集
 

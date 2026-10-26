@@ -1,6 +1,6 @@
 # memory-writeback — 写回纪律细则
 
-纪律源 = `~/.agents/skills/jspace-use/references/gbrain.md`（引用不复制）。本文件把 gbrain.md 的写回纪律固化为收工场景的细则。
+纪律源 = `../jspace-use/references/gbrain.md`（引用不复制）。本文件把 gbrain.md 的写回纪律固化为收工场景的细则。
 
 ## 1. 分类表与写语义
 
@@ -106,14 +106,14 @@ source: claude                       # 仍是 harness 出处,语义不变、不�
 
 - **为什么是 tag 不是 frontmatter 字段**：`list_pages` 可按 `tag` 过滤，`workbench-retro` 检查 1 要数「本周会话写入 vs cron 写入」，只有 tag 数得出来。frontmatter `source:` 的语义是 **harness 出处**（`claude` / `codex` / …），是另一个问题，**不要覆盖它**。
 - **本 skill 恒为 `source:session`**：memory-writeback 定义上就是「会话收工写回」，无头 cron 不跑它。会话/无头都可能跑的 skill（asset-ingest / weekly-report / memory-consolidate / workbench-retro）按**运行模式**选 `source:session` 或 `source:cron`。
-- **纪律源**：`~/.agents/skills/jspace-use/references/gbrain.md`「Provenance tag」；本节只是收工场景的落地。
+- **纪律源**：`../jspace-use/references/gbrain.md`「Provenance tag」；本节只是收工场景的落地。
 - **自检（两步，缺一不可）**：
   1. **逐页断言**：`gbrain call get_page '{"slug":"<slug>","include_content":true}'` 的 `tags` 必须含且仅含一个 `source:session`/`source:cron`。这是唯一能证明「这一页打了 tag」的判据。gbrain 的 `put_page` 只做 tag 合并,若旧页已有另一个来源 tag,用 `remove_tag`(带 `expected_revision` + 新 request id)清掉后再读回;否则不能声称「恰好一个」。
   2. **列表确认**：`gbrain call list_pages '{"tag":"source:session","limit":100,"sort":"updated_asc"}'` 刚写的页应作为候选行出现；需要全量时继续 keyset，不以固定条数宣称全集。
   - 只做第 2 步是不够的：列表能列到**只证明「至少有一页打了 tag」**。2026-09-12 retro 实测窗口内 21/30 页漏打，写侧当时只做了列表确认。
   - 若查询在你的 gbrain 版本上取不到（tag 解析差异），**照实报告**给用户，不要改成「大概写进去了」——写回率取证依赖它。
 
-**与 hook 提醒的关系**：`jspace context session-end`（claude / grok / cursor）与 `jspace context turn` 的每会话一次轻提示都只是**提醒**——它们不写 gbrain，也不打这条 tag。tag 只在你真的执行了本 skill 时产生，所以「本周 `source:session` 计数」量的正是**写回动作本身**，不是提醒次数。提醒的能力边界见 `~/.agents/skills/jspace-use/references/harnesses.md`。
+**与 hook 提醒的关系**：`jspace context session-end`（claude / grok / cursor）与 `jspace context turn` 的每会话一次轻提示都只是**提醒**——它们不写 gbrain，也不打这条 tag。tag 只在你真的执行了本 skill 时产生，所以「本周 `source:session` 计数」量的正是**写回动作本身**，不是提醒次数。提醒的能力边界见 `../jspace-use/references/harnesses.md`。
 
 ## 7. embedding 降级
 
@@ -124,9 +124,9 @@ source: claude                       # 仍是 harness 出处,语义不变、不�
 
 | 文档 | 角色 |
 |---|---|
-| `~/.agents/skills/jspace-use/references/gbrain.md` | 纪律源（维度模型 / state 覆盖 vs 知识追加 / 晋升 / 来源 tag / status / kind） |
-| `~/.agents/skills/memory-writeback/SKILL.md` | 日常流程（触发 + 6 步） |
-| `~/.agents/skills/asset-ingest/SKILL.md` | 资产写侧（文件归位 / reference 页，转引用） |
-| `~/.agents/skills/workbench-retro/references/checks.md` 检查 1 | 来源 tag 的消费者（写回率取证） |
-| `~/.agents/skills/jspace-use/references/harnesses.md` | session-end / turn 提醒的能力边界（提醒 ≠ 写入） |
+| `../jspace-use/references/gbrain.md` | 纪律源（维度模型 / state 覆盖 vs 知识追加 / 晋升 / 来源 tag / status / kind） |
+| `SKILL.md` | 日常流程（触发 + 6 步） |
+| `../asset-ingest/SKILL.md` | 资产写侧（文件归位 / reference 页，转引用） |
+| `../workbench-retro/references/checks.md` 检查 1 | 来源 tag 的消费者（写回率取证） |
+| `../jspace-use/references/harnesses.md` | session-end / turn 提醒的能力边界（提醒 ≠ 写入） |
 | `templates/workbench/AGENTS.md` End-of-Work Capture | 何时触发的提示（引用本 skill，不双写纪律） |

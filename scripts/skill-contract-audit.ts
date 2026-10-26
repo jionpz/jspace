@@ -16,8 +16,15 @@ export const REQUIRED_SKILL_SECTIONS = [
   "## 转交",
 ] as const;
 
-const NEW_REFERENCE = /`~\/\.agents\/skills\/([\w-]+)\/([\w/.-]+)`/g;
-const OLD_RELATIVE_REFERENCE = /`(references\/[\w-]+\.md|\.\.\/[\w-]+\/(?:references\/[\w-]+\.md|SKILL\.md)|\.\.\/SKILL\.md)`/g;
+/** A backticked token; reference forms are classified inside auditReferences. */
+const BACKTICK_TOKEN = /`([^`\n]+)`/g;
+/** Scope-independent reference prefix: `$SKILL_DIR/...` = this skill's root. */
+const SKILL_DIR_PREFIX = "$SKILL_DIR/";
+/** The retired user-level install path used as a *reference*. A bare install
+ *  directory (`~/.agents/skills/harness-config`) stays legal prose — the global
+ *  skills genuinely live there — but anything below the skill dir is a
+ *  reference that must be scope-independent. */
+const USER_LEVEL_PREFIX = "~/.agents/skills/";
 const STRUCTURED_CALLS = new Set([
   "get_page",
   "list_pages",
@@ -48,37 +55,71 @@ function migrationContext(line: string): boolean {
   return /\b(legacy|migration|migrate)\b|迁移|旧根|旧版/i.test(line);
 }
 
+/** Own skill name from a repo-relative path (`skills/<name>/...`). */
+function ownSkill(relPath: string): string | null {
+  const m = /^skills\/([^/]+)\//.exec(relPath);
+  return m ? m[1]! : null;
+}
+
+/** Reference forms are skill-root-relative and scope-independent:
+ *    `references/x.md`            → this skill
+ *    `$SKILL_DIR/x.md`            → this skill (explicit directory variable)
+ *    `../<skill>/x.md`            → a sibling official skill
+ *  `~/.agents/skills/<skill>/...` is rejected: it only resolves when the skill
+ *  happens to be installed at the user level, which is true for machine-global
+ *  skills and false for workbench ones (issue: skill scope convergence). */
 function auditReferences(
   relPath: string,
   body: string,
   opts: SkillDocAuditOptions,
   failures: string[],
 ): number {
+  const own = ownSkill(relPath);
+  if (own === null) return 0; // not part of the official skills tree
   const skillsRoot = resolve(opts.repoRoot, "skills");
   const exists = opts.exists ?? existsSync;
   let checked = 0;
+
   body.split(/\r?\n/).forEach((line, index) => {
-    for (const match of line.matchAll(NEW_REFERENCE)) {
+    for (const match of line.matchAll(BACKTICK_TOKEN)) {
+      const token = match[1]!.trim();
+      // Placeholders (`references/harness-{a,b}.md`, `<skill>`) are templates,
+      // not references.
+      if (token.includes("{") || token.includes("<")) continue;
+
+      let source: string;
+      if (token.startsWith(USER_LEVEL_PREFIX)) {
+        const rest = token.slice(USER_LEVEL_PREFIX.length);
+        const slash = rest.indexOf("/");
+        // `~/.agents/skills/harness-config/` (install dir, nothing below it) is
+        // legal prose about where a machine-global skill lives.
+        if (slash === -1 || rest.slice(slash + 1) === "") continue;
+        checked += 1;
+        failures.push(
+          `C1 user-level reference at ${relPath}:${index + 1}: \`${token}\`; ` +
+            `use \`${SKILL_DIR_PREFIX}...\` or \`../<skill>/...\` (skill-root-relative resolves in every scope)`,
+        );
+        continue;
+      }
+      if (token.startsWith(SKILL_DIR_PREFIX)) {
+        source = resolve(skillsRoot, own, token.slice(SKILL_DIR_PREFIX.length));
+      } else if (token.startsWith("references/")) {
+        source = resolve(skillsRoot, own, token);
+      } else if (/^\.\.\/[\w-]+\//.test(token)) {
+        source = resolve(skillsRoot, token.slice(3));
+      } else {
+        continue; // not a reference
+      }
+
       checked += 1;
-      const skill = match[1]!;
-      const rest = match[2]!;
-      const source = resolve(skillsRoot, skill, rest);
       const relToSkills = relative(skillsRoot, source);
       if (relToSkills.startsWith("..") || isAbsolute(relToSkills)) {
-        failures.push(
-          `C1 invalid reference path at ${relPath}:${index + 1}: \`~/.agents/skills/${skill}/${rest}\` escapes the skills root`,
-        );
+        failures.push(`C1 invalid reference path at ${relPath}:${index + 1}: \`${token}\` escapes the skills root`);
       } else if (!exists(source)) {
         failures.push(
-          `C1 broken reference at ${relPath}:${index + 1}: \`~/.agents/skills/${skill}/${rest}\` has no source skills/${skill}/${rest}`,
+          `C1 broken reference at ${relPath}:${index + 1}: \`${token}\` has no source skills/${normalizeRel(relToSkills)}`,
         );
       }
-    }
-    for (const match of line.matchAll(OLD_RELATIVE_REFERENCE)) {
-      checked += 1;
-      failures.push(
-        `C1 stale relative reference at ${relPath}:${index + 1}: \`${match[1]}\`; use \`~/.agents/skills/<skill>/...\``,
-      );
     }
   });
   return checked;

@@ -57,7 +57,7 @@ gbrain call get_page '{"slug":"smoke/first-use","include_content":true}'
 # 探针页可以保留；清理不是本步骤的完成条件。若需清理，按本机确认的删除接口
 # 单独记录，不能用旧文本读写命令替代结构化契约。
 ```
-断言:`gbrain doctor --json` resolver/pgvector 全 `ok`;smoke 页 `put_page`→`get_page` 通过，清理方式已记录。细则 `~/.agents/skills/jspace-use/references/gbrain.md`。
+断言:`gbrain doctor --json` resolver/pgvector 全 `ok`;smoke 页 `put_page`→`get_page` 通过，清理方式已记录。细则 `references/gbrain.md`。
 
 ## Phase 2 — Registry health
 
@@ -70,7 +70,7 @@ jq .jspace/hub.json >/dev/null   # 合法 JSON
 ✓ hub.json schema_version 1   ✓ domains ↔ workspace/ 一致   ✓ 每资源恰一 primary
 ⚠ resource <x> 外部路径未绑定(warning,不阻塞)
 ```
-断言:`jspace doctor` 退出 0;缺外部路径只报 warning,不视为失败。细则 `~/.agents/skills/jspace-use/references/registry.md`。
+断言:`jspace doctor` 退出 0;缺外部路径只报 warning,不视为失败。细则 `references/registry.md`。
 
 ## Phase 3 — File center(含首启验收闭环)
 
@@ -92,13 +92,13 @@ Claude Code 走 MCP,写 `~/.claude.json` 的 `mcpServers.gbrain`(`command` = gbr
 ```json
 { "mcpServers": { "gbrain": { "command": "/Users/<you>/.bun/bin/gbrain", "args": ["serve"], "type": "stdio" } } }
 ```
-断言:`~/.claude.json` 有 `mcpServers.gbrain`;重启 Claude Code 后 `/mcp` 见 gbrain 已连。只接线用户选的这一个,不代装其余 harness。细则 `~/.agents/skills/jspace-use/references/harnesses.md`。
+断言:`~/.claude.json` 有 `mcpServers.gbrain`;重启 Claude Code 后 `/mcp` 见 gbrain 已连。只接线用户选的这一个,不代装其余 harness。细则 `references/harnesses.md`。
 
 接线后补一步 gbrain skill 路由:
 ```bash
 jspace harness wire --harness claude --dir .   # GBRAIN_SKILLS_DIR=<工作台>/.jspace/skills 注入 gbrain MCP env
 ```
-重启 Claude Code 让 `gbrain serve` 以新 env 启动(否则 resolver 只认根 `skills/` 或回退内置 skill)。细则 `~/.agents/skills/jspace-use/references/gbrain.md`「Skill routing wiring」。
+重启 Claude Code 让 `gbrain serve` 以新 env 启动(否则 resolver 只认根 `skills/` 或回退内置 skill)。细则 `references/gbrain.md`「Skill routing wiring」。
 
 ## Phase 4.5 — Scheduled tasks(必须问一次,默认推荐开)
 
@@ -155,4 +155,4 @@ cp .jspace/skills/jspace-use/references/usage-mileage-ledger-template.md .jspace
 
 ## After first-use — 使用里程(M7)
 
-first-use 只证明**机制可配**;三个飞轮是否在转,走独立验收协议 `~/.agents/skills/jspace-use/references/usage-mileage.md`(R1 retro 无头首跑 / R2 连续两周写回 / R3 资产闭环)。**不是首启必跑项**,真实使用后再填证据台账;禁伪造 `source:session`。
+first-use 只证明**机制可配**;三个飞轮是否在转,走独立验收协议 `references/usage-mileage.md`(R1 retro 无头首跑 / R2 连续两周写回 / R3 资产闭环)。**不是首启必跑项**,真实使用后再填证据台账;禁伪造 `source:session`。

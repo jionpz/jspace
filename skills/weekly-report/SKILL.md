@@ -26,9 +26,10 @@ triggers:
 
 ## 权威引用
 
-- 周期、来源 tag、asset `rel_path` 和完成证据:`~/.agents/skills/jspace-use/references/gbrain.md`
-- 项目发现、文件命名和布局:`~/.agents/skills/asset-ingest/references/filing.md`
-- 机器快照边界:`~/.agents/skills/memory-consolidate/SKILL.md`
+- 本 skill 内引用一律以 skill 根为基准(`$SKILL_DIR` 指本 skill 目录);跨 skill 用 `../<skill>/...`。
+- 周期、来源 tag、asset `rel_path` 和完成证据:`../jspace-use/references/gbrain.md`
+- 项目发现、文件命名和布局:`../asset-ingest/references/filing.md`
+- 机器快照边界:`../memory-consolidate/SKILL.md`
 
 ## 写集
 
