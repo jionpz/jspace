@@ -15,7 +15,7 @@ JSpace 是**用户拥有的、可移植的个人 AI 工作底座**，目标是�
 
 - `.trellis/` —— 本开发仓库使用的 **Trellis 开发工作流框架**（vendored，Claude Code 等 harness 的任务规划/执行/检查机制），**不是 jspace 运行时组件**，不影响 CLI 产物或 JWorkspace。
 - `templates/workbench/` —— 工作台模板源（CLI 生成 JWorkspace 的种子资产，含各 harness 接线 seed `.claude/` `.grok/` `.opencode/` `.cursor/`）。
-- `skills/` —— 官方技能源码（7 个 workbench 技能：jspace-use / asset-ingest / memory-recall / memory-writeback / workbench-retro / weekly-report / memory-consolidate；另有 global 段的 `harness-config`（机器级 harness 治理）与 `jspace-adopt`（旧项目非破坏收编），manifest 合计 9 个），经 `scripts/gen-assets.ts` 嵌入二进制。
+- `skills/` —— 官方技能源码（7 个 workbench 技能：jspace-use / asset-ingest / memory-recall / memory-writeback / workbench-retro / weekly-report / memory-consolidate；另有 global 段的 `harness-config`（机器级 harness 治理）与 `jspace-adopt`（旧项目非破坏收编），manifest 合计 9 个）。workbench 技能物化进各自工作台的 `.jspace/skills/`，**不装用户级**；global 技能由 `jspace skills install` 安装到 `~/.agents/skills/`。两者都经 `scripts/gen-assets.ts` 嵌入二进制。
 - `core/` `application/` `adapters/` `scripts/` —— CLI 分层源码：契约 / 领域用例 / harness·scheduler·process·fs 适配 / 生成与校验脚本（gen-assets / check-skills / check-harness-consistency / check-manifest-integrity）。`adapters/harness/capabilities.yaml` 是 harness 支持集的单一事实源。
 
 ## 快速开始
@@ -81,7 +81,7 @@ bun run cli/main.ts doctor --dir ~/jworkspace
 - `jspace memory` — 统一周期时钟与只读审计:`memory period --json`(本地周一、半开窗口、observed_through;补跑 `--week`,固定取证 `--now`)、`memory check --json`(结构、来源、生命周期、指针与 coverage)。
 - `jspace workspace diff / upgrade` — 工作台升级计划与执行(managed 内容刷新、本地修改保冲突)。
 - `jspace context` — harness hook 上下文注入:`context session-start|turn|pre-compact|session-end`(默认 hook JSON envelope;`--plain` 纯文本;session-start 另支持 `--envelope cursor`)。被 `.claude/settings.json` / `.grok/hooks/` / `.cursor/hooks.json` 等消费。
-- `jspace domain / resource / project / filehub` — 域与资源注册表操作;`jspace skills install` 物化用户级官方技能;`jspace harness wire --harness <x> --dir <wb>` 写各 harness 配置并注入 gbrain MCP env（支持 Claude Code / Grok Build / OpenCode / Pi / Cursor；Codex 是 headless cron 条目，JSpace 不代写它的 MCP 配置）。
+- `jspace domain / resource / project / filehub` — 域与资源注册表操作;`jspace skills install` 只物化机器级（global）官方技能到 `~/.agents/skills/`，并清理用户级的 workbench 技能残留;`jspace harness wire --harness <x> --dir <wb>` 写各 harness 配置并注入 gbrain MCP env（支持 Claude Code / Grok Build / OpenCode / Pi / Cursor；Codex 是 headless cron 条目，JSpace 不代写它的 MCP 配置）。
 
 ## 目录结构
 

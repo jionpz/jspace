@@ -135,7 +135,7 @@ export function initWorkbench(
       ...projections.lines,
       `Validate: ${validateCmd} doctor --dir ${target}`,
       `Next: read AGENTS.md, then follow .jspace/skills/jspace-use/SKILL.md`,
-      `Install user-level skills (multi-harness ~/.agents/skills/, referenced from SKILL.md): ${validateCmd} skills install`,
+      `Install machine-global skills (harness-config, jspace-adopt → ~/.agents/skills/; workbench skills stay in this workbench): ${validateCmd} skills install`,
     ],
   };
 }

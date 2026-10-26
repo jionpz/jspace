@@ -44,7 +44,7 @@ Before changing files for non-trivial work, classify the request internally (imp
 
 ## Skill Governance
 
-根 `skills/` 归**用户自建**（创建须用户批准）；官方技能在 `.jspace/skills/`（machine-managed，未改随升级刷新、本地改动保留为 skip），`.claude/skills/` / `.grok/skills/` / `.opencode/skills/` / `.agents/skills/` 是指向它的目录软链（各 harness 投影，物理副本唯一），勿手工编辑；提议信号 / 禁区 / 用户确认规则 → jspace-use 第 8 章。首次使用前运行 `jspace skills install`，把官方 skills 物化到用户级 `~/.agents/skills/`（SKILL.md 里引用的 `~/.agents/skills/<skill>/references/...` 文档在此落地，未安装时打开会 404；`workspace upgrade` 会自动刷新过期副本）。
+根 `skills/` 归**用户自建**（创建须用户批准）；官方技能在 `.jspace/skills/`（machine-managed，未改随升级刷新、本地改动保留为 skip），`.claude/skills/` / `.grok/skills/` / `.opencode/skills/` / `.agents/skills/` 是指向它的目录软链（各 harness 投影，物理副本唯一），勿手工编辑；提议信号 / 禁区 / 用户确认规则 → jspace-use 第 8 章。**workbench skill 只从本工作台发现**：不进用户级 `~/.agents/skills/`（那里只放 `scope: global` 的机器级技能，如 `harness-config` / `jspace-adopt`，由 `jspace skills install` 安装）。旧版留在用户级的官方副本由 `jspace workspace upgrade` 清理，`jspace doctor` 的 `skills.user_level_workbench` 会提示。skill 文档之间的引用一律以 skill 根为基准（同 skill 内直写相对文件名，跨 skill 用上一级目录加 skill 名），与安装位置无关。
 
 ## Durable Knowledge Routing
 

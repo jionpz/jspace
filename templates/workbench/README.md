@@ -14,7 +14,7 @@
   - `.claude/skills/` - 官方 skill 的 Claude Code 投影（目录软链 → `.jspace/skills/`，机器托管；勿手工编辑，改动会产生 `skills.projection_drift` 告警）
   - `.grok/skills/` - 官方 skill 的 Grok Build 投影（目录软链；同 `.claude/skills/` 纪律）
   - `.opencode/skills/` - 官方 skill 的 OpenCode 投影（目录软链；同 `.claude/skills/` 纪律）
-  - `.agents/skills/` - 官方 skill 的项目级多 harness 投影（目录软链；同 `.claude/skills/` 纪律，用户级 `~/.agents/skills/` 由 `jspace skills install` 薄链到工作台 SSOT）
+  - `.agents/skills/` - 官方 skill 的项目级多 harness 投影（目录软链；同 `.claude/skills/` 纪律。Cursor 等 harness 从这里发现工作台 skill；用户级 `~/.agents/skills/` 只放机器级技能，不链工作台 skill）
   - `.grok/hooks/jspace.json` - Grok Build 会话 hook（SessionStart/UserPromptSubmit/PreCompact/SessionEnd；seed，未修改随升级刷新，本地修改保留）
   - `.cursor/hooks.json` - Cursor 会话 hook（sessionStart/sessionEnd；seed，未修改随升级刷新，本地修改保留）
   - `.opencode/plugins/jspace.ts` - OpenCode 会话 plugin（session.created→session-start / session.idle→pending+cron / compacting→context 注入；seed，未修改随升级刷新，本地修改保留）
@@ -40,7 +40,7 @@
 ## 使用
 
 1. 先读 `AGENTS.md`。
-2. 安装用户级 skills(多 harness 统一位置,SKILL.md 引用的 `~/.agents/skills/` 文档在此物化):`jspace skills install`(幂等;`--refresh` 更新过期副本)。
+2. 安装机器级 skills(`harness-config` / `jspace-adopt` → 多 harness 统一位置 `~/.agents/skills/`):`jspace skills install`(幂等;`--refresh` 更新过期副本)。工作台 skills 已在本目录 `.jspace/skills/`，不装用户级。
 3. 首次使用按 `.jspace/skills/jspace-use/SKILL.md` 使用指南配置 gbrain、接线所选 AI harness,并了解日常路由/维护。
 4. 用 JSpace CLI 校验本目录（`jspace` 为编译二进制，需在 PATH 上；源码检出则运行 `bun run cli/main.ts`）：
 

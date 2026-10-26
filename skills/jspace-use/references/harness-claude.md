@@ -1,6 +1,6 @@
 # Claude Code 接线参考（参考实现）
 
-> Claude Code 是 JSpace harness 接线的**参考实现**：hooks（`.claude/settings.json`）+ skills 投影（`.claude/skills/` + `.agents/skills/`）+ MCP（`~/.claude.json`）+ 用户级 `~/.agents/skills/`。其他 harness 的接线是对它的近似。与 `harness-config` skill 的机器级接线分工：本文档是 JSpace 工作台对 Claude Code 的支持声明；`~/.agents/AGENTS.md` 全局治理的逐 harness 差异见 harness-config。
+> Claude Code 是 JSpace harness 接线的**参考实现**：hooks（`.claude/settings.json`）+ skills 投影（`.claude/skills/` + `.agents/skills/`）+ MCP（`~/.claude.json`）；用户级 `~/.agents/skills/` 只承载机器级（global）skill。其他 harness 的接线是对它的近似。与 `harness-config` skill 的机器级接线分工：本文档是 JSpace 工作台对 Claude Code 的支持声明；`~/.agents/AGENTS.md` 全局治理的逐 harness 差异见 harness-config。
 > `<gbrain>` = gbrain 二进制绝对路径（`$GBRAIN_BIN` → `command -v gbrain`；两者都解析不到时 `jspace harness wire` 显式失败并提示安装，不猜测 `~/.bun/bin/gbrain` 一类安装目录）。
 
 ## 支持面（capsules：capabilities.claude）
@@ -11,7 +11,7 @@
 | 会话 hook | ✅ SessionStart / UserPromptSubmit（`.claude/settings.json`，`jspace context session-start` / `turn`） | best_effort（交互式 + 无头 `claude -p` 均触发——实测确认） |
 | 会话结束 hook | ✅ SessionEnd（`jspace context session-end`） | best_effort；**输出被 Claude 丢弃**（见下方「session-end 的边界」） |
 | MCP | ✅ 原生（`~/.claude.json` `mcpServers.gbrain`） | stdio `command + args` |
-| skills 投影 | `.claude/skills/` + `.agents/skills/`（工作台级）+ `~/.agents/skills/`（用户级） | 工作台级 init/upgrade 物化；用户级 `jspace skills install` |
+| skills 投影 | `.claude/skills/` + `.agents/skills/`（工作台级；workbench skill **只**在这里） | init/upgrade 物化；用户级 `~/.agents/skills/` 只放 global skill（`jspace skills install`） |
 | 生命周期分级 | session-start best_effort / session-end best_effort / fallback manual / crash best_effort | 见 capabilities.lifecycle |
 
 ## 接线（init 后现状）
@@ -24,7 +24,7 @@
 { "command": "<gbrain>", "args": ["serve"], "type": "stdio" }
 ```
 
-- **用户级 skills**：`jspace skills install` 物化到 `~/.agents/skills/`（多 harness 统一位置）。
+- **机器级 skills**：`jspace skills install` 只把 `scope: global` 的 skill 物化到 `~/.agents/skills/`（多 harness 统一位置）；workbench skill 不进用户级，从工作台投影被发现。
 
 ## session-end 的边界（诚实声明）
 

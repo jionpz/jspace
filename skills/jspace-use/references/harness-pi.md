@@ -13,7 +13,7 @@
 | MCP 扩展 | ⚠️ `via: pi_mcp_adapter` | 第三方通道，见下方安装提示 |
 | 会话事件 | ⚠️ `session_start` / `before_agent_start`（扩展事件；jspace 提供专用 extension） | `jspace harness wire --harness pi` 写入 `~/.pi/agent/extensions/jspace/index.ts` |
 | hooks.json | ❌ 无 | 注入靠 context/SYSTEM 文件 + 扩展事件 |
-| skills 投影 | `~/.agents/skills/`（用户级） | `jspace skills install` 物化；Pi 认该目录 |
+| skills 投影 | 工作台 `.agents/skills/`（workbench skill）+ `~/.agents/skills/`（仅 global skill） | Pi 认用户级目录，但 workbench skill 只在工作台投影里 |
 | 生命周期分级 | session-start best_effort / session-end manual / fallback manual / crash best_effort | 见 capabilities.lifecycle |
 
 ## gbrain 接入：两条路

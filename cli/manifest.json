@@ -39,7 +39,7 @@
     },
     {
       "path": "templates/workbench/AGENTS.md",
-      "sha256": "a060c66f2e330fa4bea1e148d328165394a544bc1326dbdb495e121ee90b74ce",
+      "sha256": "a1edae643f664ed7251a77f34d929a820032fe5b96bfc5b8351d2ccc5c48c960",
       "ownership": "seed"
     },
     {
@@ -49,7 +49,7 @@
     },
     {
       "path": "templates/workbench/README.md",
-      "sha256": "8ebdaa2d52b73727328be32e2a24eba58c927986d1b3ef0e537a4e179034a5f3",
+      "sha256": "102d674f4a57a14dad107fbedc6fa329211fd4883f0bb0e3e84dc36b93cc5603",
       "ownership": "seed"
     },
     {
@@ -79,7 +79,7 @@
     },
     {
       "path": "skills/jspace-use/references/harness-claude.md",
-      "sha256": "0aae2b2fc59999841a9410d4775555c8864c9831ad17a895d97aad32e316d354",
+      "sha256": "b4869b0d4175fd6a73f85ced209c41491d80eeffe5bae75c46edbdd3c8d7d057",
       "ownership": "seed"
     },
     {
@@ -104,7 +104,7 @@
     },
     {
       "path": "skills/jspace-use/references/harness-pi.md",
-      "sha256": "b0c1c1e0a88d1b2c331eaabc04b94e8572405b46b4d0d6c40a7f17437eda5b59",
+      "sha256": "439b1ae52ef82c0ebb6c32e90cbc7afc586e7dfa9bb2c304d09db568a33d4d2f",
       "ownership": "seed"
     },
     {
