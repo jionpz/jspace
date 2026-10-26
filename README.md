@@ -78,7 +78,7 @@ bun run cli/main.ts doctor --dir ~/jworkspace
 - `jspace cron` — 定时任务:`cron run --id <id> --dry-run`(rehearsal)、`cron install --dry-run`(reconciliation 计划)、`cron failures`(会话开始失败/暂存聚合)、`cron ack`。
 - `jspace ingest` — 资料入库 journal:`ingest begin`(暂存副本+journal)→ `advance --gbrain` → `advance --index` → `advance --complete`(移除 source);gbrain/index 由写侧完成后报告 checkpoint。已记录步骤失败时用 `ingest fail <id> --reason <原因>` 按状态补偿,中断后用 `ingest list` 查看续跑入口。commit 的 source 移除未证明完成时 journal 保持 `failed/failedStep=committed`(`list` 标注 `failed/cleanup-pending`)——用同一 `advance <id> --complete` 幂等收尾,不虚报 source 已删。
 - `jspace pending` — gbrain 写暂存:`pending stage` 保存锁冲突时的待写正文、`pending apply` 幂等应用、`pending ack` 确认 terminal_failed。暂存成功不等于已落库;已有不同正文的冲突和重试耗尽会显式报告。
-- `jspace memory` — 统一周期时钟与只读审计:`memory period --json`(本地周一、半开窗口、observed_through;补跑 `--week`,固定取证 `--now`)、`memory check --json`(结构、来源、生命周期、指针与 coverage)。
+- `jspace memory` — 统一周期时钟与只读审计:`memory period --json`(本地周一、半开窗口、observed_through;补跑 `--week`,取刚结束的周 `--last-complete`,固定取证 `--now`)、`memory check --json`(结构、来源、生命周期、指针与 coverage)。
 - `jspace workspace diff / upgrade` — 工作台升级计划与执行(managed 内容刷新、本地修改保冲突)。
 - `jspace context` — harness hook 上下文注入:`context session-start|turn|pre-compact|session-end`(默认 hook JSON envelope;`--plain` 纯文本;session-start 另支持 `--envelope cursor`)。被 `.claude/settings.json` / `.grok/hooks/` / `.cursor/hooks.json` 等消费。
 - `jspace domain / resource / project / filehub` — 域与资源注册表操作;`jspace skills install` 只物化机器级（global）官方技能到 `~/.agents/skills/`，并清理用户级的 workbench 技能残留;`jspace harness wire --harness <x> --dir <wb>` 写各 harness 配置并注入 gbrain MCP env（支持 Claude Code / Grok Build / OpenCode / Pi / Cursor；Codex 是 headless cron 条目，JSpace 不代写它的 MCP 配置）。

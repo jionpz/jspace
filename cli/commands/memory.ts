@@ -56,6 +56,7 @@ export function memoryPeriodCommand(
     const options = {
       ...(timezone === undefined ? {} : { timeZone: timezone }),
       ...(week === undefined ? {} : { monday: week }),
+      ...(args.last_complete === true ? { lastComplete: true } : {}),
     };
     const period = weeklyPeriod(nowArg === undefined ? deps.now() : instant(nowArg), options);
     return {
@@ -108,6 +109,11 @@ const memoryPeriodSpec: CommandSpec = {
       takesValue: true,
       metavar: "YYYY-MM-DD",
       help: "target Monday for a backfill; default: current local week",
+    },
+    {
+      name: "--last-complete",
+      takesValue: false,
+      help: "target the most recently completed week (for weekly crons that run after the week ends); exclusive with --week",
     },
     {
       name: "--timezone",

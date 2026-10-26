@@ -170,18 +170,28 @@ function zonedIso(epochMs: number, timeZone: string): string {
 export interface WeeklyPeriodOptions {
   timeZone?: string;
   monday?: string;
+  /** Target the most recently completed week instead of the week containing
+   *  `now`. Weekly crons that fire just after midnight on Monday use this to
+   *  cover the whole previous week instead of a fresh, empty one. */
+  lastComplete?: boolean;
 }
 
 /** Compute one weekly period. `monday` supports explicit backfill; it must be
  *  a real Monday whose local midnight is not later than `now`. Past weeks use
- *  their exclusive end as observed_through; the current week uses `now`. */
+ *  their exclusive end as observed_through; the current week uses `now`.
+ *  `lastComplete` resolves to the current Monday minus seven days: the current
+ *  week is never complete before its exclusive end, so this is always the week
+ *  that just ended. */
 export function weeklyPeriod(now: Date, options: WeeklyPeriodOptions = {}): WeeklyPeriod {
   if (Number.isNaN(now.getTime())) throw new RangeError("now must be a valid instant");
+  if (options.monday !== undefined && options.lastComplete) {
+    throw new RangeError("monday and lastComplete are mutually exclusive");
+  }
   const timeZone = resolveTimeZone(options.timeZone);
   const nowMs = Math.trunc(now.getTime() / 1000) * 1000;
   const nowParts = partsAt(nowMs, timeZone);
   const currentMonday = mondayOf(nowParts);
-  const weekStart = options.monday ?? currentMonday;
+  const weekStart = options.monday ?? (options.lastComplete ? addDays(currentMonday, -7) : currentMonday);
   if (weekday(weekStart) !== 1) throw new RangeError("monday must be a Monday date");
 
   const startMs = localMidnight(weekStart, timeZone);

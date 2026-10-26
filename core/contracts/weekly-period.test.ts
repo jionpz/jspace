@@ -63,6 +63,40 @@ test("keeps each DST boundary offset in the local half-open window", () => {
   });
 });
 
+test("lastComplete targets the week that just ended, never a fresh one", () => {
+  // Monday 00:20 local: the crons' slot. The default would resolve to the new,
+  // empty week; lastComplete resolves to the week that ended at midnight.
+  const earlyMonday = weeklyPeriod(new Date("2026-10-25T16:20:00Z"), {
+    timeZone: "Asia/Shanghai",
+    lastComplete: true,
+  });
+  expect(earlyMonday).toMatchObject({
+    week_start: "2026-10-19",
+    week_end_exclusive: "2026-10-26",
+    observed_through: "2026-10-26T00:00:00+08:00",
+    status: "complete",
+    is_current_week: false,
+  });
+
+  // Mid-week it still means "the last fully elapsed week" (not the partial one).
+  const sunday = weeklyPeriod(new Date("2026-10-25T13:00:00Z"), {
+    timeZone: "Asia/Shanghai",
+    lastComplete: true,
+  });
+  expect(sunday.week_start).toBe("2026-10-12");
+  expect(sunday.status).toBe("complete");
+});
+
+test("rejects --week together with --last-complete", () => {
+  expect(() =>
+    weeklyPeriod(new Date("2026-10-19T10:00:00Z"), {
+      timeZone: "Asia/Shanghai",
+      monday: "2026-10-05",
+      lastComplete: true,
+    }),
+  ).toThrow("mutually exclusive");
+});
+
 test("rejects Tuesday targets and future weeks", () => {
   const now = new Date("2026-10-19T10:00:00Z");
   expect(() => weeklyPeriod(now, { timeZone: "Asia/Shanghai", monday: "2026-10-20" })).toThrow(
