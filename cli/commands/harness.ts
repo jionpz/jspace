@@ -9,7 +9,7 @@
 // The declared `mcp_config.writer` selects a strategy (existing-server-env-json,
 // existing-server-env-toml, merge-json-server, merge-opencode-local) — never a
 // harness-name branch. All writes are merge + backup, never whole-file rewrites.
-import { readFileSync, writeFileSync, copyFileSync, mkdirSync, existsSync, statSync, symlinkSync, readlinkSync, cpSync, readdirSync, unlinkSync } from "node:fs";
+import { readFileSync, writeFileSync, copyFileSync, mkdirSync, existsSync, statSync, readdirSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import type { CommandSpec, OptionSpec, CmdContext, CmdResult } from "../../application/commands/command.ts";
@@ -154,78 +154,11 @@ export function runHarnessWire(ctx: CmdContext, harness: string, opts: RunHarnes
       }
     }
   }
-  if (harness === "cursor") {
-    const skills = cursorSkillsWire(ctx.dryRun);
-    lines.push(...skills.lines);
-    if (skills.errors.length > 0) {
-      return { lines, errors: skills.errors, exitCode: 1 };
-    }
-  }
+  // No Cursor-specific skills step: workbench skills reach Cursor through the
+  // workbench's own `.agents/skills` projection (issue #52), never through a
+  // user-level chain that can only name one workbench.
   lines.push(...describeCapability(harness));
   return { lines };
-}
-
-/** Cursor user-level skills thin-links (issue #12): link each official skill
- *  `~/.cursor/skills/<name>` → `~/.agents/skills/<name>` (the multi-harness
- *  user-level location materialized by `skills install`). Missing source -> hint;
- *  existing-but-elsewhere -> kept (never overwrite); win32 has no symlink without
- *  dev-mode, so it degrades to a copy. Read-only in dry-run. */
-function cursorSkillsWire(dryRun: boolean): { lines: string[]; errors: string[] } {
-  return wireCursorSkillLinks({
-    userRoot: join(homedir(), ".agents", "skills"),
-    cursorRoot: join(homedir(), ".cursor", "skills"),
-    skillNames: SKILLS_MANIFEST.workbench.map((x) => x.name),
-    dryRun,
-    isWin: process.platform === "win32",
-  });
-}
-
-/** Testable Cursor skills-link primitive (homedir injected). Link failures are
- *  errors (exit 1), never a silent exit 0 (issue #8 #9). */
-export function wireCursorSkillLinks(opts: {
-  userRoot: string;
-  cursorRoot: string;
-  skillNames: string[];
-  dryRun: boolean;
-  isWin: boolean;
-}): { lines: string[]; errors: string[] } {
-  const lines: string[] = [];
-  const errors: string[] = [];
-  for (const name of opts.skillNames) {
-    const userPath = join(opts.userRoot, name);
-    const linkPath = join(opts.cursorRoot, name);
-    if (!existsSync(userPath)) {
-      lines.push(`  skills: ${name} — run 'jspace skills install' first (${userPath} missing)`);
-      continue;
-    }
-    if (existsSync(linkPath)) {
-      let linked = false;
-      try {
-        linked = readlinkSync(linkPath) === userPath;
-      } catch {
-        // not a symlink (regular dir/file) — left alone
-      }
-      lines.push(linked ? `  skills: ${name} linked ✓` : `  skills: ${name} exists (points elsewhere; kept)`);
-      continue;
-    }
-    if (opts.dryRun) {
-      lines.push(`  skills: (dry-run) would link ${linkPath} → ${userPath}`);
-      continue;
-    }
-    try {
-      mkdirSync(opts.cursorRoot, { recursive: true });
-      if (opts.isWin) {
-        cpSync(userPath, linkPath, { recursive: true });
-        lines.push(`  skills: copied ${linkPath} ← ${userPath} (win32: no symlink)`);
-      } else {
-        symlinkSync(userPath, linkPath, "dir");
-        lines.push(`  skills: linked ${linkPath} → ${userPath}`);
-      }
-    } catch (e) {
-      errors.push(`  skills: ${name} — failed to link: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-  return { lines, errors };
 }
 
 // ---- `harness init` (ensure workbench seed/projection for one harness) ------

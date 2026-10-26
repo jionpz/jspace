@@ -40,7 +40,7 @@
 - [`harness-grok.md`](harness-grok.md) — T1 桥接：`.grok/hooks/` 四事件 + `.grok/skills/` + `jspace harness wire --harness grok`
 - [`harness-opencode.md`](harness-opencode.md) — T2.5 plugin：`.opencode/plugins/jspace.ts` + 细粒度事件 + compacting context 注入；MCP 用 `jspace harness wire --harness opencode`（写 `~/.config/opencode/opencode.json` 的 `mcp.gbrain`）
 - [`harness-pi.md`](harness-pi.md) — T3 honest boundary：cron `pi -p` + `jspace harness wire --harness pi`（写 `~/.pi/agent/mcp.json`）
-- [`harness-cursor.md`](harness-cursor.md) — 会话 harness（D6 保留）：无 headless，`jspace harness wire --harness cursor`（写 `~/.cursor/mcp.json` + 官方 skills 薄链到 `~/.cursor/skills/`）
+- [`harness-cursor.md`](harness-cursor.md) — 会话 harness（D6 保留）：无 headless，`jspace harness wire --harness cursor`（写 `~/.cursor/mcp.json`）；skills 走工作台 `.agents/skills` 投影，**无** `~/.cursor/skills` 链
 - [`harness-codex.md`](harness-codex.md) — 正式条目（headless cron）：`codex exec` 可被 cron 调用；**无会话 hook**；`mcp_config: null` 所以 `jspace harness wire` 不接受 codex（Codex 原生支持 MCP，但 JSpace 不写 `~/.codex/config.toml`）
 
 ## harness 接线诊断的范围与「已改 seed」(issue #52)

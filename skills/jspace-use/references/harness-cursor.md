@@ -28,7 +28,7 @@
 ```
 
   用户级 `~/.cursor/mcp.json` 或项目级 `.cursor/mcp.json`（project overrides user）。`--dry-run` 预览；Cursor 重启后可能在 MCP 设置里要求审批 server。
-- **skills 薄链**：同一条 wire 把官方 skills 链到 `~/.cursor/skills/<name>` → `~/.agents/skills/<name>`（先 `jspace skills install` 物化用户级）；缺链 `jspace doctor` 报 `cursor.skills_unlinked` info。
+- **skills 发现**：**没有 `~/.cursor/skills` 链**（旧版三跳链已退役）。Cursor 从**工作台的 `.agents/skills` 投影**发现官方 skills——这也是 `.agents/skills` 为共享投影的原因。用户级链只能指向一个工作台，多工作台必然错，因此不做。旧版残留（`~/.cursor/skills/<name>` 仍存在）由 `jspace doctor` 报 `cursor.skills_legacy_user_links` info，可手工删除。
 - **session-start 注入**：至少保证 MCP wiring；如需会话级 context 注入，用 `.cursor/rules/*.mdc`（项目级）或 Rules 文件。项目级 `.cursor/hooks.json`（seed，check into VCS）的 `sessionStart` 事件输出顶层 `{"additional_context":"<text>"}` 注入会话初始上下文——命令为 `jspace context session-start --envelope cursor`（纯命令，无 shell 语法；CLI 内部吞错 exit 0。Cursor 从项目级 + 用户级 `~/.cursor/hooks.json` 多层级加载；用户级可覆盖/追加，但工作台 seed 落项目级）。
 - **无 headless**：cron 不能用 cursor 跑（`cron run --harness cursor` → `fail`；`harness wire` 不接受 cursor 之外的 `--harness cursor` 也不会把它当 cron）。
 
@@ -42,7 +42,7 @@
 ## 验证
 
 ```bash
-jspace harness wire --harness cursor --dir . --dry-run   # 预览 ~/.cursor/mcp.json + skills 薄链计划
-jspace doctor --dir .          # checkHarness: cursor 无 headless 不触发 bin 检查（非 cron harness）；缺薄链报 cursor.skills_unlinked info
+jspace harness wire --harness cursor --dir . --dry-run   # 预览 ~/.cursor/mcp.json 写入计划
+jspace doctor --dir .          # checkHarness: cursor 无 headless 不触发 bin 检查（非 cron harness）；~/.cursor/skills 残留报 cursor.skills_legacy_user_links info
 jspace cron run --id <id> --harness cursor --dry-run --dir .   # fail("cursor has no headless CLI")
 ```

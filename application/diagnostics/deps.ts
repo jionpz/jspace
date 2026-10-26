@@ -56,10 +56,11 @@ export interface GbrainDeps {
 
 export interface CursorSkillsDeps {
   officialSkillNames: () => string[];
-  /** True when an official skill is thin-linked into Cursor's user-level skills
-   *  dir (~/.cursor/skills/<name> → ~/.agents/skills/<name>). Injected from cli
-   *  (uses homedir + readlink); doctor reports gaps as info (issue #12). */
-  cursorSkillsLinked?: (name: string) => boolean;
+  /** Official skill names still present in Cursor's RETIRED user-level skills
+   *  dir (`~/.cursor/skills/<name>`). Injected from cli (homedir); doctor reports
+   *  them as info-only leftovers — Cursor reads the workbench `.agents/skills`
+   *  projection, and a user-level entry can only ever name one workbench. */
+  cursorLegacySkillLinks?: () => string[];
 }
 
 export interface HarnessCheckDeps {

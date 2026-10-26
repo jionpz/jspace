@@ -85,22 +85,20 @@ export function checkGBrain(root: string, cron: GbrainDeps): RegistryDiagnostic[
   return diags;
 }
 
-/** Cursor user-level skills thin-links (issue #12): official skills should be
- *  linked into ~/.cursor/skills/ so the IDE sees them. Missing links are info
- *  (the wire command creates them; doctor only surfaces the gap). */
+/** Cursor's RETIRED user-level skill chain (old issue #12 wiring:
+ *  `~/.cursor/skills/<name>` → `~/.agents/skills/<name>` → one workbench).
+ *  Cursor now reads the workbench's own `.agents/skills` projection, so any
+ *  leftover entry is stale machine state that can only ever name one workbench.
+ *  Info only: doctor surfaces it, never deletes. */
 export function checkCursorSkills(cron: CursorSkillsDeps): RegistryDiagnostic[] {
-  const diags: RegistryDiagnostic[] = [];
-  const linked = cron.cursorSkillsLinked;
-  if (!linked) return diags;
-  const names = cron.officialSkillNames();
-  if (names.length === 0) return diags;
-  const missing = names.filter((n) => !linked(n));
-  if (missing.length === 0) return diags;
-  diags.push({
-    severity: "info",
-    code: "cursor.skills_unlinked",
-    path: "cursor",
-    message: `Cursor user-level skills missing jspace thin-links: ${missing.join(", ")} (run 'jspace harness wire --harness cursor' after 'jspace skills install')`,
-  });
-  return diags;
+  const leftover = cron.cursorLegacySkillLinks?.() ?? [];
+  if (leftover.length === 0) return [];
+  return [
+    {
+      severity: "info",
+      code: "cursor.skills_legacy_user_links",
+      path: "cursor",
+      message: `legacy Cursor user-level skill links still present: ${leftover.join(", ")} (~/.cursor/skills). Cursor discovers workbench skills from this workbench's .agents/skills projection — delete those entries; a user-level link can only point at one workbench.`,
+    },
+  ];
 }

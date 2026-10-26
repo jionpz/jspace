@@ -2,7 +2,7 @@
 // coercion + cron deps for doctor/workspace-upgrade). Neutral module: family
 // command files import from here instead of redefining or crossing into each
 // other (keeps the family split free of circular imports).
-import { readFileSync, readlinkSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadCrons } from "../../application/automation/definitions.ts";
@@ -71,21 +71,19 @@ export const cronDeps = {
     SKILLS_MANIFEST.global
       .filter((s) => s.install_path !== undefined)
       .map((s) => ({ name: s.name, installPath: expandTilde(s.install_path!) })), // install_path is contract-required for global; ! is filter-guaranteed
+  cursorLegacySkillLinks: legacyCursorSkillLinks,
   readHarnessConfig: readFileOrNull,
   harnessBinOnPath: (name: string) => binaryOnPath(name, process.platform),
   globalGovernanceHome: () => homedir(),
   platform: process.platform,
 };
 
-/** True when an official skill has a thin-link `~/.cursor/skills/<name>` →
- *  `~/.agents/skills/<name>` (Cursor's user-level skills dir; wired by
- *  `harness wire --harness cursor`, doctor reports gaps as info). */
-export function cursorSkillsLinked(name: string): boolean {
-  const userPath = join(homedir(), ".agents", "skills", name);
-  const cursorPath = join(homedir(), ".cursor", "skills", name);
-  try {
-    return readlinkSync(cursorPath) === userPath;
-  } catch {
-    return false;
-  }
+/** Official skills still sitting in Cursor's RETIRED user-level skills dir
+ *  (`~/.cursor/skills/<name>`, the old three-hop chain into `~/.agents/skills`).
+ *  Cursor reads this workbench's `.agents/skills` projection instead, so any
+ *  entry here is a leftover that can only point at one workbench; doctor
+ *  reports it as info and never deletes it. */
+export function legacyCursorSkillLinks(): string[] {
+  const dir = join(homedir(), ".cursor", "skills");
+  return SKILLS_MANIFEST.workbench.map((s) => s.name).filter((name) => existsSync(join(dir, name)));
 }

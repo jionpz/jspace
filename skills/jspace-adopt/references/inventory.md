@@ -31,7 +31,7 @@
 
 - 用户自建:根 `skills/`、`~/.agents/skills/`;
 - JSpace 候选:`.jspace/skills/`;
-- harness 投影:`.claude/skills/`、`.grok/skills/`、`.opencode/skills/`、`.cursor/skills/`、Pi 对应的 skills 路径;
+- harness 投影:`.claude/skills/`、`.grok/skills/`、`.opencode/skills/`、`.agents/skills/`(Cursor 等共享)、Pi 对应的 skills 路径;
 - 全局入口:`~/.agents/skills/`、harness 用户级 skills。
 
 对每个 skill 记录:name、来源目录、是否 symlink、link target、是否可达、内容 hash、与官方同名 skill 是否一致。不要跟随未知 symlink 到项目外写文件。

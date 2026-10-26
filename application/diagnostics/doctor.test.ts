@@ -1270,14 +1270,19 @@ test("opencode gbrain wiring via mcp.<name> + environment env_key (issue #12)", 
   expect(codes(wired)).not.toContain("gbrain.skillsdir_unwired");
 });
 
-test("cursor skills thin-links: all linked -> none; missing -> cursor.skills_unlinked (info)", () => {
-  const allLinked = stubDeps({ cursorSkillsLinked: () => true });
-  expect(codes(doctorWorkbench(root, allLinked))).not.toContain("cursor.skills_unlinked");
-  const someMissing = stubDeps({ cursorSkillsLinked: (n) => n !== "memory-writeback" });
-  const r = doctorWorkbench(root, someMissing);
-  expect(codes(r)).toContain("cursor.skills_unlinked");
-  const d = (r.data as { diagnostics: { code: string; severity: string }[] }).diagnostics.find((x) => x.code === "cursor.skills_unlinked");
+test("cursor legacy user-level skill links -> cursor.skills_legacy_user_links (info)", () => {
+  const clean = stubDeps({ cursorLegacySkillLinks: () => [] });
+  expect(codes(doctorWorkbench(root, clean))).not.toContain("cursor.skills_legacy_user_links");
+  const leftover = stubDeps({ cursorLegacySkillLinks: () => ["memory-writeback"] });
+  const r = doctorWorkbench(root, leftover);
+  expect(codes(r)).toContain("cursor.skills_legacy_user_links");
+  const d = (r.data as { diagnostics: { code: string; severity: string; message: string }[] }).diagnostics.find(
+    (x) => x.code === "cursor.skills_legacy_user_links",
+  );
   expect(d?.severity).toBe("info");
+  expect(d?.message).toContain("memory-writeback");
+  // dep not injected = check skipped (a stubbed doctor never reads the real home)
+  expect(codes(doctorWorkbench(root, stubDeps({})))).not.toContain("cursor.skills_legacy_user_links");
 });
 
 test("tomlSkillsDirWired scoped to target section: sibling server with same key cannot mask unwired (issue #9 #9-07)", () => {
