@@ -15,6 +15,7 @@ import { diffBundle } from "../../application/workspace/manifest.ts";
 import { readMaterializedJournal } from "../../application/workspace/journal.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
 import { binaryOnPath } from "../../adapters/harness/bin.ts";
+import { classifyUserSkill, staleGlobalSkills } from "./skill-scope.ts";
 
 export const s = (v: unknown): string => (typeof v === "string" ? v : "");
 export const b = (v: unknown): boolean => v === true;
@@ -67,6 +68,9 @@ export const cronDeps = {
   officialSkillNames: () => SKILLS_MANIFEST.workbench.map((s) => s.name),
   bundleStaleSkills,
   userSkillsRoot: () => expandTilde("~/.agents/skills"),
+  globalSkillNames: () => SKILLS_MANIFEST.global.map((s) => s.name),
+  classifyUserSkill: (wbRoot: string, name: string) => classifyUserSkill(expandTilde("~/.agents/skills"), wbRoot, name),
+  globalStaleSkills: () => staleGlobalSkills(expandTilde("~/.agents/skills")),
   globalSkills: () =>
     SKILLS_MANIFEST.global
       .filter((s) => s.install_path !== undefined)

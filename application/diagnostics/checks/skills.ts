@@ -173,48 +173,66 @@ export function checkSkills(root: string, deps: SkillsDeps): RegistryDiagnostic[
   }
 
   {
-    // User-level thin-link health (issue #39): duplicate discovery roots and
-    // broken links. Skipped entirely when the user root dep is not wired.
+    // User-level SCOPE health (~/.agents/skills/). That directory carries
+    // machine-global skills only. A workbench skill there is wrong even as a
+    // healthy link: one name can point at just one workbench, and its contract
+    // references workbench-relative state that does not exist in unrelated
+    // directories. Provenance needs the embedded bundle (byte proof), so the
+    // classifier is injected; without it only dangling links are visible.
     const userRoot = deps.userSkillsRoot?.();
     if (userRoot !== undefined) {
+      const workbenchNames = deps.officialSkillNames();
       const projDirs = skillProjections();
-      const duplicates: string[] = [];
+      const globalNames = deps.globalSkillNames?.() ?? [];
+      const classify = deps.classifyUserSkill;
       const broken: string[] = [];
-      for (const name of deps.officialSkillNames()) {
-        const userEntry = join(userRoot, name);
-        let lst;
+      for (const name of [...workbenchNames, ...globalNames]) {
+        const p = join(userRoot, name);
         try {
-          lst = lstatSync(userEntry);
+          if (!lstatSync(p).isSymbolicLink()) continue;
+          realpathSync(p);
         } catch {
-          continue; // never installed at user level — global_missing covers the absent case
+          if (present(p)) broken.push(name); // dangling: the SSOT moved or is unmounted
         }
-        if (lst.isSymbolicLink()) {
-          try {
-            realpathSync(userEntry);
-          } catch {
-            broken.push(name); // dangling: the workbench SSOT moved or is unmounted
-          }
-          continue;
-        }
-        // Real dir at user level + a workbench projection also visible to
-        // harnesses that scan both roots (e.g. pi) => two name-colliding copies.
-        if (projDirs.some((p) => existsSync(join(root, p, name)))) duplicates.push(name);
       }
       if (broken.length > 0) {
         diags.push({
           severity: "warning",
           code: "skills.user_link_broken",
           path: "skills",
-          message: `user-level skill link(s) broken (dangling): ${broken.join(", ")} at ${userRoot}; run jspace skills install inside the workbench to re-point them`,
+          message: `user-level skill link(s) broken (dangling): ${broken.join(", ")} at ${userRoot}; the link target is gone — remove the entry (jspace no longer installs workbench skills there; machine-global ones are re-created by jspace skills install)`,
         });
       }
-      if (duplicates.length > 0) {
-        diags.push({
-          severity: "info",
-          code: "skills.duplicate_roots",
-          path: "skills",
-          message: `official skill(s) visible from two discovery roots with different content: ${duplicates.slice(0, 5).join(", ")}${duplicates.length > 5 ? ", …" : ""} — harnesses that scan both ~/.agents/skills and the workbench projections (e.g. pi) warn on name collision; thin-link state (skills install inside the workbench + workspace upgrade) collapses them to one realpath`,
-        });
+      if (classify) {
+        for (const name of workbenchNames) {
+          const cls = classify(root, name);
+          if (cls === "absent" || cls === "link-dangling") continue; // broken covers dangling
+          if (cls === "link-foreign") {
+            diags.push({
+              severity: "warning",
+              code: "skills.user_link_foreign",
+              path: `skills.${name}`,
+              message: `user-level skill ${join(userRoot, name)} points at ANOTHER workbench's .jspace/skills/${name}; sessions started in any other directory load that workbench's contract instead of this one. Run jspace workspace upgrade inside this workbench to drop the leftover, so the name resolves only from this workbench.`,
+            });
+            continue;
+          }
+          if (cls === "user-owned") {
+            diags.push({
+              severity: "warning",
+              code: "skills.user_level_workbench",
+              path: `skills.${name}`,
+              message: `workbench skill "${name}" also exists at ${join(userRoot, name)} with content that is NOT the official copy, so it may be your own skill — it was left alone. A workbench skill belongs to its workbench; delete this entry by hand if it is a stale copy.`,
+            });
+            continue;
+          }
+          // link-local | copy-official: a proven official projection at the user level.
+          diags.push({
+            severity: "warning",
+            code: "skills.user_level_workbench",
+            path: `skills.${name}`,
+            message: `workbench skill "${name}" is materialized at the user level (${join(userRoot, name)}, ${cls}); one name can only point at one workbench and unrelated directories would load this workbench's contract. Run jspace workspace upgrade inside this workbench to remove the proven leftover (workbench skills are discovered from the workbench, not ~/.agents/skills).`,
+          });
+        }
       }
 
       // Retired official names must not survive on a deployed machine: harnesses
@@ -261,13 +279,50 @@ export function checkSkills(root: string, deps: SkillsDeps): RegistryDiagnostic[
   }
 
   {
+    // Scope inversion: a MACHINE-GLOBAL skill (manifest.global) must not live
+    // inside a workbench. Its contract is machine state — it has to work with no
+    // workbench and from any cwd — so a workbench copy is stale the moment
+    // `jspace skills install` refreshes the real one.
+    const globalNames = deps.globalSkillNames?.() ?? [];
+    if (globalNames.length > 0) {
+      const hits: string[] = [];
+      for (const name of globalNames) {
+        if (present(join(root, CONFIG_DIR, "skills", name))) hits.push(`${CONFIG_DIR}/skills/${name}`);
+        for (const proj of skillProjections()) {
+          if (present(join(root, proj, name))) hits.push(`${proj}/${name}`);
+        }
+      }
+      if (hits.length > 0) {
+        diags.push({
+          severity: "warning",
+          code: "skills.global_in_workbench",
+          path: "skills",
+          message: `machine-global skill(s) materialized inside the workbench: ${hits.join(", ")} — their scope is the user-level ~/.agents/skills/ (they must work with no workbench and from any cwd), so a workbench copy goes stale independently of jspace skills install. jspace workspace upgrade reconciles managed files only; anything that survives it must be deleted by hand.`,
+        });
+      }
+    }
+  }
+
+  {
     const stale = deps.bundleStaleSkills?.(root) ?? [];
     if (stale.length > 0) {
       diags.push({
         severity: "info",
         code: "skills.bundle_stale",
         path: "skills",
-        message: `official skill(s) differ from the running bundle: ${stale.join(", ")}; run jspace workspace upgrade (it refreshes unmodified copies here and in ~/.agents/skills, and preserves local edits as skip/conflict)`,
+        message: `official workbench skill(s) differ from the running bundle: ${stale.join(", ")}; run jspace workspace upgrade (it refreshes unmodified copies under .jspace/skills/ and preserves local edits as skip/conflict)`,
+      });
+    }
+  }
+
+  {
+    const stale = deps.globalStaleSkills?.() ?? [];
+    if (stale.length > 0) {
+      diags.push({
+        severity: "info",
+        code: "skills.global_stale",
+        path: "skills",
+        message: `machine-global skill(s) differ from the running bundle: ${stale.join(", ")} in ~/.agents/skills; run jspace skills install --refresh (global skills are fully managed: local edits there are not preserved)`,
       });
     }
   }

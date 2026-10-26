@@ -22,6 +22,7 @@ import {
 } from "../../application/workspace/projections.ts";
 import { MARKER_FILE } from "../../core/contracts/files.ts";
 import { ASSETS } from "../assets.generated.ts";
+import { GLOBAL_SKILLS } from "../global-skills.generated.ts";
 
 function bundledFiles(name: string): Map<string, string> {
   const prefix = `skills/${name}/`;
@@ -32,24 +33,21 @@ function bundledFiles(name: string): Map<string, string> {
   return out;
 }
 
-/** True when `entryAbs` holds exactly the bundled file set with identical bytes.
- *  Dotfiles and `__pycache__` are ignored, as in diffDirs. This is how a Windows
- *  no-symlink COPY fallback is proven to be machine state rather than a user
- *  edit — the only content-based evidence we accept. */
-export function isOfficialCopy(entryAbs: string, name: string): boolean {
-  const want = bundledFiles(name);
+/** True when `dir` holds exactly `want` with identical bytes (dotfiles and
+ *  `__pycache__` ignored, as in diffDirs). */
+function dirMatchesBundle(dir: string, want: Map<string, string>): boolean {
   if (want.size === 0) return false;
   const seen = new Set<string>();
-  const walk = (dir: string, rel: string): boolean => {
+  const walk = (d: string, rel: string): boolean => {
     let entries: string[];
     try {
-      entries = readdirSync(dir);
+      entries = readdirSync(d);
     } catch {
       return false;
     }
     for (const entry of entries) {
       if (entry.startsWith(".") || entry === "__pycache__") continue;
-      const abs = join(dir, entry);
+      const abs = join(d, entry);
       const relPath = rel === "" ? entry : `${rel}/${entry}`;
       let st;
       try {
@@ -72,7 +70,34 @@ export function isOfficialCopy(entryAbs: string, name: string): boolean {
     }
     return true;
   };
-  return walk(entryAbs, "") && seen.size === want.size;
+  return walk(dir, "") && seen.size === want.size;
+}
+
+/** Machine-global skills whose installed copy differs from the bundle. Absent
+ *  installs belong to skills.global_missing, not to staleness. */
+export function staleGlobalSkills(userRoot: string): string[] {
+  const byName = new Map<string, Map<string, string>>();
+  for (const [key, body] of Object.entries(GLOBAL_SKILLS)) {
+    const m = /^skills\/([^/]+)\/(.+)$/.exec(key);
+    if (!m) continue;
+    const files = byName.get(m[1]!) ?? new Map<string, string>();
+    files.set(m[2]!, body);
+    byName.set(m[1]!, files);
+  }
+  const out: string[] = [];
+  for (const [name, files] of byName) {
+    if (!existsSync(join(userRoot, name))) continue;
+    if (!dirMatchesBundle(join(userRoot, name), files)) out.push(name);
+  }
+  return out.sort();
+}
+
+/** True when `entryAbs` holds exactly the bundled file set with identical bytes.
+ *  Dotfiles and `__pycache__` are ignored, as in diffDirs. This is how a Windows
+ *  no-symlink COPY fallback is proven to be machine state rather than a user
+ *  edit — the only content-based evidence we accept. */
+export function isOfficialCopy(entryAbs: string, name: string): boolean {
+  return dirMatchesBundle(entryAbs, bundledFiles(name));
 }
 
 /** A directory is a workbench when it carries the marker file — an arbitrary cwd

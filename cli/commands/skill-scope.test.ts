@@ -8,12 +8,14 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { ASSETS } from "../assets.generated.ts";
+import { GLOBAL_SKILLS } from "../global-skills.generated.ts";
 import { installHandler } from "./skills.ts";
 import {
   classifyUserSkill,
   isOfficialCopy,
   isWorkbenchRoot,
   pruneWorkbenchSkillsFromUserLevel,
+  staleGlobalSkills,
 } from "./skill-scope.ts";
 
 const NAME = "memory-recall";
@@ -126,6 +128,27 @@ test("installHandler prunes only through the injected root", () => {
     expect(r.exitCode).toBeUndefined();
     expect(existsSync(join(user, NAME))).toBe(false);
     expect(r.lines.join("\n")).toContain("removed user-level workbench skill");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("staleGlobalSkills: absent is not stale, byte drift is", () => {
+  const root = mkdtempSync(join(tmpdir(), "jspace-global-stale-"));
+  try {
+    const user = join(root, "skills");
+    mkdirSync(user, { recursive: true });
+    const prefix = "skills/harness-config/";
+    expect(staleGlobalSkills(user)).toEqual([]); // not installed -> global_missing, not staleness
+    for (const [key, body] of Object.entries(GLOBAL_SKILLS)) {
+      if (!key.startsWith(prefix)) continue;
+      const abs = join(user, "harness-config", key.slice(prefix.length));
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, body);
+    }
+    expect(staleGlobalSkills(user)).toEqual([]);
+    writeFileSync(join(user, "harness-config", "SKILL.md"), "edited\n");
+    expect(staleGlobalSkills(user)).toEqual(["harness-config"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

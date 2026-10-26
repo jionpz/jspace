@@ -1,5 +1,6 @@
 // application/diagnostics/deps.ts — injected dependencies for doctor checks.
 import type { LinuxCronHealth } from "../../adapters/scheduler/types.ts";
+import type { MisplacedEntryClass } from "../workspace/projections.ts";
 
 /** Minimal cron view consumed by doctor; full cron surface lives in the scheduler. */
 export interface CronLike {
@@ -41,10 +42,21 @@ export interface SkillsDeps {
    *  target (tilde already expanded at the cli wiring). Injected for the
    *  skills.global_missing check (issue #37); omitted => check skipped. */
   globalSkills?: () => Array<{ name: string; installPath: string }>;
+  /** Machine-global skill NAMES (manifest.global). Injected for the scope
+   *  checks — a global skill materialized inside a workbench, and the broken
+   *  user-level link range; omitted => those checks skipped. */
+  globalSkillNames?: () => string[];
   /** User-level skills root (~/.agents/skills, tilde expanded at the cli
-   *  wiring). Injected for the thin-link user-level checks — duplicate_roots
-   *  and broken-link visibility (issue #39); omitted => checks skipped. */
+   *  wiring). Injected for the user-level scope checks (issue #39); omitted =>
+   *  checks skipped. */
   userSkillsRoot?: () => string;
+  /** Classify `~/.agents/skills/<name>` for a workbench name (provenance needs
+   *  the embedded bundle, so this is injected from cli). Omitted => the
+   *  misplacement findings are skipped; dangling links are still detected. */
+  classifyUserSkill?: (workbenchRoot: string, name: string) => MisplacedEntryClass;
+  /** Machine-global skills whose installed copy differs from the running
+   *  bundle. Omitted => skills.global_stale skipped. */
+  globalStaleSkills?: () => string[];
 }
 
 export interface GbrainDeps {

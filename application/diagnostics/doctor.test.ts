@@ -1473,32 +1473,83 @@ test("journal link mode=copy -> skills.copy_fallback info (fallback stays visibl
   expect(diag!.message).toContain(".claude/skills/jspace-use");
 });
 
-test("user-level real copy + projection -> duplicate_roots; dangling link -> user_link_broken (issue #39)", () => {
+test("dangling user-level link -> skills.user_link_broken (workbench and global names)", () => {
   const userSkills = join(root, "fake-home", ".agents", "skills");
-  // asset-ingest: real dir at user level AND a workbench projection visible
-  mkdirSync(join(userSkills, "asset-ingest"), { recursive: true });
-  writeFileSync(join(userSkills, "asset-ingest", "SKILL.md"), "user copy");
-  mkdirSync(join(root, ".claude", "skills", "asset-ingest"), { recursive: true });
   // memory-recall: dangling link (target moved / workbench unmounted)
+  mkdirSync(userSkills, { recursive: true });
   symlinkSync(join(userSkills, "moved-away-ssot"), join(userSkills, "memory-recall"), "dir");
-  const r = doctorWorkbench(root, stubDeps({ userSkillsRoot: () => userSkills }));
-  const c = codes(r);
-  expect(c).toContain("skills.duplicate_roots");
-  expect(c).toContain("skills.user_link_broken");
+  // harness-config: the machine-global name is in the broken-link range too
+  symlinkSync(join(userSkills, "gone"), join(userSkills, "harness-config"), "dir");
+  const r = doctorWorkbench(root, stubDeps({ userSkillsRoot: () => userSkills, globalSkillNames: () => ["harness-config"] }));
+  const msg = messageOf(r, "skills.user_link_broken");
+  expect(msg).toContain("memory-recall");
+  expect(msg).toContain("harness-config");
 });
 
-test("healthy user-level dir links produce no duplicate/broken diagnostics (issue #39)", () => {
+test("user-level health classes -> skills.user_level_workbench (official leftover vs user-owned)", () => {
+  const userSkills = join(root, "fake-home", ".agents", "skills");
+  const classes: Record<string, string> = {
+    "asset-ingest": "copy-official",
+    "memory-recall": "user-owned",
+  };
+  const r = doctorWorkbench(
+    root,
+    stubDeps({ userSkillsRoot: () => userSkills, classifyUserSkill: (_root, name) => (classes[name] ?? "absent") as never }),
+  );
+  const diags = (r.data as { diagnostics: { code: string; path: string; message: string }[] }).diagnostics.filter(
+    (x) => x.code === "skills.user_level_workbench",
+  );
+  expect(diags.map((d) => d.path).sort()).toEqual(["skills.asset-ingest", "skills.memory-recall"]);
+  // user-owned must say "left alone" — never promise an automatic cleanup
+  expect(diags.find((d) => d.path === "skills.memory-recall")!.message).toContain("left alone");
+  expect(diags.find((d) => d.path === "skills.asset-ingest")!.message).toContain("workspace upgrade");
+  // a link to another workbench is its own finding: the sessions here load the wrong contract
+  const foreign = doctorWorkbench(
+    root,
+    stubDeps({ userSkillsRoot: () => userSkills, classifyUserSkill: (_root, name) => (name === "jspace-use" ? "link-foreign" : "absent") as never }),
+  );
+  expect(codes(foreign)).toContain("skills.user_link_foreign");
+  expect(codes(foreign)).not.toContain("skills.user_level_workbench");
+  // no classifier injected -> misplacement diagnostics skipped (no real-home reads)
+  const bare = codes(doctorWorkbench(root, stubDeps({ userSkillsRoot: () => userSkills })));
+  expect(bare).not.toContain("skills.user_level_workbench");
+  expect(bare).not.toContain("skills.user_link_foreign");
+});
+
+test("healthy user-level state (all absent) -> no scope diagnostics", () => {
   const userSkills = join(root, "fake-home", ".agents", "skills");
   mkdirSync(userSkills, { recursive: true });
-  for (const name of ["jspace-use", "asset-ingest"]) {
-    const ssot = join(root, ".jspace", "skills", name);
-    mkdirSync(ssot, { recursive: true });
-    symlinkSync(ssot, join(userSkills, name), "dir");
-  }
-  const r = doctorWorkbench(root, stubDeps({ userSkillsRoot: () => userSkills }));
+  const r = doctorWorkbench(
+    root,
+    stubDeps({ userSkillsRoot: () => userSkills, classifyUserSkill: () => "absent" }),
+  );
   const c = codes(r);
-  expect(c).not.toContain("skills.duplicate_roots");
+  expect(c).not.toContain("skills.user_level_workbench");
+  expect(c).not.toContain("skills.user_link_foreign");
   expect(c).not.toContain("skills.user_link_broken");
+  expect(c).not.toContain("skills.duplicate_roots"); // retired: covered by user_level_workbench
+});
+
+test("machine-global skill inside the workbench -> skills.global_in_workbench", () => {
+  mkdirSync(join(root, ".jspace", "skills", "harness-config"), { recursive: true });
+  const r = doctorWorkbench(root, stubDeps({ globalSkillNames: () => ["harness-config"] }));
+  expect(codes(r)).toContain("skills.global_in_workbench");
+  expect(messageOf(r, "skills.global_in_workbench")).toContain(".jspace/skills/harness-config");
+  // a legitimate workbench skill is not a global name
+  expect(
+    codes(doctorWorkbench(root, stubDeps({ globalSkillNames: () => ["jspace-adopt"] }))),
+  ).not.toContain("skills.global_in_workbench");
+  // dep omitted -> skipped
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("skills.global_in_workbench");
+});
+
+test("stale machine-global install -> skills.global_stale (info)", () => {
+  const r = doctorWorkbench(root, stubDeps({ globalStaleSkills: () => ["harness-config"] }));
+  expect(codes(r)).toContain("skills.global_stale");
+  expect(severityOf(r, "skills.global_stale")).toBe("info");
+  expect(messageOf(r, "skills.global_stale")).toContain("skills install --refresh");
+  expect(codes(doctorWorkbench(root, stubDeps({ globalStaleSkills: () => [] })))).not.toContain("skills.global_stale");
+  expect(codes(doctorWorkbench(root, stubDeps()))).not.toContain("skills.global_stale");
 });
 
 test("a retired official skill still materialized -> skills.retired_present (warning)", () => {
