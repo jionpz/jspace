@@ -17,6 +17,7 @@ import {
   pruneWorkbenchSkillsFromUserLevel,
   staleGlobalSkills,
 } from "./skill-scope.ts";
+import { legacyCursorSkillLinks } from "./helpers.ts";
 
 const NAME = "memory-recall";
 
@@ -190,5 +191,23 @@ test("prune removes proofs and preserves user content", () => {
     expect(again.preserved.map((x) => x.name)).toEqual(["memory-writeback"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("legacyCursorSkillLinks sees a DANGLING ~/.cursor/skills link", () => {
+  // Retiring the three-hop chain prunes the user-level target first, so the
+  // leftover is a dangling symlink. existsSync would miss it (it follows the
+  // link); the check must still report it.
+  const home = mkdtempSync(join(tmpdir(), "jspace-cursor-legacy-"));
+  try {
+    const dir = join(home, ".cursor", "skills");
+    mkdirSync(dir, { recursive: true });
+    symlinkSync(join(home, ".agents", "skills", "memory-recall"), join(dir, "memory-recall"));
+    writeFileSync(join(dir, "weekly-report"), "");
+    expect(legacyCursorSkillLinks(home).sort()).toEqual(["memory-recall", "weekly-report"]);
+    expect(existsSync(join(dir, "memory-recall"))).toBe(false); // dangling, as in production
+    expect(legacyCursorSkillLinks(join(home, "nohome"))).toEqual([]);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
   }
 });

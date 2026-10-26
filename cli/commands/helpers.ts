@@ -2,7 +2,7 @@
 // coercion + cron deps for doctor/workspace-upgrade). Neutral module: family
 // command files import from here instead of redefining or crossing into each
 // other (keeps the family split free of circular imports).
-import { existsSync, readFileSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadCrons } from "../../application/automation/definitions.ts";
@@ -86,8 +86,19 @@ export const cronDeps = {
  *  (`~/.cursor/skills/<name>`, the old three-hop chain into `~/.agents/skills`).
  *  Cursor reads this workbench's `.agents/skills` projection instead, so any
  *  entry here is a leftover that can only point at one workbench; doctor
- *  reports it as info and never deletes it. */
-export function legacyCursorSkillLinks(): string[] {
-  const dir = join(homedir(), ".cursor", "skills");
-  return SKILLS_MANIFEST.workbench.map((s) => s.name).filter((name) => existsSync(join(dir, name)));
+ *  reports it as info and never deletes it.
+ *
+ *  Presence is decided with lstat, not exists: retiring the chain prunes the
+ *  user-level targets first, so the most likely leftover is a DANGLING symlink
+ *  — which `existsSync` (it follows the link) reports as absent. */
+export function legacyCursorSkillLinks(home: string = homedir()): string[] {
+  const dir = join(home, ".cursor", "skills");
+  return SKILLS_MANIFEST.workbench.map((s) => s.name).filter((name) => {
+    try {
+      lstatSync(join(dir, name));
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }

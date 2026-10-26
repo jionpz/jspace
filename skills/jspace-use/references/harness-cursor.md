@@ -28,7 +28,7 @@
 ```
 
   用户级 `~/.cursor/mcp.json` 或项目级 `.cursor/mcp.json`（project overrides user）。`--dry-run` 预览；Cursor 重启后可能在 MCP 设置里要求审批 server。
-- **skills 发现**：**没有 `~/.cursor/skills` 链**（旧版三跳链已退役）。Cursor 从**工作台的 `.agents/skills` 投影**发现官方 skills——这也是 `.agents/skills` 为共享投影的原因。用户级链只能指向一个工作台，多工作台必然错，因此不做。旧版残留（`~/.cursor/skills/<name>` 仍存在）由 `jspace doctor` 报 `cursor.skills_legacy_user_links` info，可手工删除。
+- **skills 发现**：**没有 `~/.cursor/skills` 链**（旧版三跳链已退役）。Cursor 从**工作台的 `.agents/skills` 投影**发现官方 skills——这也是 `.agents/skills` 为共享投影的原因。用户级链只能指向一个工作台，多工作台必然错，因此不做。Cursor 官方发现路径（`cursor.com/docs/skills`，2026-10-26 对照 Cursor 3.24.9 核对）：项目级 `.agents/skills/`、`.cursor/skills/`，用户级 `~/.agents/skills/`、`~/.cursor/skills/`，另兼容 `.claude/skills/`、`.codex/skills/` 及其用户级同名目录——工作台现有投影（`.agents/skills` + `.claude/skills`）已覆盖，无需再加 `.cursor/skills` 投影。旧版残留（`~/.cursor/skills/<name>` 仍存在）由 `jspace doctor` 报 `cursor.skills_legacy_user_links` info，可手工删除；**残留多半是悬空链**（用户级目标先被 prune），检测按 lstat 判在不在，不跟链。
 - **session-start 注入**：至少保证 MCP wiring；如需会话级 context 注入，用 `.cursor/rules/*.mdc`（项目级）或 Rules 文件。项目级 `.cursor/hooks.json`（seed，check into VCS）的 `sessionStart` 事件输出顶层 `{"additional_context":"<text>"}` 注入会话初始上下文——命令为 `jspace context session-start --envelope cursor`（纯命令，无 shell 语法；CLI 内部吞错 exit 0。Cursor 从项目级 + 用户级 `~/.cursor/hooks.json` 多层级加载；用户级可覆盖/追加，但工作台 seed 落项目级）。
 - **无 headless**：cron 不能用 cursor 跑（`cron run --harness cursor` → `fail`；`harness wire` 不接受 cursor 之外的 `--harness cursor` 也不会把它当 cron）。
 
