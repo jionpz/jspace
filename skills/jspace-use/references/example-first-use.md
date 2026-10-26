@@ -1,7 +1,7 @@
 # Golden run — jspace-use 全新工作台首次启用(first-use,第 2 章端到端)
 
 > 端到端范例:一个刚 `jspace init` 出来的空工作台,配到「gbrain 可召回 + filehub 闭环 + Claude Code 已接线」。**每 Phase = 关键命令 + 预期输出示意 + 验证断言**,中等模型照此改参即可。
-> 命令输出为**示意**(gbrain 二进制当前不在本机 PATH;jspace 命令输出按契约构造并标注示意);具体值随环境。
+> 命令输出为**示意**(按各命令的真实输出契约构造);具体路径、计数与时间随环境。
 
 ## 场景
 
@@ -98,7 +98,7 @@ Claude Code 走 MCP,写 `~/.claude.json` 的 `mcpServers.gbrain`(`command` = gbr
 ```bash
 jspace harness wire --harness claude --dir .   # GBRAIN_SKILLS_DIR=<工作台>/.jspace/skills 注入 gbrain MCP env
 ```
-重启 Claude Code 让 `gbrain serve` 以新 env 启动(否则 resolver 只认根 `skills/` 或回退内置 skill)。细则 `references/gbrain.md`「Skill routing wiring」。
+重启 Claude Code 让 `gbrain serve` 以新 env 启动(否则 resolver 只认根 `skills/` 或回退内置 skill)。细则 `references/gbrain.md` §2「二进制解析与接线」。
 
 ## Phase 4.5 — Scheduled tasks(必须问一次,默认推荐开)
 
@@ -110,13 +110,21 @@ jspace cron run --id inbox-tidy --dir .    # rehearsal:先手跑验证契约(逐
 jspace cron install --dir .           # 装进系统调度(此处 macOS launchd)
 jspace cron status --dir .
 ```
-预期(示意):
+预期(示意;逐条 `enable` 会各打印一行):
 ```
-jspace: ok: enabled cron inbox-tidy
-jspace: ok: installed 4 task(s) into launchd (tag JSpaceCron_<tag>)
-inbox-tidy        last: ok 2026-08-26 21:00   next: 2026-08-27 21:00
+jspace: ok: enabled cron: inbox-tidy (run "jspace cron install" to apply)
+...
+jspace: ok: cron install applied 4 change(s)
+[create] <tag>.inbox-tidy
+[create] <tag>.weekly-report
+[create] <tag>.memory-consolidate
+[create] <tag>.workbench-retro
+inbox-tidy: never run
+weekly-report: never run
+memory-consolidate: never run
+workbench-retro: never run
 ```
-断言:`jspace cron status` 四条都显示已安装;`jspace doctor --dir . --verbose` 不再报 `cron.all_disabled`,且无 `cron.not_installed`。
+断言:`jspace cron install --dry-run` 输出 `jspace: ok: cron install: up to date`(系统调度读回已一致);`jspace cron status` 只报每个 cron 的**最近运行状态**(未跑过即 `never run`,不显示 installed/next);`jspace doctor --dir . --verbose` 不再报 `cron.all_disabled`,且无 `cron.not_installed`。
 
 用户答"先不开":标 `deferred`,告知 `jspace doctor --verbose` 会持续报 `cron.all_disabled`(info,不失败;info 默认只计数不打印),想开时回到本 Phase——**不许默默跳过不问**。
 
@@ -140,7 +148,7 @@ gbrain doctor --fast      # brain 健康
 - [ ] Phase 0 缺失工具走「下载临时文件 → 核验 → 用户确认」,未默认远程管道执行
 - [ ] embedding 不可达时写页 `embed_skip: true` 保底,首次启用未因此失败
 - [ ] Claude Code `mcpServers.gbrain` 已写入 `~/.claude.json`
-- [ ] Phase 4.5 cron 问过用户:开了则 `jspace cron status` 显示已安装且 `doctor --verbose` 无 `cron.all_disabled`;跳过则明确标 `deferred`(未默默略过)
+- [ ] Phase 4.5 cron 问过用户:开了则 `jspace cron install --dry-run` 报 `up to date` 且 `doctor --verbose` 无 `cron.all_disabled` / `cron.not_installed`;跳过则明确标 `deferred`(未默默略过)
 - [ ] Phase 5.5 证据台账已复制 → `doctor --verbose` 无 `usage.mileage_ledger_missing`
 - [ ] 明确跳过 M7 跟踪 → `usage.mileage_ledger_missing` 仍为 info，`jspace doctor` 不失败
 

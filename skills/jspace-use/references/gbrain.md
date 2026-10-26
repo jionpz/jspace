@@ -11,7 +11,7 @@
 
 ## 2. 二进制解析与接线
 
-skill / CLI 页操作按 `$GBRAIN_BIN` -> PATH 上的 `gbrain` 解析；`jspace harness wire` 写 MCP 绝对路径时沿用其自身的 `$GBRAIN_BIN` -> PATH -> `~/.bun/bin/gbrain` 回退（见 `references/harnesses.md`）。
+skill / CLI 页操作按 `$GBRAIN_BIN` -> PATH 上的 `gbrain` 解析；`jspace harness wire` 写 MCP 绝对路径时同样只用 `$GBRAIN_BIN` -> PATH，两者都解析不到就显式失败并提示安装，**不猜测** `~/.bun/bin/gbrain` 一类安装目录（逐 harness 细节见 `references/harnesses.md`）。
 
 - 工作台接 harness：`jspace harness wire --harness <claude|grok|opencode|cursor|pi> --dir <工作台>`。
 - 机器级多 harness 治理：`harness-config` skill。
@@ -103,12 +103,12 @@ embed_skip: true
 
 每页必须满足：
 
-- `project` 是 owner namespace：项目页写 project id，area 资产写 area id；不为领域资料伪造项目。
+- `project` 是 owner namespace，且必填：`project/<id>/*` 与 `records/project/<id>/*` 写该 project id；`knowledge/<domain>/*` 写 **domain id**（与 slug 第二段一致）；`profile/<topic>` 写**工作台 id**（`marker.json` 的 `workbench_id` 语义名，例如 `jspace`）；asset 页写 owner id。不为领域资料伪造不存在的项目 id，也不把 `knowledge`/`profile` 页塞进某个项目。
 - asset 页应写 `owner_kind: project|area`，并与 slug/`rel_path` 的 owner 一致。人工补写或旧页可省略该字段，`memory check` / `filehub check` 会按 `rel_path` 推断，不要求补造历史来源。
-- `tags` 至少含一个路由 tag，并恰好含一个 `source:session` 或 `source:cron`。
-- `source` 指向实际写入 harness；历史缺来源保持 unknown，不补造。
+- `tags` 至少含一个路由 tag，并恰好含一个 `source:session` 或 `source:cron`。路由 tag 按角色取：state → `project`；decisions / lessons / `records/project/*` / `knowledge/*` → `knowledge`；`profile/*` → `profile`；`assets/*` → `asset`；`records/consolidate|retro/*` → `weekly`。**`records/project/*` 同样用 `knowledge` 路由 tag**，不是 `project`。
+- `source` 指向实际写入 harness；历史缺来源保持 unknown，不补造。`memory check` 只强制它非空，不比对固定白名单（自定义 harness 名合法）；但它不得写成运行模式（那是 `source:session|cron` tag）或内容出处（那是 `content_origin`）。
 - `status:*` 至多一个；无 status 表示 active。
-- `activity:maintenance` 只标记维护改写。它不改变事实来源，也不得让维护页计入真实业务活动；下一次真实业务更新应去掉该用途，避免永久排除该 slug。
+- `activity:maintenance` 只标记维护改写。它不改变事实来源，也不得让维护页计入真实业务活动；下一次真实业务更新应去掉该用途，避免永久排除该 slug。`memory check` **不判定该 tag 是否过期**（无法从元数据证明最近一次写入是不是维护）；长期常驻由 `workbench-retro` 的维护页计数暴露，处置是下一次真实业务更新时移除。
 
 **来源 tag 是合并语义，不是覆盖语义**：`put_page` 会把新 tags 与页面已有 tags 合并。若把 `source:cron` 页改写成 `source:session`（或反向），前一个来源 tag 仍会残留，导致 `memory check` 和写回率统计失真。写完读回后若同时看到两个来源 tag，必须用 `remove_tag` 删除不属于本次实际运行模式的那个，携带读回的 `expected_revision` 和独立 `request_id`，然后再次 `get_page` 证明只剩一个来源 tag。这一清理是 provenance 修正，不改变正文；不要把它宣称为原子生命周期更新。
 
@@ -217,7 +217,8 @@ Supersedes: [[<old-slug>]]
 
 ```bash
 jspace memory period --json
-jspace memory period --json --week <Monday>   # 补跑
+jspace memory period --json --week <Monday>       # 补跑指定周
+jspace memory period --json --last-complete       # 刚结束的完整周（周一凌晨的周任务）
 ```
 
 只消费输出中的 `timezone`、`week_start`、`window_start`、`window_end_exclusive`、`observed_through`、`status`，不自行用运行日、Python / shell 日期或“最近 7 天”重算。语义如下：
@@ -228,13 +229,14 @@ jspace memory period --json --week <Monday>   # 补跑
 - 周中运行只能写“截至 observed_through”，不得声称整周完成。
 - 同一周跨日/跨月/跨年重跑仍写同一 slug/文件，不按运行日另建页。
 - 补跑过去周期必须显式指定目标周一，不得写成当前周。
+- 周任务排在周一凌晨时用 `--last-complete`（当前周一减七天）；它永远返回 `status: complete` 的上一周，不会把刚开局的新周当目标。周中手动运行仍用默认当前周，只写截至 `observed_through`。
 
 产物：
 
-- `records/consolidate/<Monday>`：机器周快照，`tags: [consolidate, weekly, <source>]`，`project: jspace`。
-- `records/retro/<Monday>`：纪律复盘，`tags: [retro, weekly, <source>]`，`project: jspace`。
+- `records/consolidate/<Monday>`：机器周快照，`project: <workbench-id>`（模板实例通常为 `jspace`），`source: <harness>`（必填，与 `tags` 里的来源 tag 不同），`tags: [consolidate, weekly, source:session|cron]`。
+- `records/retro/<Monday>`：纪律复盘，`project: <workbench-id>`，`source: <harness>`（必填），`tags: [retro, weekly, source:session|cron]`。
 - `<filehub>/areas/周报/<Monday>-周报.md`：人读周报本体。
-- `assets/周报/<Monday>`：周报指针（area 资产），`tags: [asset, weekly, <source>]`，`project: 周报`，`owner_kind: area`，`rel_path` 指向周报本体。
+- `assets/周报/<Monday>`：周报指针（area 资产），`tags: [asset, weekly, source:session|cron]`，`project: 周报`，`owner_kind: area`，`rel_path` 指向周报本体。
 
 同周物理位置先由 `jspace filehub weekly-path --week <Monday> --json` 裁决：无既有记录用默认路径；`areas/周报/index.md` 已登记的年份位置返回 `reuse`；根/年双份、未登记文件、索引与文件不一致或索引损坏返回 `conflict`（exit 1），停止写入而不是再生成一份。索引同周只保留一行，重跑更新该行。
 
@@ -283,6 +285,8 @@ jspace pending stage <slug> \
 以下都不单独算完成：进程 exit 0、agent 自述、只写了 pending、只写了 journal、checkpoint 声明、列表里“能看到”、提醒已发出。
 
 写失败交给原生产者处理；读侧发现缺页/取代链断裂只报告并转交，不顺手改库。
+
+`jspace memory check` 的退出码与 `status` 一一对应：`ok` → 0；`attention`（存在 error/warning finding）与 `partial`（覆盖不完整，或存在 unknown finding）→ 1。exit 1 表示“需要人看一眼”，**不是**命令本身坏了；脚本不得把它当执行失败，也不得把 exit 0 当成正文语义为真。历史元数据缺口只进 `counts.historical_metadata`，不单独产生 finding。
 
 导航只是 registry 的视图：`jspace filehub refresh` 重算根 `README.md` 与 `projects/README.md` 的两个 `JSPACE:FILEHUB:NAV:*` 块（稳定排序、无时间戳、块外文字保留）；`filehub check` 只读报告 missing/stale/malformed，`filehub upgrade` 只维护归档契约块。`jspace memory check` 只读给出结构、来源、生命周期、指针、keyset 完整性和 backlink coverage；`checked/pass/issues/partial/unknown` 是机器覆盖结论，历史元数据缺口单列为 unknown，不证明正文语义事实为真。`jspace filehub check` 只读核对现行资产、index 与指针关系；inactive 资产页仅保留历史，index 指向它会报 `filehub.index.page_inactive`。同内容跨路径告警 `filehub.asset.duplicate_content` 只提示人工处置，不自动移动或删除文件。已验证 bundle 的入口行与成员不再按普通 support/asset 分类重复报错，但其整树一致性只由 `filehub check` 证明，`memory check` 不扫描成员树。asset 页含 `source_sha256` 时，check 还会比较当前 `rel_path` 字节摘要；不一致报 `filehub.memory.source_digest_changed`（warning，message 标注 `source_identity=changed` 与 `semantic_verification=not_performed`，只表示派生可能基于旧原件，不证明语义错误）；空值/非 64 位 hex/列表报 `source_digest_invalid`，目标不可读报 `source_digest_unreadable`（unknown）；旧页缺字段不报单条 finding，只在 memory coverage 计 `source_digest_absent`（非法值也计入 absent；空值 ≠ 缺失）。
 

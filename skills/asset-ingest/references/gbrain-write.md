@@ -9,7 +9,7 @@ source: <harness>            # codex | claude | hermes | pi | manual(出处,不�
 project: <project|area id>    # owner namespace；项目资产写 project id，area 资产写 area id
 owner_kind: <project|area>    # 与 slug/rel_path 的 owner 一致
 tags: [asset, source:session]  # 路由 tag asset + 来源 tag:会话内 source:session / 无头 cron source:cron
-                               # 来源 tag 按运行模式选,纪律源见 jspace-use/references/gbrain.md「Provenance tag」
+                               # 来源 tag 按运行模式选,纪律源见 jspace-use/references/gbrain.md §4「页 envelope」
 rel_path: <相对 filehub 根的路径>   # M5 起:机器无关指针标识(见下)
 # source_sha256 取 journal 的 targetHash,写 64 位小写 hex;不要带尖括号、注释或命令
 source_sha256: <64 位小写 hex>

@@ -20,14 +20,14 @@
   - 5 小时 / 5 天滑动窗口限流（订阅档位 Pro / Max 对应不同窗口额度；Max 5h/5d 宽、Pro 5h/5d 窄）。
   - 用量页面：claude.ai 设置里的 Usage；API 侧看 console 用量与余额。
 - **provider 侧**：SiliconFlow / OpenRouter / 其他 profile 的余额、并发、限流 —— 在各自控制台看。
-- **本机出口健康**：`jspace doctor`（provider/资源注册表检查）+ 本地代理日志。
+- **本机出口健康**：本地代理日志与 `provider fallback <id>` 查询。`jspace doctor` **不检查 provider 余额或连通性**，它只看 registry/filehub/cron 等工作台状态——不要用 doctor 通过来推断配额充足。
 
 ## 3. 耗尽 / 限流怎么处置
 
 1. **备用 provider（fallback 链）**：本机 provider 配置工具按 provider 配置备用模型链（常见形态：`<provider-config> provider fallback <id> <provider/model>…`，语义 = "该 provider 超出配额或不可用时改用这些"）。**它是按 provider 配的链，不是全局开关，默认不配就没有**——`provider fallback <id>` 不带参数即查询，输出 `has no fallback` 就说明这条链是空的，此时限流没有任何自动兜底。排查"为什么没自动切"先查这里。
 2. **重试**：`jspace cron run --id <id>` 手动重跑一次（`--timeout` 可调）；等待窗口（如 5 小时限流）后由 cron 自然再触发。
 3. **降档**：改 cron prompt 用更小模型 / 精简任务（无头侧不改 gbrain 契约）；**更直接的做法是 `cron add --model` 给这个 cron 钉一个免费/宽配额模型**，把无头与交互的模型彻底解耦。
-4. **记录**：无头失败会自动进 `cron-failed.md`（见下），下次会话可见 —— 不要静默放弃。
+4. **记录**：无头失败会自动生成结构化 incident（`.jspace/state/incidents/`）与执行日志（`.jspace/logs/cron/<id>/`），由下次会话的 `jspace cron failures` 汇总上报（见下）——不要静默放弃。没有名为 `cron-failed.md` 的聚合文件。
 
 ## 4. JSpace 侧兜底（失败可见性）
 

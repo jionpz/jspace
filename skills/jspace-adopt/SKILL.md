@@ -5,11 +5,11 @@ triggers:
   - "legacy adoption"
   - "adopt legacy project"
   - "migrate legacy skills"
-  - "migrate filehub"
+  - "adopt legacy directory"
   - "老项目迁移"
   - "旧项目收编"
   - "已有 skill 迁移"
-  - "filehub 迁移"
+  - "旧目录收编"
   - "init --force"
 ---
 

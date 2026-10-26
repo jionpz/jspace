@@ -10,7 +10,7 @@
 
 本目录由 JSpace CLI (`jspace init`) 生成，是用户本地工作控制平面。大多数非项目特定的计算机工作从这里开始：domain 路由、资源查找和上下文进入。**First core - gbrain unified memory base.** 第一核心是共享记忆层（`gbrain`）：JSpace 工作台 + gbrain 支持 Pi、Claude Code、Codex、Cursor、Grok Build、OpenCode 六个 harness（会话 harness 五选一，codex 兼容 cron），用户选择其一；各 harness 通过 MCP/CLI 读写同一本地记忆库（PGLite + 知识图谱 + 本地 embedding），会话开始检索式注入，结束时提醒你显式写回持久事实（提醒不代写，见 End-of-Work Capture）。hermes（自主/cron/多端）可选：提及即可，不主动推广。本工作台不包装 gbrain 命令，gbrain CLI/MCP 就是接口。
 
-> 治理与流程细节（域/资源/skill 创建规则、cron 运维）→ `.jspace/skills/jspace-use/SKILL.md` 第 8 章「治理细节」，按需读，不在此复制。
+> 治理与流程细节（域/资源/skill 创建规则、cron 运维、项目生命周期）→ `.jspace/skills/jspace-use/references/governance.md`，按需读，不在此复制。
 
 ## Modes
 
@@ -24,15 +24,15 @@ Before changing files for non-trivial work, classify the request internally (imp
 | --- | --- |
 | Existing domain work | Read `workspace/<domain>/README.md` and `domain.json`; look up the domain/resource in `.jspace/hub.json`. |
 | Existing resource work | Look up the resource in `.jspace/hub.json`; enter the owning domain before operating. |
-| Candidate new domain | Create/propose a minimal domain only if it meets the domain rules in jspace-use §8. |
+| Candidate new domain | Create/propose a minimal domain only if it meets the domain rules in `.jspace/skills/jspace-use/references/governance.md` §1. |
 | Candidate new resource | Add/update a `.jspace/hub.json` resource only when it is a reusable entrypoint worth future lookup. |
-| Candidate new skill | Propose a skill only if it meets the skill rules in jspace-use §8; ask before creating. |
+| Candidate new skill | Propose a skill only if it meets the skill rules in `.jspace/skills/jspace-use/references/governance.md` §3; ask before creating. |
 | One-off operation | Do the work without adding durable structure. |
 | JSpace development | Go to the JSpace development repository (if registered); use its workflow before editing. |
 
 ## Domain Governance
 
-域是第一等操作工作区（`workspace/<domain>/`），索引在 `.jspace/hub.json`。**初始无域**——域从真实使用涌现，不做前置分类设计。建域前读 jspace-use 第 8 章（创建信号 ≥2 / 确定度分级 / 何时加 AGENTS|runbook 都在那边）。最小形态：`workspace/<domain>/{README.md, domain.json}`；建域时同步在 `.jspace/hub.json` 加索引，细节进 `domain.json`。
+域是第一等操作工作区（`workspace/<domain>/`），索引在 `.jspace/hub.json`。**初始无域**——域从真实使用涌现，不做前置分类设计。建域前读 `.jspace/skills/jspace-use/references/governance.md` §1（创建信号 ≥2 / 确定度分级 / 何时加 AGENTS|runbook 都在那边）。最小形态：`workspace/<domain>/{README.md, domain.json}`；建域时同步在 `.jspace/hub.json` 加索引，细节进 `domain.json`。
 
 ## Resource Governance
 
@@ -44,7 +44,7 @@ Before changing files for non-trivial work, classify the request internally (imp
 
 ## Skill Governance
 
-根 `skills/` 归**用户自建**（创建须用户批准）；官方技能在 `.jspace/skills/`（machine-managed，未改随升级刷新、本地改动保留为 skip），`.claude/skills/` / `.grok/skills/` / `.opencode/skills/` / `.agents/skills/` 是指向它的目录软链（各 harness 投影，物理副本唯一），勿手工编辑；提议信号 / 禁区 / 用户确认规则 → jspace-use 第 8 章。**workbench skill 只从本工作台发现**：不进用户级 `~/.agents/skills/`（那里只放 `scope: global` 的机器级技能，如 `harness-config` / `jspace-adopt`，由 `jspace skills install` 安装）。旧版留在用户级的官方副本由 `jspace workspace upgrade` 清理，`jspace doctor` 的 `skills.user_level_workbench` 会提示。skill 文档之间的引用一律以 skill 根为基准（同 skill 内直写相对文件名，跨 skill 用上一级目录加 skill 名），与安装位置无关。
+根 `skills/` 归**用户自建**（创建须用户批准）；官方技能在 `.jspace/skills/`（machine-managed，未改随升级刷新、本地改动保留为 skip），`.claude/skills/` / `.grok/skills/` / `.opencode/skills/` / `.agents/skills/` 是指向它的目录软链（各 harness 投影，物理副本唯一），勿手工编辑；提议信号 / 禁区 / 用户确认规则 → `.jspace/skills/jspace-use/references/governance.md` §3。**workbench skill 只从本工作台发现**：不进用户级 `~/.agents/skills/`（那里只放 `scope: global` 的机器级技能，如 `harness-config` / `jspace-adopt`，由 `jspace skills install` 安装）。旧版留在用户级的官方副本由 `jspace workspace upgrade` 清理，`jspace doctor` 的 `skills.user_level_workbench` 会提示。skill 文档之间的引用一律以 skill 根为基准（同 skill 内直写相对文件名，跨 skill 用上一级目录加 skill 名），与安装位置无关。
 
 ## Durable Knowledge Routing
 
@@ -82,7 +82,7 @@ Before finishing a work session, quietly check whether anything should be preser
 
 ## Scheduled Tasks (cron)
 
-**Session start 跑 `jspace cron failures`**，上报未 ack incident、actionable pending 暂存写（`.jspace/state/pending/<id>.APPLY.json`）与各 cron 状态；定义在 `.jspace/cron.json`。**出厂四个任务全 `enabled: false`**——没开启就没有 inbox 整理 / 周报 / 记忆巩固 / 周自省（`jspace doctor --verbose` 以 `cron.all_disabled` info 提示）；开启序列 `jspace cron enable <id>` → `jspace cron run --id <id>` → `jspace cron install`，细节与代价说明 → jspace-use 第 2 章 4.5 与第 8 章。
+**Session start 跑 `jspace cron failures`**，上报未 ack incident、actionable pending 暂存写（`.jspace/state/pending/<id>.APPLY.json`）与各 cron 状态；定义在 `.jspace/cron.json`。**出厂四个任务全 `enabled: false`**——没开启就没有 inbox 整理 / 周报 / 记忆巩固 / 周自省（`jspace doctor --verbose` 以 `cron.all_disabled` info 提示）；开启序列 `jspace cron enable <id>` → `jspace cron run --id <id>` → `jspace cron install`，细节与代价说明 → `.jspace/skills/jspace-use/SKILL.md` 首次启用第 6 步与 `.jspace/skills/jspace-use/references/governance.md` §4。
 
 ## Brain operations
 
@@ -91,9 +91,9 @@ gbrain resolver rows (OpenClaw AGENTS.md layout). This section is parsed by `gbr
 <!-- JSPACE-BRAIN-OPS:BEGIN -->
 - **jspace-use**: initialize jspace | setup jspace | configure jspace | first-use jspace | how to use jspace | 工作台怎么用 | maintain jspace | 维护工作台 | workspace upgrade | jspace doctor | cron failures | 故障排查 | workbench broken | registry broken | gbrain missing | wire gbrain | fresh environment
 - **asset-ingest**: 资料入库 | 整理 inbox | 归位资料 | 把这份资料入库
-- **memory-recall**: 问一句 | 找那个文件 | 那个数 | 精准召回 | recall | find the file
-- **memory-writeback**: 收工 | 写回记忆 | 记一下本次进展 | 本次进展 | end of work | session end | writeback
-- **workbench-retro**: 周自省 | 复盘 | 本周回顾 | 工作流体检 | retro | workbench retro | 纪律检查
+- **memory-recall**: 找那个文件 | 查记忆 | 记忆里有没有 | 精准召回 | recall | find the file
+- **memory-writeback**: 收工 | 写回记忆 | 记一下本次进展 | end of work | session end | writeback
+- **workbench-retro**: 周自省 | 每周复盘 | 本周纪律回顾 | 工作流体检 | retro | workbench retro | 纪律检查
 - **weekly-report**: 生成周报 | 本周周报 | 本周汇总 | weekly report
 - **memory-consolidate**: 记忆巩固 | 巩固记忆 | 周快照 | consolidate
 <!-- JSPACE-BRAIN-OPS:END -->

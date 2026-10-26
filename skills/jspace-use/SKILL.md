@@ -42,6 +42,7 @@ triggers:
 - 本 skill 内引用一律以 skill 根为基准(`$SKILL_DIR` 指本 skill 目录);跨 skill 用 `../<skill>/...`。
 - gbrain 安装、页契约、生命周期、周期和 pending:`references/gbrain.md`
 - registry schema、binding 和 drift:`references/registry.md`
+- 域/资源/skill 创建规则、cron 运维、项目生命周期:`references/governance.md`
 - harness 能力与接线:`references/harnesses.md`
 - 各 harness 接线细节:`references/harness-{claude,grok,opencode,cursor,pi,codex}.md`
 - 无头运维:`references/headless-ops.md`
@@ -104,8 +105,8 @@ jspace ingest list --json
 jspace pending list --json
 ```
 
-- `memory check` / `filehub check` 是显式只读审计,不放进每次 hook。
-- `memory period` 是只读周期时钟;补跑用 `--week <Monday>`,固定取证用 `--now <ISO-8601>`。
+- `memory check` / `filehub check` 是显式只读审计,不放进每次 hook。`memory check` 退出码:status `ok` → 0,`attention`/`partial` → 1;exit 1 表示「需要人看一眼」,不是命令坏了。
+- `memory period` 是只读周期时钟;补跑用 `--week <Monday>`,周一凌晨运行的周任务用 `--last-complete`(取刚结束的完整周),固定取证用 `--now <ISO-8601>`。
 - `filehub weekly-path` 只读裁决同周周报的唯一位置:`default`(无既有记录)、`reuse`(已登记年份位置)或 `conflict`(根/年双份、索引与文件不一致、损坏索引),冲突时 exit 1,不生成第三份。
 - `cron failures` 聚合未 ack incident、actionable pending 和各 cron 状态;非 0 表示需要关注,不表示命令本身坏了。
 - pending 位于 `.jspace/state/pending/*.APPLY.json`;`staged`、journal checkpoint、exit 0 和提醒次数都不等于业务完成。
@@ -131,7 +132,8 @@ jspace workspace upgrade --rollback <id>
 - 域:跨天/项目/会话复现,且有独立入口、资源或规则时才创建;最小形态 `README.md + domain.json`。
 - 资源:注册可再次发现的仓库、URL、provider 或容器;主路径经 `local.bindings`,每项恰好一个 `primary: true`。
 - 项目:资产目录、域挂接、registry 和 state 四层保持一致。新 project id 使用 ascii slug;存量中文 slug 不因整理而改名。
-- 创建、删除、移动或覆盖这些对象前按工作台确认规则执行。
+- 记忆归属:`knowledge/<domain>/*` 的 `project` 写 domain id;`profile/*` 的 `project` 写工作台 id;`records/project/*` 用 `knowledge` 路由 tag(详见 `references/gbrain.md` §4)。
+- 创建、删除、移动或覆盖这些对象前按工作台确认规则执行;详细门槛与退役阈值见 `references/governance.md`。
 
 ### 7. cron
 

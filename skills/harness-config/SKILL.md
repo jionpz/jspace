@@ -38,9 +38,8 @@ triggers:
 ## 写集
 
 - `~/.agents/AGENTS.md`:唯一静态治理事实源。
-- `~/.agents/skills/harness-config/`:本 skill 的用户级安装副本。
 - 各 harness 的全局入口文件/symlink/import:只写接线指针,不复制规则正文。
-- 不写:harness 的 MCP、hooks、provider、凭据、账号和项目级会话配置。
+- 不写:本 skill 自身的安装副本(`~/.agents/skills/harness-config/` 由 `jspace skills install` 从嵌入资产物化);harness 的 MCP、hooks、provider、凭据、账号和项目级会话配置。
 
 ## 输出
 
@@ -55,7 +54,7 @@ triggers:
 ## 主流程
 
 1. **检测**:运行 `bash "$SKILL_DIR/scripts/detect.sh"`。未安装的 harness 跳过;config-only 需用户确认是否接线。
-2. **安装自身**:幂等复制到 `~/.agents/skills/harness-config/`,不覆盖用户修改;冲突保留并报告。
+2. **确认自身已安装**:运行 `jspace skills install --dry-run`(或看 `jspace doctor --json` 的 `skills.global_missing`)确认本 skill 已在用户级物化。缺失时提示用户运行 `jspace skills install`(`jspace update` 后重试),**不手工复制**——副本由 CLI 从嵌入资产物化,手工复制会与升级脱节。
 3. **治理文档**:不存在则用 `governance.md` 骨架创建;已存在则 review 分层、必需主题和决策顺序。非空内容不粗暴覆盖。
 4. **接线入口**:只处理 installed harness;按 `harnesses.md` 使用 symlink、import 或明确指针。目标已是非空用户文件时保留并给出 manual 合并方案。
 5. **只读核对**:检查 gbrain MCP/CLI、session-start 注入和 hooks 的 wired/missing/n/a;不回显令牌,不修改配置。
@@ -88,6 +87,7 @@ triggers:
 
 ```bash
 ls -la "$HOME/.agents/AGENTS.md"
+ls "$HOME/.agents/skills/harness-config/SKILL.md"   # 缺失 → jspace skills install,不手工复制
 bash "$SKILL_DIR/scripts/detect.sh"
 readlink "$HOME/.codex/AGENTS.md" 2>/dev/null || true
 readlink "$HOME/.claude/CLAUDE.md" 2>/dev/null || true

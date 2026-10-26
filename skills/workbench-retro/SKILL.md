@@ -3,8 +3,8 @@ name: workbench-retro
 description: "按工作台本地周窗口取证式审计纪律执行、流程卡点和规则漂移,产出分级建议与周 retro 页;默认只提议不改。Use when 周自省/复盘/工作流体检/retro。Do NOT use for 事实归纳(→memory-consolidate)、周报(→weekly-report)、收工写回(→memory-writeback)或命令排障(→jspace-use)。"
 triggers:
   - "周自省"
-  - "复盘"
-  - "本周回顾"
+  - "每周复盘"
+  - "本周纪律回顾"
   - "工作流体检"
   - "retro"
   - "workbench retro"
@@ -22,7 +22,7 @@ triggers:
 
 ## 输入与前置
 
-- 工作台根与 `jspace` CLI;周期参数统一取自 `jspace memory period --json`。
+- 工作台根与 `jspace` CLI;周期参数统一取自 `jspace memory period --json`(排在周一凌晨的 cron 用 `--last-complete` 取刚结束的周;周中手动运行用默认当前周)。
 - gbrain、registry、filehub、cron 日志和可用的项目记录。
 - 只读工具与一次 retro 页写入权限;无头模式不得等待用户或修改其他文件。
 
@@ -61,11 +61,12 @@ triggers:
    - gbrain 来源计数和页面抽样使用 `gbrain call list_pages` keyset,逐候选 `get_page`;
    - `jspace cron failures --json`、`jspace cron list --json`、`jspace ingest list --json`、`jspace pending list --json`;
    - `jspace memory check --json`、`jspace filehub check --json`;
-   - cron 日志、inbox、briefing 和项目挂接证据。
+   - cron 日志、inbox、briefing 和项目挂接证据;
+   - 同窗口 `records/consolidate/<Monday>` 的 `promotion_candidates` / `decay_candidates`:它们是**待裁决候选**,不是结论,也不自动执行。
 3. **判读**:按 `checks.md` 的五类阈值分级。列表查询只能证明“能查到”,不能替代逐页 tag/正文校验。
 4. **取代链**:对 `status:superseded` 页调用 `get_backlinks` 全分页,逐个 `get_page`,只接受正文明确声明取代该旧页的现行候选;分叉、环、缺页和 degraded coverage 记 `unknown/conflict`。
 5. **不按 type 路由**:页角色由 slug + tags 判断;描述性 `type` 不用于合法性裁决,也不批量改写。
-6. **生成页面**:frontmatter `project: jspace`,tags `[retro, weekly, <source>]`,含窗口和 `observed_through`;同周已有页时读取 revision 后 CAS 覆盖同一 slug。
+6. **生成页面**:frontmatter 必含 `project: <workbench-id>`、`source: <harness>` 与恰好一个来源 tag,tags 形如 `[retro, weekly, source:session|cron]`,含窗口和 `observed_through`;同周已有页时读取 revision 后 CAS 覆盖同一 slug。
 7. **读回验证**:确认页存在、来源 tag 正确、每条结论有证据、写作前后工作台文件未变化。`put_page` 合并旧 tags;若读回出现两个来源 tag,用 `remove_tag` CAS 清理并再次读回。
 
 ## 完成证据
@@ -74,7 +75,17 @@ triggers:
 - 写回率一节存在;所有数字可追溯到实际输出;
 - 每个建议都有证据行和分级,无法取证项明确列出;
 - 同周重跑不产生第二个 retro 页;
-- 除 retro 页外没有修改任何文件;会话模式的执行项都有用户确认记录。
+- 除 retro 页外没有修改任何文件;会话模式的执行项都有用户确认记录;
+- 晋升/衰减候选已逐条给出去向:有第二项目复用证据 → 转 `memory-writeback` 晋升;证据不足 → 留在「需你决策」,不自动写;
+- 输出明确报告本任务 cron 的 enabled/installed 状态(`jspace cron list --json` 看 `enabled`,`jspace doctor --json` 看 `cron.not_installed`),未启用时标 `deferred` 并给开启命令(手动能跑 ≠ 定时在跑)。
+
+## 无头模式
+
+cron 触发的 retro 只做取证与写页,**不等待用户、不执行任何「立即可做」项**:
+
+- 报告里的「立即可做」与「需你决策」都原样写入 retro 页,留给下次会话;无头模式不打印交互式提问。
+- 存在 error/warning 级发现是**巡检结果**,不是本次任务失败;仍然写页并正常结束。只有取证本身失败(命令不可用、页写不进去)才报告失败。
+- 不改任何工作台文件、不跑 `upgrade`、不 `cron ack`、不改 `cron.json`。
 
 ## 失败与恢复
 

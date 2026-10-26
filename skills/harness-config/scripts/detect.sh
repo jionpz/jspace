@@ -13,12 +13,14 @@
 
 set -u
 
-for h in pi claude codex cursor; do
+for h in pi claude grok opencode codex cursor; do
   case "$h" in
-    pi)     dir="${PI_CODING_AGENT_DIR:-${HOME:-}/.pi}" ;;
-    claude) dir="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}" ;;
-    codex)  dir="${CODEX_HOME:-${HOME:-}/.codex}" ;;
-    cursor) dir="${HOME:-}/.cursor" ;;
+    pi)       dir="${PI_CODING_AGENT_DIR:-${HOME:-}/.pi}" ;;
+    claude)   dir="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}" ;;
+    grok)     dir="${GROK_HOME:-${HOME:-}/.grok}" ;;
+    opencode) dir="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-${HOME:-}/.config}/opencode}" ;;
+    codex)    dir="${CODEX_HOME:-${HOME:-}/.codex}" ;;
+    cursor)   dir="${HOME:-}/.cursor" ;;
   esac
 
   bin=$(command -v "$h" 2>/dev/null || true)

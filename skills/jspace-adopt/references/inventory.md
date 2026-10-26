@@ -29,16 +29,18 @@
 
 盘点这些目录(不存在也记录):
 
-- 用户自建:根 `skills/`、`~/.agents/skills/`;
-- JSpace 候选:`.jspace/skills/`;
+- 用户自建:根 `skills/`;
+- JSpace workbench skill:`.jspace/skills/`(唯一物理副本,7 个官方 workbench 技能);
+- JSpace global skill:`~/.agents/skills/<name>`(只有 `scope: global` 的 `harness-config` / `jspace-adopt`,由 `jspace skills install` 维护,不是用户自建);
 - harness 投影:`.claude/skills/`、`.grok/skills/`、`.opencode/skills/`、`.agents/skills/`(Cursor 等共享)、Pi 对应的 skills 路径;
-- 全局入口:`~/.agents/skills/`、harness 用户级 skills。
+- 其他用户级 harness skills:harness 自有目录(如 `~/.claude/skills/`),只记录不接管。
 
 对每个 skill 记录:name、来源目录、是否 symlink、link target、是否可达、内容 hash、与官方同名 skill 是否一致。不要跟随未知 symlink 到项目外写文件。
 
 分类候选:
 
 - 用户自定义 → `preserve`;
+- 官方 global skill 同名且内容一致 → JSpace-managed(`jspace skills install` 维护),不是用户自建;
 - 官方同名且内容一致 → 可 `link`,但仍先报告;
 - 官方同名但内容不同 → `blocked/manual`,默认保留用户副本;
 - 坏 symlink / 不可读目标 → `blocked`,不改。

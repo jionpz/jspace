@@ -24,7 +24,8 @@ gbrain call get_page '{"slug":"assets/acme/供应商报价明细","include_conte
 jspace ingest begin _inbox/供应商报价明细.xlsx \
   --target projects/acme/2026-08-03-供应商报价明细-v1.xlsx \
   --slug assets/acme/供应商报价明细 \
-  --project acme --index "2026-08-03 | 供应商报价明细 | assets/acme/供应商报价明细"
+  --owner-kind project --owner-id acme \
+  --index-line "| projects/acme/2026-08-03-供应商报价明细-v1.xlsx | sheet | 2026-08-03 | assets/acme/供应商报价明细 |"
 ```
 预期:
 ```

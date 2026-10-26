@@ -5,7 +5,6 @@ triggers:
   - "收工"
   - "写回记忆"
   - "记一下本次进展"
-  - "本次进展"
   - "end of work"
   - "session end"
   - "writeback"

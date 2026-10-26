@@ -2,9 +2,9 @@
 name: memory-recall
 description: "读侧精准召回:用户问一句、找文件或核实某个数时,从 gbrain 指针和 filehub 原件返回有出处、可复检的答案。Use when 问一句/找那个文件/精准召回。Do NOT use for 资料入库(→asset-ingest)、会话写回(→memory-writeback)或周期归纳(→memory-consolidate)。"
 triggers:
-  - "问一句"
   - "找那个文件"
-  - "那个数"
+  - "查记忆"
+  - "记忆里有没有"
   - "精准召回"
   - "recall"
   - "find the file"

@@ -16,40 +16,40 @@
     },
     {
       "id": "weekly-report",
-      "schedule": "0 21 * * 0",
+      "schedule": "20 0 * * 1",
       "harness": "claude",
       "tools": "Bash,Read,Write,Edit,mcp__gbrain__*",
       "target": {
         "kind": "skill",
         "skill": "weekly-report",
         "entrypoint": "weekly",
-        "input": "先跑 jspace context session-start --plain 取工作台状态，再跑 jspace memory period --json；以本地周一为周期身份，week_start、窗口和 observed_through 只消费该输出，不自行计算日期。周中运行只写截至 observed_through 的本期事实。然后生成本期项目周报(无头模式:不提问,发现不了的项目就少写不编,不得把既有周报或 consolidate 页当作本期事实权威)。输出契约以 SKILL.md 为准。"
+        "input": "先跑 jspace context session-start --plain 取工作台状态，再跑 jspace memory period --json --last-complete；以本地周一为周期身份，week_start、窗口和 observed_through 只消费该输出，不自行计算日期。该槽位取刚结束的完整周，不写当前周。然后生成本期项目周报(无头模式:不提问,发现不了的项目就少写不编,不得把既有周报或 consolidate 页当作本期事实权威)。输出契约以 SKILL.md 为准。"
       },
       "enabled": false
     },
     {
       "id": "memory-consolidate",
-      "schedule": "0 22 * * 0",
+      "schedule": "40 0 * * 1",
       "harness": "claude",
       "tools": "Bash,Read,Write,Edit,mcp__gbrain__*",
       "target": {
         "kind": "skill",
         "skill": "memory-consolidate",
         "entrypoint": "weekly",
-        "input": "先跑 jspace context session-start --plain 取工作台状态，再跑 jspace memory period --json；以本地周一为周期身份，week_start、窗口和 observed_through 只消费该输出，不自行计算日期。归纳该窗口内的原始 gbrain 事实，写 records/consolidate/<Monday> 并按需回写各项目 state；同周重跑覆盖同页，周中只写截至 observed_through 的内容，不拿既有 consolidate 页或周报当本期事实权威(无头模式:不提问;无新事实则跳过不建空页)。输出契约以 SKILL.md 为准。"
+        "input": "先跑 jspace context session-start --plain 取工作台状态，再跑 jspace memory period --json --last-complete；以本地周一为周期身份，week_start、窗口和 observed_through 只消费该输出，不自行计算日期。该槽位取刚结束的完整周，不写当前周。归纳该窗口内的原始 gbrain 事实，写 records/consolidate/<Monday> 并按需回写各项目 state；同周重跑覆盖同页，周中只写截至 observed_through 的内容，不拿既有 consolidate 页或周报当本期事实权威(无头模式:不提问;无新事实则跳过不建空页)。输出契约以 SKILL.md 为准。"
       },
       "enabled": false
     },
     {
       "id": "workbench-retro",
-      "schedule": "0 23 * * 0",
+      "schedule": "0 1 * * 1",
       "harness": "claude",
       "tools": "Bash,Read,Write,Edit,mcp__gbrain__*",
       "target": {
         "kind": "skill",
         "skill": "workbench-retro",
         "entrypoint": "weekly",
-        "input": "先跑 jspace context session-start --plain 取工作台状态，再跑 jspace memory period --json；以本地周一为周期身份，week_start、窗口和 observed_through 只消费该输出，不自行计算日期。只审该窗口，不得用执行当天代替目标周。然后做本周自省(无头模式:只取证、只产报告,不提问、不修改任何文件)。在工作台根目录按 AGENTS.md 路由,执行 workbench-retro 的六条检查,产出分级建议清单并写 records/retro/<Monday>(同周重跑覆盖同页)。不得把 memory-consolidate 页或旧报告当作固定输入/事实权威；如需引用同窗口 consolidate，必须回到其原始来源核对。"
+        "input": "先跑 jspace context session-start --plain 取工作台状态，再跑 jspace memory period --json --last-complete；以本地周一为周期身份，week_start、窗口和 observed_through 只消费该输出，不自行计算日期。该槽位取刚结束的完整周，不审当前周，不得用执行当天代替目标周。然后做本周自省(无头模式:只取证、只产报告,不提问、不修改任何文件)。在工作台根目录按 AGENTS.md 路由,执行 workbench-retro 的六条检查,产出分级建议清单并写 records/retro/<Monday>(同周重跑覆盖同页)。不得把 memory-consolidate 页或旧报告当作固定输入/事实权威；如需引用同窗口 consolidate，必须回到其原始来源核对。"
       },
       "enabled": false
     }

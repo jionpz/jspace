@@ -20,7 +20,7 @@ triggers:
 ## 输入与前置
 
 - 工作台根、可解析的 filehub 根、`jspace` CLI。
-- 周期参数统一由 `jspace memory period --json` 给出;补跑时给 `--week <Monday>`,需要固定取证时给 `--now <ISO-8601>`。
+- 周期参数统一由 `jspace memory period --json` 给出;补跑时给 `--week <Monday>`,需要固定取证时给 `--now <ISO-8601>`。**排在周一凌晨的 cron 用 `--last-complete`** 取刚结束的周;周中手动运行用默认当前周(只能写截至 `observed_through`)。
 - 路径唯一性由 `jspace filehub weekly-path --week <Monday> --json` 裁决;不要自行拼年份目录。
 - 可读取项目 state、原始事实页和资产证据;无法完整读取时输出 `partial`。
 
@@ -65,7 +65,7 @@ triggers:
 5. **生成正文**:每项目写“本期进展 / 当前状态 / 下一步”,末尾列关键文件和 slug。事实不足时明确标记未知。
 6. **写文件**:只写 `weekly-path` 给出的位置。目标存在时先确认是同一周生成物并保留恢复副本,再原子更新;若发现用户改写的非同源内容,报告 conflict,不覆盖。
 7. **写索引**:`areas/周报/index.md` 缺表时按 owner index 格式建立;同 slug 已有 row 则原地更新路径/日期/类型,没有才追加一行。索引 row 的路径相对 `areas/周报/`(年份位置写 `<year>/<Monday>-周报.md`),slug 恒为 `assets/周报/<Monday>`。
-8. **写指针**:按 asset 页契约写 `rel_path`、Pointer、Summary、tags;已有同周页则读取 revision 后 CAS 覆盖。
+8. **写指针**:按 asset 页契约写 `project`、`source: <harness>`、`rel_path`、Pointer、Summary、tags(`[asset, weekly, source:session|cron]`);已有同周页则读取 revision 后 CAS 覆盖。
 9. **核对**:重跑 `jspace filehub weekly-path --week <Monday> --json` 应保持 `reuse` 且恰有一个候选;读取文件、指针页和索引;若 `put_page` 合并了旧的另一来源 tag,用 `remove_tag` CAS 清理并再次读回;`jspace filehub check --json` 对本资产无新增 error/unknown。
 
 ## 完成证据
@@ -75,7 +75,8 @@ triggers:
 - 文件存在且正文可打开,内容明确窗口与 `observed_through`;
 - `areas/周报/index.md` 可读,该周恰好一行,路径与文件一致、slug 为 `assets/周报/<Monday>`;
 - `assets/周报/<Monday>` 可读回,`rel_path` 与文件一致,Pointer 指向同一文件;
-- tags 含 `asset`、`weekly`,且恰好一个来源 tag;
+- tags 含 `asset`、`weekly`,且恰好一个来源 tag;frontmatter 含 `project: 周报` 与 `source: <harness>`;
+- 输出明确报告本任务 cron 的 enabled/installed 状态(`jspace cron list --json` 看 `enabled`,`jspace doctor --json` 看 `cron.not_installed`),未启用时标 `deferred` 并给开启命令(手动能跑 ≠ 定时在跑);
 - 同周重跑不增加第二个文件、页或 index row;
 - 来源页可追溯;不完整覆盖明确写 `partial`。
 

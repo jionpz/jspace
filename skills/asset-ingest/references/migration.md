@@ -48,7 +48,7 @@
 - `gbrain query <关键词>` 确认命中;未命中 → 查 slug / tags / embedding。
 
 ### 7. 记录(可选)
-- 本次收编清单 + 结果写 `.jspace-logs/`(时间/来源/份数/归位位置/结果),供复查与下次会话对齐。
+- 本次收编清单 + 结果追加到 `<filehub>/.jspace-logs/ingest-migration.md`(时间/来源/份数/归位位置/结果),供复查与下次会话对齐;filehub 未注册时写工作台 `.jspace/logs/ingest-migration.md`。`.jspace-logs/` 是 filehub 根下的日志目录,不是工作台相对路径。
 
 ## B. 旧格式分类结构迁移(非破坏)
 

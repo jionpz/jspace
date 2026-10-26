@@ -20,7 +20,7 @@ triggers:
 ## 输入与前置
 
 - 工作台根和 `jspace` CLI。
-- 周期参数统一由 `jspace memory period --json` 给出;补跑时给 `--week <Monday>`,需要固定取证时给 `--now <ISO-8601>`。
+- 周期参数统一由 `jspace memory period --json` 给出;补跑时给 `--week <Monday>`,需要固定取证时给 `--now <ISO-8601>`。**排在周一凌晨的 cron 用 `--last-complete` 取刚结束的那一周**;周中手动运行用默认(当前周,只能写截至 `observed_through`)。
 - 可完整分页读取 gbrain 的能力;不能证明覆盖完整时输出 `partial`。
 - 已注册 filehub(若快照要包含资产证据);无法读取时明确未知。
 
@@ -59,14 +59,15 @@ gaps: []
 3. **逐页取证**:列表行不能替代页正文;对候选逐个 `get_page(include_content:true)`,按项目/领域归组。
 4. **归纳**:只写可由页或原件支持的事实,附 slug/文件指针。不得把上一周快照、上一轮 retro 或 agent 推断当成本周事实。
 5. **处理候选**:晋升候选必须写明“第二项目已实际复用”的证据;没有证据只列为需要核实,不自动写 knowledge。衰减候选同样只提议。
-6. **写快照**:若同周页存在,读取完整正文和 revision,CAS 覆盖同一 slug;不存在则创建。创建/覆盖后都读回；tags 是合并语义，若同时出现两个来源 tag，用 `remove_tag` CAS 清理后再次读回。
-7. **刷新 state**:只更新有实质变化的项目;读取旧 state,保留三段认知卡,历史信息先落到 decision/record,再 CAS 覆盖。
+6. **写快照**:frontmatter 必含 `project: <workbench-id>`、`source: <harness>` 和恰好一个来源 tag。若同周页存在,读取完整正文和 revision,CAS 覆盖同一 slug;不存在则创建。创建/覆盖后都读回；tags 是合并语义，若同时出现两个来源 tag，用 `remove_tag` CAS 清理后再次读回。
+7. **刷新 state**:只更新有实质变化的项目;读取旧 state,保留三段认知卡,历史信息先落到 decision/record,再 CAS 覆盖。**补跑旧周时先比时间**:state 页的最近更新时间晚于目标窗口 `window_end_exclusive` → 跳过该 state 并报告(`state_newer_than_window`),旧周归纳不得把现状回退。覆盖后同样读回 tags,清掉不属于本次运行模式的来源 tag。
 8. **空周处理**:没有新事实时不建空页,报告“本周无新事实”;若已有同周页,也不制造空覆盖。
 
 ## 完成证据
 
 - `records/consolidate/<Monday>` 可读回,tags 含 `consolidate`、`weekly` 和恰好一个来源 tag;
-- frontmatter `project: jspace`,正文含窗口和 `observed_through`;
+- frontmatter `project: <workbench-id>`、`source: <harness>` 齐备,正文含窗口和 `observed_through`;
+- 输出明确报告本任务 cron 的 enabled/installed 状态(`jspace cron list --json` 看 `enabled`,`jspace doctor --json` 看 `cron.not_installed`);未启用时标 `deferred` 并给开启命令(手动能跑 ≠ 定时在跑);
 - 同一周只有这一页 consolidate;
 - 每个涉项 state 的更新都有读回 revision,无实质变化项目未被无意义覆盖;
 - gbrain 覆盖完整时 `coverage=complete`,否则为 `partial`/`unknown` 并列出缺口。
