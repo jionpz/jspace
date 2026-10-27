@@ -4,6 +4,7 @@
 // so the application layer never touches child_process directly. This is the
 // single place platform process-I/O lives (was application/automation/win32-spawn.ts).
 import { spawn, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { getCapability } from "../harness/registry.ts";
 
 /** Max harness output bytes kept in memory (1 MiB); beyond that output is
@@ -41,7 +42,18 @@ export interface SpawnResult {
   /** The adapter settled after the kill grace window because `exit` never
    *  arrived; `exit` is the synthetic code above. */
   forced: boolean;
+  /** Outcome of the idle-sleep guard (darwin only). Absent on platforms or
+   *  call paths that never arm it. "unavailable" means the guard was requested
+   *  but the binary was missing — the run proceeded WITHOUT protection, which
+   *  the caller must surface rather than treat as success (2026-10-27: cron
+   *  runs lost hours of budget to `Sleep Service Back to Sleep` while the
+   *  harness waited on a suspended TCP stream). */
+  preventSleep?: PreventSleepOutcome;
 }
+
+/** "armed" = the guard wrapped the command; "unavailable" = requested but the
+ *  helper binary is missing, so the run went ahead unprotected. */
+export type PreventSleepOutcome = "armed" | "unavailable";
 
 export interface SpawnOpts {
   cwd: string;
@@ -62,6 +74,16 @@ export interface SpawnOpts {
    *  lets tests exercise the force-settle path without a child that can survive
    *  SIGKILL. */
   killGroup?: (pid: number, signal: NodeJS.Signals) => void;
+  /** Hold an idle-sleep guard for the child's whole lifetime (darwin only).
+   *  A headless cron run does unattended model work for up to an hour with no
+   *  user present; without the guard the Mac enters `Sleep Service Back to
+   *  Sleep` a few seconds after the run starts and the harness's open stream is
+   *  suspended, which the run only discovers as a ~960s "Request timed out."
+   *  (2026-10-27: three crons lost 1800-3600s budgets this way; the transcript
+   *  gaps matched the pmset sleep windows second for second). */
+  preventSleep?: boolean;
+  /** Test seam: the guard binary (defaults to /usr/bin/caffeinate). */
+  preventSleepBin?: string;
 }
 
 /** Windows spawn target for one argv. A .cmd/.bat script cannot be executed
@@ -147,6 +169,33 @@ export function cronSpawnEnv(platform: string, harness: string): Record<string, 
   return out;
 }
 
+/** Default guard binary: macOS ships it, so the feature costs no dependency. */
+const CAFFEINATE_BIN = "/usr/bin/caffeinate";
+
+/** Wrap `argv` so an idle-sleep guard (caffeinate) holds `PreventUserIdleSystemSleep`
+ *  for the command's whole lifetime. Returns the argv unchanged plus "unavailable"
+ *  when the feature is off, the platform has no guard, or the binary is missing —
+ *  the caller must not treat that as a failure, but must not hide it either. */
+export function withPreventSleep(
+  argv: string[],
+  opts: { platform: string; requested?: boolean; exists?: (p: string) => boolean; bin?: string },
+): { argv: string[]; outcome?: PreventSleepOutcome } {
+  if (!opts.requested) return { argv };
+  // -i (idle sleep) is what a headless run needs; it does NOT survive a closed
+  // lid, so clamshell cron runs still fail and must be documented as such.
+  if (opts.platform !== "darwin") return { argv };
+  const bin = opts.bin ?? CAFFEINATE_BIN;
+  const exists = opts.exists ?? existsSync;
+  if (!exists(bin)) return { argv, outcome: "unavailable" };
+  // No `-w <pid>`: the pid does not exist yet, and caffeinate already ties its
+  // own lifetime to the command it was given. It forks a helper that becomes a
+  // SIBLING in the same process group (verified on macOS 27: spawn()'s pid is
+  // the command itself), so the existing `kill(-pgid)` covers the guard on both
+  // the SIGTERM and the SIGKILL path — a leftover caffeinate would otherwise
+  // keep the machine awake forever.
+  return { argv: [bin, "-i", ...argv], outcome: "armed" };
+}
+
 /** Spawn `argv` and wait for exit, streaming stdout+stderr (capped at
  *  MAX_OUTPUT_BYTES). Arms a hard kill after `timeoutMs`. Never throws on a
  *  child error — a spawn failure resolves as exit 1 with the error message
@@ -154,6 +203,12 @@ export function cronSpawnEnv(platform: string, harness: string): Record<string, 
 export async function spawnProcess(argv: string[], opts: SpawnOpts): Promise<SpawnResult> {
   const defaultPath = opts.platform === "win32" ? "C:\\Windows\\system32;C:\\Windows" : "/usr/local/bin:/usr/bin:/bin";
   const env = opts.env ?? { ...process.env, PATH: process.env.PATH ?? defaultPath };
+  const guarded = withPreventSleep(argv, {
+    platform: opts.platform,
+    requested: opts.preventSleep,
+    bin: opts.preventSleepBin,
+  });
+  const effectiveArgv = guarded.argv;
   const outChunks: Buffer[] = [];
   const errChunks: Buffer[] = [];
   let outBytes = 0;
@@ -167,8 +222,8 @@ export async function spawnProcess(argv: string[], opts: SpawnOpts): Promise<Spa
   const pushOut = (d: Buffer): void => { outBytes = cappedPush(outChunks, outBytes, d); };
   const pushErr = (d: Buffer): void => { errBytes = cappedPush(errChunks, errBytes, d); };
   const spawnTarget = opts.platform === "win32"
-    ? win32SpawnTarget(argv)
-    : { command: argv[0], args: argv.slice(1), verbatim: false };
+    ? win32SpawnTarget(effectiveArgv)
+    : { command: effectiveArgv[0], args: effectiveArgv.slice(1), verbatim: false };
   const child = spawn(spawnTarget.command, spawnTarget.args, {
     cwd: opts.cwd,
     env,
@@ -280,5 +335,14 @@ export async function spawnProcess(argv: string[], opts: SpawnOpts): Promise<Spa
   // that exits normally just after the deadline is not mislabeled (issue #8 #5).
   const stdout = Buffer.concat(outChunks).toString("utf-8");
   const stderr = Buffer.concat(errChunks).toString("utf-8");
-  return { exit: exited, output: `${stdout}${stderr}`, stdout, stderr, timedOut, stalled, forced };
+  return {
+    exit: exited,
+    output: `${stdout}${stderr}`,
+    stdout,
+    stderr,
+    timedOut,
+    stalled,
+    forced,
+    ...(guarded.outcome !== undefined ? { preventSleep: guarded.outcome } : {}),
+  };
 }

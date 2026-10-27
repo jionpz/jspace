@@ -29,10 +29,16 @@ export function findPendingApplies(root: string): { root: string; paths: string[
   return { root, paths: actionable.map((e) => envelopePath(root, e.id)), issues };
 }
 
+/** The only reason whose fix is NOT on the provider side, so it carries its own
+ *  hint — otherwise a reader sees `[system_sleep]` next to `[api_stall]` and
+ *  concludes they need the same fix. */
+const SYSTEM_SLEEP_HINT = " — host slept mid-run; check pmset/closed lid, not the provider";
+
 /** One human line per cron. Reason/duration/overrun are shown only when the
  *  record has them (legacy records keep the old shape). */
 function formatLastRun(id: string, last: RunRecord, timeoutSec: number): string {
-  const reason = last.reason === undefined ? "" : ` [${last.reason}]`;
+  const hint = last.reason === "system_sleep" ? SYSTEM_SLEEP_HINT : "";
+  const reason = last.reason === undefined ? "" : ` [${last.reason}${hint}]`;
   const duration = last.durationSec === undefined ? "" : `, ${last.durationSec}s`;
   const overrun = last.timedOut && last.durationSec !== undefined && last.durationSec > timeoutSec
     ? ` over ${timeoutSec}s budget`

@@ -160,6 +160,36 @@ test("stallSec must be a non-negative integer (-1 / float / string rejected)", (
   expectIssue(withStall(Number.NaN), "cron.stallSec.invalid");
 });
 
+test("per-cron preventSleep decodes; absent stays undefined (caller defaults to on)", () => {
+  const withGuard = (preventSleep: unknown) => ({
+    schema_version: 1,
+    crons: [{ id: "weekly", schedule: "0 9 * * *", harness: "claude", prompt: "p", preventSleep, enabled: true }],
+  });
+  const off = decode(withGuard(false));
+  expect(off.ok).toBe(true);
+  if (off.ok) expect(off.value.crons[0].preventSleep).toBe(false);
+
+  const on = decode(withGuard(true));
+  expect(on.ok).toBe(true);
+  if (on.ok) expect(on.value.crons[0].preventSleep).toBe(true);
+
+  // Absent must stay absent (not coerced to true at decode): the on-by-default
+  // decision belongs to the executor, so an existing cron.json keeps decoding
+  // to the exact same object it decoded to before this field existed.
+  const absent = decode({ schema_version: 1, crons: [{ id: "x", schedule: "0 9 * * *", harness: "claude", prompt: "p", enabled: true }] });
+  expect(absent.ok).toBe(true);
+  if (absent.ok) expect(absent.value.crons[0].preventSleep).toBeUndefined();
+});
+
+test("preventSleep must be a real boolean (a string \"false\" must not read as true)", () => {
+  const withGuard = (preventSleep: unknown) => ({
+    schema_version: 1,
+    crons: [{ id: "x", schedule: "0 9 * * *", harness: "claude", prompt: "p", preventSleep, enabled: true }],
+  });
+  expectIssue(withGuard("false"), "cron.preventSleep.invalid");
+  expectIssue(withGuard(0), "cron.preventSleep.invalid");
+});
+
 test("exactly one of prompt | target is required", () => {
   const neither = { schema_version: 1, crons: [{ id: "x", schedule: "* * * * *", harness: "claude", enabled: true }] };
   expectIssue(neither, "cron.entry.prompt_or_target");

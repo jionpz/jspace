@@ -32,6 +32,10 @@ export const RUN_FAILURE_REASONS = [
   "empty_output",
   "batch_stale",
   "exit_nonzero",
+  /** The HOST slept while the run was in flight (suspension evidence in the
+   *  harness output). Distinct from `timeout` so the fix goes to the machine
+   *  (idle-sleep guard / closed lid) instead of to the provider. */
+  "system_sleep",
 ] as const;
 export type RunFailureReason = (typeof RUN_FAILURE_REASONS)[number];
 

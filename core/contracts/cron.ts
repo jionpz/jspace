@@ -78,6 +78,22 @@ export interface CronDefinition {
    *  it from cron.json at execution time, so existing launchd/crontab/schtasks
    *  entries stay byte-identical. */
   stallSec?: number;
+  /** Hold an idle-sleep guard while the run executes (darwin only).
+   *
+   *  On by default when absent — the asymmetry with `stallSec` is deliberate:
+   *  a wrong `stallSec` kills healthy long runs, while the guard only costs
+   *  power. A scheduled run is unattended by definition: with `pmset sleep 1`
+   *  on AC the Mac returns to sleep seconds after launchd's dark wake, the
+   *  harness's open stream is suspended, and the run burns its whole budget
+   *  waiting (2026-10-27: three crons, transcript gaps matching the pmset
+   *  sleep windows second for second).
+   *
+   *  `false` opts out (closed-lid runs are unaffected either way, and a task
+   *  that must not keep the machine awake can say so).
+   *
+   *  Like `stallSec`, read by `cron run` at execution time and never written
+   *  into the scheduler argv. */
+  preventSleep?: boolean;
   enabled: boolean;
 }
 
@@ -121,7 +137,7 @@ export function decodeCrons(input: unknown, harnessEnum: readonly string[]): Dec
         return;
       }
       const before = issues.issues.length;
-      checkNoUnknownFields(item, ["id", "schedule", "harness", "prompt", "target", "tools", "model", "timeoutSec", "stallSec", "enabled"], prefix, "cron.entry.unknown-field", issues);
+      checkNoUnknownFields(item, ["id", "schedule", "harness", "prompt", "target", "tools", "model", "timeoutSec", "stallSec", "preventSleep", "enabled"], prefix, "cron.entry.unknown-field", issues);
       const id = readRequiredString(item, "id", prefix, "cron.id.invalid", issues);
       const schedule = readRequiredString(item, "schedule", prefix, "cron.schedule.invalid", issues);
       readEnum(issues, "cron.harness.invalid", `${prefix}.harness`, item.harness, harnessEnum);
@@ -176,6 +192,12 @@ export function decodeCrons(input: unknown, harnessEnum: readonly string[]): Dec
         if (typeof s === "number" && Number.isInteger(s) && s >= 0) stallSec = s;
         else issues.add("cron.stallSec.invalid", `${prefix}.stallSec`, "stallSec must be a non-negative integer (seconds; 0 disables)");
       }
+      let preventSleep: boolean | undefined;
+      if (item.preventSleep !== undefined) {
+        // Only a real boolean: `"false"` as a string must not silently read as true.
+        if (typeof item.preventSleep === "boolean") preventSleep = item.preventSleep;
+        else issues.add("cron.preventSleep.invalid", `${prefix}.preventSleep`, "preventSleep must be a boolean");
+      }
       if (issues.issues.length === before) {
         crons.push({
           id: id as string,
@@ -187,6 +209,7 @@ export function decodeCrons(input: unknown, harnessEnum: readonly string[]): Dec
           ...(model !== undefined ? { model } : {}),
           ...(timeoutSec !== undefined ? { timeoutSec } : {}),
           ...(stallSec !== undefined ? { stallSec } : {}),
+          ...(preventSleep !== undefined ? { preventSleep } : {}),
           enabled: item.enabled as boolean,
         });
       }

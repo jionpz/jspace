@@ -6,7 +6,7 @@ import { expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawnProcess, win32SpawnTarget, cronSpawnEnv } from "./spawn.ts";
+import { spawnProcess, win32SpawnTarget, cronSpawnEnv, withPreventSleep } from "./spawn.ts";
 
 test(".cmd script -> cmd.exe /d /s /c, doubled-quoted tail, verbatim", () => {
   const t = win32SpawnTarget(["C:\\bin\\claude.cmd", "-p", "prompt", "--allowedTools", "Bash,Read"]);
@@ -256,4 +256,64 @@ test.skipIf(process.platform === "win32")("force settle: a child that never exit
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// --- idle-sleep guard (2026-10-27) ------------------------------------------
+// Three scheduled crons lost 1800-3600s budgets to macOS re-entering sleep
+// seconds after launchd's dark wake; the harness saw only a suspended stream.
+
+test("withPreventSleep wraps a darwin argv with caffeinate -i", () => {
+  const r = withPreventSleep(["claude", "-p", "hi"], {
+    platform: "darwin", requested: true, exists: () => true, bin: "/usr/bin/caffeinate",
+  });
+  expect(r.outcome).toBe("armed");
+  expect(r.argv).toEqual(["/usr/bin/caffeinate", "-i", "claude", "-p", "hi"]);
+});
+
+test("withPreventSleep leaves argv untouched when not requested (preventSleep: false)", () => {
+  const argv = ["claude", "-p", "hi"];
+  const r = withPreventSleep(argv, { platform: "darwin", requested: false, exists: () => true });
+  expect(r.argv).toEqual(argv);
+  expect(r.outcome).toBeUndefined();
+});
+
+test("withPreventSleep is a no-op off darwin (no caffeinate on linux/win32)", () => {
+  const argv = ["claude", "-p", "hi"];
+  for (const platform of ["linux", "win32"]) {
+    const r = withPreventSleep(argv, { platform, requested: true, exists: () => true });
+    expect(r.argv).toEqual(argv);
+    expect(r.outcome).toBeUndefined();
+  }
+});
+
+test("withPreventSleep degrades visibly when the guard binary is missing", () => {
+  // Must not throw and must not pretend it protected the run: cron would
+  // otherwise report a normal-looking run that actually had no protection.
+  const argv = ["claude", "-p", "hi"];
+  const r = withPreventSleep(argv, { platform: "darwin", requested: true, exists: () => false });
+  expect(r.argv).toEqual(argv);
+  expect(r.outcome).toBe("unavailable");
+});
+
+test.skipIf(process.platform !== "darwin")("guarded spawn exits normally and reports armed", async () => {
+  const r = await spawnProcess(["/bin/sh", "-c", "echo hello; exit 0"], {
+    cwd: tmpdir(), platform: "darwin", timeoutMs: 10_000, preventSleep: true,
+  });
+  expect(r.exit).toBe(0);
+  expect(r.stdout).toContain("hello");
+  expect(r.preventSleep).toBe("armed");
+  expect(r.timedOut).toBe(false);
+});
+
+test.skipIf(process.platform !== "darwin")("guarded process-group kill also reaps the caffeinate helper", async () => {
+  // The guard forks a helper that becomes a SIBLING in the same process group.
+  // A leftover helper would hold PreventUserIdleSystemSleep forever, so the
+  // timeout path must kill the whole group (it does, via kill(-pgid)).
+  const r = await spawnProcess(["/bin/sh", "-c", "trap '' TERM; sleep 30"], {
+    cwd: tmpdir(), platform: "darwin", timeoutMs: 300, killGraceMs: 100, preventSleep: true,
+  });
+  expect(r.timedOut).toBe(true);
+  // No assertion survives the run: ask pmset what is still holding the wake lock.
+  const leftover = Bun.spawnSync(["bash", "-lc", "pmset -g assertions | grep -c caffeinate || true"]);
+  expect(leftover.stdout.toString().trim()).toBe("0");
 });

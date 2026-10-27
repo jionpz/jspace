@@ -18,7 +18,7 @@ import type { DistributionManifestV1 } from "../../core/contracts/distribution.t
 import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
 import { DEFAULT_TIMEOUT_SEC, type CronDefinition } from "../../core/contracts/cron.ts";
 import type { RunFailureReason, RunStatus } from "../../core/contracts/run-record.ts";
-import { spawnProcess, cronSpawnEnv } from "../../adapters/process/spawn.ts";
+import { spawnProcess, cronSpawnEnv, type PreventSleepOutcome } from "../../adapters/process/spawn.ts";
 import { loadCrons, resolveCronPrompt, type SkillTargetContext } from "./definitions.ts";
 import { skillRel, skillRoot } from "../fs.ts";
 import { lastRun, writeRun } from "./runs.ts";
@@ -68,6 +68,9 @@ interface RunOutcome {
   forced: boolean;
   batchChanged: boolean;
   reason?: RunFailureReason;
+  /** "unavailable" when the idle-sleep guard was wanted but could not be armed;
+   *  the run proceeded unprotected, which the prose log must say out loud. */
+  preventSleep?: PreventSleepOutcome;
   output: string;
   timing: RunTiming;
 }
@@ -196,6 +199,10 @@ function recordRun(
     `timed_out: ${outcome.timedOut}`,
     `stalled: ${outcome.stalled}`,
     `forced_resolve: ${outcome.forced}`,
+    // Only when it went wrong: "armed" is the normal case and would be noise.
+    ...(outcome.preventSleep === "unavailable"
+      ? ["prevent_sleep: unavailable (guard binary missing — run was NOT protected from idle sleep)"]
+      : []),
     `reason: ${outcome.reason ?? "none"}`,
     `batch_log_changed: ${outcome.batchChanged}`,
     "---",
@@ -283,6 +290,9 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
       timeoutMs: timeoutSec * 1000,
       stallMs: stallSec > 0 ? stallSec * 1000 : undefined,
       env: cronSpawnEnv(deps.platform, harness),
+      // Absent = on (unattended run). See CronDefinition.preventSleep for why
+      // this default is the opposite of stallSec's.
+      preventSleep: cron.preventSleep !== false,
     });
     const timing: RunTiming = { startedAt, durationSec: Math.max(0, Math.round((Date.now() - startedAtMs) / 1000)) };
     const exited = spawned.exit;
@@ -317,6 +327,7 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
       timedOut,
       stalled,
       forced: spawned.forced,
+      ...(spawned.preventSleep !== undefined ? { preventSleep: spawned.preventSleep } : {}),
       batchChanged,
       ...(reason !== undefined ? { reason } : {}),
       output,

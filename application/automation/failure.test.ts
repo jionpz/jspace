@@ -59,3 +59,40 @@ test("explicit model errors are model, but the non-fatal claude-code warning is 
 test("unmatched non-zero exit falls back to exit_nonzero", () => {
   expect(classifyFailure(input({ exit: 1, output: "something broke\n" }))).toBe("exit_nonzero");
 });
+
+// --- system_sleep (2026-10-27) ---------------------------------------------
+// The host slept mid-run. The harness says so verbatim; before this the same
+// symptom was filed as an upstream stall and the fix went to the provider.
+
+test("suspend evidence in the harness output -> system_sleep, not api_stall", () => {
+  const suspend = [
+    "[claude-code:unrecognized_model] {\"model\":\"opencode-go/deepseek-v4.1-flash\",\"query_source\":\"sdk\"}",
+    "Connection error.",
+    "Connection lost while your computer was asleep",
+    "Stream watchdog detected system suspend; aborting",
+  ].join("\n");
+  expect(classifyFailure(input({ timedOut: true, exit: 143, output: suspend }))).toBe("system_sleep");
+});
+
+test("system_sleep outranks timeout (a sleep failure ALWAYS also times out)", () => {
+  const out = "{\"message\":\"Connection error.\",\"connection\":{\"code\":\"StreamSuspended\"}}";
+  // Without the precedence rule this would be reported as `timeout`, and the
+  // new reason would be unreachable in practice.
+  expect(classifyFailure(input({ timedOut: true, exit: 124, output: out }))).toBe("system_sleep");
+});
+
+test("stalled still outranks system_sleep (the watchdog fired first)", () => {
+  const out = "Connection lost while your computer was asleep";
+  expect(classifyFailure(input({ stalled: true, timedOut: true, exit: 124, output: out }))).toBe("stalled");
+});
+
+test("a plain timeout with no suspend evidence stays timeout", () => {
+  expect(classifyFailure(input({ timedOut: true, exit: 143, output: "API Error: Request timed out after 900s\n" }))).toBe("timeout");
+});
+
+test("suspend evidence is read from raw output, not stripped as model noise", () => {
+  // The suspend line arrives alongside the non-fatal model warning; stripping
+  // that warning must not take the suspend evidence with it.
+  const out = "[claude-code:unrecognized_model] {\"model\":\"auto/x\"}\nStreamSuspended\n";
+  expect(classifyFailure(input({ timedOut: true, exit: 143, output: out }))).toBe("system_sleep");
+});

@@ -26,6 +26,8 @@ No leveled logger. Distinctions are by channel, not severity prefix:
 - Identifiers are UUIDs; timestamps use a local `YYYY-MM-DDTHHmmss` stamp (kept simple, no TZ conversion — see `localStamp()`).
 - A failed step records `failedStep` + `failureReason`; compensation is recorded as state, not just prose.
 - `RunRecord` carries optional `reason` + `durationSec` (both additive; legacy records decode unchanged). `cron status` / `cron failures` read them for the "why" and the budget overrun; recovery decisions still use `status`, never the prose log.
+- **A failure `reason` must name the fixable layer.** `system_sleep` exists because a suspended host produces the same observable symptom as a hung upstream (`Request timed out.`, a run that eats its whole budget) but a different fix: the idle-sleep guard / the closed lid, not the provider. Precedence is `stalled` > `system_sleep` > `timeout` — a sleep failure always also times out, so any later position makes the reason unreachable. It is **partial by construction** (the harness must notice the suspension), so never present it as a complete detector. Triage order: transcript gap width vs `pmset -g log` sleep windows first, upstream second.
+- `prevent_sleep: unavailable` is logged only when the guard was wanted but could not be armed; the run then proceeded unprotected, which is a fact the next reader needs. `armed` is the normal case and stays unlogged.
 
 ## What to Log
 
