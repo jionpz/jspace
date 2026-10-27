@@ -1172,7 +1172,15 @@ describe("bundle verification", () => {
       root,
       projects: PROJECTS,
     });
-    expect(report.findings).toEqual([]);
+    if (process.platform === "win32") {
+      // No executable bit on Windows: the bundle verifies, but whole-tree
+      // fidelity stays partial and that is reported as an unknown finding.
+      expect(report.findings.map((finding) => finding.code)).toEqual([
+        "filehub.bundle.executable_unverified",
+      ]);
+    } else {
+      expect(report.findings).toEqual([]);
+    }
     expect(report.coverage.files.verified_bundles).toBe(1);
     expect(report.coverage.files.bundle_files).toBe(2);
     expect(report.coverage.files.bundle_unverified).toBe(0);

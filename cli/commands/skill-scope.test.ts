@@ -4,7 +4,15 @@
 // byte-identical copy); anything with local content stays.
 // Run: bun test cli/commands/skill-scope.test.ts
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { ASSETS } from "../assets.generated.ts";
@@ -46,6 +54,16 @@ function writeOfficialCopy(dir: string, name: string): void {
   }
 }
 
+/** Remove a symlink itself. Bun's rmSync throws EFAULT on a directory symlink
+ *  under Windows, so unlink first and only fall back to a recursive remove. */
+function removeLink(path: string): void {
+  try {
+    unlinkSync(path);
+  } catch {
+    rmSync(path, { recursive: true, force: true });
+  }
+}
+
 test("workbench marker is required before a directory counts as a skill SSOT", () => {
   const { wb, root } = fixture();
   try {
@@ -66,15 +84,15 @@ test("classifies every user-level shape", () => {
     symlinkSync(join(wb, ".jspace", "skills", NAME), join(user, NAME));
     expect(cls(NAME)).toBe("link-local");
 
-    rmSync(join(user, NAME));
+    removeLink(join(user, NAME));
     symlinkSync(join(other, ".jspace", "skills", NAME), join(user, NAME));
     expect(cls(NAME)).toBe("link-foreign");
 
-    rmSync(join(user, NAME));
+    removeLink(join(user, NAME));
     symlinkSync(join(root, "gone"), join(user, NAME));
     expect(cls(NAME)).toBe("link-dangling");
 
-    rmSync(join(user, NAME));
+    removeLink(join(user, NAME));
     mkdirSync(join(user, NAME));
     expect(cls(NAME)).toBe("user-owned");
     writeOfficialCopy(join(user, NAME), NAME);

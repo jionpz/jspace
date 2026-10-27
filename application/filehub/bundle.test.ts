@@ -62,7 +62,10 @@ describe("bundle traversal", () => {
     expect(scan.state).toBe("ok");
     expect(scan.files.map((file) => file.path)).toContain(".hidden");
     expect(scan.directories).toContain("empty");
-    expect(scan.files.find((file) => file.path === "README.md")?.executable).toBe(true);
+    // Windows has no executable bit: chmod is a no-op and the scan reports false.
+    expect(scan.files.find((file) => file.path === "README.md")?.executable).toBe(
+      process.platform !== "win32",
+    );
     expect(scan.aggregateSha256).toMatch(/^[0-9a-f]{64}$/);
     expect(scan.aggregateSha256).toBe(aggregateForMembers([
       ...scan.directories.map((path) => ({ path, kind: "dir" as const })),
