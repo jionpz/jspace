@@ -19,6 +19,22 @@ import {
 export const RUN_STATUSES = ["ok", "suspect", "failed"] as const;
 export type RunStatus = (typeof RUN_STATUSES)[number];
 
+/** Machine-readable failure cause. `ok` runs and legacy records omit it; the
+ *  incident keeps its coarser `failureClass` (failed/suspect/batch-stale) and
+ *  points at this run as evidence. */
+export const RUN_FAILURE_REASONS = [
+  "timeout",
+  "stalled",
+  "api_stall",
+  "auth",
+  "model",
+  "spawn_error",
+  "empty_output",
+  "batch_stale",
+  "exit_nonzero",
+] as const;
+export type RunFailureReason = (typeof RUN_FAILURE_REASONS)[number];
+
 export interface RunRecordV1 {
   schema_version: 1;
   id: string; // uuid
@@ -30,6 +46,10 @@ export interface RunRecordV1 {
   /** prose log path (human payload, not recovery state) */
   outputLog: string;
   batchChanged: boolean;
+  /** Failure cause for failed/suspect runs; absent on ok and legacy records. */
+  reason?: RunFailureReason;
+  /** Whole seconds from spawn to record; absent on legacy records. */
+  durationSec?: number;
 }
 
 export function decodeRunRecord(input: unknown): DecodeResult<RunRecordV1> {
@@ -40,6 +60,7 @@ export function decodeRunRecord(input: unknown): DecodeResult<RunRecordV1> {
   }
   const FIELDS = [
     "schema_version", "id", "cronId", "startedAt", "exit", "status", "timedOut", "outputLog", "batchChanged",
+    "reason", "durationSec",
   ] as const;
   checkNoUnknownFields(input, FIELDS, "run", "run.unknown-field", issues);
   readVersion(issues, "run.version.unsupported", "run.version", input.schema_version, [1]);
@@ -53,6 +74,14 @@ export function decodeRunRecord(input: unknown): DecodeResult<RunRecordV1> {
   }
   readBool(issues, "run.timedOut.invalid", "run.timedOut", input.timedOut);
   readBool(issues, "run.batchChanged.invalid", "run.batchChanged", input.batchChanged);
+  if (input.reason !== undefined) {
+    readEnum(issues, "run.reason.invalid", "run.reason", input.reason, RUN_FAILURE_REASONS);
+  }
+  if (input.durationSec !== undefined) {
+    if (typeof input.durationSec !== "number" || !Number.isFinite(input.durationSec) || input.durationSec < 0) {
+      issues.add("run.durationSec.invalid", "run.durationSec", "durationSec must be a non-negative number");
+    }
+  }
   if (!issues.ok) return failure(issues.issues);
   return success({
     schema_version: 1,
@@ -64,5 +93,7 @@ export function decodeRunRecord(input: unknown): DecodeResult<RunRecordV1> {
     timedOut: input.timedOut as boolean,
     outputLog: input.outputLog as string,
     batchChanged: input.batchChanged as boolean,
+    ...(input.reason !== undefined ? { reason: input.reason as RunFailureReason } : {}),
+    ...(input.durationSec !== undefined ? { durationSec: input.durationSec as number } : {}),
   });
 }

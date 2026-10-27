@@ -17,6 +17,14 @@ const MAX_OUTPUT_BYTES = 1_048_576;
 const SIGKILL_GRACE_MS = 3000;
 /** win32 timeout path: taskkill itself must not hang and cancel the outer timeout. */
 const TASKKILL_TIMEOUT_MS = 5_000;
+/** After the kill grace window, wait this much longer for `exit` before the
+ *  adapter settles the run itself. A process that never emits `exit` (or a
+ *  process tree whose stdio keeps the event loop busy) must not hold the cron
+ *  lock open forever. */
+const FORCE_RESOLVE_SLACK_MS = 500;
+/** Synthetic exit code when the adapter had to settle without a child exit.
+ *  124 is the conventional "command timed out" code. */
+const SYNTHETIC_TIMEOUT_EXIT = 124;
 
 export interface SpawnResult {
   exit: number;
@@ -26,7 +34,13 @@ export interface SpawnResult {
   stdout: string;
   /** stderr only (NEW). */
   stderr: string;
+  /** The timeout timer fired. */
   timedOut: boolean;
+  /** The no-output watchdog fired (timeout timer did not). */
+  stalled: boolean;
+  /** The adapter settled after the kill grace window because `exit` never
+   *  arrived; `exit` is the synthetic code above. */
+  forced: boolean;
 }
 
 export interface SpawnOpts {
@@ -36,11 +50,18 @@ export interface SpawnOpts {
   /** SIGTERM → SIGKILL grace window (default 3000ms). Tests inject a small
    *  value so the SIGKILL path is exercised without waiting. */
   killGraceMs?: number;
+  /** Kill when neither stdout nor stderr produces new bytes for this long.
+   *  undefined or 0 disables the watchdog. */
+  stallMs?: number;
   /** Optional stdin content, written to the child then closed (gbrain put). */
   input?: string;
   /** Child env; defaults to the full process.env. Cron harness spawns pass the
    *  cronSpawnEnv whitelist so a prompt-injected shell can't read every secret. */
   env?: Record<string, string>;
+  /** Test seam for process-group signals (defaults to process.kill). A no-op
+   *  lets tests exercise the force-settle path without a child that can survive
+   *  SIGKILL. */
+  killGroup?: (pid: number, signal: NodeJS.Signals) => void;
 }
 
 /** Windows spawn target for one argv. A .cmd/.bat script cannot be executed
@@ -159,44 +180,105 @@ export async function spawnProcess(argv: string[], opts: SpawnOpts): Promise<Spa
     child.stdin.write(opts.input);
     child.stdin.end();
   }
-  child.stdout?.on("data", pushOut);
-  child.stderr?.on("data", pushErr);
-  let killed = false;
+
+  const killGroup = opts.killGroup ?? ((pid: number, signal: NodeJS.Signals) => process.kill(pid, signal));
+  let timedOut = false;
+  let stalled = false;
+  let forced = false;
+  let settled = false;
+  let resolveExit: ((code: number) => void) | undefined;
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+  let stallTimer: ReturnType<typeof setTimeout> | undefined;
   let killTimer: ReturnType<typeof setTimeout> | undefined;
-  const timer = setTimeout(() => {
-    killed = true;
+  let forceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const stopTimers = (): void => {
+    if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+    if (stallTimer !== undefined) clearTimeout(stallTimer);
+    if (killTimer !== undefined) clearTimeout(killTimer);
+    if (forceTimer !== undefined) clearTimeout(forceTimer);
+  };
+  const finish = (code: number): void => {
+    if (settled) return;
+    settled = true;
+    stopTimers();
+    resolveExit?.(code);
+  };
+  /** Terminate once. The first cause (timeout or stall) wins; after the grace
+   *  window the adapter force-settles even if the child never emits `exit`. */
+  const killTree = (kind: "timeout" | "stall"): void => {
+    if (timedOut || stalled) return;
+    if (kind === "timeout") timedOut = true;
+    else stalled = true;
+    // the other cause's timer must not fire a second kill later
+    if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+    if (stallTimer !== undefined) clearTimeout(stallTimer);
+
+    if (child.pid === undefined) {
+      finish(1);
+      return;
+    }
+    const graceMs = opts.killGraceMs ?? SIGKILL_GRACE_MS;
     if (opts.platform === "win32") {
       try {
         spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { timeout: TASKKILL_TIMEOUT_MS });
       } catch { /* ignore */ }
     } else {
       try {
-        process.kill(-child.pid!, "SIGTERM");
+        killGroup(-child.pid, "SIGTERM");
         // grace period: a harness that ignores SIGTERM must still die
         killTimer = setTimeout(() => {
-          try { process.kill(-child.pid!, "SIGKILL"); } catch { /* already gone */ }
-        }, opts.killGraceMs ?? SIGKILL_GRACE_MS);
+          try { killGroup(-child.pid!, "SIGKILL"); } catch {
+            try { child.kill("SIGKILL"); } catch { /* ignore */ }
+          }
+        }, graceMs);
       } catch {
         try { child.kill("SIGKILL"); } catch { /* ignore */ }
       }
     }
-  }, opts.timeoutMs);
 
-  const exited = await new Promise<number>((resolveExit) => {
+    const settleAfter = opts.platform === "win32"
+      ? TASKKILL_TIMEOUT_MS + FORCE_RESOLVE_SLACK_MS
+      : graceMs + FORCE_RESOLVE_SLACK_MS;
+    forceTimer = setTimeout(() => {
+      if (settled) return;
+      forced = true;
+      // A lingering process tree must not keep the adapter (and its pipes)
+      // alive after we have decided the run is over.
+      try { child.stdout?.destroy(); } catch { /* ignore */ }
+      try { child.stderr?.destroy(); } catch { /* ignore */ }
+      try { child.unref(); } catch { /* ignore */ }
+      finish(SYNTHETIC_TIMEOUT_EXIT);
+    }, settleAfter);
+  };
+  const armStall = (): void => {
+    if (opts.stallMs === undefined || opts.stallMs <= 0) return;
+    // A stream can flush data after `exit`/force-settle; re-arming then would
+    // leave a timer that keeps the CLI alive for the whole stall window.
+    if (settled || timedOut || stalled) return;
+    if (stallTimer !== undefined) clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => killTree("stall"), opts.stallMs);
+  };
+
+  child.stdout?.on("data", (d: Buffer) => { pushOut(d); armStall(); });
+  child.stderr?.on("data", (d: Buffer) => { pushErr(d); armStall(); });
+  armStall();
+  timeoutTimer = setTimeout(() => killTree("timeout"), opts.timeoutMs);
+
+  const exited = await new Promise<number>((resolve) => {
+    resolveExit = resolve;
     // Spawn failure (e.g. executable not in PATH) routes into the RESULT's
     // stderr, not this process's stderr: callers that report failures (cron
     // run log, gbrain put/list error field) still get the message, while an
     // expected state — gbrain not yet installed when a session-start hook
     // probes it — no longer prints noise at the top of every session.
-    child.on("error", (e) => { pushErr(Buffer.from(`jspace: spawn error: ${e.message}\n`)); resolveExit(1); });
-    child.on("exit", (code) => resolveExit(code ?? 1));
+    child.on("error", (e) => { pushErr(Buffer.from(`jspace: spawn error: ${e.message}\n`)); finish(1); });
+    child.on("exit", (code) => finish(code ?? 1));
   });
-  clearTimeout(timer);
-  if (killTimer !== undefined) clearTimeout(killTimer);
+  stopTimers();
   // timedOut is the timer's own flag, not a wall-clock comparison — a child
   // that exits normally just after the deadline is not mislabeled (issue #8 #5).
-  const timedOut = killed;
   const stdout = Buffer.concat(outChunks).toString("utf-8");
   const stderr = Buffer.concat(errChunks).toString("utf-8");
-  return { exit: exited, output: `${stdout}${stderr}`, stdout, stderr, timedOut };
+  return { exit: exited, output: `${stdout}${stderr}`, stdout, stderr, timedOut, stalled, forced };
 }

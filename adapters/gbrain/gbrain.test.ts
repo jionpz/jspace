@@ -19,7 +19,7 @@ function fakeRun(impl: (argv: string[], opts: SpawnOpts) => SpawnResult): { run:
 
 const okRes = (value: unknown): SpawnResult => {
   const stdout = typeof value === "string" ? value : JSON.stringify(value);
-  return { exit: 0, output: stdout, stdout, stderr: "", timedOut: false };
+  return { exit: 0, output: stdout, stdout, stderr: "", timedOut: false, stalled: false, forced: false };
 };
 
 const failRes = (code: string, message: string): SpawnResult => ({
@@ -28,6 +28,8 @@ const failRes = (code: string, message: string): SpawnResult => ({
   stdout: "",
   stderr: JSON.stringify({ code, message }),
   timedOut: false,
+  stalled: false,
+  forced: false,
 });
 
 function argsOf(call: Call): Record<string, unknown> {
@@ -80,7 +82,7 @@ test("getPage normalizes page_not_found from JSON stderr", async () => {
 });
 
 test("getPage timeout is typed and never hangs the hook", async () => {
-  const { run } = fakeRun(() => ({ exit: 0, output: "", stdout: "", stderr: "", timedOut: true }));
+  const { run } = fakeRun(() => ({ exit: 0, output: "", stdout: "", stderr: "", timedOut: true, stalled: false, forced: false }));
   const r = await realGbrain(run, 17).getPage("x");
   expect(r.ok).toBe(false);
   if (!r.ok) expect(r.code).toBe("timeout");

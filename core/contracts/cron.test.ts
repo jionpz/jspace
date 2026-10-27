@@ -131,6 +131,35 @@ test("timeoutSec must be a positive integer (0 / negative / float / string rejec
   expectIssue(withTimeout(Number.NaN), "cron.timeoutSec.invalid");
 });
 
+test("per-cron stallSec decodes; 0 disables and absent stays undefined", () => {
+  const withStall = (stallSec: unknown) => ({
+    schema_version: 1,
+    crons: [{ id: "weekly", schedule: "0 9 * * *", harness: "claude", prompt: "p", stallSec, enabled: true }],
+  });
+  const on = decode(withStall(600));
+  expect(on.ok).toBe(true);
+  if (on.ok) expect(on.value.crons[0].stallSec).toBe(600);
+
+  const off = decode(withStall(0));
+  expect(off.ok).toBe(true);
+  if (off.ok) expect(off.value.crons[0].stallSec).toBe(0);
+
+  const absent = decode({ schema_version: 1, crons: [{ id: "x", schedule: "0 9 * * *", harness: "claude", prompt: "p", enabled: true }] });
+  expect(absent.ok).toBe(true);
+  if (absent.ok) expect(absent.value.crons[0].stallSec).toBeUndefined();
+});
+
+test("stallSec must be a non-negative integer (-1 / float / string rejected)", () => {
+  const withStall = (stallSec: unknown) => ({
+    schema_version: 1,
+    crons: [{ id: "x", schedule: "0 9 * * *", harness: "claude", prompt: "p", stallSec, enabled: true }],
+  });
+  expectIssue(withStall(-1), "cron.stallSec.invalid");
+  expectIssue(withStall(1.5), "cron.stallSec.invalid");
+  expectIssue(withStall("600"), "cron.stallSec.invalid");
+  expectIssue(withStall(Number.NaN), "cron.stallSec.invalid");
+});
+
 test("exactly one of prompt | target is required", () => {
   const neither = { schema_version: 1, crons: [{ id: "x", schedule: "* * * * *", harness: "claude", enabled: true }] };
   expectIssue(neither, "cron.entry.prompt_or_target");

@@ -38,7 +38,7 @@ interface RecordedCall {
 
 const okRes = (value: unknown): SpawnResult => {
   const stdout = JSON.stringify(value);
-  return { exit: 0, output: stdout, stdout, stderr: "", timedOut: false };
+  return { exit: 0, output: stdout, stdout, stderr: "", timedOut: false, stalled: false, forced: false };
 };
 
 const failRes = (code: string, message: string): SpawnResult => ({
@@ -47,6 +47,8 @@ const failRes = (code: string, message: string): SpawnResult => ({
   stdout: "",
   stderr: JSON.stringify({ code, message }),
   timedOut: false,
+  stalled: false,
+  forced: false,
 });
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -77,7 +79,7 @@ function fakeGbrainServer(opts: ServerOptions): { run: GbrainRun; calls: Recorde
       if (opts.listDelayMs !== undefined) {
         if (opts.listDelayMs >= timeoutMs) {
           await sleep(Math.max(1, timeoutMs));
-          return { exit: 0, output: "", stdout: "", stderr: "", timedOut: true };
+          return { exit: 0, output: "", stdout: "", stderr: "", timedOut: true, stalled: false, forced: false };
         }
         await sleep(opts.listDelayMs);
       }

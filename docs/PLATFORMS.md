@@ -37,10 +37,14 @@ JSpace **必须支持 macOS / Linux / Windows 三平台**。本文档记录各�
 
 **`timeoutSec` 同理是调和键的一部分(2026-10-22 起)**:`cron.json` 条目可写 `"timeoutSec": 3600`(正整数秒),它是该 cron **每次定时运行**的执行预算;`cron run --timeout N` 仍是**单次**覆盖,优先级 `--timeout` > `timeoutSec` > 1800。之所以必须进调和键:预算在**安装期烘焙**进条目(plist 的 `ProgramArguments`、crontab 行的 `--timeout <n>`、schtasks 的 `/tr`),运行期不再重算 —— 若只写 json 而不进比较键,`cron install` 会永远报 `up to date`,定时运行继续按旧预算被杀(实测 `server-status` 两次 143:1915s / 2042s,而 cron.json 改不动它)。三平台读回侧(plist dump / crontab 行 / schtasks XML)各自重建 `--timeout <n>` 才不产生永久 update。缺省(不写该字段)与旧版字节一致:条目里没有 `--timeout`,既有安装不会因为新增字段被整体重写。
 
+**`stallSec` 不是调和键(2026-10-27 起)**:`cron.json` 条目可写 `"stallSec": 600`(非负整数秒),表示「stdout/stderr 连续多少秒没有新数据就判定停滞」;`0` 或缺省表示**关闭**(opt-in)。它只在 `cron run` 执行时从 `cron.json` 读取,不进入 launchd/crontab/schtasks 的 argv,所以既有安装条目不因新增字段被重写。之所以默认关闭:`claude -p --output-format text` 只在运行结束时输出正文,「暂时没输出」与「上游挂起」在外部无法区分,默认开启会误杀正常的长任务;只对输出节奏已知的 harness/任务显式开启。停滞走与超时相同的终止路径,但 run record 的 `reason` 记为 `stalled`(不是 `timeout`)。
+
+**超时兜底与失败原因(2026-10-27 起)**:到达预算后先 SIGTERM 进程组、宽限期后 SIGKILL;若 `exit` 仍未触发,适配器在宽限期 + 500ms 后强制 settle(`forced: true`,合成 exit 124),避免锁和调度窗口被无限拖住。run record 新增可选 `reason`(`timeout` / `stalled` / `api_stall` / `auth` / `model` / `spawn_error` / `empty_output` / `batch_stale` / `exit_nonzero`)与 `durationSec`;`cron status` 显示 `[reason]`、耗时和相对 `timeoutSec` 的越界,`cron failures --json` 的 `crons[]` 同步暴露 `reason` / `duration_sec` / `timed_out`。`[claude-code:unrecognized_model]` 是本环境成功运行也会出现的非致命告警,不参与归因。**降级边界**:记录解码是严格 unknown-field,回滚到旧版二进制后,新记录里的 `reason`/`durationSec` 会被当作未知字段,该条 run 报 damaged state 而不被读取(不会伪造成功);重装新版即恢复,无需改 state 文件。
+
 
 ## 运行状态与 incidents（结构化，M3）
 
-- 每次 run 写 `.jspace/state/runs/<cron>/<run-id>.json`（`exit` = harness 子进程退出码；`status` = jspace 判定 ok/suspect/failed；另含 timedOut/outputLog/batchChanged）；prose 日志保留在 `.jspace/logs/cron/<id>/` 作为人类 payload。
+- 每次 run 写 `.jspace/state/runs/<cron>/<run-id>.json`（`exit` = harness 子进程退出码；`status` = jspace 判定 ok/suspect/failed；另含 timedOut/outputLog/batchChanged、durationSec，以及失败时的 reason）；prose 日志保留在 `.jspace/logs/cron/<id>/` 作为人类 payload。
 - failed/suspect/batch-stale run 打开或更新 incident（keyed by cron + failure class）；成功 retry 自动 resolve。
 - **fail-closed**：inbox 类 cron 无法验证批次变化（无 filehub / batch 日志未出现 / 未变）时，记 `batchChanged: false` 且 `status: "failed"`，incident class 为 `batch-stale`，CLI 退出码 1 —— 此时 harness 自身 `exit` 可能为 0，两者不矛盾（判定 vs 子进程事实）。同日成功判定要求 `status: "ok"`，并额外要求 `batchChanged`，所以 stale 会被下一个触发点重跑，不会静默跳过一天。
 - `cron ack [id]`：open → acknowledged（证据保留，不再告警）；`cron failures` 仅对 open（未 ack）incident、actionable pending write 或 damaged machine-state 返回非 0。

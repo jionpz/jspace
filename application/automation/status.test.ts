@@ -225,3 +225,64 @@ test("damaged ingest journal -> cron failures reports damaged_state (symmetric w
   expect(r.lines.join("\n")).toContain("damaged state records: (1)");
   rmSync(wb, { recursive: true, force: true });
 });
+
+// ---- failure reason / duration / timeout overrun surface ----
+
+type CronRow = {
+  id: string;
+  status: string;
+  reason: string | null;
+  duration_sec: number | null;
+  timed_out: boolean;
+};
+
+function writeFailedRun(wb: string, cronId: string): void {
+  const dir = join(wb, ".jspace", "state", "runs", cronId);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, "run-1.json"),
+    JSON.stringify({
+      schema_version: 1,
+      id: RUN_ID,
+      cronId,
+      startedAt: "2026-10-25T090000",
+      exit: 124,
+      status: "failed",
+      timedOut: true,
+      outputLog: "x",
+      batchChanged: true,
+      reason: "timeout",
+      durationSec: 3141,
+    }),
+  );
+}
+
+test("cronStatus: failed run shows reason, duration and timeout overrun", () => {
+  const wb = makeWorkbench({ crons: ["a"] });
+  writeFailedRun(wb, "a");
+  const line = cronStatus(wb).lines[0];
+  expect(line).toContain("a: failed [timeout]");
+  expect(line).toContain("exit 124");
+  expect(line).toContain("3141s");
+  expect(line).toContain("over 1800s budget");
+  rmSync(wb, { recursive: true, force: true });
+});
+
+test("cronFailures JSON: per-cron reason/duration/timed_out are exposed", () => {
+  const wb = makeWorkbench({ crons: ["a"], incidents: [{ cron: "a", failureClass: "failed" }] });
+  writeFailedRun(wb, "a");
+  const r = cronFailures(wb);
+  const data = r.data as { crons: CronRow[] };
+  expect(data.crons[0]).toMatchObject({ id: "a", status: "failed", reason: "timeout", duration_sec: 3141, timed_out: true });
+  expect(r.lines.join("\n")).toContain("a: failed [timeout]");
+  rmSync(wb, { recursive: true, force: true });
+});
+
+test("cronStatus: legacy record without reason/duration keeps the old shape", () => {
+  const wb = makeWorkbench({ crons: ["a"], runs: { a: "failed" } });
+  const line = cronStatus(wb).lines[0];
+  expect(line).toContain("a: failed (exit 1, 2026-08-03T12:00:00)");
+  expect(line).not.toContain("[");
+  expect(line).not.toContain(" over ");
+  rmSync(wb, { recursive: true, force: true });
+});

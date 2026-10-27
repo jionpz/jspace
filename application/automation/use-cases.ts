@@ -95,10 +95,10 @@ export function cronList(root: string, json: boolean): CmdResult {
   if (data.crons.length === 0) {
     return { lines: ["jspace: ok: no crons defined (add one with: jspace cron add <id> --schedule ... )"] };
   }
-  // timeoutSec is shown only when set: an unset budget IS the default, and
-  // printing "1800" for every legacy cron would blur the difference between
-  // "this cron was given a budget" and "this cron inherits one".
-  return { lines: data.crons.map((c) => `${c.enabled ? "" : "[disabled] "}${c.id}  ${c.schedule}  ${c.harness}${c.timeoutSec === undefined ? "" : `  timeout=${c.timeoutSec}s`}`) };
+  // timeoutSec/stallSec are shown only when set: an unset budget IS the
+  // default, and printing defaults for every legacy cron would blur the
+  // difference between "this cron was given a value" and "this cron inherits".
+  return { lines: data.crons.map((c) => `${c.enabled ? "" : "[disabled] "}${c.id}  ${c.schedule}  ${c.harness}${c.timeoutSec === undefined ? "" : `  timeout=${c.timeoutSec}s`}${c.stallSec === undefined ? "" : `  stall=${c.stallSec}s`}`) };
 }
 
 export function cronRemove(root: string, id: string, deps: CronInstalledCheck): CmdResult {

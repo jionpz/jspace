@@ -17,11 +17,13 @@ import type { CmdResult } from "../commands/command.ts";
 import type { DistributionManifestV1 } from "../../core/contracts/distribution.ts";
 import type { SkillsManifestV1 } from "../../core/contracts/skills.ts";
 import { DEFAULT_TIMEOUT_SEC, type CronDefinition } from "../../core/contracts/cron.ts";
+import type { RunFailureReason, RunStatus } from "../../core/contracts/run-record.ts";
 import { spawnProcess, cronSpawnEnv } from "../../adapters/process/spawn.ts";
 import { loadCrons, resolveCronPrompt, type SkillTargetContext } from "./definitions.ts";
 import { skillRel, skillRoot } from "../fs.ts";
 import { lastRun, writeRun } from "./runs.ts";
 import { openOrUpdate, resolveIncidents } from "./incidents.ts";
+import { classifyFailure } from "./failure.ts";
 import { acquireLockWithClock } from "../lock.ts";
 import { harnessArgv } from "../../adapters/harness/argv.ts";
 import { assertHarnessSupportsTools, assertHarnessSupportsModel } from "../../adapters/harness/registry.ts";
@@ -54,6 +56,20 @@ export interface RunTiming {
   startedAt: string;
   /** whole seconds between spawn and record; 0 for sub-second runs. */
   durationSec: number;
+}
+
+/** Everything recordRun needs about one finished run. Kept as an object because
+ *  the positional list grew past the point where call sites stayed readable. */
+interface RunOutcome {
+  exit: number;
+  status: RunStatus;
+  timedOut: boolean;
+  stalled: boolean;
+  forced: boolean;
+  batchChanged: boolean;
+  reason?: RunFailureReason;
+  output: string;
+  timing: RunTiming;
 }
 
 export interface ExecuteDeps {
@@ -158,12 +174,7 @@ function recordRun(
   root: string,
   opts: CronRunOptions,
   argv: string[],
-  exited: number,
-  status: "ok" | "suspect" | "failed",
-  timedOut: boolean,
-  batchChanged: boolean,
-  output: string,
-  timing: RunTiming,
+  outcome: RunOutcome,
   deps: ExecuteDeps,
 ): { runId: string; logPath: string } {
   const logDir = deps.logDir(root, opts.cronId);
@@ -174,18 +185,21 @@ function recordRun(
   // named by the run's START stamp: the filename, the prose log and the
   // RunRecord all report the same instant (pre-fix the filename/`startedAt`
   // carried the END stamp — see the startedAt note on RunTiming).
-  const logPath = join(logDir, `${timing.startedAt}-${runId.slice(0, 8)}.md`);
+  const logPath = join(logDir, `${outcome.timing.startedAt}-${runId.slice(0, 8)}.md`);
   writeFileSync(logPath, [
     `# cron ${opts.cronId}`,
-    `time: ${timing.startedAt}`,
-    `duration_sec: ${timing.durationSec}`,
+    `time: ${outcome.timing.startedAt}`,
+    `duration_sec: ${outcome.timing.durationSec}`,
     `command: ${argv.join(" ")}`,
-    `exit: ${exited}`,
-    `status: ${status}`,
-    `timed_out: ${timedOut}`,
-    `batch_log_changed: ${batchChanged}`,
+    `exit: ${outcome.exit}`,
+    `status: ${outcome.status}`,
+    `timed_out: ${outcome.timedOut}`,
+    `stalled: ${outcome.stalled}`,
+    `forced_resolve: ${outcome.forced}`,
+    `reason: ${outcome.reason ?? "none"}`,
+    `batch_log_changed: ${outcome.batchChanged}`,
     "---",
-    output.slice(0, LOG_TRUNCATE_BYTES),
+    outcome.output.slice(0, LOG_TRUNCATE_BYTES),
   ].join("\n"), "utf-8");
   pruneLogs(root, opts.cronId, LOG_KEEP, deps.logDir);
 
@@ -193,12 +207,14 @@ function recordRun(
     schema_version: 1,
     id: runId,
     cronId: opts.cronId,
-    startedAt: timing.startedAt,
-    exit: exited,
-    status,
-    timedOut,
+    startedAt: outcome.timing.startedAt,
+    exit: outcome.exit,
+    status: outcome.status,
+    timedOut: outcome.timedOut,
     outputLog: logPath,
-    batchChanged,
+    batchChanged: outcome.batchChanged,
+    ...(outcome.reason !== undefined ? { reason: outcome.reason } : {}),
+    durationSec: outcome.timing.durationSec,
   });
   return { runId, logPath };
 }
@@ -215,6 +231,11 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
   // the lock staleness and the spawn kill derive from this one value, so they
   // can never disagree about how long the run is allowed to live.
   const timeoutSec = opts.timeoutSec ?? cron.timeoutSec ?? DEFAULT_TIMEOUT_SEC;
+  // No-output watchdog, opt-in: absent/0 disables it. `claude -p --output-format
+  // text` prints nothing until the run ends, so a default-on watchdog would kill
+  // every long-but-healthy run; only a cron whose output cadence is known should
+  // set stallSec. Unlike timeoutSec this is not baked into the scheduler argv.
+  const stallSec = cron.stallSec ?? 0;
   const skillCtx: SkillTargetContext = {
     skillsManifest: deps.skillsManifest,
     bundleManifest: deps.bundleManifest,
@@ -256,12 +277,19 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
     // taken after it is the END instant (see RunTiming).
     const startedAt = localStamp();
     const startedAtMs = Date.now();
-    const spawned = await spawnProcess(argv, { cwd: root, platform: deps.platform, timeoutMs: timeoutSec * 1000, env: cronSpawnEnv(deps.platform, harness) });
+    const spawned = await spawnProcess(argv, {
+      cwd: root,
+      platform: deps.platform,
+      timeoutMs: timeoutSec * 1000,
+      stallMs: stallSec > 0 ? stallSec * 1000 : undefined,
+      env: cronSpawnEnv(deps.platform, harness),
+    });
     const timing: RunTiming = { startedAt, durationSec: Math.max(0, Math.round((Date.now() - startedAtMs) / 1000)) };
     const exited = spawned.exit;
     const output = spawned.output;
     const timedOut = spawned.timedOut;
-    const exitOk = exited === 0 && !timedOut;
+    const stalled = spawned.stalled;
+    const exitOk = exited === 0 && !timedOut && !stalled;
     const hasOutput = output.trim().length > 0;
     const suspect = exitOk && !hasOutput;
 
@@ -280,15 +308,27 @@ export async function cronRun(root: string, opts: CronRunOptions, deps: ExecuteD
     // status "ok" (even with a batch-stale incident) lets todaySuccess skip
     // the rest of the day and prints `jspace: ok:` — a fake-success exit.
     const batchStale = isInboxTask && !batchChanged;
-    const status: "ok" | "suspect" | "failed" = !exitOk || batchStale ? "failed" : suspect ? "suspect" : "ok";
+    const status: RunStatus = !exitOk || batchStale ? "failed" : suspect ? "suspect" : "ok";
+    const reason = classifyFailure({ exit: exited, timedOut, stalled, batchStale, output });
 
-    const { runId, logPath } = recordRun(root, opts, argv, exited, status, timedOut, batchChanged, output, timing, deps);
+    const { runId, logPath } = recordRun(root, opts, argv, {
+      exit: exited,
+      status,
+      timedOut,
+      stalled,
+      forced: spawned.forced,
+      batchChanged,
+      ...(reason !== undefined ? { reason } : {}),
+      output,
+      timing,
+    }, deps);
 
     const failed = status !== "ok";
     if (failed) {
       const failureClass = !exitOk ? "failed" : batchStale ? "batch-stale" : "suspect";
       openOrUpdate(root, opts.cronId, failureClass, runId);
-      return { exitCode: status === "failed" ? 1 : 0, lines: [`jspace: ${failureClass}: cron ${opts.cronId} (exit ${exited}); log ${logPath}`] };
+      const reasonTag = reason === undefined ? "" : ` [${reason}]`;
+      return { exitCode: status === "failed" ? 1 : 0, lines: [`jspace: ${failureClass}${reasonTag}: cron ${opts.cronId} (exit ${exited}); log ${logPath}`] };
     }
     resolveIncidents(root, opts.cronId);
     return { lines: [`jspace: ok: cron ${opts.cronId} (exit ${exited}); log ${logPath}`] };

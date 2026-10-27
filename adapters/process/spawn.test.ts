@@ -196,3 +196,64 @@ test.skipIf(process.platform === "win32")("missing executable -> exit 1 with the
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---- no-output watchdog + final settle ----
+
+test.skipIf(process.platform === "win32")("no-output watchdog kills a silently stalled harness (stalled=true, timeout not reached)", async () => {
+  // win32 skip: fixture is a /bin/sh script and the watchdog kill path is POSIX process-group signals.
+  const dir = mkdtempSync(join(tmpdir(), "jspace-spawn-"));
+  const script = join(dir, "silent.sh");
+  writeFileSync(script, "#!/bin/sh\nsleep 30\n");
+  chmodSync(script, 0o755);
+  try {
+    const started = Date.now();
+    const res = await spawnProcess(["/bin/sh", script], { cwd: dir, platform: "linux", timeoutMs: 5000, stallMs: 150, killGraceMs: 100 });
+    expect(res.stalled).toBe(true);
+    expect(res.timedOut).toBe(false);
+    expect(res.exit).not.toBe(0);
+    expect(Date.now() - started).toBeLessThan(3000);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test.skipIf(process.platform === "win32")("output resets the stall watchdog (a chatty long run is not killed)", async () => {
+  // win32 skip: fixture drives /bin/sh -c (POSIX-only).
+  const dir = mkdtempSync(join(tmpdir(), "jspace-spawn-"));
+  try {
+    const res = await spawnProcess(
+      ["/bin/sh", "-c", "for i in 1 2 3 4 5; do echo tick; sleep 0.1; done; exit 0"],
+      { cwd: dir, platform: "linux", timeoutMs: 5000, stallMs: 400, killGraceMs: 100 },
+    );
+    expect(res.stalled).toBe(false);
+    expect(res.timedOut).toBe(false);
+    expect(res.exit).toBe(0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test.skipIf(process.platform === "win32")("force settle: a child that never exits is resolved after the kill grace (forced=true)", async () => {
+  // win32 skip: POSIX process-group path; killGroup is injected so the child
+  // survives the signal and only the adapter's final settle can end the run.
+  const dir = mkdtempSync(join(tmpdir(), "jspace-spawn-"));
+  const script = join(dir, "survive.sh");
+  writeFileSync(script, "#!/bin/sh\nsleep 1\n");
+  chmodSync(script, 0o755);
+  try {
+    const started = Date.now();
+    const res = await spawnProcess(["/bin/sh", script], {
+      cwd: dir,
+      platform: "linux",
+      timeoutMs: 100,
+      killGraceMs: 100,
+      killGroup: () => { /* no-op: simulate a process that never emits exit */ },
+    });
+    expect(res.timedOut).toBe(true);
+    expect(res.forced).toBe(true);
+    expect(res.exit).toBe(124);
+    expect(Date.now() - started).toBeLessThan(2500);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

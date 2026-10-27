@@ -5,7 +5,9 @@
 import { join } from "node:path";
 import type { CmdResult } from "../commands/command.ts";
 import { CONFIG_DIR } from "../../core/contracts/files.ts";
+import { DEFAULT_TIMEOUT_SEC } from "../../core/contracts/cron.ts";
 import type { ContractIssue } from "../../core/contracts/diagnostics.ts";
+import type { RunRecord } from "./runs.ts";
 import { loadCrons } from "./definitions.ts";
 import { lastRun, readRuns } from "./runs.ts";
 import { readIncidents } from "./incidents.ts";
@@ -27,15 +29,27 @@ export function findPendingApplies(root: string): { root: string; paths: string[
   return { root, paths: actionable.map((e) => envelopePath(root, e.id)), issues };
 }
 
+/** One human line per cron. Reason/duration/overrun are shown only when the
+ *  record has them (legacy records keep the old shape). */
+function formatLastRun(id: string, last: RunRecord, timeoutSec: number): string {
+  const reason = last.reason === undefined ? "" : ` [${last.reason}]`;
+  const duration = last.durationSec === undefined ? "" : `, ${last.durationSec}s`;
+  const overrun = last.timedOut && last.durationSec !== undefined && last.durationSec > timeoutSec
+    ? ` over ${timeoutSec}s budget`
+    : "";
+  return `${id}: ${last.status}${reason} (exit ${last.exit ?? "?"}${duration}${overrun}, ${last.startedAt}) log ${last.outputLog}`;
+}
+
 /** `jspace cron status` — last run result per cron (all, or one). */
 export function cronStatus(root: string, id?: string): CmdResult {
   const data = loadCrons(root);
   const ids = id ? [id] : data.crons.map((c) => c.id);
   if (ids.length === 0) return { lines: ["jspace: ok: no crons defined"] };
+  const timeoutById = new Map(data.crons.map((c) => [c.id, c.timeoutSec ?? DEFAULT_TIMEOUT_SEC]));
   const lines = ids.map((cid) => {
     const last = lastRun(root, cid);
     if (!last) return `${cid}: never run`;
-    return `${cid}: ${last.status} (exit ${last.exit ?? "?"}, ${last.startedAt}) log ${last.outputLog}`;
+    return formatLastRun(cid, last, timeoutById.get(cid) ?? DEFAULT_TIMEOUT_SEC);
   });
   return { lines };
 }
@@ -57,7 +71,13 @@ export function cronFailures(root: string): CmdResult {
     const runs = readRuns(root, id);
     runIssues.push(...runs.issues);
     const last = runs.records.length > 0 ? runs.records[runs.records.length - 1] : null;
-    return { id, status: last === null ? "never run" : last.status };
+    return {
+      id,
+      status: last === null ? "never run" : last.status,
+      reason: last?.reason ?? null,
+      duration_sec: last?.durationSec ?? null,
+      timed_out: last?.timedOut ?? false,
+    };
   });
   const failed = crons.filter((c) => c.status === "failed").length;
   const suspect = crons.filter((c) => c.status === "suspect").length;
@@ -105,7 +125,7 @@ export function cronFailures(root: string): CmdResult {
       ? [`damaged state records: (${stateIssues.length})`, ...stateIssues.map((s) => `  ${s.path}: ${s.message}`)]
       : []),
     "cron status:",
-    ...crons.map((c) => `  ${c.id}: ${c.status}`),
+    ...crons.map((c) => `  ${c.id}: ${c.status}${c.reason === null ? "" : ` [${c.reason}]`}`),
     `needs_attention: ${needsAttention}`,
   ];
   return {

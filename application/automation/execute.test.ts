@@ -196,6 +196,7 @@ test.skipIf(process.platform === "win32")("suspect: exit 0 with no output", asyn
   const d = deps({ harnessBin: silentHarness });
   const res = await run({ cronId: "weekly" }, d);
   expect(res.lines[0]).toContain("suspect");
+  expect(lastRun(root, "weekly")!.reason).toBe("empty_output");
 });
 
 test.skipIf(process.platform === "win32")("timeout: harness that sleeps longer than timeout -> failed", async () => {
@@ -205,6 +206,39 @@ test.skipIf(process.platform === "win32")("timeout: harness that sleeps longer t
   chmodSync(slow, 0o755);
   const res = await run({ cronId: "weekly", timeoutSec: 1 }, deps({ harnessBin: slow }));
   expect(res.lines[0]).toContain("failed");
+  expect(res.lines[0]).toContain("[timeout]");
+  const rec = lastRun(root, "weekly")!;
+  expect(rec.reason).toBe("timeout");
+  expect(rec.timedOut).toBe(true);
+  expect(rec.durationSec).toBeGreaterThanOrEqual(1);
+});
+
+test.skipIf(process.platform === "win32")("stall watchdog: no output for stallSec -> failed [stalled], not timeout", async () => {
+  // win32 skip: the fixture harness is a POSIX /bin/sh script and deps.platform pins the linux spawn path.
+  writeFileSync(join(root, ".jspace", "cron.json"), JSON.stringify({
+    schema_version: 1,
+    crons: [{ id: "weekly", schedule: "0 9 * * 1", harness: "claude", prompt: "report", stallSec: 1, enabled: true }],
+  }));
+  const slow = join(root, "slow-harness");
+  writeFileSync(slow, "#!/bin/sh\nsleep 30\nexit 0\n");
+  chmodSync(slow, 0o755);
+  const res = await run({ cronId: "weekly", timeoutSec: 10 }, deps({ harnessBin: slow }));
+  expect(res.lines[0]).toContain("failed");
+  expect(res.lines[0]).toContain("[stalled]");
+  const rec = lastRun(root, "weekly")!;
+  expect(rec.reason).toBe("stalled");
+  expect(rec.timedOut).toBe(false);
+  expect(rec.status).toBe("failed");
+});
+
+test.skipIf(process.platform === "win32")("failure reason: auth error is recorded and shown", async () => {
+  // win32 skip: the fixture harness is a POSIX /bin/sh script and deps.platform pins the linux spawn path.
+  const auth = join(root, "auth-harness");
+  writeFileSync(auth, "#!/bin/sh\necho 'Not logged in · Please run /login'\nexit 1\n");
+  chmodSync(auth, 0o755);
+  const res = await run({ cronId: "weekly" }, deps({ harnessBin: auth }));
+  expect(res.lines[0]).toContain("[auth]");
+  expect(lastRun(root, "weekly")!.reason).toBe("auth");
 });
 
 test.skipIf(process.platform === "win32")("lock is released after success AND failure (no stale lock left)", async () => {
@@ -241,6 +275,7 @@ test.skipIf(process.platform === "win32")("inbox-tidy with no filehub -> batch-s
   const res = await run({ cronId: "inbox-tidy" }, inboxDeps()); // filehubRoot: () => null → batchLog === null
   expect(lastRun(root, "inbox-tidy")!.batchChanged).toBe(false);
   expect(lastRun(root, "inbox-tidy")!.status).toBe("failed");
+  expect(lastRun(root, "inbox-tidy")!.reason).toBe("batch_stale");
   expect(hasBatchStaleIncident("inbox-tidy")).toBe(true);
   expect(res.exitCode).toBe(1);
   expect(res.lines[0]).toContain("batch-stale");

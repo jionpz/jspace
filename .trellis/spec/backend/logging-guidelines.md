@@ -25,6 +25,7 @@ No leveled logger. Distinctions are by channel, not severity prefix:
 - Each structured record is a typed contract with a decoder (`core/contracts/*`), strict unknown-field, and a `version`/`schema_version` field.
 - Identifiers are UUIDs; timestamps use a local `YYYY-MM-DDTHHmmss` stamp (kept simple, no TZ conversion — see `localStamp()`).
 - A failed step records `failedStep` + `failureReason`; compensation is recorded as state, not just prose.
+- `RunRecord` carries optional `reason` + `durationSec` (both additive; legacy records decode unchanged). `cron status` / `cron failures` read them for the "why" and the budget overrun; recovery decisions still use `status`, never the prose log.
 
 ## What to Log
 

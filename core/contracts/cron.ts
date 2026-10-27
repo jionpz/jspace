@@ -67,6 +67,17 @@ export interface CronDefinition {
    *
    *  Absent = DEFAULT_TIMEOUT_SEC (1800), byte-identical to pre-field behaviour. */
   timeoutSec?: number;
+  /** No-output watchdog in seconds: kill the run when neither stdout nor stderr
+   *  has produced new bytes for this long. `0` or absent disables it.
+   *
+   *  Opt-in by design: `claude -p --output-format text` emits its payload only
+   *  when the run finishes, so "no output yet" cannot be told apart from a hung
+   *  upstream. Enable it for harnesses/prompts whose output cadence is known.
+   *
+   *  Unlike `timeoutSec`, this never enters the scheduler argv: `cron run` reads
+   *  it from cron.json at execution time, so existing launchd/crontab/schtasks
+   *  entries stay byte-identical. */
+  stallSec?: number;
   enabled: boolean;
 }
 
@@ -110,7 +121,7 @@ export function decodeCrons(input: unknown, harnessEnum: readonly string[]): Dec
         return;
       }
       const before = issues.issues.length;
-      checkNoUnknownFields(item, ["id", "schedule", "harness", "prompt", "target", "tools", "model", "timeoutSec", "enabled"], prefix, "cron.entry.unknown-field", issues);
+      checkNoUnknownFields(item, ["id", "schedule", "harness", "prompt", "target", "tools", "model", "timeoutSec", "stallSec", "enabled"], prefix, "cron.entry.unknown-field", issues);
       const id = readRequiredString(item, "id", prefix, "cron.id.invalid", issues);
       const schedule = readRequiredString(item, "schedule", prefix, "cron.schedule.invalid", issues);
       readEnum(issues, "cron.harness.invalid", `${prefix}.harness`, item.harness, harnessEnum);
@@ -158,6 +169,13 @@ export function decodeCrons(input: unknown, harnessEnum: readonly string[]): Dec
         if (typeof t === "number" && Number.isInteger(t) && t > 0) timeoutSec = t;
         else issues.add("cron.timeoutSec.invalid", `${prefix}.timeoutSec`, "timeoutSec must be a positive integer (seconds)");
       }
+      let stallSec: number | undefined;
+      if (item.stallSec !== undefined) {
+        // 0 disables the watchdog; a negative/float/string value has no meaning.
+        const s = item.stallSec;
+        if (typeof s === "number" && Number.isInteger(s) && s >= 0) stallSec = s;
+        else issues.add("cron.stallSec.invalid", `${prefix}.stallSec`, "stallSec must be a non-negative integer (seconds; 0 disables)");
+      }
       if (issues.issues.length === before) {
         crons.push({
           id: id as string,
@@ -168,6 +186,7 @@ export function decodeCrons(input: unknown, harnessEnum: readonly string[]): Dec
           ...(tools !== undefined ? { tools } : {}),
           ...(model !== undefined ? { model } : {}),
           ...(timeoutSec !== undefined ? { timeoutSec } : {}),
+          ...(stallSec !== undefined ? { stallSec } : {}),
           enabled: item.enabled as boolean,
         });
       }
