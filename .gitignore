@@ -75,6 +75,11 @@ tmp/
 temp/
 *.tmp
 
+# Real-brain audit exports (read-only dumps of the live gbrain store: profile and
+# family pages hold personal data). This repo is PUBLIC — an untracked export is
+# one `git add -A` away from being published, so ignore the whole family.
+.memory-audit-*/
+
 # Python
 __pycache__/
 *.pyc
