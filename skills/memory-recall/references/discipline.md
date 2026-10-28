@@ -25,7 +25,6 @@
 4. 快照无明确指针 → 换更具体 query,或 `gbrain call list_pages '{"tag":"project","limit":100,"sort":"updated_asc"}'` / `{"tag":"knowledge"}` 缩小候选面后重问；候选仍需逐页读回。
 
 ## 3. 指针断言链（四连过才算命中）
-
 | 步 | 断言 | 命令 |
 |---|---|---|
 | ① | 取到完整页与目标文件定位 | `gbrain call get_page '{"slug":"<slug>","include_content":true}'`；优先读 `rel_path` |
@@ -43,6 +42,14 @@
 - 沿反向边继续到第一个非 superseded 的现行页；无 status、provisional、settled 都可作为当前页，provisional 必须标不确定。零/多候选、缺页、环、coverage degraded 或预算耗尽 → “不确定/冲突”，不得按时间猜。
 - 若含 `status:archived` 或 `status:deprecated` → 默认不作为确定依据；仅在用户明确问历史时引用。
 - 含 `status:provisional` → 可返回但须标注不确定。
+
+### 3c. 派生页回源（`atoms/*` / `extracts/*` — 命中后必做）
+
+- 判定只看 slug 前缀：`atoms/`、`extracts/` 是 gbrain 抽取产物，**无论 tags 里有什么都不能直接作答**。
+- 读页取 `source_slug`，对该源页 `get_page(include_content:true)`，再用源页走 §3b 的取代检查作答。答案只引用源页 slug，可注明「经由 `atoms/...` 定位」。
+- 源页也不存在或不可读 → 报 `partial`，说明来源缺失；不得把 atom 正文当结论。
+- 同一源页产出多条 atom 是正常体量（本机 76 atoms / 28 源页）。只有「同一 `source_slug` + 同一标题」才是重复抽取，报候选而非重复事实。
+- 反向不成立：**不要**因为某页被 atom 引用就认为该页更权威或更现行。
 
 ## 4. 稳定性与双路径
 

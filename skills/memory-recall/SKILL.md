@@ -58,6 +58,7 @@ triggers:
 1. **理解问题**:确定实体、时间范围、要找的是决策、知识还是资产原件。
 2. **检索**:优先 `gbrain query`;embedding 不可达时用 `gbrain search`,并记录固定降级提示。
 3. **排除投影**:命中 `records/consolidate/*`、`records/retro/*` 或 `assets/周报/*` 时,先读其来源指针,再回到窗口内原始页或项目 state;投影不能直接充当答案。
+3b. **排除派生**:命中 `atoms/*` / `extracts/*` 时不得直接作答 —— 它们带 `source_slug` 指向被抽取的源页,读源页再回答,答案只引用源页 slug。同一源页产出多条 atom 是正常体量,不是重复证据。判定表见 `../jspace-use/references/gbrain.md` §5.1。
 4. **校验现行性**:逐页检查 tags。
    - `status:superseded`:从旧页调用 `gbrain call get_backlinks`,分页读完;逐个 `get_page` 候选,只接受正文明确含 `Supersedes: [[<旧页>]]` 且生命周期仍现行的页。零/多候选、缺页、环或 coverage degraded 返回 `partial/conflict`。
    - `status:deprecated` / `status:archived`:只在用户明确问历史时引用。

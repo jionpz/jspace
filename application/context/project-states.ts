@@ -17,6 +17,7 @@ import type {
   GbrainListRow,
 } from "../../core/contracts/gbrain.ts";
 import { listPageInventory } from "../gbrain/page-inventory.ts";
+import { classifyMemoryPage, memoryRole } from "../../core/contracts/memory.ts";
 
 /** Max project state cards surfaced in the session-start injection line. */
 export const MAX_ACTIVE_PROJECTS = 8;
@@ -250,8 +251,10 @@ interface RecentCollectSpec<T> {
   target: number;
   /** Namespace / registry filter. Runs before any body read. */
   matches: (row: GbrainListRow) => boolean;
-  /** Lifecycle filter. Runs on the fetched body; an unreadable body is kept. */
-  acceptsBody: (body: string) => boolean;
+  /** Lifecycle filter. Runs on the fetched body; an unreadable body is kept.
+   *  Receives the row so a rule can combine slug with frontmatter tags — the
+   *  shared canonical/derived classifier needs both. */
+  acceptsBody: (body: string, row: GbrainListRow) => boolean;
   build: (row: GbrainListRow, content: string | undefined) => T;
 }
 
@@ -391,7 +394,7 @@ async function collectRecent<T>(
           readErrorCodes.push("unknown");
         }
         // Unknown != excluded: keep the candidate, mark the read incomplete.
-        if (content !== undefined && !spec.acceptsBody(content)) continue;
+        if (content !== undefined && !spec.acceptsBody(content, row)) continue;
         if (items.length >= spec.target) break;
         items.push(spec.build(row, content));
       }
@@ -525,7 +528,25 @@ export interface RecentKnowledgeEntry {
 
 /** Collect recent decisions, lessons, and knowledge pages for session-start
  *  injection. Gives the AI awareness of what was learned in prior sessions,
- *  not just the current state — the missing "越用越懂我" signal. Never throws. */
+ *  not just the current state — the missing "越用越懂我" signal. Never throws.
+ *
+ *  A slot is only spent on a page that may serve as the CURRENT answer, using
+ *  the shared classifier (`core/contracts/memory.ts`) rather than a local rule:
+ *  gbrain-derived evidence (atoms/extracts), weekly projections and inactive
+ *  pages are skipped and the next candidate fills the slot.
+ *
+ *  Scope, measured on the live brain (2026-10-28): `list_pages tag=knowledge`
+ *  returns 44 rows, none of them `atoms/*` — gbrain's extract pass does not tag
+ *  its output with the routing tag, so the derived guard is a structural
+ *  invariant (a derived page that ever carries the tag must not answer), not a
+ *  fix for today's data. The `weekly` guard also covers today's data only at
+ *  the margin.
+ *
+ *  `activity:maintenance` is NOT filtered here and must not be: it marks a
+ *  housekeeping WRITE (excluded from the write-count ledger per write), and the
+ *  live brain carries it on 38 pages (15 state / 17 asset / 3 record / 2 lesson
+ *  / 1 decision). Filtering on it would drop 3 real knowledge candidates purely
+ *  because housekeeping touched them last. */
 export async function collectRecentKnowledge(
   gbrain: GbrainDeps,
   opts: { budget?: ContextReadBudget } = {},
@@ -536,9 +557,8 @@ export async function collectRecentKnowledge(
     pageSize: PAGE_SIZE.knowledge,
     maxPages: MAX_PAGES,
     target: MAX_RECENT_KNOWLEDGE,
-    matches: (row) => RECENT_KNOWLEDGE_SLUG.test(row.slug) || row.slug.startsWith("knowledge/"),
-    acceptsBody: (body) =>
-      !isArchivedGbrainNote(body) && !parseNoteTags(body).includes("status:superseded"),
+    matches: (row) => RECENT_KNOWLEDGE_SLUG.test(row.slug) || memoryRole(row.slug) === "knowledge",
+    acceptsBody: (body, row) => classifyMemoryPage(row.slug, parseNoteTags(body)) === "canonical",
     build: (row, content) => ({
       slug: row.slug,
       summary: content === undefined ? "" : summarizeProfilePage(content),

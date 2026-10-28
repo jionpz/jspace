@@ -469,3 +469,100 @@ tags:
 `;
   expect(parseNoteTags(supersededBlock)).toContain("status:superseded");
 });
+
+// ---- canonical-only session-start slots (memory-governance-quality) ----
+// Slots are spent on CURRENT answers only. The live store shows why the list
+// filter alone is not enough: `list_pages tag=knowledge` never returns an
+// `atoms/*` row today (gbrain does not tag its extract output with the routing
+// tag), so the derived cases below are the structural invariant — a derived
+// page that ever carries the routing tag must still not answer.
+//
+// `activity:maintenance` is NOT a page class: it marks a housekeeping WRITE and
+// sits on 38 live state/lesson/decision pages. A page carrying it is still a
+// current answer; only the write-count ledger subtracts it, per write.
+
+test("collectRecentKnowledge: derived atoms, weekly projections and inactive pages never take a slot", async () => {
+  const canonical = (body: string, tags: string[] = ["knowledge"]) =>
+    `---\ntype: knowledge\ntags: [${tags.join(", ")}]\n---\n\n${body}\n`;
+  const g = fakeGbrain({
+    list: async () => ({
+      ok: true,
+      rows: [
+        // Newest first: every one of these must be skipped.
+        { slug: "atoms/2026-09-12/纪律-8ae045b2", updatedAt: "2026-09-12" },
+        { slug: "extracts/2026-09-17/atoms/default/x/round-single", updatedAt: "2026-09-11" },
+        { slug: "records/consolidate/2026-09-10", updatedAt: "2026-09-10" },
+        { slug: "project/acme/decisions/hermes", updatedAt: "2026-09-09" },
+        { slug: "project/acme/lessons/old", updatedAt: "2026-09-08" },
+        { slug: "project/acme/decisions/older", updatedAt: "2026-09-07" },
+        // Eligible canonical pages.
+        { slug: "knowledge/testing/反例验证纪律", updatedAt: "2026-09-06" },
+        { slug: "project/acme/lessons/retry", updatedAt: "2026-09-05" },
+      ],
+    }),
+    get: async (slug) => {
+      if (slug.startsWith("atoms/") || slug.startsWith("extracts/")) {
+        return { ok: true, content: canonical("atoms 正文", ["knowledge", "source:cron"]) };
+      }
+      if (slug === "records/consolidate/2026-09-10") {
+        return { ok: true, content: canonical("周快照正文", ["consolidate", "weekly"]) };
+      }
+      if (slug === "project/acme/decisions/hermes") {
+        // Housekeeping touched this page last; it is still the current answer.
+        return { ok: true, content: canonical("维护重写正文", ["knowledge", "activity:maintenance"]) };
+      }
+      if (slug === "project/acme/lessons/old") {
+        return { ok: true, content: canonical("旧经验正文", ["knowledge", "status:superseded"]) };
+      }
+      if (slug === "project/acme/decisions/older") {
+        return { ok: true, content: canonical("归档正文", ["knowledge", "status:archived"]) };
+      }
+      return { ok: true, content: canonical(`${slug} 一句话。`) };
+    },
+  });
+  const r = await collectKnowledge(g);
+  expect(r.map((k) => k.slug)).toEqual([
+    // 5 slots: the maintenance page takes one, the 4 skipped rows do not.
+    "project/acme/decisions/hermes",
+    "knowledge/testing/反例验证纪律",
+    "project/acme/lessons/retry",
+  ]);
+  // Skipped rows must not cost the caller a read-back slot, and the window is
+  // complete — a filtered result is not a partial read.
+  expect(r[0].summary).toBe("维护重写正文");
+  expect(r.some((k) => k.slug.startsWith("atoms/"))).toBe(false);
+  expect(r.some((k) => k.slug.startsWith("extracts/"))).toBe(false);
+  expect(r.some((k) => k.slug === "records/consolidate/2026-09-10")).toBe(false);
+});
+
+test("collectRecentKnowledge: an unreadable body is kept, not silently treated as derived", async () => {
+  // Unknown != excluded (existing invariant): a read failure must not become a
+  // silent skip that makes the payload look complete.
+  const g = fakeGbrain({
+    list: async () => ({ ok: true, rows: [{ slug: "knowledge/testing/evidence", updatedAt: "2026-09-01" }] }),
+    get: async () => ({ ok: false }),
+  });
+  const r = await collectKnowledge(g);
+  expect(r.map((k) => k.slug)).toEqual(["knowledge/testing/evidence"]);
+});
+
+test("collectRecentKnowledge: atoms are filtered by slug before any body read", async () => {
+  // Structural invariant: a derived page must not answer even if it reaches the
+  // `knowledge` tag list, so the body read is never spent on it.
+  const read: string[] = [];
+  const g = fakeGbrain({
+    list: async () => ({
+      ok: true,
+      rows: [
+        { slug: "atoms/2026-09-12/x", updatedAt: "2026-09-12" },
+        { slug: "knowledge/testing/live", updatedAt: "2026-09-01" },
+      ],
+    }),
+    get: async (slug) => {
+      read.push(slug);
+      return { ok: true, content: "---\ntags: [knowledge]\n---\n\n正文。\n" };
+    },
+  });
+  await collectKnowledge(g);
+  expect(read).toEqual(["knowledge/testing/live"]);
+});

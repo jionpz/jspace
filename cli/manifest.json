@@ -74,7 +74,7 @@
     },
     {
       "path": "skills/jspace-use/references/gbrain.md",
-      "sha256": "a8836f7980ee33c92bcd36159f5664e47d265b2ba34a151a77af3622279cf5f7",
+      "sha256": "df903c340337a6b169293e38afb11999512a030e07e7e1fde944d2e8f42ffe29",
       "ownership": "seed"
     },
     {
@@ -184,12 +184,12 @@
     },
     {
       "path": "skills/memory-recall/SKILL.md",
-      "sha256": "5973c109489c52942518132ecc13e03c99e4341128bed3976fbd79d3848cda5f",
+      "sha256": "69539b1280447280afd9cb45a32176d5526645addf995006938d17bd24764833",
       "ownership": "seed"
     },
     {
       "path": "skills/memory-recall/references/discipline.md",
-      "sha256": "dfa2b6dc3d8a483b143b5ad4d34b6ef29ee9e74d224d9afb18b79951ea34a3e3",
+      "sha256": "c0767523319a7040b665d7d9c9ab64db9da57a805bac9e0036273276a3a05bc0",
       "ownership": "seed"
     },
     {
@@ -209,7 +209,7 @@
     },
     {
       "path": "skills/memory-writeback/SKILL.md",
-      "sha256": "420c5c32d9bcfce95c276ebed33e00eccb8df99a5555df3df479c6706828e773",
+      "sha256": "dc96c51a21b47c9685a14b6a3d2df9e7645415cc7590fffbf1638cb4c049c54c",
       "ownership": "seed"
     },
     {
@@ -219,7 +219,7 @@
     },
     {
       "path": "skills/memory-writeback/references/writeback.md",
-      "sha256": "2c5acc3d04377ebed30a3d281689bf54ed88c0445c76274b0d964928752458e8",
+      "sha256": "1221eb263252bf309a26018467433fff22535dc88ebd0ffb40edebe17da748d2",
       "ownership": "seed"
     },
     {
@@ -244,7 +244,7 @@
     },
     {
       "path": "skills/memory-consolidate/SKILL.md",
-      "sha256": "fa6e25b38165b1f3bbc6008a460f476bbf9d1d21b83f14471080b4f57ef80242",
+      "sha256": "663b4b725094124fa3276b4b3b6e2d69e37c1bd182c78ef248ab9a13e9568752",
       "ownership": "seed"
     }
   ]

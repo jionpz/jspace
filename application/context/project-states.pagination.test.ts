@@ -144,7 +144,7 @@ test("cross-layer: a descending window surfaces the newest 8 of 9 projects", asy
 
 test("cross-layer: 6 knowledge pages yield the newest 5", async () => {
   const rows: StoredRow[] = Array.from({ length: 6 }, (_, i) => ({
-    slug: `knowledge/topic-${i + 1}`,
+    slug: `knowledge/topic/t${i + 1}`,
     updatedAt: `2026-10-0${i + 1}T00:00:00Z`,
     content: `---\ntype: knowledge\ntags: [knowledge]\n---\n\n知识 ${i + 1}\n`,
   }));
@@ -152,11 +152,11 @@ test("cross-layer: 6 knowledge pages yield the newest 5", async () => {
   const result = await collectRecentKnowledge(realGbrain(server.run, 2000));
 
   expect(result.items.map((k) => k.slug)).toEqual([
-    "knowledge/topic-6",
-    "knowledge/topic-5",
-    "knowledge/topic-4",
-    "knowledge/topic-3",
-    "knowledge/topic-2",
+    "knowledge/topic/t6",
+    "knowledge/topic/t5",
+    "knowledge/topic/t4",
+    "knowledge/topic/t3",
+    "knowledge/topic/t2",
   ]);
   expect(result.status).toBe("complete");
 });

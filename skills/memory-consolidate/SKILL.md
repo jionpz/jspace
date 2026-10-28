@@ -52,10 +52,22 @@ decay_candidates: []
 gaps: []
 ```
 
+候选必须带状态，否则每周重跑只会重复同一条建议：
+
+| 状态 | 含义 | 何时用 |
+|---|---|---|
+| `no action` | 已核实，无需处置（例如第二项目复用证据不足） | 证据看过、结论是不晋升 |
+| `pending verification` | 候选成立但还缺一项可指名的证据 | 缺第二项目的产物/引用 |
+| `conflict` | 同一主题存在多个现行页，无法判定哪一版为现行 | 无 `Supersedes` 关系的双页 |
+| `resolved` | 已由某一页/某次写入处置完毕，附处置页 slug | 本周内已取代/复用 |
+
+同一周期重跑时，先读同周快照的已有候选，**保留原状态并只更新有变化的项**；不允许因为重跑把 `resolved` / `no action` 退回成新的待办。
+
 ## 主流程
 
 1. **定周期**:先运行 `jspace memory period --json`。slug 只用 `week_start`,窗口与截止时刻只消费输出;`period.status=in_progress` 时只能描述截至 `observed_through` 的内容。
 2. **盘点**:用 `list_pages` keyset 分页读取目标窗口内更新或创建的页,至少覆盖 state、decisions、lessons、knowledge、assets、records 和同周 consolidate。达到预算或游标异常时停止并标记 `partial`。
+   盘点只收 canonical 页（`../jspace-use/references/gbrain.md` §5.1）：`atoms/*`、`extracts/*` 是抽取证据，计入 gaps 的来源引用即可，不作为本周事实来源，也不进候选。
 3. **逐页取证**:列表行不能替代页正文;对候选逐个 `get_page(include_content:true)`,按项目/领域归组。
 4. **归纳**:只写可由页或原件支持的事实,附 slug/文件指针。不得把上一周快照、上一轮 retro 或 agent 推断当成本周事实。
 5. **处理候选**:晋升候选必须写明“第二项目已实际复用”的证据;没有证据只列为需要核实,不自动写 knowledge。衰减候选同样只提议。

@@ -16,6 +16,7 @@
 | 周快照 | `records/consolidate/<Monday>` | **转 memory-consolidate** | 本周汇总（本 skill 不写） |
 
 - **绝不覆盖追加页**：decisions / lessons / knowledge / project events 只追加新页；更新「现状」只写 state 页或 profile 页。
+- **追加前先查重**：同主题已有现行页 → 复用或取代，不新建（第 5 节）；无查重就追加等于制造无版本关系的双页。
 - **state 页是全局固定 slug**：多会话覆盖同一页 → 归属（project id）必须准，防串页。
 - **覆盖 state 前**：被删信息未来可能解释「为什么」→ 先写 decision 或 project event，再覆盖 state。
 
@@ -70,14 +71,45 @@ state 页保持「现状」不承载历史。晋升 = 复制蒸馏 + wikilink �
 
 **决策草案不进 decisions**：留在 state 的「开放问题」；进入 decisions = 已 settled。
 
-## 5. 取代协议（decisions / knowledge）
+## 5. 写前查重（append-only 的前置门槛）
 
-推翻旧决策或旧知识时：
-1. 写**新页**，正文含 `Supersedes: [[旧 slug]]`
-2. 读取旧页完整正文与 revision，保留正文，只把当前 `status:*` 调整为唯一 `status:superseded`，用一次 CAS `put_page` 写回
-3. state 卡「当前决策」指向新页
+append-only 指的是**不覆盖旧页正文**，不是**允许为同一主题反复新建**。新建 decision / lesson / knowledge 之前必须先回答一个问题：这个稳定主题已经有现行页了吗？
+
+### 5.1 三步查重（缺一不可）
+
+1. **按稳定主题检索**：主题 = 去掉日期、轮次、版本号后的语义名。用 `gbrain query "<主题>"` 找语义候选，再用 `gbrain call list_pages '{"tag":"knowledge","limit":100,"sort":"updated_desc"}'` 或按 slug 前缀缩小面。跨项目知识查 `knowledge/<domain>/`，项目内查 `project/<id>/decisions|lessons/`。
+2. **逐页读回**：候选行只是线索，必须 `get_page(include_content:true)` 读正文，确认它讲的是不是同一件事。
+3. **判定归属**（四选一，不得含糊）：
+
+| 情况 | 处置 |
+|---|---|
+| 同主题、事实相同、页现行 | **复用**：不新建。需要补细节就覆盖该页（仅限 state/profile 或已确认同主题的 knowledge 页正文增补） |
+| 同主题、明确新版/纠错/约束变化 | **取代**：写新页 + `Supersedes: [[old]]` + 旧页 CAS 设 `status:superseded`（见 §5.2） |
+| 同主题、无法证明新旧关系 | **不写**：输出 `conflict` / `pending verification`，把候选 slug 与差异列给用户 |
+| 只是本次执行记录 | **不晋升**：留在任务/retro/consolidate，不进 knowledge |
+
+### 5.2 取代协议（decisions / lessons / knowledge）
+
+1. 写**新页**，正文含 `Supersedes: [[旧 slug]]`（单行、独立成行、方向是新页指向旧页）。
+2. 读取旧页完整正文与 revision，保留正文，只把当前 `status:*` 调整为唯一 `status:superseded`，用一次 CAS `put_page` 写回。
+3. state 卡「当前决策」指向新页。
 
 不得用 `add_tag` / `remove_tag` 分开调用冒充原子更新；不以旧页正文反向跟随 `Supersedes`。找现行页必须从旧页 `get_backlinks` 分页取候选，再逐页 `get_page(include_content:true)` 核对正文方向。
+
+### 5.3 纠错必须走取代，不能只追加
+
+用户纠正了某条已落库的事实（「那个结论不对」/「已经改了」）时，**不许**再写一条普通 knowledge 页了事：那会产生两页互相矛盾但没有版本关系的现行页，召回时只能靠更新时间猜，且 `memory check` 会报 `memory.topics.duplicate_title`。正确做法：
+
+- 写新页并声明 `Supersedes: [[旧页]]`；
+- 旧页 CAS 设 `status:superseded`，正文保持原样（历史可追溯）；
+- 在输出里给出旧页、新页 slug 和读回 revision。
+
+只有当纠正涉及的是**state / profile 这类固定 slug 的现行卡片**时，才用覆盖：那类页本身就是「现在的说法」，历史由 decision/record 承载。
+
+### 5.4 查重失败的诚实边界
+
+- `gbrain query` 不可用（embedding 不可达）时，关键词降级可以继续，但**不得**因为「没搜到」就宣称「库里没有」——覆盖不完整要在输出里写明。
+- 标题只是人类可读元数据，不是判重依据；相似标题不等于同主题，不同标题也可能是同主题。判重看正文语义，确定性自动化只在 `memory check` 里做（同标题 + 无 Supersedes）。
 
 ## 6. 每页纪律
 

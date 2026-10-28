@@ -140,6 +140,27 @@ embed_skip: true
 - 跨 owner 资料写 references 受管块（`JSPACE:ASSET-REFERENCES`）：只导航、不提供 ownership，也永不豁免 unindexed。本地目标必须存在且不经 symlink/受限路径逃逸；可选 `sha256` 锁与当前字节比较；`bundle-sha256` 只在目标被已验证资料包覆盖时与整树聚合比较，否则明确未验证；外部 URL 只标 unverified。块外普通链接只算部分引用覆盖。
 - `entity/*` 尚未授权；真实实体事实先放 `knowledge/<domain>/<topic>` 并加 `kind:*`。
 
+## 5.1 canonical 与 derived：哪些页能当“现行答案”
+
+gbrain 自己会派生页，JSpace 也会留下周期投影。它们**是证据，不是现行答案**。判定顺序固定（实现见 `core/contracts/memory.ts` 的 `classifyMemoryPage`，读侧规则、session-start 收集器和 `memory check` 共用同一套）：
+
+| 类别 | 判定 | 用途 |
+|---|---|---|
+| derived | slug 以 `atoms/` 或 `extracts/` 开头 | gbrain 抽取产物，带 `source_slug` 指向被引用的源页；只能回源，不能当答案 |
+| inactive | 含 `status:superseded` / `deprecated` / `archived` | 历史页，只在用户明确问历史时引用 |
+| projection | `records/consolidate/*`、`records/retro/*`，或带 `weekly` tag | 周期视图；不进入默认注入，也不充当即时事实 |
+| canonical | 上表七种授权 slug 且不属于以上三类 | 可作现行答案 |
+| unclassified | 在 JSpace 命名空间内但无授权形态，或根本不在命名空间 | 不能证明现行性，不当证据 |
+
+要点：
+
+- **derivation 由 slug 决定，不由 tags 决定**。gbrain 的抽取产物目前不带路由 tag（本机 2026-10-28 实测：`list_pages tag=knowledge` 44 行无 `atoms/*`），所以派生守卫是**结构约束**——将来一旦有派生页带上 routing tag，它也不得作答；不能因为“现在搜不到”就省掉这一步。
+- **`source_slug` 只是回源指针**：`atoms/2026-09-12/x` 的 `source_slug` 指向被抽取的源页，不代表 atom 等于源页。命中 derived 页必须 `get_page` 源页再作答。
+- **一个源页产出多个 atom 是正常的**（本机 76 atoms / 28 源页）。只有「同一 `source_slug` + 同一标题」才是重复抽取候选。
+- **`activity:maintenance` 不是页面类别**：它标记的是「这次写入是维护整理」，只用于把该次写入从业务活动计数里减掉（见第 5 节与 `usage-mileage.md`）。本机 38 页带它（15 state / 17 asset / 3 record / 2 lesson / 1 decision），所以它**不参与 canonical 判定**——页不会因为最近一次是维护改写就不再是现行答案。若按它排除，知识槽位会少掉 3 个真实候选。
+- session-start 的知识槽位只给 canonical 页；被跳过的页不消耗槽位，由下一个合格候选补位。读不出正文时保留候选并标 partial——未知不等于已排除。
+- `memory check` 的 `counts.derived` / `counts.topics` 只报告，不修改、不合并、不删除；确定性重复（同源同标题 atom、同标题且无 `Supersedes` 关系的 canonical 页）单列 warning，语义近重复不判定为重复（没有 embedding，阈值会把“措辞相似”伪装成“已证实重复”）。
+
 ## 6. 项目认知卡
 
 state 是“看一眼就知道项目和现状”的短卡，不是工程台账：
@@ -245,6 +266,7 @@ jspace memory period --json --last-complete       # 刚结束的完整周（周�
 ## 9. 检索与现行性
 
 - 纯知识问题优先召回 `knowledge/`、`decisions/`、`lessons/`，不强制文件 Pointer。
+- 命中 `atoms/*` / `extracts/*`（derived）时**不得直接作答**：读它的 `source_slug`，回到源页再回答；源页也不现行时按第 7.1 节继续找现行页。答案只引用源页 slug，可注明“经由 `atoms/...` 定位”。
 - 资产关键数字必须读 asset 指针的 `rel_path`，经本机 filehub 根解析并打开原件核对。
 - 历史问句明确保留时间语境；dated snapshot 不能替代当前 state。
 - 命中 `status:superseded` 页时按第 7.1 节找现行页；无法证明现行时回答“不确定 + 缺什么证据”。

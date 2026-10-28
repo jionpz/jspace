@@ -12,11 +12,15 @@ import {
 } from "../../core/contracts/check.ts";
 import type { GbrainDeps, GbrainPage } from "../../core/contracts/gbrain.ts";
 import {
+  classifyMemoryPage,
   declaresSupersedes,
+  derivedSourceSlug,
+  hasInactiveStatus,
   isKnowledgeRole,
   lifecycleTags,
   memoryOwnerEquals,
   memoryRole,
+  normalizeTopic,
   parseMemoryMarkdown,
   provenanceTags,
   supersedesTargets,
@@ -40,6 +44,7 @@ const DEFAULT_MAX_LIST_PAGES = 50;
 const DEFAULT_MAX_LIST_ROWS = 5000;
 const DEFAULT_MAX_BACKLINK_PAGES = 20;
 const DEFAULT_MAX_BACKLINK_ROWS = 1000;
+const DEFAULT_MAX_DERIVED_PAGES = 200;
 const GET_CONCURRENCY = 8;
 const STATE_SOFT_LIMIT_BYTES = 16 * 1024;
 const DEFAULT_ENFORCEMENT_SINCE = "2026-10-19T00:00:00+08:00";
@@ -50,12 +55,6 @@ const ALLOWED_STATUS_TAGS = new Set([
   "status:deprecated",
   "status:archived",
 ]);
-const INACTIVE_STATUS_TAGS = new Set([
-  "status:superseded",
-  "status:deprecated",
-  "status:archived",
-]);
-
 export interface MemoryCheckOptions {
   pageLimit?: number;
   maxListPages?: number;
@@ -63,6 +62,10 @@ export interface MemoryCheckOptions {
   maxBacklinkPages?: number;
   maxBacklinkRows?: number;
   stateSoftLimitBytes?: number;
+  /** Cap on gbrain-generated pages (`atoms/*`, `extracts/*`) read for the
+   *  derived-projection audit. Exceeding it marks that section partial instead
+   *  of pretending the projections were all inspected. */
+  maxDerivedPages?: number;
   /** Metadata rules apply to pages updated at or after this instant. Older
    *  pages retain an explicit unknown gap instead of being retroactively
    *  assigned a source, project or lifecycle they never declared. */
@@ -80,6 +83,31 @@ interface HistoricalMetadataGaps {
   weekly_identity: number;
 }
 
+/** Counts for pages that are evidence ABOUT canonical pages, never current
+ *  answers themselves. Kept separate from `by_role`, which counts only the
+ *  JSpace canonical namespaces. */
+interface DerivedProjectionCounts {
+  atoms: number;
+  extracts: number;
+  /** Derived pages carrying a `source_slug` (the page they quote). */
+  with_source_slug: number;
+  /** Derived pages read for the duplicate/drift audit (bounded by
+   *  `maxDerivedPages`). */
+  inspected: number;
+  /** Atoms generated twice from the same source page with the same title. */
+  duplicate_atom_groups: number;
+  /** Derived pages whose `source_slug` has no page (upstream provenance drift). */
+  source_missing: number;
+}
+
+interface TopicCandidateCounts {
+  /** Active canonical knowledge pages sharing one normalized title (deterministic:
+   *  the same title written twice, with no Supersedes link either way). */
+  duplicate_title_groups: number;
+  /** Active canonical knowledge pages inspected for the check above. */
+  inspected: number;
+}
+
 export interface MemoryCheckReport {
   schema_version: 1;
   status: CheckStatus;
@@ -94,11 +122,16 @@ export interface MemoryCheckReport {
       calls: number;
     };
     filehub: CheckCoverage;
+    /** How much of the derived (atoms/extracts) population was actually
+     *  inspected; `partial` means the counts are a lower bound. */
+    derived: CheckCoverage;
   };
   counts: {
     owned_pages: number;
     by_role: Partial<Record<MemoryRole, number>>;
     historical_metadata: HistoricalMetadataGaps;
+    derived: DerivedProjectionCounts;
+    topics: TopicCandidateCounts;
     findings: ReturnType<typeof countFindings>;
   };
   findings: CheckFinding[];
@@ -390,7 +423,7 @@ export async function memoryCheck(
   const failureCodes = new Map<string, string>();
   const inFlight = new Map<string, Promise<LoadedPage | null>>();
 
-  async function loadPage(slug: string, owner: "inventory" | "supersedes" | "backlink"): Promise<LoadedPage | null> {
+  async function loadPage(slug: string, owner: "inventory" | "supersedes" | "backlink" | "derived"): Promise<LoadedPage | null> {
     const cached = cache.get(slug);
     if (cached !== undefined) return cached;
     const existing = inFlight.get(slug);
@@ -402,8 +435,10 @@ export async function memoryCheck(
         // A missing explicit replacement target is a complete, actionable
         // finding. Only read failures make the replacement relationship
         // unknowable. Inventory pages remain strict: any getPage failure on
-        // an owned row reduces page coverage.
-        if (!(owner === "supersedes" && got.code === "not_found")) {
+        // an owned row reduces page coverage. Derived pages are aggregated
+        // into `coverage.derived` instead of one finding per atom — a broken
+        // extraction backlog can be hundreds of pages.
+        if (owner !== "derived" && !(owner === "supersedes" && got.code === "not_found")) {
           const finding: CheckFinding = {
             code: owner === "backlink" ? "memory.backlink.page_unreadable" : "memory.page.unreadable",
             severity: "unknown",
@@ -645,7 +680,7 @@ export async function memoryCheck(
           recordHistoricalGap(slug, "project_mismatch");
         }
       }
-    } else if (role === "asset" && !statuses.some((status) => INACTIVE_STATUS_TAGS.has(status))) {
+    } else if (role === "asset" && !hasInactiveStatus(tags)) {
       const ownerId = assetOwnerForSlug(slug);
       if (!memoryOwnerEquals(fields.project, ownerId)) {
         addFinding({
@@ -833,6 +868,161 @@ export async function memoryCheck(
         }
       }
     }
+  }
+
+  // ---- derived projections (atoms / extracts) ----
+  // gbrain generates these from a `source_slug` page. They are evidence about
+  // that page, never the current answer, and they are NOT in the JSpace
+  // canonical namespaces — so they are audited separately and never counted as
+  // owned pages. Nothing here writes, merges or deletes anything.
+  const derivedRows = inventory.rows.filter((row) => classifyMemoryPage(row.slug, []) === "derived");
+  const derived: DerivedProjectionCounts = {
+    atoms: derivedRows.filter((row) => row.slug.startsWith("atoms/")).length,
+    extracts: derivedRows.filter((row) => row.slug.startsWith("extracts/")).length,
+    with_source_slug: 0,
+    inspected: 0,
+    duplicate_atom_groups: 0,
+    source_missing: 0,
+  };
+  const derivedBudget = opts.maxDerivedPages ?? DEFAULT_MAX_DERIVED_PAGES;
+  const derivedToRead = derivedRows.slice(0, derivedBudget);
+  // The derived population comes from the same keyset as the inventory, so a
+  // partial inventory makes every derived count a lower bound too — say so
+  // instead of reporting "complete" over a population that was never listed.
+  const derivedDetail = [
+    derivedRows.length > derivedToRead.length
+      ? `derived audit covered ${derivedToRead.length} of ${derivedRows.length} page(s) (maxDerivedPages)`
+      : undefined,
+    inventory.complete ? undefined : "derived population comes from a partial page inventory, so the counts are lower bounds",
+  ].filter((part): part is string => part !== undefined);
+  const derivedCoverage: CheckCoverage =
+    derivedDetail.length > 0 ? { state: "partial", detail: derivedDetail.join("; ") } : { state: "complete" };
+  const inventorySlugs = new Set(inventory.rows.map((row) => row.slug));
+  const atomGroups = new Map<string, string[]>();
+  const missingSources = new Map<string, string[]>();
+  let derivedReadFailures = 0;
+  await mapLimit(derivedToRead, GET_CONCURRENCY, async (row) => {
+    // Reuse the shared page cache: an owned page is already loaded, and a
+    // derived page read once must not be read twice by another rule.
+    const loaded = await loadPage(row.slug, "derived");
+    if (loaded === null) {
+      derivedReadFailures++;
+      return;
+    }
+    derived.inspected++;
+    const source = derivedSourceSlug(loaded.parsed.fields);
+    if (source !== undefined) {
+      derived.with_source_slug++;
+      // Coverage honesty: a missing source page only means drift when the
+      // inventory is complete. With a partial keyset the page may simply not
+      // have been listed yet.
+      if (inventory.complete && !inventorySlugs.has(source)) {
+        derived.source_missing++;
+        const group = missingSources.get(source);
+        if (group === undefined) missingSources.set(source, [row.slug]);
+        else group.push(row.slug);
+      }
+    }
+    if (row.slug.startsWith("atoms/") && source !== undefined) {
+      const title = normalizeTopic(loaded.parsed.fields.title ?? loaded.page.title ?? "");
+      if (title !== "") {
+        const key = `${source}\u0000${title}`;
+        const group = atomGroups.get(key);
+        if (group === undefined) atomGroups.set(key, [row.slug]);
+        else group.push(row.slug);
+      }
+    }
+  });
+  if (derivedReadFailures > 0) {
+    derivedCoverage.state = "partial";
+    // Append rather than replace: a capped audit that ALSO failed reads must
+    // report both, otherwise "2 of 5" hides that one of the 2 was unreadable.
+    const note = `${derivedReadFailures} derived page(s) could not be read`;
+    derivedCoverage.detail =
+      derivedCoverage.detail === undefined ? note : `${derivedCoverage.detail}; ${note}`;
+  }
+  for (const [key, slugs] of [...atomGroups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    if (slugs.length < 2) continue;
+    derived.duplicate_atom_groups++;
+    // Same source page, same title, generated more than once: re-extraction
+    // produced a second copy. Deterministic and safe to report; the fix is a
+    // human decision on the gbrain side (this command never writes).
+    addFinding({
+      code: "memory.derived.duplicate_atom",
+      severity: "warning",
+      slug: slugs.sort()[0],
+      message: `${slugs.length} atoms from ${key.split("\u0000")[0]} share the same title: ${slugs.sort().join(", ")}`,
+    });
+  }
+  for (const [source, slugs] of [...missingSources.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    addFinding({
+      code: "memory.derived.source_missing",
+      severity: "unknown",
+      slug: slugs.sort()[0],
+      message: `${slugs.length} derived page(s) quote source_slug ${source}, which no page owns`,
+    });
+  }
+
+  // ---- deterministic topic duplicates among active canonical knowledge ----
+  // Only the same normalized title written twice with no Supersedes link either
+  // way. Semantic near-duplicates are deliberately NOT reported: this command
+  // has no embeddings and a heuristic threshold would present "similar wording"
+  // as a proven duplicate. Such cases stay for human review (see the audit doc).
+  const topics: TopicCandidateCounts = { duplicate_title_groups: 0, inspected: 0 };
+  const titleGroups = new Map<string, { slug: string; targets: Set<string> }[]>();
+  for (const [slug, loaded] of cache.entries()) {
+    const role = memoryRole(slug);
+    // Topic pages only: decisions / lessons / cross-project knowledge. Sparse
+    // `records/project/*` events are dated and may legitimately repeat a title
+    // ("release"), so including them would report noise as a duplicate.
+    if (role !== "project-decision" && role !== "project-lesson" && role !== "knowledge") continue;
+    if (classifyMemoryPage(slug, loaded.tags) !== "canonical") continue;
+    const title = normalizeTopic(loaded.parsed.fields.title ?? loaded.page.title ?? "");
+    if (title === "") continue;
+    topics.inspected++;
+    const entry = { slug, targets: new Set(supersedesTargets(loaded.parsed.body)) };
+    const group = titleGroups.get(title);
+    if (group === undefined) titleGroups.set(title, [entry]);
+    else group.push(entry);
+  }
+  for (const [title, group] of [...titleGroups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    if (group.length < 2) continue;
+    // Two pages are related when either declares Supersedes for the other; a
+    // one-directional link is the canonical replacement protocol, not a dup.
+    // Group by relationship CHAINS rather than dropping the whole cluster: a
+    // title shared by {A, B linked} and an unrelated C is one replacement chain
+    // PLUS one duplicate, and reporting "no Supersedes relation" over all three
+    // would be false.
+    const parent = new Map<string, string>(group.map((page) => [page.slug, page.slug]));
+    const find = (slug: string): string => {
+      let root = slug;
+      while (parent.get(root) !== root) root = parent.get(root)!;
+      return root;
+    };
+    for (const left of group) {
+      for (const right of group) {
+        if (left === right) continue;
+        if (!left.targets.has(right.slug) && !right.targets.has(left.slug)) continue;
+        const [a, b] = [find(left.slug), find(right.slug)];
+        if (a !== b) parent.set(a, b);
+      }
+    }
+    const chains = new Map<string, string[]>();
+    for (const page of group) {
+      const root = find(page.slug);
+      const chain = chains.get(root);
+      if (chain === undefined) chains.set(root, [page.slug]);
+      else chain.push(page.slug);
+    }
+    if (chains.size < 2) continue;
+    const described = [...chains.values()].map((chain) => chain.sort().join(" + ")).sort();
+    topics.duplicate_title_groups++;
+    addFinding({
+      code: "memory.topics.duplicate_title",
+      severity: "warning",
+      slug: described[0].split(" + ")[0],
+      message: `title "${title}" is claimed by ${chains.size} unrelated page chain(s): ${described.join(" | ")}`,
+    });
   }
 
   // Direction-independent cycle detection over explicit replacement edges.
@@ -1042,7 +1232,8 @@ export async function memoryCheck(
     inventory.complete &&
     ownedRows.every((row) => !failures.has(row.slug)) &&
     backlinksCoverage.state !== "partial" &&
-    filehubCoverage.state !== "unknown";
+    filehubCoverage.state !== "unknown" &&
+    derivedCoverage.state !== "partial";
   const status = checkStatus(findings, complete);
   return {
     schema_version: 1,
@@ -1051,11 +1242,14 @@ export async function memoryCheck(
       pages: pageCoverage,
       backlinks: backlinksCoverage,
       filehub: filehubCoverage,
+      derived: derivedCoverage,
     },
     counts: {
       owned_pages: ownedRows.length,
       by_role: byRole,
       historical_metadata: historicalMetadata,
+      derived,
+      topics,
       findings: countFindings(findings),
     },
     findings,
@@ -1069,7 +1263,12 @@ export function renderMemoryCheck(report: MemoryCheckReport): { lines: string[];
     `  pages: ${report.coverage.pages.state} (${report.coverage.pages.scanned_rows} row(s), ${report.coverage.pages.list_calls} list call(s))`,
     `  backlinks: ${report.coverage.backlinks.state} (${report.coverage.backlinks.checked_pages} superseded page(s), ${report.coverage.backlinks.calls} call(s))`,
     `  filehub: ${report.coverage.filehub.state}`,
+    `  derived: ${report.coverage.derived.state} (${report.counts.derived.atoms} atom(s), ${report.counts.derived.extracts} extract(s); ${report.counts.derived.inspected} inspected, never served as current answers)`,
+    `  topics: ${report.counts.topics.inspected} canonical page(s) with a title, ${report.counts.topics.duplicate_title_groups} duplicate-title group(s)`,
   ];
+  if (report.coverage.derived.detail !== undefined) {
+    lines.push(`  derived coverage: ${report.coverage.derived.detail}`);
+  }
   if (report.counts.historical_metadata.pages > 0) {
     lines.push(
       `  historical metadata: ${report.counts.historical_metadata.pages} page(s) retain unknown provenance/owner metadata; not backfilled`,

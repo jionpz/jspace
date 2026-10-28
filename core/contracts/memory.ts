@@ -164,3 +164,114 @@ export function isWeeklyRole(role: MemoryRole): boolean {
 export function isKnowledgeRole(role: MemoryRole): boolean {
   return role === "project-decision" || role === "project-lesson" || role === "project-record" || role === "knowledge";
 }
+
+// ---------------------------------------------------------------------------
+// Canonical vs derived
+//
+// gbrain writes derived pages itself (atoms / extracts from the dream and
+// extract passes). They quote a source page and are evidence — they must never
+// be served as the current answer, and they must never occupy a session-start
+// knowledge slot. The same is true of JSpace's own weekly projections and of
+// pages explicitly marked maintenance-only.
+//
+// These helpers are pure and IO-free so the read side (recall rules), the
+// session-start collector and the read-only audit all apply ONE rule set
+// instead of three similar ones.
+// ---------------------------------------------------------------------------
+
+/** Namespaces gbrain generates; they are projections of a `source_slug` page. */
+export const DERIVED_SLUG_ROOTS = ["atoms/", "extracts/"] as const;
+
+/** Roles whose pages carry the current answer. Weekly projections and
+ *  unclassified pages inside a JSpace namespace are deliberately excluded. */
+export type CanonicalMemoryRole = Exclude<
+  MemoryRole,
+  "weekly-consolidate" | "weekly-retro" | "unknown-owned"
+>;
+
+export function isCanonicalRole(role: MemoryRole | null): role is CanonicalMemoryRole {
+  return role !== null && role !== "weekly-consolidate" && role !== "weekly-retro" && role !== "unknown-owned";
+}
+
+/** Lifecycle tags that take a page out of "current answer" service. */
+export const INACTIVE_STATUS_TAGS: ReadonlySet<string> = new Set([
+  "status:superseded",
+  "status:deprecated",
+  "status:archived",
+]);
+
+/** Tags that mark a page as a periodic VIEW rather than a fact. `weekly` is the
+ *  route tag of consolidate/retro and of weekly-report assets.
+ *
+ *  `activity:maintenance` is deliberately NOT here. It is a WRITE-EVENT marker
+ *  ("this write was housekeeping, do not count it as business activity" — see
+ *  `jspace-use` §5), and the same tag therefore sits on real state cards,
+ *  lessons, decisions and asset pages, which the writeback contract says must
+ *  carry it only for that one write. Treating it as a page class would exclude
+ *  38 live pages from session-start, i.e. hide current answers because they
+ *  were last touched by housekeeping. The tag's only sanctioned consumer is the
+ *  write-count ledger, where it is subtracted per WRITE, not per page. */
+export const PROJECTION_TAGS = ["weekly"] as const;
+
+export function hasInactiveStatus(tags: readonly string[]): boolean {
+  return tags.some((tag) => INACTIVE_STATUS_TAGS.has(tag));
+}
+
+export function hasProjectionTag(tags: readonly string[]): boolean {
+  return tags.some((tag) => (PROJECTION_TAGS as readonly string[]).includes(tag));
+}
+
+export function isDerivedSlug(slug: string): boolean {
+  return DERIVED_SLUG_ROOTS.some((root) => slug.startsWith(root));
+}
+
+export type MemoryPageClass =
+  /** A live canonical page — may serve as the current answer. */
+  | "canonical"
+  /** gbrain-generated evidence (`atoms/*`, `extracts/*`);回源 to `source_slug`. */
+  | "derived"
+  /** Weekly/retro/consolidate page (a periodic view, not a fact). */
+  | "projection"
+  /** superseded / deprecated / archived — history only. */
+  | "inactive"
+  /** Inside a JSpace namespace but no authorized form, or outside every
+   *  namespace: not classifiable, therefore never evidence of currency. */
+  | "unclassified";
+
+/**
+ * Classify a page by slug + tags alone. Precedence is deliberate and stated:
+ * derived (an atom stays an atom whatever tags gbrain merged into it) →
+ * inactive → projection → canonical → unclassified.
+ *
+ * Callers pass tags from both the gbrain list row and the page frontmatter
+ * when both are available; passing only one is honest but weaker.
+ */
+export function classifyMemoryPage(slug: string, tags: readonly string[]): MemoryPageClass {
+  if (isDerivedSlug(slug)) return "derived";
+  if (hasInactiveStatus(tags)) return "inactive";
+  const role = memoryRole(slug);
+  if (role === "weekly-consolidate" || role === "weekly-retro") return "projection";
+  if (hasProjectionTag(tags)) return "projection";
+  return isCanonicalRole(role) ? "canonical" : "unclassified";
+}
+
+/** True when a page may be served/ranked as the current answer. */
+export function isCanonicalAnswer(slug: string, tags: readonly string[]): boolean {
+  return classifyMemoryPage(slug, tags) === "canonical";
+}
+
+/** Normalize a page title for topic comparison. Titles are prose, so the only
+ *  honest normalization is whitespace + ASCII case — no stemming, no synonym
+ *  table. Anything weaker would turn "similar wording" into a claimed duplicate;
+ *  anything stronger would miss the real case (the same title written twice). */
+export function normalizeTopic(title: string): string {
+  return title
+    .replace(/\s+/g, "")
+    .replace(/[A-Z]/g, (c) => c.toLowerCase());
+}
+
+/** `source_slug` of a gbrain-derived page (atoms/extracts quote their origin). */
+export function derivedSourceSlug(fields: Readonly<Record<string, string>>): string | undefined {
+  const value = fields.source_slug;
+  return value !== undefined && value.trim() !== "" ? value.trim() : undefined;
+}

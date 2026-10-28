@@ -62,6 +62,7 @@ triggers:
 2. **分类与归属**:按 `writeback.md` 分类,确定 project/area 和稳定 slug;归属不明先查 registry、域 README 和既有 state。
 3. **先保全再覆盖**:state 中将被移除、但仍能解释历史的决定或事件,先写 decision/record;随后生成新的三段式认知卡。
 4. **读取现状**:替换前 `get_page(include_content:true)` 取得最新 `revision`;追加页先检查 slug 是否已存在,避免重复。
+   追加页还要按 `writeback.md` 第 5 节做**写前查重**:先按稳定主题检索并逐页读回,再在「复用 / 取代 / 冲突待验证 / 不晋升」中作出判断。用户纠错必须走 `Supersedes` 取代流程,不能只再追加一条普通页。
 5. **构造完整页**:frontmatter 必须含实际 `source`、owner 字段、路由 tag,且恰好一个 `source:session`/`source:cron`;描述性 `type` 保持真实值,路由只用 slug + tags。
 6. **结构化写入**:用新的稳定 request id 调用 `gbrain call put_page`;替换时携带读到的完整页正文和 `expected_revision`。
 7. **处理响应丢失**:先 `get_write_request` 找 committed 回执,再读目标页;不得换新 request id 重发不同正文。

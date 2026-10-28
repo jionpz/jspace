@@ -728,3 +728,264 @@ test("memoryCheck does not claim whole-tree proof for a bundle", async () => {
   const report = await memoryCheck(fakeGbrain([fixture.page]), root);
   expect(report.findings).toEqual([]);
 });
+
+// ---- derived projections + deterministic topic duplicates ----
+// Real shape (2026-10-27 audit of the local brain): 76 `atoms/*` pages over 28
+// source pages, none of the sources missing, and no two canonical pages sharing
+// a title. These cases pin both the reporting AND its limits: a duplicate atom
+// is a counted candidate, a missing source is unknown (never an error), and the
+// command must stay read-only.
+
+function atom(slug: string, source: string, title: string): PageSpec {
+  return {
+    slug,
+    content: `---
+type: atom
+title: ${title}
+source_slug: ${source}
+tags:
+  - knowledge
+  - source:cron
+---
+
+${title}
+`,
+    tags: ["knowledge", "source:cron"],
+  };
+}
+
+test("memoryCheck counts derived pages separately and never treats them as owned", async () => {
+  const pages = [
+    ...validPages(),
+    atom("atoms/2026-09-12/纪律-8ae045b2", "records/retro/2026-09-12", "工作流闭环靠严格纪律"),
+    atom("atoms/2026-09-12/迁移-1f2e3d4c", "records/retro/2026-09-12", "迁移 put 未带来源 tag"),
+    { slug: "extracts/2026-09-17/atoms/default/x/round-single", content: "---\ntype: extract_receipt\n---\n", tags: [] },
+  ];
+  const report = await memoryCheck(fakeGbrain(pages), root);
+  expect(report.counts.derived.atoms).toBe(2);
+  expect(report.counts.derived.extracts).toBe(1);
+  expect(report.counts.derived.with_source_slug).toBe(2);
+  expect(report.counts.derived.inspected).toBe(3);
+  // Owned pages count only the canonical namespaces — atoms are not JSpace pages.
+  expect(report.counts.by_role).not.toHaveProperty("atoms");
+  expect(report.counts.owned_pages).toBe(validPages().length);
+  expect(report.coverage.derived.state).toBe("complete");
+  // Two atoms from one source is normal extraction volume, not a duplicate.
+  expect(report.counts.derived.duplicate_atom_groups).toBe(0);
+});
+
+test("memoryCheck reports the same atom title from one source as a duplicate candidate", async () => {
+  const pages = [
+    ...validPages(),
+    atom("atoms/2026-09-12/纪律-a1", "records/retro/2026-09-12", "工作流闭环靠严格纪律"),
+    atom("atoms/2026-09-20/纪律-b2", "records/retro/2026-09-12", "工作流闭环靠严格纪律"),
+  ];
+  const report = await memoryCheck(fakeGbrain(pages), root);
+  expect(report.counts.derived.duplicate_atom_groups).toBe(1);
+  expect(report.findings).toContainEqual(
+    expect.objectContaining({ code: "memory.derived.duplicate_atom", severity: "warning" }),
+  );
+});
+
+test("memoryCheck reports a derived page whose source page is gone as unknown, not an error", async () => {
+  const pages = [...validPages(), atom("atoms/2026-09-12/orphan-aa", "records/retro/2030-01-01", "孤立片段")];
+  const report = await memoryCheck(fakeGbrain(pages), root);
+  expect(report.counts.derived.source_missing).toBe(1);
+  const finding = report.findings.find((f) => f.code === "memory.derived.source_missing");
+  expect(finding?.severity).toBe("unknown");
+  expect(report.status).toBe("partial");
+});
+
+test("memoryCheck caps the derived audit and says so instead of claiming full coverage", async () => {
+  const pages = [
+    ...validPages(),
+    ...Array.from({ length: 5 }, (_, i) =>
+      atom(`atoms/2026-09-12/a${i}`, "records/retro/2026-09-12", `片段 ${i}`),
+    ),
+  ];
+  const report = await memoryCheck(fakeGbrain(pages), root, { maxDerivedPages: 2 });
+  expect(report.counts.derived.atoms).toBe(5);
+  expect(report.counts.derived.inspected).toBe(2);
+  expect(report.coverage.derived.state).toBe("partial");
+  expect(report.coverage.derived.detail).toContain("2 of 5");
+});
+
+test("memoryCheck reports one duplicate-title group for unrelated active canonical pages", async () => {
+  const twin = (slug: string) => ({
+    slug,
+    content: markdown({
+      project: slug.split("/")[1]!,
+      tags: ["knowledge", "source:session"],
+      extra: "title: 反例验证纪律\n",
+      body: `# 反例验证纪律\n\n正文 ${slug}\n`,
+    }),
+    tags: ["knowledge", "source:session"],
+  });
+  const pages = [...validPages(), twin("project/acme/lessons/反例验证"), twin("knowledge/testing/反例验证")];
+  const report = await memoryCheck(fakeGbrain(pages), root);
+  expect(report.counts.topics.duplicate_title_groups).toBe(1);
+  expect(report.findings).toContainEqual(
+    expect.objectContaining({ code: "memory.topics.duplicate_title", severity: "warning" }),
+  );
+});
+
+test("memoryCheck does not call a Supersedes pair a duplicate", async () => {
+  const old = {
+    slug: "project/acme/lessons/topic",
+    content: markdown({
+      project: "acme",
+      tags: ["knowledge", "source:session", "status:superseded"],
+      extra: "title: 同一主题\n",
+      body: "# 同一主题\n\n旧。\n",
+    }),
+    tags: ["knowledge", "source:session", "status:superseded"],
+  };
+  const fresh = {
+    slug: "project/acme/lessons/topic-v2",
+    content: markdown({
+      project: "acme",
+      tags: ["knowledge", "source:session"],
+      extra: "title: 同一主题\n",
+      body: "Supersedes: [[project/acme/lessons/topic]]\n\n新。\n",
+    }),
+    tags: ["knowledge", "source:session"],
+  };
+  const g = fakeGbrain([...validPages(), old, fresh], {
+    backlinks: (slug) =>
+      slug === "project/acme/lessons/topic"
+        ? {
+            ok: true,
+            rows: [{ slug: "project/acme/lessons/topic-v2" }],
+            total: 1,
+            truncated: false,
+            coverage: { state: "complete", degraded: false },
+          }
+        : { ok: true, rows: [], total: 0, truncated: false, coverage: { state: "complete", degraded: false } },
+  });
+  const report = await memoryCheck(g, root);
+  expect(report.counts.topics.duplicate_title_groups).toBe(0);
+});
+
+test("memoryCheck never writes while auditing derived pages and topics", async () => {
+  let writes = 0;
+  const pages = [
+    ...validPages(),
+    atom("atoms/2026-09-12/x", "records/retro/2026-09-12", "标题"),
+  ];
+  const g = fakeGbrain(pages);
+  const original = g.putPage;
+  g.putPage = async (...args) => {
+    writes++;
+    return original(...args);
+  };
+  await memoryCheck(g, root);
+  expect(writes).toBe(0);
+});
+
+test("renderMemoryCheck prints derived and topic sections and keeps the read-only line", async () => {
+  const { renderMemoryCheck } = await import("./check.ts");
+  const pages = [
+    ...validPages(),
+    {
+      slug: "records/retro/2026-09-12",
+      content: "---\nsource: claude\nproject: jspace\ntags: [retro, weekly, source:cron]\n---\n\n# retro\n",
+      tags: ["retro", "weekly", "source:cron"],
+    },
+    atom("atoms/2026-09-12/a1", "records/retro/2026-09-12", "片段"),
+    atom("atoms/2026-09-20/a2", "records/retro/2026-09-12", "片段"),
+  ];
+  const report = await memoryCheck(fakeGbrain(pages), root);
+  const { lines } = renderMemoryCheck(report);
+  const text = lines.join("\n");
+  expect(text).toContain("derived: complete (2 atom(s), 0 extract(s); 2 inspected");
+  expect(text).toContain("topics: ");
+  expect(text).toContain("duplicate-title group(s)");
+  expect(text).toContain("memory.derived.duplicate_atom");
+  expect(text).toContain("read-only; no page was modified");
+  // A deterministic duplicate is a warning: it needs a human look, and the
+  // command did not fail to cover anything.
+  expect(report.status).toBe("attention");
+});
+
+test("memoryCheck reports a third page that shares a title with a replacement chain", async () => {
+  // Realistic half-done transition: the new page already declares Supersedes
+  // while the old page is still active (its status tag was not updated yet).
+  // {旧, 新} is ONE chain, and the unrelated third page is ONE duplicate — not
+  // zero, and not a false "no Supersedes relation" spread over all three.
+  const page = (slug: string, body: string) => ({
+    slug,
+    content: markdown({
+      project: slug.split("/")[1]!,
+      tags: ["knowledge", "source:session"],
+      extra: "title: 同一主题\n",
+      body,
+    }),
+    tags: ["knowledge", "source:session"],
+  });
+  const old = page("project/acme/lessons/chain", "# 同一主题\n\n旧。\n");
+  const fresh = page("project/acme/lessons/chain-v2", "Supersedes: [[project/acme/lessons/chain]]\n\n新。\n");
+  const stray = page("knowledge/testing/chain", "# 同一主题\n\n另一条无关记录。\n");
+  const report = await memoryCheck(fakeGbrain([...validPages(), old, fresh, stray]), root);
+  expect(report.counts.topics.duplicate_title_groups).toBe(1);
+  const finding = report.findings.find((f) => f.code === "memory.topics.duplicate_title");
+  expect(finding?.message).toContain("2 unrelated page chain(s)");
+  // The replacement pair is reported as one chain, never as two unrelated pages.
+  expect(finding?.message).toContain("project/acme/lessons/chain + project/acme/lessons/chain-v2");
+  expect(finding?.message).toContain("knowledge/testing/chain");
+});
+
+test("memoryCheck ignores an inactive page when grouping duplicate titles", async () => {
+  // A superseded page is history: its old title colliding with a live page is
+  // the protocol working, so it must not produce a finding on its own.
+  const page = (slug: string, tags: string[], body: string) => ({
+    slug,
+    content: markdown({
+      project: slug.split("/")[1]!,
+      tags,
+      extra: "title: 同一主题\n",
+      body,
+    }),
+    tags,
+  });
+  const report = await memoryCheck(
+    fakeGbrain([
+      ...validPages(),
+      page("project/acme/lessons/gone", ["knowledge", "source:session", "status:superseded"], "# 同一主题\n\n旧。\n"),
+      page("knowledge/testing/live", ["knowledge", "source:session"], "# 同一主题\n\n新。\n"),
+    ]),
+    root,
+  );
+  expect(report.counts.topics.duplicate_title_groups).toBe(0);
+});
+
+test("memoryCheck reports both a capped derived audit and unreadable derived pages", async () => {
+  // A cap alone ("2 of 5") would hide that one of the two inspected pages was
+  // unreadable. Both limits must appear, because each one independently makes
+  // the count a lower bound.
+  const pages = [
+    ...validPages(),
+    atom("atoms/2026-09-12/ok", "records/retro/2026-09-12", "可读片段"),
+    atom("atoms/2026-09-12/broken", "records/retro/2026-09-12", "不可读片段"),
+    atom("atoms/2026-09-12/capped", "records/retro/2026-09-12", "被截断片段"),
+  ];
+  const g = fakeGbrain(pages, {
+    get: async (slug) =>
+      slug === "atoms/2026-09-12/broken"
+        ? { ok: false, code: "process_error", message: "boom" }
+        : {
+            ok: true,
+            page: {
+              slug,
+              revision: "revision-1",
+              contentHash: `hash:${slug}`,
+              content: pages.find((p) => p.slug === slug)!.content,
+              tags: pages.find((p) => p.slug === slug)!.tags ?? [],
+              updatedAt: "2026-10-18T12:00:00Z",
+            },
+          },
+  });
+  const report = await memoryCheck(g, root, { maxDerivedPages: 2 });
+  expect(report.coverage.derived.state).toBe("partial");
+  expect(report.coverage.derived.detail).toContain("2 of 3");
+  expect(report.coverage.derived.detail).toContain("1 derived page(s) could not be read");
+});

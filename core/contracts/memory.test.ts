@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import {
+  classifyMemoryPage,
   declaresSupersedes,
+  isCanonicalAnswer,
   memoryOwnerEquals,
   memoryRole,
   parseMemoryMarkdown,
@@ -112,4 +114,60 @@ test("block lists survive comment and blank lines (support_paths truncation regr
   // a following top-level key still terminates the list and parses normally
   expect(parsed.tags).toEqual(["project"]);
   expect(parsed.fields.owner).toBe("acme");
+});
+
+// ---- canonical vs derived classification ----
+// The rule set is shared by the recall contract, the session-start collector and
+// the read-only audit. These cases pin the precedence so a derived page can
+// never be promoted by whatever tags gbrain happened to merge into it.
+
+test("classifyMemoryPage: atoms/extracts are derived whatever their tags say", () => {
+  expect(classifyMemoryPage("atoms/2026-09-12/some-insight-8ae045b2", ["knowledge", "source:cron"])).toBe("derived");
+  expect(classifyMemoryPage("extracts/2026-09-17/atoms/default/x/round-single", ["knowledge"])).toBe("derived");
+  expect(isCanonicalAnswer("atoms/2026-09-12/x", ["knowledge", "status:settled"])).toBe(false);
+});
+
+test("classifyMemoryPage: inactive beats canonical so superseded pages never answer", () => {
+  expect(classifyMemoryPage("project/acme/decisions/stack", ["knowledge", "status:superseded"])).toBe("inactive");
+  expect(classifyMemoryPage("knowledge/ops/topic", ["knowledge", "status:archived"])).toBe("inactive");
+  expect(classifyMemoryPage("project/acme/state", ["project", "status:deprecated"])).toBe("inactive");
+});
+
+test("classifyMemoryPage: weekly roles are projections", () => {
+  expect(classifyMemoryPage("records/consolidate/2026-10-12", ["consolidate", "weekly"])).toBe("projection");
+  expect(classifyMemoryPage("records/retro/2026-10-12", ["retro", "weekly"])).toBe("projection");
+  expect(classifyMemoryPage("profile/output-style", ["profile", "weekly"])).toBe("projection");
+});
+
+test("classifyMemoryPage: activity:maintenance is a write-event tag, not a page class", () => {
+  // The tag means "this write was housekeeping, do not count it as business
+  // activity". It is carried by real state/lesson/decision pages (38 on the
+  // live brain), so treating it as a page class would drop current answers from
+  // session-start merely because housekeeping touched them last.
+  expect(classifyMemoryPage("project/acme/decisions/hermes", ["knowledge", "activity:maintenance"])).toBe("canonical");
+  expect(classifyMemoryPage("project/acme/state", ["project", "activity:maintenance"])).toBe("canonical");
+  expect(classifyMemoryPage("project/acme/lessons/gone", ["knowledge", "activity:maintenance", "status:superseded"])).toBe("inactive");
+});
+
+test("classifyMemoryPage: only authorized canonical roles answer; unknown-owned does not", () => {
+  for (const slug of [
+    "project/acme/state",
+    "project/acme/decisions/stack",
+    "project/acme/lessons/retry",
+    "records/project/acme/2026-10-01-incident",
+    "knowledge/architecture/retry",
+    "profile/output-style",
+    "assets/acme/report",
+  ]) {
+    expect(classifyMemoryPage(slug, ["knowledge"])).toBe("canonical");
+  }
+  expect(classifyMemoryPage("project/acme/records/2026-10-01-x", ["knowledge"])).toBe("unclassified");
+  expect(classifyMemoryPage("somewhere/else", ["knowledge"])).toBe("unclassified");
+});
+
+test("classifyMemoryPage: derived may carry a source_slug, so slug alone decides derivation", () => {
+  // gbrain atoms quote `source_slug: records/retro/...`; they remain evidence
+  // about that source page, never a replacement for it.
+  expect(classifyMemoryPage("atoms/2026-09-12/x", [])).toBe("derived");
+  expect(classifyMemoryPage("records/retro/2026-09-12", [])).toBe("projection");
 });
