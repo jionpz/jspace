@@ -66,6 +66,12 @@ export interface MemoryCheckOptions {
    *  derived-projection audit. Exceeding it marks that section partial instead
    *  of pretending the projections were all inspected. */
   maxDerivedPages?: number;
+  /** Known owner ids for `knowledge/*`'s `project` field: the workbench's
+   *  registered projects and domains. `knowledge/<domain>` carries the SOURCE
+   *  project (see gbrain.md §4), so the rule is existence, not equality with the
+   *  slug segment. Omit the option when the registry is unavailable: unknown is
+   *  then reported, never silently passed. */
+  knownOwners?: { projects: readonly string[]; domains: readonly string[] };
   /** Metadata rules apply to pages updated at or after this instant. Older
    *  pages retain an explicit unknown gap instead of being retroactively
    *  assigned a source, project or lifecycle they never declared. */
@@ -122,6 +128,10 @@ export interface MemoryCheckReport {
       calls: number;
     };
     filehub: CheckCoverage;
+    /** Whether `memory.project.unknown` could be evaluated at all: `unknown`
+     *  when the workbench registry was unavailable, so a clean report never
+     *  implies the owner rule passed. */
+    owners: CheckCoverage;
     /** How much of the derived (atoms/extracts) population was actually
      *  inspected; `partial` means the counts are a lower bound. */
     derived: CheckCoverage;
@@ -511,6 +521,44 @@ export async function memoryCheck(
     }
   }
 
+  // Known owners for the `knowledge/*` provenance rule. Two sources, both
+  // needed and neither sufficient:
+  //   - the workbench REGISTRY (hub.json) lists only projects carrying filehub
+  //     assets — 4 of 15 on the live brain — so it alone reported 14 real
+  //     projects (`keel`, `jspace`, `viocein` …) as invented;
+  //   - a `project/<id>/state` card is the brain's own declaration that project
+  //     `<id>` exists, which is exactly the question asked.
+  // State cards only (not any `project/<id>/*` page): otherwise a fabricated
+  // page would legitimise its own id.
+  const declaredProjects = new Set<string>();
+  for (const row of inventory.rows) {
+    const stateId = /^project\/([^/]+)\/state$/.exec(row.slug)?.[1];
+    if (stateId !== undefined) declaredProjects.add(stateId);
+  }
+  const knownOwners =
+    opts.knownOwners === undefined && declaredProjects.size === 0
+      ? undefined
+      : {
+          projects: [...new Set([...(opts.knownOwners?.projects ?? []), ...declaredProjects])],
+          domains: [...new Set(opts.knownOwners?.domains ?? [])],
+        };
+
+  // Coverage, not per-page noise: when neither source is available the rule did
+  // not run, and a clean report must not be read as "every owner id is real".
+  // Counted, not assumed: `not_applicable` when no knowledge page declares a
+  // project (nothing was skipped), `unknown` only when something was.
+  let ownerChecksSkipped = 0;
+  const ownersCoverage = (): CheckCoverage => {
+    if (knownOwners !== undefined) return { state: "complete" };
+    if (ownerChecksSkipped === 0) {
+      return { state: "not_applicable", detail: "no knowledge page declares a source project" };
+    }
+    return {
+      state: "unknown",
+      detail: `no workbench registry and no project state card; ${ownerChecksSkipped} knowledge page(s) name a project that could not be verified`,
+    };
+  };
+
   const superseded: string[] = [];
   const edges = new Map<string, string[]>();
   const pageTags = new Map<string, string[]>();
@@ -571,7 +619,13 @@ export async function memoryCheck(
       }
     }
     if (!fields.project) {
-      if (current) {
+      // `knowledge/*` is exempt: its `project` records the SOURCE project, and a
+      // cross-project fact legitimately has none (gbrain.md §4). Requiring it
+      // there would push writers to invent an owner — the exact failure the
+      // `memory.project.unknown` rule exists to catch.
+      if (role === "knowledge") {
+        // no gap recorded: "absent" is the honest state for this role
+      } else if (current) {
         addFinding({
           code: "memory.frontmatter.project_missing",
           severity: "error",
@@ -666,7 +720,32 @@ export async function memoryCheck(
           message: `state card is ${bytes} bytes; keep the current card concise and move durable history out`,
         });
       }
-    } else if (isKnowledgeRole(role) || role === "profile") {
+    } else if (role === "knowledge") {
+      // `knowledge/<domain>` writes the SOURCE project, not the domain: the
+      // domain segment is retrieval grouping, the project is provenance. So the
+      // rule is "a known owner", not "equals the slug segment" — plus an
+      // explicit "missing is fine": a cross-project fact has no source project
+      // and must stay blank rather than borrow one. Unknown owner ids are the
+      // real defect this catches (the live brain had `gbrain-infra` on three
+      // pages and `synology-drive` on one; neither exists in any registry).
+      if (fields.project !== undefined && fields.project !== "") {
+        const owners = knownOwners;
+        // No known-owner source means the rule was not applied — that is ONE
+        // coverage fact (`coverage.owners: unknown`), not one finding per
+        // knowledge page. Per-page "cannot verify" would drown the report and
+        // say nothing the coverage line does not already say.
+        if (owners === undefined) {
+          ownerChecksSkipped += 1;
+        } else if (!owners.projects.includes(fields.project) && !owners.domains.includes(fields.project)) {
+          addFinding({
+            code: "memory.project.unknown",
+            severity: "warning",
+            slug,
+            message: `frontmatter project ${fields.project} is not a registered project or domain in this workbench; knowledge pages name their source project, so leave it blank instead of inventing one`,
+          });
+        }
+      }
+    } else if (role === "project-decision" || role === "project-lesson" || role === "project-record" || role === "profile") {
       const projectId = projectIdForSlug(slug);
       if (projectId !== undefined && fields.project !== projectId) {
         if (current) {
@@ -1228,11 +1307,16 @@ export async function memoryCheck(
     calls: backlinkCalls,
   };
 
+  // Evaluated here, after every page: the state depends on how many owner
+  // checks were actually skipped. It feeds `complete` below for the same reason
+  // filehub does — an unverified rule must not leave the report looking clean.
+  const owners = ownersCoverage();
   const complete =
     inventory.complete &&
     ownedRows.every((row) => !failures.has(row.slug)) &&
     backlinksCoverage.state !== "partial" &&
     filehubCoverage.state !== "unknown" &&
+    owners.state !== "unknown" &&
     derivedCoverage.state !== "partial";
   const status = checkStatus(findings, complete);
   return {
@@ -1242,6 +1326,7 @@ export async function memoryCheck(
       pages: pageCoverage,
       backlinks: backlinksCoverage,
       filehub: filehubCoverage,
+      owners,
       derived: derivedCoverage,
     },
     counts: {
@@ -1263,6 +1348,7 @@ export function renderMemoryCheck(report: MemoryCheckReport): { lines: string[];
     `  pages: ${report.coverage.pages.state} (${report.coverage.pages.scanned_rows} row(s), ${report.coverage.pages.list_calls} list call(s))`,
     `  backlinks: ${report.coverage.backlinks.state} (${report.coverage.backlinks.checked_pages} superseded page(s), ${report.coverage.backlinks.calls} call(s))`,
     `  filehub: ${report.coverage.filehub.state}`,
+    `  owners: ${report.coverage.owners.state}`,
     `  derived: ${report.coverage.derived.state} (${report.counts.derived.atoms} atom(s), ${report.counts.derived.extracts} extract(s); ${report.counts.derived.inspected} inspected, never served as current answers)`,
     `  topics: ${report.counts.topics.inspected} canonical page(s) with a title, ${report.counts.topics.duplicate_title_groups} duplicate-title group(s)`,
   ];

@@ -2,12 +2,15 @@
 import type { CmdContext, CmdResult, CommandSpec } from "../../application/commands/command.ts";
 import { memoryCheck, renderMemoryCheck } from "../../application/memory/check.ts";
 import { resolveFilehubRoot } from "../../application/registry/filehub-lookup.ts";
+import { resolveKnownOwners } from "../../application/registry/known-owners.ts";
 import { realGbrain, type GbrainDeps } from "../../adapters/gbrain/gbrain.ts";
 import { weeklyPeriod, type WeeklyPeriod } from "../../core/contracts/weekly-period.ts";
 
 export interface MemoryCheckCommandDeps {
   gbrain: () => GbrainDeps;
   filehubRoot: (root: string) => string | null;
+  /** Registered owner ids for the `knowledge/*` provenance rule. */
+  knownOwners: (root: string) => { projects: string[]; domains: string[] } | null;
 }
 
 export interface MemoryPeriodCommandDeps {
@@ -17,6 +20,7 @@ export interface MemoryPeriodCommandDeps {
 const defaultDeps: MemoryCheckCommandDeps = {
   gbrain: () => realGbrain(),
   filehubRoot: resolveFilehubRoot,
+  knownOwners: resolveKnownOwners,
 };
 
 const defaultPeriodDeps: MemoryPeriodCommandDeps = {
@@ -76,7 +80,10 @@ export async function memoryCheckCommand(
   ctx: CmdContext,
   deps: MemoryCheckCommandDeps = defaultDeps,
 ): Promise<CmdResult> {
-  const report = await memoryCheck(deps.gbrain(), deps.filehubRoot(ctx.root));
+  const knownOwners = deps.knownOwners(ctx.root);
+  const report = await memoryCheck(deps.gbrain(), deps.filehubRoot(ctx.root), {
+    ...(knownOwners === null ? {} : { knownOwners }),
+  });
   if (ctx.json) {
     return {
       lines: [],

@@ -237,8 +237,10 @@ test("memoryCheck reports a page read failure as partial/unknown", async () => {
 });
 
 test("memoryCheck records historical metadata gaps as unknown without backfilling them", async () => {
+  // A non-knowledge role: `knowledge/*` is exempt from the project rule, so it
+  // cannot demonstrate the project gap this test records.
   const legacy: PageSpec = {
-    slug: "knowledge/acme/legacy",
+    slug: "project/acme/lessons/legacy",
     content: "---\ntype: note\n---\n# Legacy\n",
     updatedAt: "2026-08-15T12:00:00Z",
   };
@@ -257,7 +259,7 @@ test("memoryCheck records historical metadata gaps as unknown without backfillin
 
 test("memoryCheck enforces metadata rules for current writes", async () => {
   const current: PageSpec = {
-    slug: "knowledge/acme/current",
+    slug: "project/acme/lessons/current",
     content: "---\ntype: note\n---\n# Current\n",
     updatedAt: "2026-10-20T12:00:00Z",
   };
@@ -307,6 +309,7 @@ test("memoryCheck verifies supersession direction through backlinks and reads th
       }),
     }),
     root,
+    { knownOwners: { projects: ["acme"], domains: [] } },
   );
   expect(report.status).toBe("ok");
   expect(report.coverage.backlinks).toMatchObject({ state: "complete", checked_pages: 1 });
@@ -384,6 +387,7 @@ test("memoryCheck reports multiple explicit replacements instead of choosing the
       }),
     }),
     root,
+    { knownOwners: { projects: ["acme"], domains: [] } },
   );
   expect(report.status).toBe("attention");
   expect(report.findings).toContainEqual(
@@ -405,6 +409,7 @@ test("memoryCheck distinguishes a missing Supersedes target from an unreadable o
       },
     ]),
     root,
+    { knownOwners: { projects: ["acme"], domains: [] } },
   );
   expect(missing.status).toBe("attention");
   expect(missing.findings).toContainEqual(
@@ -447,6 +452,7 @@ test("memoryCheck distinguishes a missing Supersedes target from an unreadable o
       },
     ),
     root,
+    { knownOwners: { projects: ["acme"], domains: [] } },
   );
   expect(unreadable.status).toBe("partial");
   expect(unreadable.findings.some((finding) => finding.code === "memory.supersedes.target_missing")).toBe(false);
@@ -511,6 +517,7 @@ test("memoryCheck rejects unknown lifecycle status tags", async () => {
       },
     ]),
     root,
+    { knownOwners: { projects: ["acme"], domains: [] } },
   );
   expect(report.status).toBe("attention");
   expect(report.findings).toContainEqual(
@@ -988,4 +995,138 @@ test("memoryCheck reports both a capped derived audit and unreadable derived pag
   expect(report.coverage.derived.state).toBe("partial");
   expect(report.coverage.derived.detail).toContain("2 of 3");
   expect(report.coverage.derived.detail).toContain("1 derived page(s) could not be read");
+});
+
+// ---- knowledge/*'s project names the SOURCE project, not the domain ----
+// gbrain.md §4: `knowledge/<domain>` groups for retrieval, `project` records
+// provenance. The rule is therefore existence in the workbench registry, not
+// equality with the slug segment. The live brain had four invented ids
+// (`gbrain-infra` ×3, `synology-drive` ×1) that no registry knows about.
+
+function knowledgePage(slug: string, project: string | undefined): PageSpec {
+  const extra = project === undefined ? "" : `project: ${project}\n`;
+  return {
+    slug,
+    content: `---\ntype: concept\ntitle: ${slug.split("/").pop()}\nsource: claude-code\n${extra}tags: [knowledge, source:session]\n---\n\n# 正文\n`,
+    tags: ["knowledge", "source:session"],
+  };
+}
+
+test("memoryCheck accepts a knowledge page whose project differs from its domain", async () => {
+  // `检查必须用反例验证` lives in the 工程实践 domain but came from keel.
+  const report = await memoryCheck(
+    fakeGbrain([...validPages(), knowledgePage("knowledge/工程实践/反例验证", "keel")]),
+    root,
+    { knownOwners: { projects: ["keel", "acme"], domains: ["工程实践", "agent-infra"] } },
+  );
+  expect(report.findings.some((f) => f.code === "memory.project.unknown")).toBe(false);
+  expect(report.coverage.owners.state).toBe("complete");
+});
+
+test("memoryCheck warns when a knowledge page's project is not a registered owner", async () => {
+  const report = await memoryCheck(
+    fakeGbrain([...validPages(), knowledgePage("knowledge/ops/gbrain-jobs", "gbrain-infra")]),
+    root,
+    { knownOwners: { projects: ["keel", "acme"], domains: ["ops"] } },
+  );
+  const finding = report.findings.find((f) => f.code === "memory.project.unknown");
+  expect(finding?.severity).toBe("warning");
+  expect(finding?.message).toContain("gbrain-infra");
+  // A warning, not an error: the page is still a usable current answer.
+  expect(report.status).toBe("attention");
+});
+
+test("memoryCheck accepts a knowledge page with no source project at all", async () => {
+  // A cross-project fact has no source project and must stay blank rather than
+  // borrow one — blank is not a defect, so `project_missing` is exempt for this
+  // role. Requiring it here would push writers to invent an owner, which is the
+  // exact failure `memory.project.unknown` exists to catch.
+  const report = await memoryCheck(
+    fakeGbrain([...validPages(), knowledgePage("knowledge/git/worktree-identity", undefined)]),
+    root,
+    { knownOwners: { projects: ["keel"], domains: ["git"] } },
+  );
+  expect(report.findings.some((f) => f.code.startsWith("memory.project."))).toBe(false);
+  expect(report.findings.some((f) => f.code === "memory.frontmatter.project_missing")).toBe(false);
+});
+
+test("memoryCheck still requires project for non-knowledge roles", async () => {
+  // The exemption is per role, not a global loosening.
+  const noOwner = {
+    slug: "project/acme/lessons/ownerless",
+    content: "---\ntype: lesson\ntitle: 无主经验\nsource: claude-code\ntags: [knowledge, source:session]\n---\n\n正文\n",
+    tags: ["knowledge", "source:session"],
+    updatedAt: "2026-10-25T00:00:00Z",
+  };
+  const report = await memoryCheck(fakeGbrain([...validPages(), noOwner]), root, {
+    knownOwners: { projects: ["acme"], domains: [] },
+  });
+  expect(
+    report.findings.some(
+      (f) => f.code === "memory.frontmatter.project_missing" && f.slug === "project/acme/lessons/ownerless",
+    ),
+  ).toBe(true);
+});
+
+test("memoryCheck reports owners coverage as unknown with neither a registry nor a state card", async () => {
+  // Both sources absent means the rule did not run. That must show up as ONE
+  // coverage fact, not a per-page finding that would drown the report — and it
+  // must still keep the report out of `ok`, or a skipped rule reads as a pass.
+  const report = await memoryCheck(fakeGbrain([knowledgePage("knowledge/ops/x", "whatever")]), root);
+  expect(report.coverage.owners.state).toBe("unknown");
+  expect(report.coverage.owners.detail).toContain("1 knowledge page(s)");
+  expect(report.findings.some((f) => f.code === "memory.project.unknown")).toBe(false);
+  expect(report.status).toBe("partial");
+});
+
+test("memoryCheck reports owners coverage as not_applicable when no knowledge page names a project", async () => {
+  // Nothing was skipped, so nothing is unverified. Reporting `unknown` here
+  // would make every registry-less run look degraded for no reason.
+  const report = await memoryCheck(fakeGbrain([knowledgePage("knowledge/git/worktree-identity", undefined)]), root);
+  expect(report.coverage.owners.state).toBe("not_applicable");
+  expect(report.status).toBe("ok");
+});
+
+test("memoryCheck takes a project state card as proof the project exists", async () => {
+  // The live brain registers only 4 of its 15 projects in hub.json (the rest
+  // carry no filehub assets), so the registry alone called `keel` invented. A
+  // `project/<id>/state` card is the brain's own declaration of that project.
+  const report = await memoryCheck(
+    fakeGbrain([
+      ...validPages(),
+      knowledgePage("knowledge/工程实践/反例验证", "keel"),
+      {
+        slug: "project/keel/state",
+        content: "---\ntype: project-state\nproject: keel\ntags: [project, source:session]\n---\n\n## 这个项目是什么·解决什么\n\n## 现在到哪了\n\n## 下一步\n\n## 执行层\n",
+        tags: ["project", "source:session"],
+      },
+    ]),
+    root,
+  );
+  expect(report.findings.some((f) => f.code === "memory.project.unknown")).toBe(false);
+  expect(report.coverage.owners.state).toBe("complete");
+});
+
+test("memoryCheck still requires project to equal the slug segment for project pages", async () => {
+  // The knowledge exemption must not leak: a decision page's project is its
+  // owner and equality is still enforced.
+  const wrongOwner = {
+    slug: "project/acme/decisions/topic",
+    content: markdown({
+      project: "keel",
+      tags: ["knowledge", "source:session"],
+      extra: "title: 主题\n",
+      body: "# 主题\n\n正文\n",
+    }),
+    tags: ["knowledge", "source:session"],
+    // After the enforcement boundary: older pages record a historical gap
+    // instead of an error, which is a different rule (and not what this pins).
+    updatedAt: "2026-10-25T00:00:00Z",
+  };
+  const report = await memoryCheck(fakeGbrain([...validPages(), wrongOwner]), root, {
+    knownOwners: { projects: ["keel", "acme"], domains: [] },
+  });
+  expect(
+    report.findings.some((f) => f.code === "memory.project.mismatch" && f.slug === "project/acme/decisions/topic"),
+  ).toBe(true);
 });

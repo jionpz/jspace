@@ -103,7 +103,12 @@ embed_skip: true
 
 每页必须满足：
 
-- `project` 是 owner namespace，且必填：`project/<id>/*` 与 `records/project/<id>/*` 写该 project id；`knowledge/<domain>/*` 写 **domain id**（与 slug 第二段一致）；`profile/<topic>` 写**工作台 id**（`marker.json` 的 `workbench_id` 语义名，例如 `jspace`）；asset 页写 owner id。不为领域资料伪造不存在的项目 id，也不把 `knowledge`/`profile` 页塞进某个项目。
+- `project` 是 owner namespace：除 `knowledge/<domain>/*` 外必填，且 **`knowledge/<domain>/*` 的取值语义与其余角色不同**：
+  - `project/<id>/*` 与 `records/project/<id>/*` 写该 project id；`profile/<topic>` 写**工作台 id**（`marker.json` 的 `workbench_id` 语义名，例如 `jspace`）；asset 页写 owner id。这些都与 slug 段一致。
+  - **`knowledge/<domain>/*` 写「这条知识来自哪个项目」**，不是写 domain。`knowledge/<domain>` 的 domain 段只表达**检索归类**（方便按域捞），`project` 表达**归属来源**，两者本就是不同的问题。例：`knowledge/工程实践/检查必须用反例验证` 写 `project: keel` 是正确语义——教训来自 keel，归类在「工程实践」域。
+  - 判据是**存在性**，不是相等：`project` 必须是本机认得出来的项目 id —— 来源是两者并集：`hub.json` 里注册的项目，或库里已存在的 `project/<id>/state` 卡。两者缺一都不可靠：`hub.json` 只收带 filehub 资产的项目（本机 15 个项目里只有 4 个在里面），光看它会把 `keel`、`viocein` 这类真实项目判成编造；只看 state 卡则会被一条伪造页自我合法化。写两边都不认的 id 等于伪造归属。
+  - 没有来源项目（跨项目通用事实）时**留空**：`knowledge/*` 因此**豁免** `memory.frontmatter.project_missing`。要求必填会逼写手编一个 owner，正好制造这条规则要抓的缺陷。
+  - `memory check` 对 `knowledge/*` 只校验存在性（`memory.project.unknown`，warning）；`project/*`、`records/project/*`、`assets/*`、`records/consolidate|retro/*`、`profile/*` 仍校验与 slug 段相等。
 - asset 页应写 `owner_kind: project|area`，并与 slug/`rel_path` 的 owner 一致。人工补写或旧页可省略该字段，`memory check` / `filehub check` 会按 `rel_path` 推断，不要求补造历史来源。
 - `tags` 至少含一个路由 tag，并恰好含一个 `source:session` 或 `source:cron`。路由 tag 按角色取：state → `project`；decisions / lessons / `records/project/*` / `knowledge/*` → `knowledge`；`profile/*` → `profile`；`assets/*` → `asset`；`records/consolidate|retro/*` → `weekly`。**`records/project/*` 同样用 `knowledge` 路由 tag**，不是 `project`。
 - `source` 指向实际写入 harness；历史缺来源保持 unknown，不补造。`memory check` 只强制它非空，不比对固定白名单（自定义 harness 名合法）；但它不得写成运行模式（那是 `source:session|cron` tag）或内容出处（那是 `content_origin`）。

@@ -117,7 +117,8 @@ append-only 指的是**不覆盖旧页正文**，不是**允许为同一主题�
 - `type` 是描述性元数据，保持真实值，不要为了角色判定而改值；角色由 slug + tags 判定（state=`[project]`、profile=`[profile]`、决策/经验/知识/`records/project/*`=`[knowledge]`）。
 - 形态不明确时追加一个 `kind:*` tag（见 gbrain.md §5 补充规则）。
 - 未验证的主张/启发式 → `status:provisional`；有充分证据 → `status:settled`。
-- `project` 归属 = 活跃项目发现结果；无项目归属的通用事实 → 用 `knowledge/<通用域>/` + 打 tags；工作台偏好 → `profile/`。
+- `project` 归属 = 活跃项目发现结果；工作台偏好 → `profile/`。
+- **`knowledge/<domain>` 的 `project` 写「这条知识来自哪个项目」，不是写 domain**（`gbrain.md` §4）。domain 段只做检索归类，project 表达来源归属。值必须是本机认得的项目 id（`hub.json` 注册项目 ∪ 已有 `project/<id>/state` 卡）；跨项目通用事实没有来源项目就**留空**（该角色豁免 `project_missing`）——绝不编一个不存在的 id。本机实测有 5 条无法核实的值（`gbrain-infra` ×3、`dsh-chat`、`governance`），`memory check` 报 `memory.project.unknown`——「核实不到」不等于「编造」，但这些 id 在本机没有项目卡也没有注册，写进 `project` 就是让读者无从追溯。
 - append-only 页只写新页，不改旧正文；生命周期更新使用完整页 + revision 的 CAS，且 `status:*` 至多一个。
 - 内容出处显式传 `content_origin: user_said|tool_output|inferred`；它与 frontmatter `source`（harness）及运行模式 tag 正交。
 - **来源 tag 必带**（B4，见下节）：本 skill 的每一次写页都恰好带一个 `source:session`。

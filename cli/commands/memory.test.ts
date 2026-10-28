@@ -37,6 +37,7 @@ test("memoryCheckCommand returns structured JSON and exits zero on an empty comp
   const result = await memoryCheckCommand(ctx(true), {
     gbrain: emptyGbrain,
     filehubRoot: () => null,
+    knownOwners: () => ({ projects: [], domains: [] }),
   });
   expect(result.exitCode).toBeUndefined();
   expect(result.data).toMatchObject({
@@ -57,6 +58,7 @@ test("memoryCheckCommand returns human output and exit 1 for partial coverage", 
       listPages: async () => ({ ok: false, code: "timeout", message: "timed out" }),
     }),
     filehubRoot: () => null,
+    knownOwners: () => ({ projects: [], domains: [] }),
   });
   expect(result.exitCode).toBe(1);
   expect(result.lines?.join("\n")).toContain("memory check: partial");
@@ -96,6 +98,7 @@ tags: [asset, source:session]
       }),
     }),
     filehubRoot: (r) => r,
+    knownOwners: () => ({ projects: [], domains: [] }),
   });
   expect(result.exitCode).toBeUndefined();
   expect(result.lines?.join("\n")).toContain("filehub: complete");
