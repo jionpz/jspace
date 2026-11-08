@@ -95,7 +95,7 @@ excel / ppt 走深度抽取(`references/deep-extract.md`)时,asset 指针页在�
 结构化写入与读回:
 
 ```bash
-gbrain call put_page '{"slug":"<slug>","content":"<full-page-markdown>","request_id":"<uuid>","source_id":"jspace:asset-ingest:<owner>/<topic>","content_origin":"inferred"}'
+gbrain call put_page '{"slug":"<slug>","content":"<full-page-markdown>","request_id":"<uuid>","content_origin":"inferred"}'
 gbrain call get_page '{"slug":"<slug>","include_content":true}'
 ```
 

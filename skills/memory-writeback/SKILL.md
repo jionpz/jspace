@@ -77,9 +77,8 @@ jq -n \
   --arg slug "<slug>" \
   --rawfile content page.md \
   --arg request_id "$request_id" \
-  --arg source_id "jspace:memory-writeback:<stable-topic>" \
   --arg content_origin user_said \
-  '{slug:$slug,content:$content,request_id:$request_id,source_id:$source_id,content_origin:$content_origin}' \
+  '{slug:$slug,content:$content,request_id:$request_id,content_origin:$content_origin}' \
   > request.json
 gbrain call put_page "$(cat request.json)"
 gbrain call get_page "$(jq -cn --arg slug "<slug>" '{slug:$slug,include_content:true}')"

@@ -48,9 +48,8 @@ probe
 EOF
 jq -n --arg slug smoke/first-use --rawfile content /tmp/jspace-smoke.md \
   --arg request_id "${SMOKE_REQUEST_ID:-$(uuidgen | tr '[:upper:]' '[:lower:]')}" \
-  --arg source_id 'jspace:first-use:smoke' \
   --arg content_origin inferred \
-  '{slug:$slug,content:$content,request_id:$request_id,source_id:$source_id,content_origin:$content_origin}' \
+  '{slug:$slug,content:$content,request_id:$request_id,content_origin:$content_origin}' \
   > /tmp/jspace-smoke.json
 gbrain call put_page "$(cat /tmp/jspace-smoke.json)"
 gbrain call get_page '{"slug":"smoke/first-use","include_content":true}'

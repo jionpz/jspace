@@ -74,9 +74,8 @@ gbrain call put_page "$(jq -n \
   --arg slug "assets/acme/供应商报价明细" \
   --rawfile content 页正文文件 \
   --arg request_id "<fresh-uuid>" \
-  --arg source_id "jspace:asset-ingest:acme/供应商报价明细" \
   --arg content_origin inferred \
-  '{slug:$slug,content:$content,request_id:$request_id,source_id:$source_id,content_origin:$content_origin}')"
+  '{slug:$slug,content:$content,request_id:$request_id,content_origin:$content_origin}')"
 gbrain call get_page '{"slug":"assets/acme/供应商报价明细","include_content":true}'
 jspace ingest advance <journal-id> --gbrain
 ```

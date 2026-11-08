@@ -61,15 +61,16 @@ jq -n \
   --arg slug '<slug>' \
   --rawfile content page.md \
   --arg request_id '<fresh-uuid>' \
-  --arg source_id 'jspace:<skill>:<stable-topic>' \
   --arg content_origin inferred \
-  '{slug:$slug,content:$content,request_id:$request_id,source_id:$source_id,content_origin:$content_origin}' \
+  '{slug:$slug,content:$content,request_id:$request_id,content_origin:$content_origin}' \
   > request.json
 
 gbrain call put_page "$(cat request.json)"
 ```
 
 替换时在 JSON 中再加 `"expected_revision": "<opaque-revision>"`。
+
+- **不要发送 `source_id`**：gbrain 要求它是已注册 source（1–32 位小写字母数字/连字符）；JSpace 的 `jspace:<skill>:<topic>` 不是 source，旧版本返回 `invalid_params`、新版本返回 `source_changed`。来源由 frontmatter `source` 与 `source:session|cron` tag 表达，pending envelope 本地记录 producer/requestId；省略该字段时 gbrain 使用 ambient/default source。
 
 - `content_origin` 必须显式选择：`user_said`、`tool_output`、`inferred`。
 - `source:session` / `source:cron` tag 表示运行模式；`source` frontmatter 表示 harness；`content_origin` 表示内容出处。三者不能互相替代。

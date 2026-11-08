@@ -69,12 +69,12 @@
     },
     {
       "path": "skills/jspace-use/references/example-first-use.md",
-      "sha256": "2a843f984efdaa7ec4ced3093f901e873aab4e5f98d0e0abbf1d4f4335a3796a",
+      "sha256": "59da89c900f1164aea4a130d451e8561d1ccf3431e788203d088af98c7a2fd5a",
       "ownership": "seed"
     },
     {
       "path": "skills/jspace-use/references/gbrain.md",
-      "sha256": "ac5c0c935a353b9da28d3a6e4f15a5c6c156ca4fb0097ea12ee138816b7795cb",
+      "sha256": "c781551406844d6ba52f5d45244e448b3c114b612c09169cf18a6cb788060724",
       "ownership": "seed"
     },
     {
@@ -139,7 +139,7 @@
     },
     {
       "path": "skills/asset-ingest/SKILL.md",
-      "sha256": "76f54e63ff1009ebbc200e87cf1922a66bbec1421245dfa252b06d20b88fbc76",
+      "sha256": "2d0f39f3e2797d2acd80a5747c00cabc379ae78a0a7634070b329ad182f9234d",
       "ownership": "seed"
     },
     {
@@ -154,7 +154,7 @@
     },
     {
       "path": "skills/asset-ingest/references/example-ingest.md",
-      "sha256": "497f4980326104877de78ec3d901340d9a7af6e1cfcbfd5d18800b3f03c773ac",
+      "sha256": "2c11727dc4a41915ac66c9aae482248b3c93cf52d948674fd5324c03809315ed",
       "ownership": "seed"
     },
     {
@@ -164,7 +164,7 @@
     },
     {
       "path": "skills/asset-ingest/references/gbrain-write.md",
-      "sha256": "8c55b9eb4a61472ba4c41d6d61e2ea252a2c8af2e1cce1527f99fd2ffb2d79a7",
+      "sha256": "55e99477e2bb5881cd376f7bb338dbe07028a8c5c64e53502b49d5fc1f1098bf",
       "ownership": "seed"
     },
     {
@@ -209,7 +209,7 @@
     },
     {
       "path": "skills/memory-writeback/SKILL.md",
-      "sha256": "dc96c51a21b47c9685a14b6a3d2df9e7645415cc7590fffbf1638cb4c049c54c",
+      "sha256": "925700e6c6e2e5e795645d84541db2eb0acb9e136ea5b8ce803ee09b5619df10",
       "ownership": "seed"
     },
     {
@@ -234,7 +234,7 @@
     },
     {
       "path": "skills/workbench-retro/references/example-retro.md",
-      "sha256": "94c793cbc4ca1473e873c329abf7643cb2f6603fe57a33159b5f68d98ba3376e",
+      "sha256": "62b6862110a2022a2ad0dbaa23d28a25fca90b474e582b4e9d41a744aa285035",
       "ownership": "seed"
     },
     {

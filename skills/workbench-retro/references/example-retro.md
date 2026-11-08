@@ -192,7 +192,6 @@ cat > /tmp/retro-request.json <<'JSON'
   "slug": "records/retro/<Monday>",
   "content": "<full-retro-markdown>",
   "request_id": "<fresh-uuid>",
-  "source_id": "jspace:workbench-retro:<Monday>",
   "content_origin": "inferred"
 }
 JSON
