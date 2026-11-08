@@ -110,6 +110,14 @@ export interface HarnessCapabilityData {
   cron_env: HarnessCronEnv;
 }
 
+/** Machine-wide gbrain MCP policy. `mcp_surface` is the stdio tool surface
+ *  pinned into every harness's gbrain server env as `GBRAIN_SURFACE`. */
+export type GbrainMcpSurface = "verbs" | "starter" | "full";
+
+export interface GbrainConfig {
+  mcp_surface: GbrainMcpSurface;
+}
+
 /** A capability with `name` resolved from the harness key (registry output). */
 export type HarnessCapability = HarnessCapabilityData & { name: string };
 
@@ -117,6 +125,7 @@ export interface HarnessCapabilitiesFile {
   schema_version: 1;
   global_governance: GlobalGovernance;
   shared_workbench_projection: string[];
+  gbrain: GbrainConfig;
   harnesses: Record<string, HarnessCapabilityData>;
 }
 

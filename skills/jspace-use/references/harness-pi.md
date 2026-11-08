@@ -27,12 +27,12 @@
 pi install npm:pi-mcp-adapter
 ```
 
-然后配置 `mcpServers`（stdio `command` + `args`，`<gbrain>` 按上文解析）。**机器级接线用统一 wire（issue #12）**：`jspace harness wire --harness pi --dir <workbench>` 幂等写 `~/.pi/agent/mcp.json` 的 `mcpServers.gbrain`（`command` = gbrain 路径，`args: ["serve"]`，`env.GBRAIN_SKILLS_DIR`），merge 保留其余字段，写前 backup。等价产物：
+然后配置 `mcpServers`（stdio `command` + `args`，`<gbrain>` 按上文解析）。**机器级接线用统一 wire（issue #12）**：`jspace harness wire --harness pi --dir <workbench>` 幂等写 `~/.pi/agent/mcp.json` 的 `mcpServers.gbrain`（`command` = gbrain 路径，`args: ["serve"]`，`env.GBRAIN_SKILLS_DIR` + `env.GBRAIN_SURFACE`），merge 保留其余字段，写前 backup。等价产物：
 
 ```json
 {
   "mcpServers": {
-    "gbrain": { "command": "<gbrain>", "args": ["serve"], "env": { "GBRAIN_SKILLS_DIR": "<wb>/.jspace/skills" } }
+    "gbrain": { "command": "<gbrain>", "args": ["serve"], "env": { "GBRAIN_SKILLS_DIR": "<wb>/.jspace/skills", "GBRAIN_SURFACE": "<capabilities 的 gbrain.mcp_surface>" } }
   }
 }
 ```

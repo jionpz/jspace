@@ -31,6 +31,11 @@ const STRUCTURED_CALLS = new Set([
   "put_page",
   "get_write_request",
   "get_backlinks",
+  // Provenance cleanup: not one of the five page-contract methods, but the
+  // source-tag fix (`put_page` merges tags) cannot be done through put_page
+  // itself. Verified on gbrain 0.60.294.0 via `gbrain call`; the MCP starter
+  // surface does not expose it, so the CLI form is the stable path.
+  "remove_tag",
 ]);
 
 export interface SkillDocAuditOptions {

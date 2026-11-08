@@ -96,7 +96,7 @@ Claude Code 走 MCP,写 `~/.claude.json` 的 `mcpServers.gbrain`(`command` = gbr
 
 接线后补一步 gbrain skill 路由:
 ```bash
-jspace harness wire --harness claude --dir .   # GBRAIN_SKILLS_DIR=<工作台>/.jspace/skills 注入 gbrain MCP env
+jspace harness wire --harness claude --dir .   # GBRAIN_SKILLS_DIR=<工作台>/.jspace/skills + GBRAIN_SURFACE 注入 gbrain MCP env
 ```
 重启 Claude Code 让 `gbrain serve` 以新 env 启动(否则 resolver 只认根 `skills/` 或回退内置 skill)。细则 `references/gbrain.md` §2「二进制解析与接线」。
 

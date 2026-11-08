@@ -220,7 +220,8 @@ export const harnessSpec: CommandSpec = {
   description:
     "Per-harness init + wire (Trellis init --<platform> equivalent). `init` ensures the selected harness's " +
     "skill projections are materialized in the workbench; `wire` idempotently points its gbrain MCP server's " +
-    "GBRAIN_SKILLS_DIR at this workbench's .jspace/skills. Five session harnesses: claude/grok/opencode/cursor/pi. " +
+    "GBRAIN_SKILLS_DIR at this workbench's .jspace/skills and pins GBRAIN_SURFACE to the capability's " +
+    "gbrain.mcp_surface. Five session harnesses: claude/grok/opencode/cursor/pi. " +
     "Machine-level configs are merged + backed up, never rewritten.",
   features: { dir: true },
   children: [
@@ -233,7 +234,7 @@ export const harnessSpec: CommandSpec = {
     },
     {
       name: "wire",
-      summary: "inject GBRAIN_SKILLS_DIR into a harness's gbrain MCP server env (idempotent, merge + backup)",
+      summary: "inject GBRAIN_SKILLS_DIR + GBRAIN_SURFACE into a harness's gbrain MCP server env (idempotent, merge + backup)",
       features: { dir: true, dryRun: true },
       options: [harnessOption()],
       handler: (ctx, args) => runHarnessWire(ctx, s((args as Record<string, unknown>).harness)),

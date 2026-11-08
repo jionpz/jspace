@@ -22,7 +22,7 @@
   - `PreCompact` → `jspace context pre-compact`（timeout 30；**被动注入**「快 compaction 了，如有需记忆的事实请显式收工」——D2/方案 a，不自动写 gbrain）
   - `SessionEnd` → `jspace context session-end`（结算提醒，同样不自动写）
 - **skill 投影**：`.grok/skills/`（与 `.claude/skills/` 并列，机器托管）。
-- **wire**：`jspace harness wire --harness grok` 把 `GBRAIN_SKILLS_DIR=<wb>/.jspace/skills` 注入 `~/.grok/config.toml` 的 `[mcp_servers.gbrain]` env（TOML 最小行编辑，保留其余字节；需已存在 gbrain MCP server）。
+- **wire**：`jspace harness wire --harness grok` 把 `GBRAIN_SKILLS_DIR=<wb>/.jspace/skills` 和 `GBRAIN_SURFACE=<capabilities 的 gbrain.mcp_surface>` 注入 `~/.grok/config.toml` 的 `[mcp_servers.gbrain]` env（TOML 最小行编辑，保留其余字节；需已存在 gbrain MCP server；env 是多行表时显式报 `unsupported-env-shape`，不假 `already-wired`）。
 
 ## hook 双写权衡（已知，显式接受）
 

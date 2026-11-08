@@ -14,6 +14,9 @@ export const CAPABILITIES: HarnessCapabilitiesFile = {
   "shared_workbench_projection": [
     ".agents/skills"
   ],
+  "gbrain": {
+    "mcp_surface": "starter"
+  },
   "harnesses": {
     "claude": {
       "headless": [

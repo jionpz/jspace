@@ -96,6 +96,7 @@ describe("harness wire — cursor (MCP-list create/merge)", () => {
     expect(plan.mcpServers.gbrain.command).toBe("/usr/local/bin/gbrain");
     expect(plan.mcpServers.gbrain.args).toEqual(["serve"]);
     expect(plan.mcpServers.gbrain.env.GBRAIN_SKILLS_DIR).toBe(WB_SKILLS);
+    expect(plan.mcpServers.gbrain.env.GBRAIN_SURFACE).toBe("starter");
   });
 
   test("real wire writes + backs up the file", () => {
@@ -137,7 +138,7 @@ describe("harness wire — cursor (MCP-list create/merge)", () => {
 
   test("idempotent: already-correct server → already-wired, no write", () => {
     const existing = JSON.stringify({
-      mcpServers: { gbrain: { command: "/usr/local/bin/gbrain", args: ["serve"], env: { GBRAIN_SKILLS_DIR: WB_SKILLS } } },
+      mcpServers: { gbrain: { command: "/usr/local/bin/gbrain", args: ["serve"], env: { GBRAIN_SKILLS_DIR: WB_SKILLS, GBRAIN_SURFACE: "starter" } } },
     });
     const { deps, writes } = makeCtx({ files: { [CURSOR_MCP]: existing }, dryRun: true });
     const r = wireHarness("cursor", deps, ROOT);
@@ -146,6 +147,26 @@ describe("harness wire — cursor (MCP-list create/merge)", () => {
     expect(r.status).toBe("already-wired");
     expect(r.plans).toEqual([]);
     expect(writes.length).toBe(0);
+  });
+
+  test("skills-dir-only config → rewires, adds surface, preserves existing args", () => {
+    const existing = JSON.stringify({
+      mcpServers: {
+        gbrain: {
+          command: "/usr/local/bin/gbrain",
+          args: ["serve", "--verbose"],
+          env: { GBRAIN_SKILLS_DIR: WB_SKILLS },
+        },
+      },
+    });
+    const { deps } = makeCtx({ files: { [CURSOR_MCP]: existing }, dryRun: true });
+    const r = wireHarness("cursor", deps, ROOT);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.status).toBe("wired");
+    const doc = JSON.parse(r.plans[0].content) as Record<string, any>;
+    expect(doc.mcpServers.gbrain.args).toEqual(["serve", "--verbose"]);
+    expect(doc.mcpServers.gbrain.env.GBRAIN_SURFACE).toBe("starter");
   });
 
   test("merge preserves unrelated MCP servers and fields", () => {
@@ -163,6 +184,7 @@ describe("harness wire — cursor (MCP-list create/merge)", () => {
     expect(doc.mcpServers.gbrain.command).toBe("/usr/local/bin/gbrain"); // bin refreshed
     expect(doc.mcpServers.gbrain.env.KEEP).toBe("me"); // other env vars preserved
     expect(doc.mcpServers.gbrain.env.GBRAIN_SKILLS_DIR).toBe(WB_SKILLS);
+    expect(doc.mcpServers.gbrain.env.GBRAIN_SURFACE).toBe("starter");
   });
 
   test("no gbrain binary → no-gbrain-bin failure (no guess)", () => {
@@ -215,6 +237,7 @@ describe("harness wire — opencode (mcp.<name> local-server shape)", () => {
     expect(doc.mcp.gbrain.command).toEqual(["/usr/local/bin/gbrain", "serve"]);
     expect(doc.mcp.gbrain.enabled).toBe(true);
     expect(doc.mcp.gbrain.environment.GBRAIN_SKILLS_DIR).toBe(WB_SKILLS);
+    expect(doc.mcp.gbrain.environment.GBRAIN_SURFACE).toBe("starter");
   });
 
   test("merge preserves unrelated config (e.g. provider apiKey) — never whole-file rewrite", () => {
@@ -231,6 +254,7 @@ describe("harness wire — opencode (mcp.<name> local-server shape)", () => {
     expect(doc.provider.opencodego.apiKey).toBe("sk-secret"); // preserved
     expect(doc.mcp.context7.command).toEqual(["npx", "-y", "context7"]); // preserved
     expect(doc.mcp.gbrain.environment.GBRAIN_SKILLS_DIR).toBe(WB_SKILLS);
+    expect(doc.mcp.gbrain.environment.GBRAIN_SURFACE).toBe("starter");
   });
 
   test("idempotent opencode re-run → already-wired", () => {
@@ -240,7 +264,7 @@ describe("harness wire — opencode (mcp.<name> local-server shape)", () => {
           type: "local",
           command: ["/usr/local/bin/gbrain", "serve"],
           enabled: true,
-          environment: { GBRAIN_SKILLS_DIR: WB_SKILLS },
+          environment: { GBRAIN_SKILLS_DIR: WB_SKILLS, GBRAIN_SURFACE: "starter" },
         },
       },
     });
@@ -250,6 +274,27 @@ describe("harness wire — opencode (mcp.<name> local-server shape)", () => {
     if (!r.ok) return;
     expect(r.status).toBe("already-wired");
     expect(writes.length).toBe(0);
+  });
+
+  test("skills-dir-only opencode config → rewires, adds surface, preserves trailing command args", () => {
+    const existing = JSON.stringify({
+      mcp: {
+        gbrain: {
+          type: "local",
+          command: ["/usr/local/bin/gbrain", "serve", "--verbose"],
+          enabled: true,
+          environment: { GBRAIN_SKILLS_DIR: WB_SKILLS },
+        },
+      },
+    });
+    const { deps } = makeCtx({ files: { [OPENCODE_JSON]: existing }, dryRun: true });
+    const r = wireHarness("opencode", deps, ROOT);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.status).toBe("wired");
+    const doc = JSON.parse(r.plans[0].content) as Record<string, any>;
+    expect(doc.mcp.gbrain.command).toEqual(["/usr/local/bin/gbrain", "serve", "--verbose"]);
+    expect(doc.mcp.gbrain.environment.GBRAIN_SURFACE).toBe("starter");
   });
 
   test("no gbrain binary → no-gbrain-bin", () => {
@@ -275,6 +320,7 @@ describe("harness wire — pi (MCP-list, ~/.pi/agent/mcp.json)", () => {
     expect(doc.mcpServers.gbrain.command).toBe("/usr/local/bin/gbrain");
     expect(doc.mcpServers.gbrain.args).toEqual(["serve"]);
     expect(doc.mcpServers.gbrain.env.GBRAIN_SKILLS_DIR).toBe(WB_SKILLS);
+    expect(doc.mcpServers.gbrain.env.GBRAIN_SURFACE).toBe("starter");
   });
 
   test("dry-run also plans the Pi session-start extension", () => {
@@ -342,7 +388,7 @@ describe("harness wire — pi (MCP-list, ~/.pi/agent/mcp.json)", () => {
 
   test("idempotent pi re-run → already-wired", () => {
     const existing = JSON.stringify({
-      mcpServers: { gbrain: { command: "/usr/local/bin/gbrain", args: ["serve"], env: { GBRAIN_SKILLS_DIR: WB_SKILLS } } },
+      mcpServers: { gbrain: { command: "/usr/local/bin/gbrain", args: ["serve"], env: { GBRAIN_SKILLS_DIR: WB_SKILLS, GBRAIN_SURFACE: "starter" } } },
     });
     const { deps, writes } = makeCtx({ files: { [PI_MCP]: existing }, dryRun: true });
     const r = wireHarness("pi", deps, ROOT);
@@ -369,13 +415,23 @@ describe("harness wire — claude (reuses application/gbrain/wiring.ts)", () => 
   });
 
   test("already-wired claude → already-wired, no write", () => {
-    const existing = JSON.stringify({ mcpServers: { gbrain: { command: "gbrain", args: ["serve"], env: { GBRAIN_SKILLS_DIR: WB_SKILLS } } } });
+    const existing = JSON.stringify({ mcpServers: { gbrain: { command: "gbrain", args: ["serve"], env: { GBRAIN_SKILLS_DIR: WB_SKILLS, GBRAIN_SURFACE: "starter" } } } });
     const { deps, writes } = makeCtx({ files: { [CLAUDE_JSON]: existing }, dryRun: true });
     const r = wireHarness("claude", deps, ROOT);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.status).toBe("already-wired");
     expect(writes.length).toBe(0);
+  });
+
+  test("skills-dir-only claude config → rewires and adds surface", () => {
+    const existing = JSON.stringify({ mcpServers: { gbrain: { command: "gbrain", args: ["serve"], env: { GBRAIN_SKILLS_DIR: WB_SKILLS } } } });
+    const { deps, writes } = makeCtx({ files: { [CLAUDE_JSON]: existing }, dryRun: true });
+    const r = wireHarness("claude", deps, ROOT);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.status).toBe("wired");
+    expect(writes.length).toBe(0); // dry-run
   });
 
   test("no gbrain server in ~/.claude.json → missing-config (never creates)", () => {
@@ -425,13 +481,33 @@ describe("harness wire — grok (reuses application/gbrain/grok-wiring.ts)", () 
   test("already-wired grok → already-wired", () => {
     // TOML basic strings escape backslashes; on Windows a raw path would be an
     // invalid escape, so the fixture must use the same JSON encoding the writer does.
-    const toml = `[mcp_servers.gbrain]\ncommand = "gbrain"\nenv = { GBRAIN_SKILLS_DIR = ${JSON.stringify(WB_SKILLS)} }\n`;
+    const toml = `[mcp_servers.gbrain]\ncommand = "gbrain"\nenv = { GBRAIN_SKILLS_DIR = ${JSON.stringify(WB_SKILLS)}, GBRAIN_SURFACE = "starter" }\n`;
     const { deps, writes } = makeCtx({ files: { [GROK_TOML]: toml }, dryRun: true });
     const r = wireHarness("grok", deps, ROOT);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.status).toBe("already-wired");
     expect(writes.length).toBe(0);
+  });
+
+  test("skills-dir-only grok config → rewires and adds surface", () => {
+    const toml = `[mcp_servers.gbrain]\ncommand = "gbrain"\nenv = { GBRAIN_SKILLS_DIR = ${JSON.stringify(WB_SKILLS)} }\n`;
+    const { deps } = makeCtx({ files: { [GROK_TOML]: toml }, dryRun: true });
+    const r = wireHarness("grok", deps, ROOT);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.status).toBe("wired");
+  });
+
+  test("multiline grok env → invalid-config with manual fix (not false already-wired)", () => {
+    const toml = "[mcp_servers.gbrain]\nenv = {\n  OTHER = \"keep\"\n}\n";
+    const { deps } = makeCtx({ files: { [GROK_TOML]: toml }, dryRun: true });
+    const r = wireHarness("grok", deps, ROOT);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe("invalid-config");
+      expect(r.reason).toContain("GBRAIN_SURFACE");
+    }
   });
 
   test("backup failure → backup-failed outcome, no write, bytes unchanged (legacy writer path)", () => {

@@ -16,6 +16,7 @@ import {
 } from "./registry.ts";
 import { getAdapter } from "./index.ts";
 import { createAdapter } from "./generic.ts";
+import type { HarnessCapabilitiesFile } from "./types.ts";
 
 test("capabilities file has the full support set (5 session + codex compat)", () => {
   const caps = loadCapabilities();
@@ -24,6 +25,17 @@ test("capabilities file has the full support set (5 session + codex compat)", ()
   expect(caps.shared_workbench_projection).toContain(".agents/skills");
   expect(caps.global_governance.source).toBe("~/.agents/AGENTS.md");
   expect(caps.global_governance.required_headings).toEqual(["安全与隐私红线", "决策原则", "维护约定"]);
+  expect(caps.gbrain.mcp_surface).toBe("starter");
+});
+
+test("registry rejects a missing or invalid gbrain surface", () => {
+  const missing = structuredClone(loadCapabilities()) as unknown as Record<string, unknown>;
+  delete missing.gbrain;
+  expect(() => resolveCapabilities(missing as unknown as HarnessCapabilitiesFile)).toThrow(/missing gbrain declaration/);
+
+  const invalid = structuredClone(loadCapabilities());
+  (invalid.gbrain as { mcp_surface: string }).mcp_surface = "everything";
+  expect(() => resolveCapabilities(invalid)).toThrow(/gbrain.mcp_surface must be one of/);
 });
 
 test("registry rejects invalid global_context kinds and missing file paths", () => {

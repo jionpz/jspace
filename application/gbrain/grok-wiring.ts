@@ -7,10 +7,11 @@
 // touches the `env = { ... }` inline table of `[mcp_servers.gbrain]` and
 // preserves every other byte. Pure: fs access goes through injected deps.
 import { join } from "node:path";
+import type { GbrainMcpSurface } from "../../adapters/harness/types.ts";
 
 export type GrokWireResult =
   | { ok: true; status: "wired" | "already-wired"; skillsDir?: string }
-  | { ok: false; status: "no-grok-gbrain-server"; reason: string };
+  | { ok: false; status: "no-grok-gbrain-server" | "unsupported-env-shape"; reason: string };
 
 export interface GrokWireDeps {
   readFile: (p: string) => string | null; // malformed/missing -> null
@@ -40,17 +41,25 @@ function isSectionHeader(line: string): boolean {
 }
 
 /**
- * Merge GBRAIN_SKILLS_DIR into the `env = { ... }` inline table of the
+ * Merge gbrain env keys into the `env = { ... }` inline table of the
  * `[mcp_servers.gbrain]` section (single-line inline table form). If no env
- * table exists, insert `env = { GBRAIN_SKILLS_DIR = "<dir>" }` after the section
- * header. Returns { content, changed } — the section must exist (the caller
- * returns no-grok-gbrain-server when it does not, mirroring wireSkillsDir's
- * "never create the server" rule).
+ * table exists, insert one after the section header. Returns
+ * `{ content, changed, unsupported }`; `unsupported` means the env is a
+ * multi-line table that this line-oriented writer refuses to rewrite.
  */
-export function mergeGrokEnv(content: string, skillsDir: string): { content: string; changed: boolean } {
+export function mergeGrokEnv(
+  content: string,
+  envVars: Record<string, string>,
+): { content: string; changed: boolean; unsupported?: boolean } {
   const lines = content.split("\n");
   const section = findGbrainSection(lines);
   if (section === -1) return { content, changed: false };
+
+  // A `[mcp_servers.gbrain.env]` sub-table is a multi-line env shape. Refuse it
+  // loudly instead of inserting a conflicting inline `env = { ... }`.
+  if (lines.some((line, i) => i > section && /^\s*\[mcp_servers\.gbrain\.env\]\s*$/.test(line))) {
+    return { content, changed: false, unsupported: true };
+  }
 
   // section end = next `[...]` header (or EOF)
   let end = lines.length;
@@ -60,8 +69,6 @@ export function mergeGrokEnv(content: string, skillsDir: string): { content: str
       break;
     }
   }
-
-  const quote = JSON.stringify(skillsDir); // TOML string literal == JSON for plain paths
 
   // find an existing `env =` line in the section
   let envIdx = -1;
@@ -73,9 +80,12 @@ export function mergeGrokEnv(content: string, skillsDir: string): { content: str
   }
 
   if (envIdx === -1) {
-    // no env line: insert after the section header (line 0 of the section)
+    // no env line: insert after the section header
     const insertAt = section + 1;
-    const envLine = `env = { GBRAIN_SKILLS_DIR = ${quote} }`;
+    const entries = Object.entries(envVars)
+      .map(([key, value]) => `${key} = ${JSON.stringify(value)}`)
+      .join(", ");
+    const envLine = `env = { ${entries} }`;
     // skip comment/blank lines right after the header so the insert lands on code
     let pos = insertAt;
     while (pos < end && (lines[pos].trim() === "" || lines[pos].trimStart().startsWith("#"))) pos++;
@@ -84,34 +94,52 @@ export function mergeGrokEnv(content: string, skillsDir: string): { content: str
   }
 
   const line = lines[envIdx];
-  // replace an existing GBRAIN_SKILLS_DIR value in the inline table
-  if (line.includes("GBRAIN_SKILLS_DIR")) {
-    const replaced = line.replace(/GBRAIN_SKILLS_DIR\s*=\s*"[^"]*"/, `GBRAIN_SKILLS_DIR = ${quote}`);
-    if (replaced === line) return { content, changed: false }; // already exact
-    lines[envIdx] = replaced;
-    return { content: lines.join("\n"), changed: true };
+  const brace = line.lastIndexOf("}");
+  if (brace === -1) {
+    // not a single-line inline table (multiline env block) — do not rewrite it
+    return { content, changed: false, unsupported: true };
   }
 
-  // env inline table without GBRAIN_SKILLS_DIR: insert into the braces
-  const brace = line.indexOf("}");
-  if (brace === -1) {
-    // not a single-line inline table (multiline env block) — do not rewrite it;
-    // report as changed=false (caller treats as already-satisfied limitation).
-    return { content, changed: false };
+  let inner = line.slice(0, brace).trimEnd();
+  const tail = line.slice(brace);
+  let changed = false;
+  for (const [key, value] of Object.entries(envVars)) {
+    const literal = `${key} = ${JSON.stringify(value)}`;
+    const pattern = new RegExp(`\\b${escapeRegExp(key)}\\s*=\\s*(?:"[^"]*"|'[^']*'|[^,}\\s]+)`);
+    if (pattern.test(inner)) {
+      const next = inner.replace(pattern, literal);
+      if (next !== inner) {
+        inner = next;
+        changed = true;
+      }
+    } else {
+      const separator = /,\s*$/.test(inner) ? " " : /\{\s*$/.test(inner) ? " " : ", ";
+      inner = `${inner}${separator}${literal}`;
+      changed = true;
+    }
   }
-  const inner = line.slice(0, brace).trimEnd();
-  const needsComma = !/,\s*$/.test(inner) && !/\{\s*$/.test(inner);
-  lines[envIdx] = `${inner}${needsComma ? ", " : ""}GBRAIN_SKILLS_DIR = ${quote} }`;
+  if (!changed) return { content, changed: false };
+  lines[envIdx] = `${inner} ${tail}`;
   return { content: lines.join("\n"), changed: true };
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
- * Wire GBRAIN_SKILLS_DIR into ~/.grok/config.toml's `[mcp_servers.gbrain]` env.
- * Merged, preserving every other field. Never creates the config file or the
- * gbrain server (mirrors wireSkillsDir). Idempotent: already-correct value
- * reports already-wired and writes nothing.
+ * Wire GBRAIN_SKILLS_DIR + GBRAIN_SURFACE into ~/.grok/config.toml's
+ * `[mcp_servers.gbrain]` env. Merged, preserving every other field. Never
+ * creates the config file or the gbrain server (mirrors wireSkillsDir).
+ * Idempotent: both values correct reports already-wired and writes nothing.
+ * A multiline env table fails loudly (`unsupported-env-shape`) rather than
+ * pretending the keys are already present.
  */
-export function wireGrokSkillsDir(deps: GrokWireDeps, root: string): GrokWireResult {
+export function wireGrokSkillsDir(
+  deps: GrokWireDeps,
+  root: string,
+  surface: GbrainMcpSurface,
+): GrokWireResult {
   const path = grokConfigPath(deps.homedir());
   const skillsDir = deps.resolveWorkbenchSkillsDir(root);
 
@@ -123,7 +151,17 @@ export function wireGrokSkillsDir(deps: GrokWireDeps, root: string): GrokWireRes
     return { ok: false, status: "no-grok-gbrain-server", reason: `no [mcp_servers.gbrain] in ${path}; wire the gbrain MCP in Grok first` };
   }
 
-  const { content: merged, changed } = mergeGrokEnv(content, skillsDir);
+  const { content: merged, changed, unsupported } = mergeGrokEnv(content, {
+    GBRAIN_SKILLS_DIR: skillsDir,
+    GBRAIN_SURFACE: surface,
+  });
+  if (unsupported) {
+    return {
+      ok: false,
+      status: "unsupported-env-shape",
+      reason: `[mcp_servers.gbrain] in ${path} uses a multiline env table; add GBRAIN_SKILLS_DIR = ${JSON.stringify(skillsDir)} and GBRAIN_SURFACE = ${JSON.stringify(surface)} to [mcp_servers.gbrain.env] manually`,
+    };
+  }
   if (!changed) {
     return { ok: true, status: "already-wired", skillsDir };
   }

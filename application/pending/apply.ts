@@ -49,7 +49,15 @@ function retry(root: string, env: PendingWriteEnvelopeV2, error: string): boolea
 }
 
 function isTransient(code: string): boolean {
-  return code === "lock" || code === "timeout" || code === "process_error" || code === "unknown";
+  // write_pending can settle via get_write_request; migrations_pending cannot
+  // settle without an explicit apply-migrations, so it stays terminal here.
+  return (
+    code === "lock" ||
+    code === "timeout" ||
+    code === "process_error" ||
+    code === "unknown" ||
+    code === "write_pending"
+  );
 }
 
 function failOrRetry(

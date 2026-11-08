@@ -312,6 +312,7 @@ the per-platform PATH round-trip tests.
 - Gates: `bunx tsc --noEmit` + `bun test` must stay green (currently 1052 tests across 84 files).
 - New function → unit test; bug fix → regression test; changed behavior → update existing tests.
 - Fault-injection via injected deps (ingest journal fs ops, pending envelope gbrain stub).
+- **gbrain dependency changes**: after touching the gbrain adapter, error mapping, or MCP wiring, run `bun run scripts/check-gbrain-contract.ts --bin <gbrain>` against the target binary (isolated temp brain; not part of CI) and record the verified version in `skills/jspace-use/references/gbrain.md` §12. The MCP surface is pinned once in `adapters/harness/capabilities.yaml` (`gbrain.mcp_surface`) and propagated by `jspace harness wire` — never hardcode a surface per adapter. A JSpace-local provenance token must never be forwarded as gbrain `source_id` (gbrain requires a registered source id).
 - Contract round-trip + decode-issue tests for every decoder.
 - Scheduler behavior: pure `planReconciliation` tests + argv round-trip through the real parser; no real scheduler apply in tests.
 - Regression tests call the real production path under test (public adapter methods, parse the actual output) — never hand-craft the internal payload with the expected values baked in. A test that assembles `schtasksArgs(...)`/`JSON.stringify` by hand stays green while the shipped method (`buildContent`) emits a mismatched task handle → false-green masked a Windows cron bug (issue #8 #1).

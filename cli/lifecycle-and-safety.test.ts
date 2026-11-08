@@ -58,7 +58,7 @@ test("first-use pipe installs are guarded, never default-executed", () => {
 test("gbrain verified contract version + upgrade health check are declared", () => {
   const gbrain = ASSETS["skills/jspace-use/references/gbrain.md"];
   expect(gbrain, "gbrain reference must be bundled").toBeDefined();
-  expect(gbrain).toContain("当前结构化契约已用 gbrain `0.60.294.0` 隔离验证");
+  expect(gbrain).toContain("已在 gbrain `0.60.614.0` 上验证");
   expect(gbrain).toContain("更高版本必须重新跑");
   expect(gbrain).toContain("gbrain doctor --json");
   expect(gbrain).toContain("升级前运行");

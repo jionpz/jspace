@@ -6,6 +6,7 @@
 // Pure: filesystem access goes through injected deps (unit-testable), and the
 // machine-level config is merged, never rewritten (backup before write).
 import { join } from "node:path";
+import type { GbrainMcpSurface } from "../../adapters/harness/types.ts";
 
 export interface WireResult {
   ok: boolean;
@@ -41,20 +42,27 @@ export function gbrainServer(doc: unknown): Record<string, unknown> | null {
   return g && typeof g === "object" ? (g as Record<string, unknown>) : null;
 }
 
-/** True when the server's env already points GBRAIN_SKILLS_DIR at the workbench. */
-export function gbrainSkillsDirWired(server: Record<string, unknown>, wbSkillsDir: string): boolean {
+/** True when the server's env points GBRAIN_SKILLS_DIR at the workbench and
+ *  carries the pinned stdio surface. A skills-dir-only config is NOT wired:
+ *  a bare `serve` defaults to the full tool catalog. */
+export function gbrainSkillsDirWired(
+  server: Record<string, unknown>,
+  wbSkillsDir: string,
+  surface: GbrainMcpSurface,
+): boolean {
   const env = server.env;
   if (!env || typeof env !== "object") return false;
-  return (env as Record<string, unknown>).GBRAIN_SKILLS_DIR === wbSkillsDir;
+  const values = env as Record<string, unknown>;
+  return values.GBRAIN_SKILLS_DIR === wbSkillsDir && values.GBRAIN_SURFACE === surface;
 }
 
 /**
- * Wire GBRAIN_SKILLS_DIR into ~/.claude.json's gbrain MCP server env (merged,
- * preserving every other field). Never creates the server or the config file —
- * those are the user's Claude Code setup. Idempotent: an already-correct value
- * reports already-wired and writes nothing.
+ * Wire GBRAIN_SKILLS_DIR + GBRAIN_SURFACE into ~/.claude.json's gbrain MCP
+ * server env (merged, preserving every other field). Never creates the server or
+ * the config file — those are the user's Claude Code setup. Idempotent: both
+ * values correct reports already-wired and writes nothing.
  */
-export function wireSkillsDir(deps: WireDeps, root: string): WireResult {
+export function wireSkillsDir(deps: WireDeps, root: string, surface: GbrainMcpSurface): WireResult {
   const path = claudeJsonPath(deps.homedir());
   const skillsDir = deps.resolveWorkbenchSkillsDir(root);
 
@@ -70,7 +78,7 @@ export function wireSkillsDir(deps: WireDeps, root: string): WireResult {
     return { ok: false, status: "no-gbrain-server", reason: 'no mcpServers.gbrain in ~/.claude.json; wire the gbrain MCP first (claude mcp add --scope user)' };
   }
 
-  if (gbrainSkillsDirWired(server, skillsDir)) {
+  if (gbrainSkillsDirWired(server, skillsDir, surface)) {
     return { ok: true, status: "already-wired", skillsDir };
   }
 
@@ -82,6 +90,7 @@ export function wireSkillsDir(deps: WireDeps, root: string): WireResult {
   deps.backup(path);
   const env = (server.env && typeof server.env === "object" ? server.env : {}) as Record<string, unknown>;
   env.GBRAIN_SKILLS_DIR = skillsDir;
+  env.GBRAIN_SURFACE = surface;
   server.env = env;
   deps.writeJson(path, doc);
   return { ok: true, status: "wired", skillsDir };

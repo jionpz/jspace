@@ -144,9 +144,23 @@ test("putPage sends the full write intent and parses its receipt", async () => {
     content: "body",
     request_id: "11111111-1111-4111-8111-111111111111",
     content_origin: "tool_output",
-    source_id: "jspace:pending:test:1",
     expected_revision: "revision-7",
   });
+});
+
+test("putPage never forwards JSpace's local sourceId as gbrain source_id", async () => {
+  // gbrain's source_id must name a registered source (lowercase alnum/hyphens);
+  // JSpace's per-request provenance token is rejected by every version tested.
+  const { run, calls } = fakeRun(() => okRes({ state: "committed", revision: "revision-1" }));
+  const r = await realGbrain(run).putPage({
+    slug: "knowledge/foo/bar",
+    content: "body",
+    requestId: "33333333-3333-4333-8333-333333333333",
+    contentOrigin: "tool_output",
+    sourceId: "jspace:pending:memory-writeback:33333333",
+  });
+  expect(r.ok).toBe(true);
+  expect(argsOf(calls[0]!)).not.toHaveProperty("source_id");
 });
 
 test("putPage preserves semantic errors and does not retry another protocol", async () => {
@@ -392,4 +406,64 @@ test("per-call timeoutMs overrides the adapter default for that call only", asyn
   await g.getPage("x", { timeoutMs: 40 });
   await g.listPages();
   expect(calls.map((c) => c.opts.timeoutMs)).toEqual([120, 40, 30_000]);
+});
+
+test("getPage maps migrations_pending/schema_behind to a non-retryable code carrying the fix", async () => {
+  for (const raw of ["migrations_pending", "schema_behind"]) {
+    const { run } = fakeRun(() => failRes(raw, "brain schema is behind"));
+    const r = await realGbrain(run).getPage("x");
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.code).toBe("migrations_pending"); // one JSpace code for both backend spellings
+      expect(r.rawCode).toBe(raw); // backend spelling stays visible to diagnostics
+      expect(r.message).toContain("gbrain apply-migrations --yes");
+    }
+  }
+});
+
+test("putPage maps write_pending/refresh_barrier_expired to a retryable code", async () => {
+  for (const raw of ["write_pending", "refresh_barrier_expired"]) {
+    const { run } = fakeRun(() => failRes(raw, "write is still settling"));
+    const r = await realGbrain(run).putPage({
+      slug: "assets/foo/doc",
+      content: "body",
+      requestId: "req-1",
+      contentOrigin: "tool_output",
+      sourceId: "jspace:pending:test:1",
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.code).toBe("write_pending");
+      expect(r.rawCode).toBe(raw);
+    }
+  }
+});
+
+test("putPage reports a pending receipt as write_pending, not a schema error", async () => {
+  const { run } = fakeRun(() => okRes({ state: "pending", request_id: "req-9" }));
+  const r = await realGbrain(run).putPage({
+    slug: "assets/foo/doc",
+    content: "body",
+    requestId: "req-1",
+    contentOrigin: "tool_output",
+    sourceId: "jspace:pending:test:1",
+  });
+  expect(r.ok).toBe(false);
+  if (!r.ok) {
+    expect(r.code).toBe("write_pending");
+    expect(r.message).toContain("req-9"); // the server-side request id, not the local one
+    expect(r.message).toContain("get_write_request"); // tells the caller how to settle it
+  }
+});
+
+test("getPage refuses an outline/window payload instead of returning empty content", async () => {
+  const { run } = fakeRun(() =>
+    okRes({ page: { slug: "big", revision: "r1", content_hash: "h1", outline: [{ heading: "a" }] } }),
+  );
+  const r = await realGbrain(run).getPage("big");
+  expect(r.ok).toBe(false);
+  if (!r.ok) {
+    expect(r.code).toBe("schema_error");
+    expect(r.message).toContain("exceeds inline threshold");
+  }
 });

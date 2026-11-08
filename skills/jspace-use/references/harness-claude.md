@@ -40,7 +40,7 @@ Claude Code 的 `SessionEnd` 是**一次性会话级事件**，matcher 可按结
 
 ## gbrain skill 路由
 
-`jspace harness wire --harness claude --dir <wb>` 把 `GBRAIN_SKILLS_DIR=<wb>/.jspace/skills` 注入 `~/.claude.json` 的 gbrain MCP server env(合并、备份、绝不重写;需已存在 gbrain MCP server)。这是唯一现行入口;旧的 gbrain wire 别名已移除。
+`jspace harness wire --harness claude --dir <wb>` 把 `GBRAIN_SKILLS_DIR=<wb>/.jspace/skills` 和 `GBRAIN_SURFACE=<capabilities 的 gbrain.mcp_surface>` 注入 `~/.claude.json` 的 gbrain MCP server env(合并、备份、绝不重写;需已存在 gbrain MCP server)。这是唯一现行入口;旧的 gbrain wire 别名已移除。
 
 ## 验证
 

@@ -81,6 +81,16 @@ function normalizeError(stdout: string, stderr: string): GbrainFailure {
   if (key.includes("revision_required")) return failure("revision_required", message, rawCode);
   if (key.includes("revision_conflict")) return failure("revision_conflict", message, rawCode);
   if (key.includes("idempotency_conflict")) return failure("idempotency_conflict", message, rawCode);
+  if (key.includes("migrations_pending") || key.includes("schema_behind")) {
+    return failure(
+      "migrations_pending",
+      `${message} (fix: run "gbrain apply-migrations --yes")`,
+      rawCode,
+    );
+  }
+  if (key.includes("write_pending") || key.includes("refresh_barrier_expired")) {
+    return failure("write_pending", message, rawCode);
+  }
   if (key.includes("lock")) return failure("lock", message, rawCode);
   if (key.includes("timeout") || key.includes("timed out")) return failure("timeout", message, rawCode);
   return failure("process_error", message, rawCode);
@@ -108,6 +118,12 @@ function parsePage(raw: unknown, expectedSlug: string): GbrainPageResult {
   const revision = stringField(candidate, "revision");
   const contentHash = stringField(candidate, "content_hash") ?? stringField(candidate, "contentHash");
   const content = stringField(candidate, "content");
+  if (content === undefined && (candidate.outline !== undefined || candidate.window !== undefined)) {
+    return failure(
+      "schema_error",
+      "get_page returned outline/window for a large page (page exceeds inline threshold); use a windowed read or reduce page size",
+    );
+  }
   if (revision === undefined || contentHash === undefined || content === undefined) {
     return failure("schema_error", "get_page payload lacks revision, content_hash, or content");
   }
@@ -164,6 +180,13 @@ function parsePut(raw: unknown, requestId: string): GbrainPutResult {
   if (!isRecord(candidate)) return failure("schema_error", "put_page returned a non-object payload");
   const revision = stringField(candidate, "revision");
   const state = stringField(candidate, "state");
+  if (state === "pending") {
+    const id = stringField(candidate, "request_id") ?? stringField(candidate, "requestId") ?? requestId;
+    return failure(
+      "write_pending",
+      `put_page is pending (request_id=${id}); poll get_write_request before retrying`,
+    );
+  }
   if (revision === undefined || state === undefined) {
     return failure("schema_error", "put_page payload lacks revision or state");
   }
@@ -300,7 +323,12 @@ export function realGbrain(
         content: input.content,
         request_id: input.requestId,
         content_origin: input.contentOrigin,
-        source_id: input.sourceId,
+        // `sourceId` is JSpace's local provenance token, not a gbrain source:
+        // gbrain requires a registered source id (1-32 lowercase alnum chars,
+        // optional interior hyphens) and refuses unknown ids (`invalid_params`
+        // before 0.60.3xx, `source_changed` after). Provenance travels in the
+        // page frontmatter (`source`) and the pending envelope; omitting
+        // `source_id` lets gbrain use the ambient/default source.
         ...(input.expectedRevision !== undefined ? { expected_revision: input.expectedRevision } : {}),
       });
       return r.ok ? parsePut(r.value, input.requestId) : r;

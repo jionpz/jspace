@@ -25,7 +25,7 @@
 
 所有 spawn 带 guard（8s 超时 + `stdin: ignore` + 退出码检查），失败静默返回空——hook/plugin 永不阻塞会话。`cwd = directory`（workbench 根）。
 
-**gbrain MCP 接线（统一 wire，issue #12）**：`jspace harness wire --harness opencode --dir <workbench>` 幂等写 `~/.config/opencode/opencode.json` 的 `mcp.gbrain`（local-server shape：`{ type: "local", command: ["<gbrain>", "serve"], enabled: true, environment: { GBRAIN_SKILLS_DIR: "<wb>/.jspace/skills" } }`），merge 保留其余配置（如 provider apiKey），写前 backup。
+**gbrain MCP 接线（统一 wire，issue #12）**：`jspace harness wire --harness opencode --dir <workbench>` 幂等写 `~/.config/opencode/opencode.json` 的 `mcp.gbrain`（local-server shape：`{ type: "local", command: ["<gbrain>", "serve"], enabled: true, environment: { GBRAIN_SKILLS_DIR: "<wb>/.jspace/skills", GBRAIN_SURFACE: "<capabilities 的 gbrain.mcp_surface>" } }`），merge 保留其余配置（如 provider apiKey），写前 backup。
 
 `jspace cron failures` 的退出码语义：exit != 0 表示有需要 attention 的项（失败 + actionable pending writes + damaged state）；`--quiet` 变体抑制 stdout 但保留 exit code（JSpace CLI 提供）。
 

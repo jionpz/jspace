@@ -56,16 +56,18 @@ test("gbrainServer: top-level mcpServers.gbrain; null when absent", () => {
   expect(gbrainServer("x")).toBeNull();
 });
 
-test("gbrainSkillsDirWired: exact match; env absent/mismatch false", () => {
-  expect(gbrainSkillsDirWired(serverWith({ GBRAIN_SKILLS_DIR: SKILLS }), SKILLS)).toBe(true);
-  expect(gbrainSkillsDirWired(serverWith({ GBRAIN_SKILLS_DIR: "/other/skills" }), SKILLS)).toBe(false);
-  expect(gbrainSkillsDirWired(serverWith({}), SKILLS)).toBe(false);
-  expect(gbrainSkillsDirWired({ command: "x" }, SKILLS)).toBe(false);
+test("gbrainSkillsDirWired: exact match of skills dir + surface; missing/mismatch false", () => {
+  expect(gbrainSkillsDirWired(serverWith({ GBRAIN_SKILLS_DIR: SKILLS, GBRAIN_SURFACE: "starter" }), SKILLS, "starter")).toBe(true);
+  expect(gbrainSkillsDirWired(serverWith({ GBRAIN_SKILLS_DIR: SKILLS }), SKILLS, "starter")).toBe(false);
+  expect(gbrainSkillsDirWired(serverWith({ GBRAIN_SKILLS_DIR: "/other/skills", GBRAIN_SURFACE: "starter" }), SKILLS, "starter")).toBe(false);
+  expect(gbrainSkillsDirWired(serverWith({ GBRAIN_SKILLS_DIR: SKILLS, GBRAIN_SURFACE: "full" }), SKILLS, "starter")).toBe(false);
+  expect(gbrainSkillsDirWired(serverWith({}), SKILLS, "starter")).toBe(false);
+  expect(gbrainSkillsDirWired({ command: "x" }, SKILLS, "starter")).toBe(false);
 });
 
 test("wire: missing ~/.claude.json -> no-claude-json, nothing written", () => {
   const { deps, written } = mkDeps(null);
-  const r = wireSkillsDir(deps, WB);
+  const r = wireSkillsDir(deps, WB, "starter");
   expect(r.status).toBe("no-claude-json");
   expect(r.ok).toBe(false);
   expect(written).toHaveLength(0);
@@ -73,14 +75,16 @@ test("wire: missing ~/.claude.json -> no-claude-json, nothing written", () => {
 
 test("wire: no gbrain server -> no-gbrain-server, nothing written", () => {
   const { deps, written } = mkDeps({ mcpServers: {} });
-  const r = wireSkillsDir(deps, WB);
+  const r = wireSkillsDir(deps, WB, "starter");
   expect(r.status).toBe("no-gbrain-server");
   expect(written).toHaveLength(0);
 });
 
 test("wire: already correct -> already-wired, no backup, no write", () => {
-  const { deps, written, backedUp } = mkDeps({ mcpServers: { gbrain: serverWith({ GBRAIN_SKILLS_DIR: SKILLS }) } });
-  const r = wireSkillsDir(deps, WB);
+  const { deps, written, backedUp } = mkDeps({
+    mcpServers: { gbrain: serverWith({ GBRAIN_SKILLS_DIR: SKILLS, GBRAIN_SURFACE: "starter" }) },
+  });
+  const r = wireSkillsDir(deps, WB, "starter");
   expect(r.status).toBe("already-wired");
   expect(r.skillsDir).toBe(SKILLS);
   expect(written).toHaveLength(0);
@@ -90,32 +94,44 @@ test("wire: already correct -> already-wired, no backup, no write", () => {
 test("wire: absent env -> resolver ensured, backed up, merged, written; other fields preserved", () => {
   const doc = { mcpServers: { gbrain: { command: "/x/gbrain", args: ["serve"], type: "stdio" } }, permissions: { defaultMode: "acceptEdits" } };
   const { deps, written, backedUp, resolvers } = mkDeps(doc);
-  const r = wireSkillsDir(deps, WB);
+  const r = wireSkillsDir(deps, WB, "starter");
   expect(r.status).toBe("wired");
   expect(resolvers).toEqual([SKILLS]); // RESOLVER.md ensured first
   expect(backedUp).toHaveLength(1);
   expect(written).toHaveLength(1);
   const out = written[0] as { mcpServers: { gbrain: Record<string, unknown> & { env: Record<string, unknown> } }; permissions: { defaultMode: string } };
   expect(out.mcpServers.gbrain.env.GBRAIN_SKILLS_DIR).toBe(SKILLS);
+  expect(out.mcpServers.gbrain.env.GBRAIN_SURFACE).toBe("starter");
   expect(out.mcpServers.gbrain.command).toBe("/x/gbrain"); // preserved
   expect(out.mcpServers.gbrain.args).toEqual(["serve"]); // preserved
   expect(out.permissions.defaultMode).toBe("acceptEdits"); // untouched unrelated field
 });
 
-test("wire: existing env with other keys -> GBRAIN_SKILLS_DIR set, others kept", () => {
-  const doc = { mcpServers: { gbrain: serverWith({ PATH: "/usr/bin" }) } };
+test("wire: skills dir only (no surface) -> rewires and adds the pinned surface", () => {
+  const doc = { mcpServers: { gbrain: serverWith({ GBRAIN_SKILLS_DIR: SKILLS }) } };
   const { deps, written } = mkDeps(doc);
-  const r = wireSkillsDir(deps, WB);
+  const r = wireSkillsDir(deps, WB, "starter");
   expect(r.status).toBe("wired");
   const out = written[0] as { mcpServers: { gbrain: { env: Record<string, unknown> } } };
   expect(out.mcpServers.gbrain.env.GBRAIN_SKILLS_DIR).toBe(SKILLS);
+  expect(out.mcpServers.gbrain.env.GBRAIN_SURFACE).toBe("starter");
+});
+
+test("wire: existing env with other keys -> GBRAIN_SKILLS_DIR set, others kept", () => {
+  const doc = { mcpServers: { gbrain: serverWith({ PATH: "/usr/bin" }) } };
+  const { deps, written } = mkDeps(doc);
+  const r = wireSkillsDir(deps, WB, "starter");
+  expect(r.status).toBe("wired");
+  const out = written[0] as { mcpServers: { gbrain: { env: Record<string, unknown> } } };
+  expect(out.mcpServers.gbrain.env.GBRAIN_SKILLS_DIR).toBe(SKILLS);
+  expect(out.mcpServers.gbrain.env.GBRAIN_SURFACE).toBe("starter");
   expect(out.mcpServers.gbrain.env.PATH).toBe("/usr/bin"); // other env key preserved
 });
 
 test("wire: dry-run computes without writing or backing up", () => {
   const doc = { mcpServers: { gbrain: { command: "x" } } };
   const { deps, written, backedUp } = mkDeps(doc, { dryRun: true });
-  const r = wireSkillsDir(deps, WB);
+  const r = wireSkillsDir(deps, WB, "starter");
   expect(r.status).toBe("wired");
   expect(r.skillsDir).toBe(SKILLS);
   expect(written).toHaveLength(0);

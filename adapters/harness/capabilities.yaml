@@ -44,6 +44,10 @@
 #                           `writer` selects the constrained merge strategy used
 #                           by `harness wire`; `path` may start with `~`
 #                           (expanded per home dir).
+#   gbrain               — machine-wide gbrain MCP policy consumed by
+#                           `harness wire`: `mcp_surface` is the stdio tool
+#                           surface pinned into each server env as
+#                           `GBRAIN_SURFACE` (verbs | starter | full).
 #   workbench_projection  — workbench-relative skill projection dirs materialized by
 #                           init/upgrade as directory symlinks to `.jspace/skills/`
 #                           (copy only as a visible fallback when symlink is unavailable).
@@ -87,6 +91,13 @@ global_governance:
 # to per-harness dirs (workbench_projection) and the user-level ~/.agents/skills.
 shared_workbench_projection:
   - .agents/skills
+
+# Machine-wide gbrain MCP policy. `starter` is the daily-driver surface (~20
+# tools: seven memory verbs + page/read/write + skills/agent lane). Pin it so a
+# bare `gbrain serve` (which defaults to `full` for new registrations) never
+# exposes the entire 100+ tool catalog to every harness session.
+gbrain:
+  mcp_surface: starter
 
 harnesses:
   claude:

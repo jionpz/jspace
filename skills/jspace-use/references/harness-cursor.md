@@ -17,12 +17,12 @@
 
 ## 接线（D6 保留不扩；机器级用一条命令）
 
-- **MCP（统一 wire，issue #12）**：`jspace harness wire --harness cursor --dir <workbench>` 幂等写 `~/.cursor/mcp.json` 的 `mcpServers.gbrain`（`command` = 解析出的 gbrain 路径，`args: ["serve"]`，`env.GBRAIN_SKILLS_DIR` 指向工作台 `.jspace/skills`）；已正确则 `already-wired` 不写；写前 backup。等价手动产物：
+- **MCP（统一 wire，issue #12）**：`jspace harness wire --harness cursor --dir <workbench>` 幂等写 `~/.cursor/mcp.json` 的 `mcpServers.gbrain`（`command` = 解析出的 gbrain 路径，`args: ["serve"]`，`env.GBRAIN_SKILLS_DIR` 指向工作台 `.jspace/skills`，`env.GBRAIN_SURFACE` 取 capabilities 的 `gbrain.mcp_surface`）；已正确则 `already-wired` 不写；写前 backup。等价手动产物：
 
 ```json
 {
   "mcpServers": {
-    "gbrain": { "command": "<gbrain>", "args": ["serve"], "env": { "GBRAIN_SKILLS_DIR": "<wb>/.jspace/skills" } }
+    "gbrain": { "command": "<gbrain>", "args": ["serve"], "env": { "GBRAIN_SKILLS_DIR": "<wb>/.jspace/skills", "GBRAIN_SURFACE": "<capabilities 的 gbrain.mcp_surface>" } }
   }
 }
 ```

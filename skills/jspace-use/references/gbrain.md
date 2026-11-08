@@ -117,6 +117,8 @@ embed_skip: true
 
 **来源 tag 是合并语义，不是覆盖语义**：`put_page` 会把新 tags 与页面已有 tags 合并。若把 `source:cron` 页改写成 `source:session`（或反向），前一个来源 tag 仍会残留，导致 `memory check` 和写回率统计失真。写完读回后若同时看到两个来源 tag，必须用 `remove_tag` 删除不属于本次实际运行模式的那个，携带读回的 `expected_revision` 和独立 `request_id`，然后再次 `get_page` 证明只剩一个来源 tag。这一清理是 provenance 修正，不改变正文；不要把它宣称为原子生命周期更新。
 
+> **MCP surface**：五个会话 harness 的 gbrain server 固定在 `starter` 工具面（`adapters/harness/capabilities.yaml` 的 `gbrain.mcp_surface`，由 `jspace harness wire` 注入 `GBRAIN_SURFACE`）。`add_tag` / `remove_tag` / `get_tags` 不在该面内，来源 tag 清理走 CLI：`gbrain call remove_tag '{"slug":"<slug>","tag":"source:cron","expected_revision":"<rev>","request_id":"<id>"}'`（与结构化写路径一致，不受 MCP 面影响）。若客户端支持 gbrain 的动态扩面，也可先 `request_tools {"tools":["remove_tag"]}` 取 schema；不要假定该能力在所有 harness 上都生效。
+
 历史元数据边界：`2026-10-19T00:00:00+08:00` 之前更新的页面可以缺少 `source`、owner、路由 tag 或 provenance；`jspace memory check` 把这些缺口计入 `counts.historical_metadata` 并标为 unknown，不伪造旧来源。该时间点之后的新写入与实质更新必须满足上述 envelope；维护整理只修正能证明的字段，不用今天的日期补造历史。
 
 ## 5. 命名空间与写语义
@@ -319,8 +321,9 @@ jspace pending stage <slug> \
 
 ## 12. gbrain 版本与健康
 
-- 当前结构化契约已用 gbrain `0.60.294.0` 隔离验证；更高版本必须重新跑 `gbrain call` fixture，不因版本更新自动宣称兼容。
-- 升级前运行 `gbrain doctor --json` / `gbrain models doctor --json`；已知未解决项先修复。
+- 当前结构化契约已在 gbrain `0.60.614.0` 上验证（2026-11-08）；历史基线 `0.60.294.0` 同样通过。更高版本必须重新跑 `gbrain call` fixture，不因版本更新自动宣称兼容。
+- 回归脚本：开发仓库的 `check-gbrain-contract.ts`（仓库 scripts 目录）会创建临时 brain（独立 HOME/content root、关闭 embedding），覆盖五个 page 方法、四类写错误、keyset 分页、backlink 与 tag CAS，不触碰真实 brain。
+- 升级前运行 `gbrain doctor --json` / `gbrain models doctor --json`；升级后确认无 `migrations_pending` / `schema_behind`，再重启 `gbrain serve` 与 jobs supervisor，并确认 cron/launchd 的 PATH 解析到新二进制。
 - 降级只回到上一已知可用版本，并重新验证结构化合同。
 
 ## 13. Embedding 降级

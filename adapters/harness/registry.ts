@@ -10,6 +10,7 @@ import type { HarnessCapabilitiesFile, HarnessCapability } from "./types.ts";
 
 const GLOBAL_CONTEXT_KINDS = ["symlink", "symlink-or-import", "manual", "unverified"] as const;
 const FILE_GLOBAL_CONTEXT_KINDS = new Set<string>(["symlink", "symlink-or-import"]);
+const GBRAIN_MCP_SURFACES = ["verbs", "starter", "full"] as const;
 
 /** Resolve + validate the embedded capabilities file. `name` is derived from the
  *  harness key (single source, not duplicated in the yaml); a violation is a
@@ -17,6 +18,7 @@ const FILE_GLOBAL_CONTEXT_KINDS = new Set<string>(["symlink", "symlink-or-import
  *  process at module load rather than surfacing partial data. */
 export function resolveCapabilities(raw: HarnessCapabilitiesFile): Record<string, HarnessCapability> {
   validateGlobalGovernance(raw);
+  validateGbrainConfig(raw);
   const harnesses: Record<string, HarnessCapability> = {};
   for (const [name, data] of Object.entries(raw.harnesses)) {
     if (data.headless === null && data.cron_harness_enum_value !== null) {
@@ -82,6 +84,19 @@ function validateGlobalGovernance(raw: HarnessCapabilitiesFile): void {
     governance.required_headings.some((heading) => typeof heading !== "string" || heading.trim() === "")
   ) {
     fail("capabilities: global_governance.required_headings must be a non-empty string array");
+  }
+}
+
+function validateGbrainConfig(raw: HarnessCapabilitiesFile): void {
+  const gbrain: unknown = raw.gbrain;
+  if (!isRecord(gbrain)) {
+    fail("capabilities: missing gbrain declaration");
+  }
+  if (
+    typeof gbrain.mcp_surface !== "string" ||
+    !(GBRAIN_MCP_SURFACES as readonly string[]).includes(gbrain.mcp_surface)
+  ) {
+    fail(`capabilities: gbrain.mcp_surface must be one of ${GBRAIN_MCP_SURFACES.join(", ")}`);
   }
 }
 

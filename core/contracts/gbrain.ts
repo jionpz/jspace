@@ -7,6 +7,8 @@ export const GBRAIN_ERROR_CODES = [
   "revision_required",
   "revision_conflict",
   "idempotency_conflict",
+  "migrations_pending",
+  "write_pending",
   "lock",
   "timeout",
   "schema_error",
@@ -92,6 +94,10 @@ export interface GbrainPutInput {
   content: string;
   requestId: string;
   contentOrigin: GbrainContentOrigin;
+  /** Local provenance token (pending envelope audit). Never sent to gbrain:
+   *  its `source_id` must name a registered source, and JSpace's per-request
+   *  token is not one. The adapter omits the field so gbrain uses its ambient
+   *  source; page provenance is carried by frontmatter and the envelope. */
   sourceId: string;
   expectedRevision?: string;
 }

@@ -21,7 +21,7 @@
 // disk). Pure: fs access goes through injected deps.
 import { join } from "node:path";
 import { getCapability, loadCapabilities, wireHarnessNames } from "../../adapters/harness/registry.ts";
-import type { HarnessCapability, McpWriter } from "../../adapters/harness/types.ts";
+import type { GbrainMcpSurface, HarnessCapability, McpWriter } from "../../adapters/harness/types.ts";
 import { wireSkillsDir, type WireDeps } from "../gbrain/wiring.ts";
 import { wireGrokSkillsDir, type GrokWireDeps } from "../gbrain/grok-wiring.ts";
 
@@ -147,16 +147,38 @@ function legacyBackup(deps: HarnessWireDeps, path: string): string | null {
   return backup.path;
 }
 
-/** True when the server's env already points GBRAIN_SKILLS_DIR at the workbench. */
-function skillsDirWired(server: Record<string, unknown>, envKey: string, skillsDir: string): boolean {
+/** Merge the two gbrain env keys into an existing server env object. */
+function gbrainEnv(
+  env: Record<string, unknown>,
+  skillsDir: string,
+  surface: GbrainMcpSurface,
+): Record<string, unknown> {
+  return { ...env, GBRAIN_SKILLS_DIR: skillsDir, GBRAIN_SURFACE: surface };
+}
+
+/** True when the server's env has both the workbench skills dir and the pinned
+ *  surface. A skills-dir-only config is NOT wired: gbrain defaults a bare
+ *  `serve` to `full`, so re-wiring must add `GBRAIN_SURFACE`. */
+function gbrainEnvWired(
+  server: Record<string, unknown>,
+  envKey: string,
+  skillsDir: string,
+  surface: GbrainMcpSurface,
+): boolean {
   const env = server[envKey];
   if (!env || typeof env !== "object") return false;
-  return (env as Record<string, unknown>).GBRAIN_SKILLS_DIR === skillsDir;
+  const values = env as Record<string, unknown>;
+  return values.GBRAIN_SKILLS_DIR === skillsDir && values.GBRAIN_SURFACE === surface;
 }
 
 /** Shared create/merge MCP-list backend for cursor/pi (claude-shaped server:
  *  `{ command, args, env }`; the declared `mcp_config` supplies path + server_key). */
-function wireMcpListBackend(cap: HarnessCapability, deps: HarnessWireDeps, root: string): WireOutcome {
+function wireMcpListBackend(
+  cap: HarnessCapability,
+  deps: HarnessWireDeps,
+  root: string,
+  surface: GbrainMcpSurface,
+): WireOutcome {
   const cfg = cap.mcp_config;
   if (cfg === null) return { ok: false, status: "missing-config", reason: `${cap.name} has no mcp_config declared` };
   const bin = deps.resolveGbrainBin();
@@ -174,15 +196,20 @@ function wireMcpListBackend(cap: HarnessCapability, deps: HarnessWireDeps, root:
   const envKey = cfg.env_key ?? "env";
   // judge against the ORIGINAL server (never a mutated copy — shallow spreads
   // share the env object reference, and mergeEnv on a copy would flip this check)
-  if (server !== null && skillsDirWired(server, envKey, skillsDir)) {
+  if (server !== null && gbrainEnvWired(server, envKey, skillsDir, surface)) {
     return { ok: true, status: "already-wired", skillsDir, plans: [] };
   }
+  // Preserve user args (e.g. --verbose); default to a bare serve. The surface is
+  // carried by env, which has higher precedence than --surface in gbrain.
+  const existingArgs = Array.isArray(server?.args)
+    ? server.args.filter((arg): arg is string => typeof arg === "string")
+    : [];
   const want: Record<string, unknown> = {
     ...(server ?? {}),
     command: bin,
-    args: ["serve"],
-    // fresh env object: existing vars preserved, GBRAIN_SKILLS_DIR added
-    [envKey]: { ...((server?.[envKey] as Record<string, unknown>) ?? {}), GBRAIN_SKILLS_DIR: skillsDir },
+    args: existingArgs.length > 0 ? existingArgs : ["serve"],
+    // fresh env object: existing vars preserved, both gbrain keys added
+    [envKey]: gbrainEnv((server?.[envKey] as Record<string, unknown>) ?? {}, skillsDir, surface),
   };
 
   // merge under the server_key path (mcpServers.gbrain / mcp.gbrain), preserving every other field
@@ -204,7 +231,12 @@ function wireMcpListBackend(cap: HarnessCapability, deps: HarnessWireDeps, root:
 
 /** opencode backend — `mcp.<name>` local-server shape differs from cursor/pi:
  *  `{ type: "local", command: [bin, ...], enabled: true, environment }`. */
-function wireOpencodeBackend(cap: HarnessCapability, deps: HarnessWireDeps, root: string): WireOutcome {
+function wireOpencodeBackend(
+  cap: HarnessCapability,
+  deps: HarnessWireDeps,
+  root: string,
+  surface: GbrainMcpSurface,
+): WireOutcome {
   const cfg = cap.mcp_config;
   if (cfg === null) return { ok: false, status: "missing-config", reason: `${cap.name} has no mcp_config declared` };
   const bin = deps.resolveGbrainBin();
@@ -220,16 +252,21 @@ function wireOpencodeBackend(cap: HarnessCapability, deps: HarnessWireDeps, root
 
   const server = getByPath(doc, cfg.server_key);
   const envKey = cfg.env_key ?? "env";
-  if (server !== null && skillsDirWired(server, envKey, skillsDir)) {
+  if (server !== null && gbrainEnvWired(server, envKey, skillsDir, surface)) {
     return { ok: true, status: "already-wired", skillsDir, plans: [] };
   }
+  // Preserve trailing command args (e.g. --verbose); keep exactly one `serve`.
+  const existingCommand = Array.isArray(server?.command)
+    ? server.command.filter((arg): arg is string => typeof arg === "string")
+    : [];
+  const trailing = existingCommand.slice(1).filter((arg) => arg !== "serve");
   const want: Record<string, unknown> = {
     ...(server ?? {}),
     type: "local",
-    command: [bin, "serve"],
+    command: [bin, "serve", ...trailing],
     enabled: true,
-    // fresh env object: existing vars preserved, GBRAIN_SKILLS_DIR added
-    [envKey]: { ...((server?.[envKey] as Record<string, unknown>) ?? {}), GBRAIN_SKILLS_DIR: skillsDir },
+    // fresh env object: existing vars preserved, both gbrain keys added
+    [envKey]: gbrainEnv((server?.[envKey] as Record<string, unknown>) ?? {}, skillsDir, surface),
   };
 
   const segs = cfg.server_key.split(".");
@@ -250,7 +287,12 @@ function wireOpencodeBackend(cap: HarnessCapability, deps: HarnessWireDeps, root
 
 // ---- existing claude/grok backends (thin adapters, logic reused unchanged) ----
 
-function wireClaudeBackend(cap: HarnessCapability, deps: HarnessWireDeps, root: string): WireOutcome {
+function wireClaudeBackend(
+  cap: HarnessCapability,
+  deps: HarnessWireDeps,
+  root: string,
+  surface: GbrainMcpSurface,
+): WireOutcome {
   const wireDeps: WireDeps = {
     readJson: (p) => {
       const raw = deps.readFile(p);
@@ -270,7 +312,7 @@ function wireClaudeBackend(cap: HarnessCapability, deps: HarnessWireDeps, root: 
   };
   let r: ReturnType<typeof wireSkillsDir>;
   try {
-    r = wireSkillsDir(wireDeps, root);
+    r = wireSkillsDir(wireDeps, root, surface);
   } catch (e) {
     if (e instanceof BackupFailedError) return { ok: false, status: "backup-failed", reason: e.message };
     throw e;
@@ -285,7 +327,12 @@ function wireClaudeBackend(cap: HarnessCapability, deps: HarnessWireDeps, root: 
   return { ok: true, status, skillsDir: r.skillsDir ?? "", plans: [] };
 }
 
-function wireGrokBackend(_cap: HarnessCapability, deps: HarnessWireDeps, root: string): WireOutcome {
+function wireGrokBackend(
+  _cap: HarnessCapability,
+  deps: HarnessWireDeps,
+  root: string,
+  surface: GbrainMcpSurface,
+): WireOutcome {
   const grokDeps: GrokWireDeps = {
     readFile: deps.readFile,
     writeFile: deps.writeFile,
@@ -297,13 +344,15 @@ function wireGrokBackend(_cap: HarnessCapability, deps: HarnessWireDeps, root: s
   };
   let r: ReturnType<typeof wireGrokSkillsDir>;
   try {
-    r = wireGrokSkillsDir(grokDeps, root);
+    r = wireGrokSkillsDir(grokDeps, root, surface);
   } catch (e) {
     if (e instanceof BackupFailedError) return { ok: false, status: "backup-failed", reason: e.message };
     throw e;
   }
   if (!r.ok) {
-    return { ok: false, status: "missing-config", reason: r.reason };
+    const status: "missing-config" | "invalid-config" =
+      r.status === "unsupported-env-shape" ? "invalid-config" : "missing-config";
+    return { ok: false, status, reason: r.reason };
   }
   return { ok: true, status: r.status, skillsDir: r.skillsDir ?? "", plans: [] };
 }
@@ -424,7 +473,12 @@ export function wireSessionStart(harness: string, deps: HarnessWireDeps, root: s
 
 // ---- dispatch ---------------------------------------------------------------
 
-type WireWriter = (cap: HarnessCapability, deps: HarnessWireDeps, root: string) => WireOutcome;
+type WireWriter = (
+  cap: HarnessCapability,
+  deps: HarnessWireDeps,
+  root: string,
+  surface: GbrainMcpSurface,
+) => WireOutcome;
 
 /** Constrained MCP writer strategies. Dispatch is by declared strategy, never by
  *  harness name; the capability remains the single source of selection. */
@@ -436,7 +490,12 @@ const WIRE_WRITERS: Record<McpWriter, WireWriter> = {
 };
 
 /** Wire one already-resolved capability. Exported for fixture-level strategy tests. */
-export function wireCapability(cap: HarnessCapability, deps: HarnessWireDeps, root: string): WireOutcome {
+export function wireCapability(
+  cap: HarnessCapability,
+  deps: HarnessWireDeps,
+  root: string,
+  surface: GbrainMcpSurface = loadCapabilities().gbrain.mcp_surface,
+): WireOutcome {
   const cfg = cap.mcp_config;
   if (cfg === null) {
     return {
@@ -453,7 +512,7 @@ export function wireCapability(cap: HarnessCapability, deps: HarnessWireDeps, ro
       reason: `unsupported mcp_config.writer "${cfg.writer}" for harness ${cap.name}`,
     };
   }
-  const backend = writer(cap, deps, root);
+  const backend = writer(cap, deps, root, surface);
   if (!backend.ok) return backend;
   const sessionStart = wireSessionStart(cap.name, deps, root);
   if (sessionStart.status === "failed") {

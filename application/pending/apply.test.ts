@@ -318,6 +318,38 @@ test("transient put failures retry, then terminal_failed at MAX_RETRY", async ()
   expect(s.puts).toHaveLength(3);
 });
 
+test("migrations_pending is terminal — retrying cannot fix a pending migration", async () => {
+  const env = stageEnvelope(root, {
+    producer: "asset-ingest",
+    slug: "assets/foo/doc",
+    content: "content",
+    intent: "create",
+    contentOrigin: "tool_output",
+  });
+  const s = stub({ putPage: async () => fail("migrations_pending", "schema behind; apply-migrations") });
+  const res = await applyPending(root, s.deps);
+  expect(res.terminal).toEqual([env.id]);
+  expect(s.puts).toHaveLength(1);
+  expect(readEnvelopes(root).records[0]!.status).toBe("terminal_failed");
+  const again = await applyPending(root, s.deps);
+  expect(again.skipped).toEqual([env.id]);
+});
+
+test("write_pending stays retryable until the write settles or MAX_RETRY", async () => {
+  const env = stageEnvelope(root, {
+    producer: "asset-ingest",
+    slug: "assets/foo/doc",
+    content: "content",
+    intent: "create",
+    contentOrigin: "tool_output",
+  });
+  const s = stub({ putPage: async () => fail("write_pending", "put_page is pending") });
+  const res = await applyPending(root, s.deps);
+  expect(res.failed).toEqual([env.id]);
+  expect(readEnvelopes(root).records[0]!.status).toBe("staged");
+  expect(readEnvelopes(root).records[0]!.retryCount).toBe(1);
+});
+
 test("idempotency conflict from gbrain is terminal, never retried with a new id", async () => {
   const env = stageEnvelope(root, {
     producer: "asset-ingest",

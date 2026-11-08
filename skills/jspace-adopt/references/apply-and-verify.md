@@ -89,7 +89,7 @@ jspace harness wire --harness <claude|grok|opencode|cursor|pi> --dir <target> --
 jspace harness wire --harness <claude|grok|opencode|cursor|pi> --dir <target>
 ```
 
-该命令负责 merge + backup 与 `GBRAIN_SKILLS_DIR` 注入;不丢弃非 gbrain 项,不手改用户 MCP 配置。Codex(无 JSpace 管理的 MCP 配置,属于 headless cron 条目)不传给 `harness wire`。机器级统一治理/全 harness 接线交给 `harness-config`。
+该命令负责 merge + backup 与 `GBRAIN_SKILLS_DIR` / `GBRAIN_SURFACE` 注入;不丢弃非 gbrain 项,不手改用户 MCP 配置。Codex(无 JSpace 管理的 MCP 配置,属于 headless cron 条目)不传给 `harness wire`。机器级统一治理/全 harness 接线交给 `harness-config`。
 
 ## 7. Cron
 
