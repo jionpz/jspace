@@ -161,13 +161,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest]
+        os: [macos-15, windows-latest]
     timeout-minutes: 20
     concurrency:
       # Two levels of isolation: from the ubuntu `verify` job (a shared group
       # would cancel one against the other inside the same run) AND between the
-      # matrix legs (a bare ref-based group made windows-latest cancel
-      # macos-14 — observed on this job's first run).
+      # matrix legs (a bare ref-based group made windows-latest cancel the
+      # macos leg — observed on this job's first run).
       group: cross-platform-${{ matrix.os }}-${{ github.ref }}
       cancel-in-progress: true
     steps:
