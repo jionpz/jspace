@@ -48,9 +48,8 @@ schema 定稿(存储层 PGLite)。
 ```bash
 jq -n --arg slug project/acme/state --rawfile content state.md \
   --arg request_id "<fresh-uuid>" \
-  --arg source_id "jspace:memory-writeback:project/acme/state" \
   --arg content_origin user_said \
-  '{slug:$slug,content:$content,request_id:$request_id,source_id:$source_id,content_origin:$content_origin}' \
+  '{slug:$slug,content:$content,request_id:$request_id,content_origin:$content_origin}' \
   > request.json
 gbrain call put_page "$(cat request.json)"
 ```
@@ -71,9 +70,8 @@ tags: [knowledge, kind:pitfall, source:session]
 ```bash
 jq -n --arg slug project/acme/lessons/migration-idempotency --rawfile content lesson.md \
   --arg request_id "<fresh-uuid>" \
-  --arg source_id "jspace:memory-writeback:acme/migration-idempotency" \
   --arg content_origin inferred \
-  '{slug:$slug,content:$content,request_id:$request_id,source_id:$source_id,content_origin:$content_origin}' \
+  '{slug:$slug,content:$content,request_id:$request_id,content_origin:$content_origin}' \
   > request.json
 gbrain call put_page "$(cat request.json)"
 ```
@@ -94,9 +92,8 @@ tags: [knowledge, source:session]
 ```bash
 jq -n --arg slug project/acme/decisions/storage-choice --rawfile content decision.md \
   --arg request_id "<fresh-uuid>" \
-  --arg source_id "jspace:memory-writeback:acme/storage-choice" \
   --arg content_origin user_said \
-  '{slug:$slug,content:$content,request_id:$request_id,source_id:$source_id,content_origin:$content_origin}' \
+  '{slug:$slug,content:$content,request_id:$request_id,content_origin:$content_origin}' \
   > request.json
 gbrain call put_page "$(cat request.json)"
 ```

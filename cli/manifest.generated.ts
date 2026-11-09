@@ -47,7 +47,7 @@ export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   { path: "skills/memory-recall/references/memory-acceptance.md", sha256: "db67fe9d1ce98aa4fa1a2c5411e8c2ee5ebe12e375962c87042c7d0c07f77977", ownership: "seed" },
   { path: "skills/memory-recall/references/real-second-machine-protocol.md", sha256: "58d20c886ea49ef2a1daf7e1888e001824ac18a1fe46dce7219dbbc95f53bb10", ownership: "seed" },
   { path: "skills/memory-writeback/SKILL.md", sha256: "925700e6c6e2e5e795645d84541db2eb0acb9e136ea5b8ce803ee09b5619df10", ownership: "seed" },
-  { path: "skills/memory-writeback/references/example-writeback.md", sha256: "d44ad5ba8e85fea646d70f0e321ac23bad13c5ea3efbac6ac6a240ffec2ecb9d", ownership: "seed" },
+  { path: "skills/memory-writeback/references/example-writeback.md", sha256: "62d6bf8de064bfd69cd02500e0b269799c7c6fbd7564b3e2fb47ba085dfbacba", ownership: "seed" },
   { path: "skills/memory-writeback/references/writeback.md", sha256: "9f905abccdff04f4f5cee87d52d2a0ce0e73fede09a92a3d74cca30b0b5d1317", ownership: "seed" },
   { path: "skills/workbench-retro/SKILL.md", sha256: "93dd192df8e9af85e018cd3e9a6ad0a33e2c5ac2f027af031a51c2187362166f", ownership: "seed" },
   { path: "skills/workbench-retro/references/checks.md", sha256: "a0d46e53f2b03d0abac16f7fe4eb639bc66ebca701d7367315436b0e895cea61", ownership: "seed" },
