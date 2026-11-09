@@ -52,7 +52,7 @@ export const BUNDLE_MANIFEST: DistributionManifestV1 = {
   { path: "skills/workbench-retro/SKILL.md", sha256: "93dd192df8e9af85e018cd3e9a6ad0a33e2c5ac2f027af031a51c2187362166f", ownership: "seed" },
   { path: "skills/workbench-retro/references/checks.md", sha256: "a0d46e53f2b03d0abac16f7fe4eb639bc66ebca701d7367315436b0e895cea61", ownership: "seed" },
   { path: "skills/workbench-retro/references/example-retro.md", sha256: "62b6862110a2022a2ad0dbaa23d28a25fca90b474e582b4e9d41a744aa285035", ownership: "seed" },
-  { path: "skills/weekly-report/SKILL.md", sha256: "2a465c22aa4d97d200f587ff5b73bf9c55fc4f780dbbd4544ac3d4fd0a9d3620", ownership: "seed" },
+  { path: "skills/weekly-report/SKILL.md", sha256: "c94bd354c596387d82b5b95d09ff8743a63d216600aace6991850d628e2c92ac", ownership: "seed" },
   { path: "skills/memory-consolidate/SKILL.md", sha256: "663b4b725094124fa3276b4b3b6e2d69e37c1bd182c78ef248ab9a13e9568752", ownership: "seed" },
   ],
 };

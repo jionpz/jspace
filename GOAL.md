@@ -86,8 +86,8 @@ M0–M6 与 H1 的工程交付、M4 示例召回、M5 本机模拟双机、已�
 尚未完成的事项继续开放：
 
 - **M7 记忆腿**：2026-10-16 的仓库记录认定旧窗口中断，按既定协议以 2026-10-05 为新 W0；新 W1 为 10-12 至 10-18、新 W2 为 10-19 至 10-25。截止本次复审未取得两个完整窗口的新计数，不能关闭。已记录的自省腿与资产腿结论保持各自效力边界。
-- **真实第二机**：M5 仅证明本机模拟；真实第二机 `eco.verdict` / `eco.date` 仍待按 [协议](skills/memory-recall/references/real-second-machine-protocol.md) 填证据。
-- **Linux / Windows 真机调度与环境边界**：按 [平台验证台账](docs/PLATFORMS.md) 保留真机挂账；CI CRUD、手工 `cron run` 不替代自然触发证据。
+- **真实第二机**：M5 仅证明本机模拟；真实第二机 `eco.verdict` / `eco.date` 仍待按 [协议](skills/memory-recall/references/real-second-machine-protocol.md) 填证据。当前周期（使用验证期 2026-11-10 ~ 12-07）不推进；触发条件：出现真实第二台日常工作机。
+- **Linux / Windows 真机调度与环境边界**：按 [平台验证台账](docs/PLATFORMS.md) 保留真机挂账；CI CRUD、手工 `cron run` 不替代自然触发证据。当前周期不推进；触发条件：出现 Linux 或 Windows 日常使用需求。
 
 M7 的原关闭标准与记忆分类学冻结继续有效，详见 [使用里程协议](skills/jspace-use/references/usage-mileage.md)。记忆腿沿用历史 GOAL 更严格的**业务写入**口径：窗口内带 `source:session` 的更新页，排除 `project/jspace*` 与 `knowledge/{agent-harness,ai-infra,tools}*`；工具写入单独记录，不参与关闭。该页数不是不可变的写入操作次数，须保留当周取证。新增目标不改写旧验收，不制造来源 tag、计数或关闭结论。
 
