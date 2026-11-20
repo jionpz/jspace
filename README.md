@@ -73,6 +73,17 @@ bun run cli/main.ts init --dir ~/jworkspace
 bun run cli/main.ts doctor --dir ~/jworkspace
 ```
 
+## 可选的 JStack 工程工作流集成
+
+JSpace 可以在初始化工作台时可选启用 [JStack](https://github.com/jionpz/jstack) 的**工程工作流桥接**，并保持 JStack 的插件、hooks、版本锁与工程任务在各自 Git 仓库内管理：
+
+```bash
+jspace init --dir ~/jworkspace --integration jstack
+jspace integration status jstack --dir ~/jworkspace
+```
+
+已有工作台也可运行 `jspace integration enable jstack --dir ~/jworkspace`，停用用 `integration disable`（不会卸载项目里的 JStack）。将具体仓库登记为 JSpace resource 后，通过 `integration attach jstack --repo <git仓库> --source <本地可信JStack源码目录> --dry-run` 预览，再显式执行安装。**默认不集成，启用时不自动下载、不向所有仓库强制安装插件。** 完整机制、路由、诊断与迁移说明见 [JStack 可选集成指南](./docs/integrations/jstack.md)。
+
 ## 常用运维命令
 
 - `jspace cron` — 定时任务:`cron run --id <id> --dry-run`(rehearsal)、`cron install --dry-run`(reconciliation 计划)、`cron failures`(会话开始失败/暂存聚合)、`cron ack`。

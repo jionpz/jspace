@@ -14,6 +14,7 @@ import { ASSETS } from "../assets.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
 import { b, cronDeps, optS, readFileOrNull, s } from "./helpers.ts";
 import { userSkillsRoot, embeddedSkillAssets } from "./skills.ts";
+import { refreshEnabledJstack, JSTACK_BRIDGE_ASSET } from "../../application/integrations/jstack.ts";
 
 /** After a successful workbench upgrade, sync the user-level ~/.agents/skills/
  *  entries: inside the workbench, its official skills are dir links to the SSOT
@@ -100,6 +101,7 @@ export interface WorkspaceUpgradeHandlerDeps {
   readFile: typeof readFileOrNull;
   writeFile: (p: string, c: string) => void;
   filehubRoot: (root: string) => string | null;
+  refreshIntegration?: (root: string) => ReturnType<typeof refreshEnabledJstack>;
 }
 
 const defaultUpgradeDeps = (): WorkspaceUpgradeHandlerDeps => ({
@@ -112,6 +114,7 @@ const defaultUpgradeDeps = (): WorkspaceUpgradeHandlerDeps => ({
   readFile: readFileOrNull,
   writeFile: (p, c) => writeBytesAtomic(p, c),
   filehubRoot: resolveFilehubRoot,
+  refreshIntegration: (root) => refreshEnabledJstack(root, ASSETS[JSTACK_BRIDGE_ASSET]),
 });
 
 /** `workspace upgrade` handler — exported for CLI combo tests with injected deps. */
@@ -140,13 +143,14 @@ export function workspaceUpgradeHandler(
   // transient mismatches)
   if (result.exitCode || b(args.dryRun) || s(args.rollback)) return result;
   const refreshLines = deps.refreshExternalSkills(ctx.root);
+  const integration = deps.refreshIntegration?.(ctx.root);
   const doctor = deps.doctorWorkbench(ctx.root, deps.cronDeps);
   return {
     ...result,
-    lines: [...result.lines, ...refreshLines, ...doctor.lines],
-    warnings: doctor.warnings,
-    errors: doctor.errors,
-    exitCode: doctor.exitCode,
+    lines: [...result.lines, ...refreshLines, ...(integration?.lines ?? []), ...doctor.lines],
+    warnings: [...(integration?.warnings ?? []), ...(doctor.warnings ?? [])],
+    errors: [...(integration?.errors ?? []), ...(doctor.errors ?? [])],
+    exitCode: integration?.exitCode || doctor.exitCode,
   };
 }
 

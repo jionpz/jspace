@@ -24,21 +24,36 @@ import { contextSpec } from "./context.ts";
 import { skillsSpec } from "./skills.ts";
 import { harnessSpec } from "./harness.ts";
 import { memorySpec } from "./memory.ts";
+import { integrationSpec, bundledJstackBridge } from "./integration.ts";
+import { enableJstack } from "../../application/integrations/jstack.ts";
+import { fail } from "../../core/shared/errors.ts";
 
 const initSpec: CommandSpec = {
   name: "init",
   summary: "initialize a new JSpace workbench in a target directory",
   features: { dir: true },
-  options: [{ name: "--force", takesValue: false, help: "allow initialization into a non-empty directory" }],
-  handler: (ctx, args) =>
-    initWorkbench(ctx.root, b(args.force), {
+  options: [
+    { name: "--force", takesValue: false, help: "allow initialization into a non-empty directory" },
+    { name: "--integration", takesValue: true, repeatable: true, metavar: "NAME", help: "enable an optional integration at creation (currently: jstack)" },
+  ],
+  handler: (ctx, args) => {
+    const integrations = (args.integration as string[] | undefined) ?? [];
+    if (integrations.some((name) => name !== "jstack")) {
+      fail(`unsupported integration: ${integrations.filter((name) => name !== "jstack").join(", ")} (supported: jstack)`);
+    }
+    const bridge = integrations.includes("jstack") ? bundledJstackBridge() : null;
+    const initialized = initWorkbench(ctx.root, b(args.force), {
       resolvePath,
       expandTilde,
       isCompiled,
       devRoot,
       materialize: materializeTree,
       manifest: BUNDLE_MANIFEST,
-    }),
+    });
+    if (bridge === null) return initialized;
+    const enabled = enableJstack(ctx.root, bridge);
+    return { ...initialized, lines: [...initialized.lines, ...enabled.lines] };
+  },
 };
 
 const doctorSpec: CommandSpec = {
@@ -66,4 +81,5 @@ export const COMMANDS: CommandSpec[] = [
   memorySpec,
   harnessSpec,
   skillsSpec,
+  integrationSpec,
 ];
