@@ -55,6 +55,16 @@ test("attach rejects unregistered Git roots before it tries to execute a script"
   expect(called).toBe(false);
 }));
 
+test("attach rejects a nested directory even inside a registered repository", () => tempFixture((root, repo) => {
+  register(root, repo);
+  const nested = join(repo, "src");
+  mkdirSync(nested);
+  expect(() => attachJstack(root, nested, "/trusted/jstack", true, {
+    locateScript: () => "/trusted/jstack/jstack",
+    runner: () => ({ exit: 0, output: "not called" }),
+  })).toThrow(/must name the Git repository root/);
+}));
+
 test("dry-run delegates to the JStack project installer without actual install", () => tempFixture((root, repo) => {
   register(root, repo);
   const calls: string[][] = [];

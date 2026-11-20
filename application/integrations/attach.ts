@@ -79,18 +79,20 @@ export function verifyJstackProject(repo: string, doctor: ExecResult): string[] 
 
 function repoTop(path: string): string {
   if (!existsSync(path) || !statSync(path).isDirectory()) fail(`Git repository directory does not exist: ${path}`);
-  let top: string;
+  // Git for Windows may spell the very same root using 8.3 short names,
+  // long names or different drive-letter casing than Node realpathSync.
+  // Asking Git whether the current directory is below its own root avoids
+  // brittle cross-runtime string comparisons while still rejecting subdirs.
+  let prefix: string;
   try {
-    top = execFileSync("git", ["-C", path, "rev-parse", "--show-toplevel"], {
+    prefix = execFileSync("git", ["-C", path, "rev-parse", "--show-prefix"], {
       encoding: "utf8", timeout: 10_000, stdio: ["ignore", "pipe", "pipe"],
     }).trim();
   } catch {
     fail(`target is not an accessible Git repository: ${path}`);
   }
-  const real = realpathSync(path);
-  const actualTop = realpathSync(top);
-  if (real !== actualTop) fail(`--repo must name the Git repository root, not a nested directory: ${path}`);
-  return actualTop;
+  if (prefix !== "") fail(`--repo must name the Git repository root, not a nested directory: ${path}`);
+  return realpathSync(path);
 }
 function registeredRepository(root: string, repo: string): string {
   const reads = readWorkbenchState(root);
