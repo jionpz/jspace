@@ -313,6 +313,9 @@ function relativeTarget(projectionRootAbs: string, ssotDirAbs: string): string {
 export interface ProjectionPlanOptions {
   skillNames: string[];
   projectionDirs: readonly string[];
+  /** Full official-skill upgrade sweeps retired/empty residue. Optional one-skill
+   * integrations must NOT clean unrelated workbench or user-owned directories. */
+  sweepResidue?: boolean;
 }
 
 /** Plan (read-only) the thin-link state for every (projection, skill) pair. */
@@ -364,8 +367,10 @@ export function applyProjectionLinks(root: string, opts: ProjectionPlanOptions):
         lines.push(`jspace: info: ${op.rel} materialized as COPY (symlink unavailable on this platform); content is a snapshot, not a link`);
       }
     }
-    for (const name of sweepResidue(projectionRootAbs, opts.skillNames)) {
-      lines.push(`jspace: info: removed retired official skill ${proj}/${name} (no longer shipped by jspace)`);
+    if (opts.sweepResidue !== false) {
+      for (const name of sweepResidue(projectionRootAbs, opts.skillNames)) {
+        lines.push(`jspace: info: removed retired official skill ${proj}/${name} (no longer shipped by jspace)`);
+      }
     }
   }
   return { links, lines };

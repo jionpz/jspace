@@ -109,6 +109,23 @@ test("workspace upgrade dry-run does not append refresh or doctor", () => {
   expect(r.lines.join("\n")).not.toContain("should not appear");
 });
 
+test("workspace upgrade dry-run surfaces an optional integration refresh without mutations", () => {
+  const r = workspaceUpgradeHandler(ctx(), { dryRun: true }, {
+    workspaceUpgrade: () => ({ lines: ["jspace: ok: would upgrade: nothing to do"] }),
+    refreshExternalSkills: () => { throw new Error("must not write"); },
+    doctorWorkbench: () => { throw new Error("must not inspect post-update state"); },
+
+    previewIntegration: () => ({ lines: ["jspace: note: JStack integration bridge refresh or repair is available"] }),
+    cronDeps: stubCronDeps(),
+    manifest: BUNDLE_MANIFEST,
+    assets: {},
+    readFile: () => null,
+    writeFile: () => {},
+    filehubRoot: () => null,
+  });
+  expect(r.lines.join("\n")).toContain("bridge refresh or repair is available");
+});
+
 test("workspace upgrade rollback does not append refresh or doctor", () => {
   let refreshCalled = false;
   let doctorCalled = false;

@@ -14,6 +14,7 @@ import { ASSETS } from "../assets.generated.ts";
 import { SKILLS_MANIFEST } from "../skills.generated.ts";
 import { b, cronDeps, optS, readFileOrNull, s } from "./helpers.ts";
 import { userSkillsRoot, embeddedSkillAssets } from "./skills.ts";
+import { previewEnabledJstack, JSTACK_BRIDGE_ASSET } from "../../application/integrations/jstack.ts";
 
 /** After a successful workbench upgrade, sync the user-level ~/.agents/skills/
  *  entries: inside the workbench, its official skills are dir links to the SSOT
@@ -100,6 +101,7 @@ export interface WorkspaceUpgradeHandlerDeps {
   readFile: typeof readFileOrNull;
   writeFile: (p: string, c: string) => void;
   filehubRoot: (root: string) => string | null;
+  previewIntegration?: (root: string) => ReturnType<typeof previewEnabledJstack>;
 }
 
 const defaultUpgradeDeps = (): WorkspaceUpgradeHandlerDeps => ({
@@ -112,6 +114,7 @@ const defaultUpgradeDeps = (): WorkspaceUpgradeHandlerDeps => ({
   readFile: readFileOrNull,
   writeFile: (p, c) => writeBytesAtomic(p, c),
   filehubRoot: resolveFilehubRoot,
+  previewIntegration: (root) => previewEnabledJstack(root, ASSETS[JSTACK_BRIDGE_ASSET]),
 });
 
 /** `workspace upgrade` handler — exported for CLI combo tests with injected deps. */
@@ -138,14 +141,26 @@ export function workspaceUpgradeHandler(
   // dry-run is a preview, rollback restores a historical state: neither
   // should run the follow-up doctor or skill refresh (both can report
   // transient mismatches)
-  if (result.exitCode || b(args.dryRun) || s(args.rollback)) return result;
+  if (result.exitCode || s(args.rollback)) return result;
+  if (b(args.dryRun)) {
+    const preview = deps.previewIntegration?.(ctx.root);
+    return {
+      ...result,
+      lines: [...result.lines, ...(preview?.lines ?? [])],
+      warnings: [...(result.warnings ?? []), ...(preview?.warnings ?? [])],
+      exitCode: preview?.exitCode,
+    };
+  }
   const refreshLines = deps.refreshExternalSkills(ctx.root);
+  // Optional bridges are separate user-owned lifecycle state. Never upgrade
+  // their contents here: workspace rollback would have no bridge backup.
+  const integration = deps.previewIntegration?.(ctx.root);
   const doctor = deps.doctorWorkbench(ctx.root, deps.cronDeps);
   return {
     ...result,
-    lines: [...result.lines, ...refreshLines, ...doctor.lines],
-    warnings: doctor.warnings,
-    errors: doctor.errors,
+    lines: [...result.lines, ...refreshLines, ...(integration?.lines ?? []), ...doctor.lines],
+    warnings: [...(integration?.warnings ?? []), ...(doctor.warnings ?? [])],
+    errors: [...(integration?.errors ?? []), ...(doctor.errors ?? [])],
     exitCode: doctor.exitCode,
   };
 }
