@@ -1,7 +1,7 @@
 // application/integrations/attach.test.ts — explicit JStack install delegation.
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initWorkbench } from "../workspace/init.ts";
@@ -24,7 +24,9 @@ function tempFixture(fn: (root: string, repo: string) => void): void {
     });
     execFileSync("git", ["init", "-q", repo]);
     enableJstack(root, ASSETS[JSTACK_BRIDGE_ASSET]);
-    fn(root, repo);
+    // macOS temp paths can alias /var -> /private/var; use the same canonical
+    // path that Git (and the production adapter) resolves.
+    fn(root, realpathSync(repo));
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(repo, { recursive: true, force: true });
@@ -135,14 +137,18 @@ test("doctor confirms ONLY repo-local vendor/lock and rejects global cache", () 
 
 test("attach reports missing JStack source cleanly without touching the project", () => tempFixture((root, repo) => {
   register(root, repo);
-  expect(() => attachJstack(root, repo, join(root, "missing-checkout"), true)).toThrow(/trusted JStack checkout does not exist/);
+  expect(() => attachJstack(root, repo, join(root, "missing-checkout"), true, {
+    runner: () => ({ exit: 0, output: "not called" }),
+  })).toThrow(/trusted JStack checkout does not exist/);
 }));
 
 test("attach rejects nested source paths to prevent installer self-modification", () => tempFixture((root, repo) => {
   register(root, repo);
   const nestedSource = join(repo, "jstack-checkout");
   mkdirSync(nestedSource);
-  expect(() => attachJstack(root, repo, nestedSource, true)).toThrow(/must not overlap/);
+  expect(() => attachJstack(root, repo, nestedSource, true, {
+    runner: () => ({ exit: 0, output: "not called" }),
+  })).toThrow(/must not overlap/);
 }));
 
 test("attach refuses the workbench root even if registered as a Git resource", () => tempFixture((root, _repo) => {
@@ -153,6 +159,12 @@ test("attach refuses the workbench root even if registered as a Git resource", (
     runner: () => ({ exit: 0, output: "ok" }),
   })).toThrow(/never be installed at the JWorkspace root/);
 }));
+
+test("native Windows attach explicitly requires WSL; injected pure runner is not production", () => {
+  if (process.platform !== "win32") return;
+  expect(() => attachJstack("C:\\fake-workbench", "C:\\fake-repo", "C:\\fake-source", true))
+    .toThrow(/needs a POSIX bash environment/);
+});
 
 test("attach refuses disabled workbench integration", () => tempFixture((root, repo) => {
   register(root, repo);

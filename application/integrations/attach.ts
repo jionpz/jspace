@@ -150,7 +150,9 @@ export interface AttachDeps {
 export function attachJstack(
   workbench: string, repoArg: string, sourceArg: string, dryRun = false, deps: AttachDeps = {},
 ): CmdResult {
-  if (process.platform === "win32") fail("JStack project installer currently needs a POSIX bash environment; use WSL for project attach");
+  // Production on Windows requires WSL: only explicit injected test runners
+  // can bypass this platform guard (CLI never injects a runner).
+  if (process.platform === "win32" && deps.runner === undefined) fail("JStack project installer currently needs a POSIX bash environment; use WSL for project attach");
   const state = readIntegrations(workbench);
   if (state.status !== "ok" || state.value.integrations.jstack?.enabled !== true) {
     fail("JStack workbench integration is not enabled; run 'jspace integration enable jstack' first");

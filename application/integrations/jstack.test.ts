@@ -2,7 +2,7 @@
 import { expect, test } from "bun:test";
 import {
   existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, readdirSync,
-  rmSync, writeFileSync, symlinkSync,
+  rmSync, writeFileSync, symlinkSync, unlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -210,7 +210,7 @@ test("doctor detects malformed integration state and broken projection", () => i
   expect(() => enableJstack(root, BRIDGE)).toThrow(/damaged/);
   writeFileSync(state(root), JSON.stringify({ schema_version: 1, integrations: { jstack: { enabled: false } } }));
   enableJstack(root, BRIDGE);
-  rmSync(projection(root));
+  unlinkSync(projection(root)); // remove the link itself, not its target (Windows-safe)
   expect(checkJstackIntegration(root).map((d) => d.code)).toContain("integrations.jstack.projection-invalid");
 }));
 
