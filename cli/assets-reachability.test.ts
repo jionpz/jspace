@@ -113,6 +113,13 @@ test("bundle-internal references resolve to an embedded file or dir", () => {
     for (const ref of refsOf(body)) {
       const target = resolve(key, ref);
       if (target === null) continue;
+      // Optional integrations are materialized by user choice, not by the
+      // default workbench manifest. Their references are valid only when the
+      // corresponding embedded, opt-in bridge source exists and is identifiable.
+      if (target === "skills/jspace-jstack/SKILL.md") {
+        const bridge = ASSETS["skills/jspace-use/references/jstack-bridge.md"];
+        if (bridge?.startsWith("---\nname: jspace-jstack\n")) continue;
+      }
       if (!exists(target)) failures.push(`${key}: unresolved ref \`${ref}\``);
     }
   }

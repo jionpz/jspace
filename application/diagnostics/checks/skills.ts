@@ -7,6 +7,7 @@ import { readMaterializedJournal } from "../../workspace/journal.ts";
 import { skillProjections } from "../../workspace/manifest.ts";
 import { isFile } from "../../fs.ts";
 import type { SkillsDeps } from "../deps.ts";
+import { enabledIntegrationSkillNames } from "../../integrations/jstack.ts";
 import {
   activeHarnesses,
   BLOCK_END,
@@ -34,7 +35,7 @@ export function checkSkills(root: string, deps: SkillsDeps): RegistryDiagnostic[
   const diags: RegistryDiagnostic[] = [];
 
   {
-    const official = new Set(deps.officialSkillNames());
+    const official = new Set([...deps.officialSkillNames(), ...enabledIntegrationSkillNames(root)]);
     let recorded = new Set<string>();
     try {
       const j = readMaterializedJournal(root);
@@ -128,7 +129,7 @@ export function checkSkills(root: string, deps: SkillsDeps): RegistryDiagnostic[
       // damaged journal
     }
     for (const proj of skillProjections()) {
-      for (const name of deps.officialSkillNames()) {
+      for (const name of [...deps.officialSkillNames(), ...enabledIntegrationSkillNames(root)]) {
         const sourceDir = join(root, CONFIG_DIR, "skills", name);
         const projDir = join(root, proj, name);
         if (!existsSync(sourceDir)) continue;

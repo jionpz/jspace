@@ -33,13 +33,18 @@
       "ownership": "user"
     },
     {
+      "path": "templates/workbench/.jspace/integrations.json",
+      "sha256": "a16363713c8f9fc86bfb71a9abde97617d3b05251b3a78cf7f29248efe97ae49",
+      "ownership": "user"
+    },
+    {
       "path": "templates/workbench/.opencode/plugins/jspace.ts",
       "sha256": "c745b2fcc76a5a3f5a0564713e9f031fa8029fa8ae36829e878299e878e8cf2f",
       "ownership": "seed"
     },
     {
       "path": "templates/workbench/AGENTS.md",
-      "sha256": "9994b7b23922b73f285428707c3558bdcf6baea44237f7fd4e25d0b26c812726",
+      "sha256": "0d83ad590006026591e92efa58be866d61ff09d628ce5ff6e7fc46384b3779f3",
       "ownership": "seed"
     },
     {
@@ -59,7 +64,7 @@
     },
     {
       "path": "skills/jspace-use/SKILL.md",
-      "sha256": "44bd52faf089e5b849c93ffde3590ce2154ec9e2dbaccda994b1751561ccc6fc",
+      "sha256": "a5b4d8040f34aa165bdb88e2e49a904011848ea7a34446b82191d411afdd782b",
       "ownership": "seed"
     },
     {
@@ -120,6 +125,11 @@
     {
       "path": "skills/jspace-use/references/headless-ops.md",
       "sha256": "9b1ea651bbe4e1387895ab602c22115c5a92c53e3dfcbb95ece5365f51cf8e8a",
+      "ownership": "seed"
+    },
+    {
+      "path": "skills/jspace-use/references/jstack-bridge.md",
+      "sha256": "3dab0b3b1c9d128703197c27e368bf9ce1da96b09d0df8fadd32f0032816d906",
       "ownership": "seed"
     },
     {

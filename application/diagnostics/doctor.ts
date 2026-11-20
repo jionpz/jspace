@@ -19,6 +19,7 @@ import { checkSessionStartHooks } from "./checks/session-hooks.ts";
 import { checkWritebackHabit } from "./checks/writeback.ts";
 import { checkUsageMileageLedger } from "./checks/usage-mileage.ts";
 import type { CronHealthDeps } from "./deps.ts";
+import { checkJstackIntegration } from "../integrations/jstack.ts";
 
 export type { CronHealthDeps, CronLike } from "./deps.ts";
 
@@ -49,6 +50,7 @@ export function doctorWorkbench(root: string, cron: CronHealthDeps, verbose = fa
     ...checkPending(root),
     ...checkIngest(root),
     ...checkSkills(root, cron),
+    ...checkJstackIntegration(root),
     ...checkDomains(root, reads.hub.status === "ok" ? reads.hub.value : null),
     ...checkGBrain(root, cron),
     ...checkCursorSkills(cron),

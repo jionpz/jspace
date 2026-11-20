@@ -24,6 +24,7 @@ Before changing files for non-trivial work, classify the request internally (imp
 | --- | --- |
 | Existing domain work | Read `workspace/<domain>/README.md` and `domain.json`; look up the domain/resource in `.jspace/hub.json`. |
 | Existing resource work | Look up the resource in `.jspace/hub.json`; enter the owning domain before operating. |
+| Software engineering in a registered Git repository | If `.jspace/skills/jspace-jstack/SKILL.md` exists **and** `jspace integration status jstack` reports enabled, read that bridge and delegate code work to the repository-scoped JStack. Never install JStack at the JWorkspace root; if not enabled, follow the repository's own engineering rules. |
 | Candidate new domain | Create/propose a minimal domain only if it meets the domain rules in `.jspace/skills/jspace-use/references/governance.md` §1. |
 | Candidate new resource | Add/update a `.jspace/hub.json` resource only when it is a reusable entrypoint worth future lookup. |
 | Candidate new skill | Propose a skill only if it meets the skill rules in `.jspace/skills/jspace-use/references/governance.md` §3; ask before creating. |
