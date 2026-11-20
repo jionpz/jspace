@@ -24,5 +24,5 @@ Use for implementation, refactoring, repository CI repair, code reviews and othe
 
 - `jspace integration enable jstack --dir <workbench>` enables this bridge on an existing workbench.
 - `jspace integration disable jstack --dir <workbench>` removes the workbench bridge; it does **not** uninstall JStack from any Git repository.
-- `jspace workspace upgrade` can refresh an unmodified bridge, while preserving and reporting local edits; verify with `jspace integration status jstack`.
+- `jspace workspace upgrade` preserves the integration choice and bridge bytes so its own rollback remains consistent. It reports whether a bridge refresh/repair is available, but does not silently update optional bridge files. Refresh explicitly with `jspace integration enable jstack`; verify with `jspace integration status jstack`.
 - JStack projects own their own `.jstack/lock.json`, installer, hooks, migrations and uninstallation. Do not duplicate these in JSpace's registry or state.

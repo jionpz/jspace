@@ -9,7 +9,7 @@ import { fail } from "../../core/shared/errors.ts";
 import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
 import { readIntegrations } from "./jstack.ts";
 
-export type ExecResult = { exit: number; output: string };
+export type ExecResult = { exit: number; output: string; stdout?: string };
 export type JStackRunner = (script: string, args: string[], cwd: string) => ExecResult;
 
 export function runJstack(script: string, args: string[], cwd: string): ExecResult {
@@ -19,8 +19,64 @@ export function runJstack(script: string, args: string[], cwd: string): ExecResu
   return {
     exit: result.error ? 1 : (result.status ?? 1),
     output: [result.stdout, result.stderr, result.error?.message].filter(Boolean).join("\n").trim(),
+    stdout: result.stdout ?? "",
   };
 }
+/** Doctor's exit status alone does NOT prove installation: on a bare Git repo
+ * JStack doctor --json can legitimately exit 0 with an empty [] inventory.
+ * Require the repo-local lock and the three project vendor records with
+ * matching versions and lock=ok. Never accept global/cached installations. */
+export function verifyJstackProject(repo: string, doctor: ExecResult): string[] {
+  const problems: string[] = [];
+  if (doctor.exit !== 0) problems.push(`JStack doctor exited with status ${doctor.exit}`);
+  const meta = join(repo, ".jstack");
+  const vendor = join(meta, "vendor", "plugins");
+  const lockPath = join(meta, "lock.json");
+  let lock: unknown;
+  try {
+    if (!lstatSync(meta).isDirectory() || lstatSync(meta).isSymbolicLink()) throw new Error(".jstack is not a regular directory");
+    if (!lstatSync(lockPath).isFile() || lstatSync(lockPath).isSymbolicLink()) throw new Error("lock.json is not a regular file");
+    lock = JSON.parse(readFileSync(lockPath, "utf8"));
+  } catch {
+    problems.push("missing, unreadable, symlinked or invalid project .jstack/lock.json");
+  }
+  const plugins = lock && typeof lock === "object" && !Array.isArray(lock)
+    ? (lock as { plugins?: unknown }).plugins : null;
+  if (!plugins || typeof plugins !== "object" || Array.isArray(plugins)) {
+    problems.push("JStack project lock does not declare its plugins");
+  }
+  let rows: unknown;
+  try { rows = JSON.parse(doctor.stdout ?? doctor.output); }
+  catch { problems.push("JStack doctor output is not valid JSON"); }
+  if (!Array.isArray(rows)) problems.push("JStack doctor output is not an inventory array");
+  for (const name of ["flow", "spec", "pstack"]) {
+    const expectedPath = join(vendor, name);
+    const versionRecord = plugins && typeof plugins === "object"
+      ? (plugins as Record<string, unknown>)[name] : undefined;
+    const version = typeof versionRecord === "string" ? versionRecord
+      : versionRecord && typeof versionRecord === "object" && !Array.isArray(versionRecord)
+        ? (versionRecord as Record<string, unknown>).version : undefined;
+    if (typeof version !== "string" || version.length === 0) {
+      problems.push(`JStack project lock is missing ${name} version`);
+    }
+    try {
+      if (!lstatSync(expectedPath).isDirectory() || lstatSync(expectedPath).isSymbolicLink()) {
+        throw new Error("not a regular directory");
+      }
+    } catch {
+      problems.push(`missing project vendor directory: ${name}`);
+    }
+    const matching = Array.isArray(rows) && rows.some((row) =>
+      row !== null && typeof row === "object" && !Array.isArray(row)
+      && row.harness === "vendor" && row.scope === "project"
+      && row.plugin === name && row.path === expectedPath && row.lock === "ok"
+      && row.version === version
+    );
+    if (!matching) problems.push(`JStack doctor did not confirm project vendor ${name} with lock=ok`);
+  }
+  return problems;
+}
+
 function repoTop(path: string): string {
   if (!existsSync(path) || !statSync(path).isDirectory()) fail(`Git repository directory does not exist: ${path}`);
   let top: string;
@@ -42,6 +98,7 @@ function registeredRepository(root: string, repo: string): string {
     fail("workbench hub.json and machine-local bindings must be valid before attaching JStack");
   }
   const requested = repoTop(resolve(repo));
+  if (requested === realpathSync(root)) fail("JStack must never be installed at the JWorkspace root; register and attach a separate software Git repository");
   const bindings = reads.local.value.bindings;
   const found = reads.hub.value.resources.some((resource) =>
     resource.entrypoints.some((ep) => {
@@ -117,15 +174,17 @@ export function attachJstack(
     return { lines: ["jspace: JStack project installation failed", applied.output], exitCode: 1 };
   }
   const verified = runner(script, ["doctor", "--repo", repo, "--json"], repo);
+  const problems = verifyJstackProject(repo, verified);
   return {
     lines: [
       `jspace: JStack project installation completed for ${repo}`,
       applied.output,
-      verified.exit === 0
-        ? "jspace: ok: JStack doctor passed (configuration checked; runtime phase enforcement not proven)"
+      problems.length === 0
+        ? "jspace: ok: JStack doctor confirmed project vendor flow/spec/pstack and matching lock (runtime phase enforcement not proven)"
         : "jspace: warning: JStack doctor could not confirm a healthy project installation",
+      ...problems.map((problem) => `jspace: warning: ${problem}`),
       verified.output,
     ],
-    ...(verified.exit !== 0 ? { exitCode: 1 } : {}),
+    ...(problems.length > 0 ? { exitCode: 1 } : {}),
   };
 }

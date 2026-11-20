@@ -25,7 +25,7 @@ import { skillsSpec } from "./skills.ts";
 import { harnessSpec } from "./harness.ts";
 import { memorySpec } from "./memory.ts";
 import { integrationSpec, bundledJstackBridge } from "./integration.ts";
-import { enableJstack } from "../../application/integrations/jstack.ts";
+import { enableJstack, preflightInitJstack } from "../../application/integrations/jstack.ts";
 import { fail } from "../../core/shared/errors.ts";
 
 const initSpec: CommandSpec = {
@@ -42,6 +42,7 @@ const initSpec: CommandSpec = {
       fail(`unsupported integration: ${integrations.filter((name) => name !== "jstack").join(", ")} (supported: jstack)`);
     }
     const bridge = integrations.includes("jstack") ? bundledJstackBridge() : null;
+    if (bridge !== null) preflightInitJstack(ctx.root, bridge);
     const initialized = initWorkbench(ctx.root, b(args.force), {
       resolvePath,
       expandTilde,

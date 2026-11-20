@@ -1,6 +1,6 @@
 // cli/commands/integration.test.ts — CLI end-to-end init/enable/status/disable.
 import { expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, mkdirSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse, type CmdContext, type CmdResult, type CommandSpec } from "../../application/commands/command.ts";
@@ -50,6 +50,25 @@ test("existing workspace can be enabled, disabled, enabled; status reflects each
 test("init refuses re-initializing an existing enabled workbench", async () => withRoot(async (root) => {
   await execute(root, ["init", "--dir", root, "--integration", "jstack"]);
   await expect(execute(root, ["init", "--dir", root, "--integration", "jstack", "--force"])).rejects.toThrow(/already a JSpace workbench/);
+}));
+
+test("init --integration --force refuses existing JStack namespace before touching workbench", async () => withRoot(async (root) => {
+  const conflicting = join(root, ".agents", "skills", "jspace-jstack");
+  mkdirSync(conflicting, { recursive: true });
+  writeFileSync(join(conflicting, "SKILL.md"), "MY SKILL");
+  await expect(execute(root, ["init", "--dir", root, "--force", "--integration", "jstack"])).rejects.toThrow(/reserved path already exists/);
+  expect(existsSync(join(root, ".jspace", "marker.json"))).toBe(false);
+  expect(readFileSync(join(conflicting, "SKILL.md"), "utf8")).toBe("MY SKILL");
+}));
+
+test("init --integration --force refuses symlinked shared skill parents before workbench creation", async () => withRoot(async (root) => {
+  const outside = mkdtempSync(join(tmpdir(), "jspace-init-shared-"));
+  try {
+    mkdirSync(join(root, ".agents"), { recursive: true });
+    symlinkSync(outside, join(root, ".agents", "skills"), "dir");
+    await expect(execute(root, ["init", "--dir", root, "--force", "--integration", "jstack"])).rejects.toThrow(/parent must be a normal directory/);
+    expect(existsSync(join(root, ".jspace", "marker.json"))).toBe(false);
+  } finally { rmSync(outside, { recursive: true, force: true }); }
 }));
 
 test("integration attach requires explicit repo and source arguments", () => {

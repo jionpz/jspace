@@ -44,7 +44,7 @@
     },
     {
       "path": "templates/workbench/AGENTS.md",
-      "sha256": "9994b7b23922b73f285428707c3558bdcf6baea44237f7fd4e25d0b26c812726",
+      "sha256": "0d83ad590006026591e92efa58be866d61ff09d628ce5ff6e7fc46384b3779f3",
       "ownership": "seed"
     },
     {
@@ -64,7 +64,7 @@
     },
     {
       "path": "skills/jspace-use/SKILL.md",
-      "sha256": "44bd52faf089e5b849c93ffde3590ce2154ec9e2dbaccda994b1751561ccc6fc",
+      "sha256": "a5b4d8040f34aa165bdb88e2e49a904011848ea7a34446b82191d411afdd782b",
       "ownership": "seed"
     },
     {
@@ -129,7 +129,7 @@
     },
     {
       "path": "skills/jspace-use/references/jstack-bridge.md",
-      "sha256": "92e007113cf217859e546fdd329b383c3222a0228d63b5f71810c0ee54e2e3f6",
+      "sha256": "3dab0b3b1c9d128703197c27e368bf9ce1da96b09d0df8fadd32f0032816d906",
       "ownership": "seed"
     },
     {

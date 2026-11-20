@@ -37,12 +37,21 @@ function present(path: string): boolean {
   try { lstatSync(path); return true; } catch { return false; }
 }
 function readText(path: string): string | null {
-  try { return readFileSync(path, "utf-8"); } catch { return null; }
+  try {
+    const stat = lstatSync(path);
+    if (!stat.isFile() || stat.isSymbolicLink()) return null;
+    return readFileSync(path, "utf-8");
+  } catch { return null; }
 }
 
 export function readIntegrations(root: string): FileRead<IntegrationsV1> {
   const path = statePath(root);
   if (!present(path)) return { status: "missing" }; // older workbenches: disabled by default
+  const stat = lstatSync(path);
+  if (!stat.isFile() || stat.isSymbolicLink()) return {
+    status: "invalid", issues: [{ code: "integrations.file-type", path: STATE_REL,
+      message: "integrations.json must be a regular file, not a symlink or directory" }],
+  };
   let json: unknown;
   try { json = JSON.parse(readFileSync(path, "utf-8")); }
   catch (e) {
@@ -108,7 +117,47 @@ function ensureSafeSkillPath(root: string, trustedDigests: readonly string[]): v
     fail(`integration skill has local edits: ${file}; preserving it (no silent overwrite)`);
   }
 }
+/** Refuse symlinked ancestor directories before touching a managed bridge.
+ * A user may have .agents/skills linked to a shared/global directory; writing
+ * there would escape the selected workbench even if the leaf does not exist. */
+function ensureOwnedParentDirectories(root: string): void {
+  // Mutation locks are acquired before writing integration state; their
+  // ancestors must also stay inside the workbench (not external symlinks).
+  const parents = new Set([".jspace", ".jspace/skills", ".jspace/state", ".jspace/state/locks"]);
+  for (const projection of skillProjections()) {
+    const parts = projection.split("/");
+    for (let i = 1; i <= parts.length; i++) parents.add(parts.slice(0, i).join("/"));
+  }
+  for (const rel of parents) {
+    const path = join(root, rel);
+    if (!present(path)) continue;
+    const stat = lstatSync(path);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+      fail(`JStack integration parent must be a normal directory inside the workbench: ${path}`);
+    }
+  }
+}
+
+/** Optional init is a two-step operation. Preflight collisions BEFORE
+ * materializing the workbench so a conflict cannot leave a half-initialized
+ * JWorkspace with a marker but no requested integration. */
+export function preflightInitJstack(root: string, bridge: string): void {
+  sourceDigest(bridge);
+  if (present(join(root, ".jspace/marker.json"))) {
+    fail(`target is already a JSpace workbench: ${root} (use jspace workspace upgrade to update it)`);
+  }
+  ensureOwnedParentDirectories(root);
+  const reserved = [statePath(root), skillDir(root),
+    ...skillProjections().map((projection) => projectionPath(root, projection))];
+  for (const path of reserved) {
+    if (present(path)) {
+      fail(`JStack integration reserved path already exists: ${path}; refusing to overwrite during init`);
+    }
+  }
+}
+
 function preflightProjections(root: string, digests: readonly string[]): void {
+  ensureOwnedParentDirectories(root);
   for (const proj of skillProjections()) {
     if (projectionKind(root, proj, digests) === "foreign") {
       fail(`integration skill name collision at ${projectionPath(root, proj)}; preserving the existing skill`);
@@ -122,6 +171,7 @@ function enabled(state: IntegrationsV1): boolean {
 /** Enables or refreshes the bridge, preserving unrelated skill/harness content. */
 export function enableJstack(root: string, bridge: string, dryRun = false): CmdResult {
   requireWorkbench(root);
+  ensureOwnedParentDirectories(root); // before acquiring mutation lock
   const digest = sourceDigest(bridge);
   const run = (): CmdResult => {
     const state = readRequiredState(root);
@@ -145,6 +195,7 @@ export function enableJstack(root: string, bridge: string, dryRun = false): CmdR
     const projections = applyProjectionLinks(root, {
       skillNames: [JSTACK_SKILL_NAME],
       projectionDirs: skillProjections(),
+      sweepResidue: false,
     });
     writeState(root, {
       schema_version: 1,
@@ -164,6 +215,7 @@ export function enableJstack(root: string, bridge: string, dryRun = false): CmdR
 /** Disabling the bridge cannot uninstall project-owned JStack installations. */
 export function disableJstack(root: string, dryRun = false): CmdResult {
   requireWorkbench(root);
+  ensureOwnedParentDirectories(root); // before acquiring mutation lock
   const run = (): CmdResult => {
     const state = readRequiredState(root);
     if (!enabled(state)) return { lines: ["jspace: ok: JStack integration already disabled"] };
@@ -196,14 +248,26 @@ export function disableJstack(root: string, dryRun = false): CmdResult {
   return dryRun ? run() : withWorkbenchMutationLock(root, run);
 }
 
-/** Called only AFTER an applied workspace upgrade (not during preview/rollback). */
-export function refreshEnabledJstack(root: string, bridge: string): CmdResult {
+/** Read-only plan for the optional bridge, included in workspace upgrade
+ * --dry-run so a "nothing to do" bundle preview never hides a bridge rewrite. */
+export function previewEnabledJstack(root: string, bridge: string): CmdResult {
   const state = readIntegrations(root);
-  if (state.status === "invalid") return { lines: [], warnings: [`JStack bridge refresh blocked: ${state.issues.map((i) => i.message).join("; ")}`], exitCode: 1 };
+  if (state.status === "invalid") {
+    return { lines: [], warnings: [`JStack integration config is invalid: ${state.issues.map((i) => i.message).join("; ")}`], exitCode: 1 };
+  }
   if (state.status !== "ok" || !enabled(state.value)) return { lines: [] };
-  try { return enableJstack(root, bridge); }
-  catch (e) {
-    return { lines: [], warnings: [`JStack bridge not refreshed (preserved local state): ${(e as Error).message}`], exitCode: 1 };
+  const status = jstackStatus(root, bridge);
+  if (status.bridge === "current" && status.bundled_bridge_current === true &&
+      Object.values(status.projections).every((kind) => kind === "link")) {
+    return { lines: [] };
+  }
+  try {
+    enableJstack(root, bridge, true); // check for collisions without writing
+    return { lines: [
+      "jspace: note: JStack integration bridge refresh or repair is available; run jspace integration enable jstack separately (workspace upgrade/rollback never changes optional bridge state)",
+    ] };
+  } catch (e) {
+    return { lines: [], warnings: [`JStack bridge is preserved and needs manual attention: ${(e as Error).message}`] };
   }
 }
 
@@ -212,6 +276,7 @@ export interface JStackStatus {
   state: "missing" | "invalid" | "ok";
   bridge: "absent" | "current" | "modified";
   bundled_bridge_current: boolean | null;
+  parent_safe: boolean;
   projections: Record<string, ProjectionKind>;
 }
 export function jstackStatus(root: string, bridge?: string): JStackStatus {
@@ -221,11 +286,14 @@ export function jstackStatus(root: string, bridge?: string): JStackStatus {
   const source = readText(skillFile(root));
   const current = source !== null && fingerprint !== undefined && sha256Of(source) === fingerprint;
   const projections = Object.fromEntries(skillProjections().map((p) => [p, projectionKind(root, p, fingerprint ? [fingerprint] : [])])) as Record<string, ProjectionKind>;
+  let parentSafe = true;
+  try { ensureOwnedParentDirectories(root); } catch { parentSafe = false; }
   return {
     enabled: on,
     state: state.status,
     bridge: source === null ? "absent" : current ? "current" : "modified",
     bundled_bridge_current: bridge === undefined || !on ? null : fingerprint === sha256Of(bridge),
+    parent_safe: parentSafe,
     projections,
   };
 }
@@ -242,11 +310,12 @@ export function jstackIntegrationStatus(root: string, bridge: string, json = fal
       data: status,
     };
   }
-  const ready = status.enabled && status.bridge === "current"
+  const ready = status.enabled && status.parent_safe && status.bridge === "current"
     && Object.values(status.projections).every((k) => k === "link" || k === "copy");
+  const outdated = ready && status.bundled_bridge_current === false;
   return {
     lines: json ? [] : [
-      `jspace: JStack integration ${status.enabled ? (ready ? "enabled" : "unhealthy") : "disabled"}`,
+      `jspace: JStack integration ${status.enabled ? (ready ? (outdated ? "enabled (bridge update available)" : "enabled") : "unhealthy") : "disabled"}`,
       `bridge: ${status.bridge}; bundled-current: ${status.bundled_bridge_current === null ? "n/a" : status.bundled_bridge_current}; projections: ${Object.entries(status.projections).map(([p, kind]) => `${p}=${kind}`).join(", ")}`,
     ],
     data: status,
@@ -257,7 +326,15 @@ export function jstackIntegrationStatus(root: string, bridge: string, json = fal
 /** Purely local checks; never spawn JStack, read remote data, or touch a repo. */
 export function checkJstackIntegration(root: string): RegistryDiagnostic[] {
   const state = readIntegrations(root);
-  if (state.status === "missing") return []; // old workbench is not broken
+  // Old workbenches without integrations.json are disabled by default. A
+  // leftover bridge is still hazardous: harnesses would continue loading it.
+  if (state.status === "missing") {
+    const status = jstackStatus(root);
+    return status.bridge === "absent" && Object.values(status.projections).every((p) => p === "absent")
+      ? []
+      : [{ severity: "warning", code: "integrations.jstack.untracked-residue", path: SSOT_REL,
+        message: "integration config is missing but JStack bridge/projections remain; inspect workbench skill ownership" }];
+  }
   if (state.status === "invalid") return state.issues.map((i) => ({
     severity: "error", code: i.code, path: i.path, message: i.message,
   }));
@@ -272,6 +349,12 @@ export function checkJstackIntegration(root: string): RegistryDiagnostic[] {
       });
     }
     return findings;
+  }
+  if (!status.parent_safe) {
+    findings.push({
+      severity: "error", code: "integrations.jstack.parent-unsafe", path: SSOT_REL,
+      message: "JStack workbench bridge has a symlinked or non-directory parent; stop and inspect workbench ownership before continuing",
+    });
   }
   if (status.bridge !== "current") {
     findings.push({

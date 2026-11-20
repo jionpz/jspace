@@ -11,7 +11,7 @@ import { BUNDLE_MANIFEST } from "../../cli/manifest.generated.ts";
 import { ASSETS } from "../../cli/assets.generated.ts";
 import { domainAdd } from "../registry/domain.ts";
 import { resourceAdd } from "../registry/resource.ts";
-import { attachJstack, type JStackRunner } from "./attach.ts";
+import { attachJstack, verifyJstackProject, type JStackRunner } from "./attach.ts";
 import { JSTACK_BRIDGE_ASSET, enableJstack } from "./jstack.ts";
 
 function tempFixture(fn: (root: string, repo: string) => void): void {
@@ -29,6 +29,16 @@ function tempFixture(fn: (root: string, repo: string) => void): void {
     rmSync(root, { recursive: true, force: true });
     rmSync(repo, { recursive: true, force: true });
   }
+}
+function mockProjectInstalled(repo: string): string {
+  const plugins: Record<string, string> = { flow: "0.1.0", spec: "1.2.0", pstack: "0.15.0" };
+  mkdirSync(join(repo, ".jstack", "vendor", "plugins"), { recursive: true });
+  for (const name of Object.keys(plugins)) mkdirSync(join(repo, ".jstack", "vendor", "plugins", name), { recursive: true });
+  writeFileSync(join(repo, ".jstack", "lock.json"), JSON.stringify({ version: 2, plugins }));
+  return JSON.stringify(Object.entries(plugins).map(([plugin, version]) => ({
+    harness: "vendor", scope: "project", plugin, version, source: "vendor",
+    path: join(repo, ".jstack", "vendor", "plugins", plugin), lock: "ok",
+  })));
 }
 function register(root: string, repo: string): void {
   domainAdd(root, "engineering", undefined, undefined, "software", false);
@@ -67,14 +77,15 @@ test("actual attach runs dry-run -> project install -> doctor in order", () => t
     locateScript: () => "/trusted/jstack/jstack",
     runner: (_script, args) => {
       calls.push(args);
-      return { exit: 0, output: "ok" };
+      if (calls.length === 2) mockProjectInstalled(repo);
+      return { exit: 0, output: calls.length === 3 ? mockProjectInstalled(repo) : "ok" };
     },
   });
   expect(result.exitCode).toBeUndefined();
   expect(calls.map((args) => args[0])).toEqual(["install", "install", "doctor"]);
   expect(calls[1]).toEqual(["install", "--all", "--scope", "project", "--repo", repo]);
   expect(calls[2]).toEqual(["doctor", "--repo", repo, "--json"]);
-  expect(result.lines.join("\n")).toContain("configuration checked; runtime phase enforcement not proven");
+  expect(result.lines.join("\n")).toContain("matching lock (runtime phase enforcement not proven)");
 }));
 
 test("attach stops after failed dry-run, and doctor failure is not reported as verified", () => tempFixture((root, repo) => {
@@ -98,6 +109,30 @@ test("attach stops after failed dry-run, and doctor failure is not reported as v
   expect(result.lines.join("\n")).toContain("could not confirm");
 }));
 
+test("doctor exit 0 with [] is NOT enough to certify a JStack install", () => tempFixture((root, repo) => {
+  register(root, repo);
+  const result = attachJstack(root, repo, "/trusted/jstack", false, {
+    locateScript: () => "/trusted/jstack/jstack",
+    runner: (_script, args) => args[0] === "doctor"
+      ? { exit: 0, output: "[]" } : { exit: 0, output: "ok" },
+  });
+  expect(result.exitCode).toBe(1);
+  expect(result.lines.join("\n")).toContain("missing, unreadable, symlinked or invalid project .jstack/lock.json");
+  expect(result.lines.join("\n")).toContain("did not confirm project vendor flow");
+}));
+
+test("doctor confirms ONLY repo-local vendor/lock and rejects global cache", () => tempFixture((_root, repo) => {
+  const body = mockProjectInstalled(repo);
+  expect(verifyJstackProject(repo, { exit: 0, output: body })).toEqual([]);
+  expect(verifyJstackProject(repo, { exit: 0, output: "[]" }).some((x) => x.includes("doctor did not confirm"))).toBe(true);
+  const globals = JSON.parse(body) as Record<string, unknown>[];
+  for (const row of globals) row.scope = "user";
+  expect(verifyJstackProject(repo, { exit: 0, output: JSON.stringify(globals) }).length).toBe(3);
+  const stale = JSON.parse(body) as Record<string, unknown>[];
+  stale[0].lock = "drift";
+  expect(verifyJstackProject(repo, { exit: 0, output: JSON.stringify(stale) }).length).toBe(1);
+}));
+
 test("attach reports missing JStack source cleanly without touching the project", () => tempFixture((root, repo) => {
   register(root, repo);
   expect(() => attachJstack(root, repo, join(root, "missing-checkout"), true)).toThrow(/trusted JStack checkout does not exist/);
@@ -108,6 +143,15 @@ test("attach rejects nested source paths to prevent installer self-modification"
   const nestedSource = join(repo, "jstack-checkout");
   mkdirSync(nestedSource);
   expect(() => attachJstack(root, repo, nestedSource, true)).toThrow(/must not overlap/);
+}));
+
+test("attach refuses the workbench root even if registered as a Git resource", () => tempFixture((root, _repo) => {
+  execFileSync("git", ["init", "-q", root]);
+  register(root, root);
+  expect(() => attachJstack(root, root, "/trusted/jstack", true, {
+    locateScript: () => "/trusted/jstack/jstack",
+    runner: () => ({ exit: 0, output: "ok" }),
+  })).toThrow(/never be installed at the JWorkspace root/);
 }));
 
 test("attach refuses disabled workbench integration", () => tempFixture((root, repo) => {

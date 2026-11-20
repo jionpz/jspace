@@ -1,7 +1,7 @@
 // application/integrations/jstack.test.ts — workbench-only integration lifecycle.
 import { expect, test } from "bun:test";
 import {
-  existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync,
+  existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, readdirSync,
   rmSync, writeFileSync, symlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,7 +14,7 @@ import { ASSETS } from "../../cli/assets.generated.ts";
 import { decodeIntegrations } from "../../core/contracts/integrations.ts";
 import {
   JSTACK_BRIDGE_ASSET, enableJstack, disableJstack, readIntegrations, jstackStatus,
-  jstackIntegrationStatus, refreshEnabledJstack, checkJstackIntegration,
+  jstackIntegrationStatus, previewEnabledJstack, checkJstackIntegration,
 } from "./jstack.ts";
 import { workspaceUpgrade } from "../workspace/workspace.ts";
 
@@ -111,24 +111,97 @@ test("foreign projection collision is rejected without modifying user data", () 
   } finally { rmSync(outside, { recursive: true, force: true }); }
 }));
 
+test("one-skill enable never sweeps unrelated empty skill directories", () => inWorkbench((root) => {
+  const unrelated = join(root, ".claude", "skills", "my-own-empty-skill");
+  mkdirSync(unrelated);
+  enableJstack(root, BRIDGE);
+  expect(existsSync(unrelated)).toBe(true);
+}));
+
+test("enable rejects symlinked parent directory to prevent writes outside the workbench", () => inWorkbench((root) => {
+  const outside = mkdtempSync(join(tmpdir(), "jspace-outside-skills-"));
+  try {
+    rmSync(join(root, ".agents", "skills"), { recursive: true, force: true });
+    symlinkSync(outside, join(root, ".agents", "skills"), "dir");
+    expect(() => enableJstack(root, BRIDGE)).toThrow(/parent must be a normal directory/);
+    expect(readdirSync(outside)).toEqual([]);
+    expect(readIntegrations(root)).toMatchObject({ status: "ok", value: { integrations: { jstack: { enabled: false } } } });
+  } finally { rmSync(outside, { recursive: true, force: true }); }
+}));
+
+test("enable refuses a symlinked mutation-lock directory without touching its external target", () => inWorkbench((root) => {
+  const outside = mkdtempSync(join(tmpdir(), "jspace-outside-lock-"));
+  try {
+    rmSync(join(root, ".jspace", "state", "locks"), { recursive: true, force: true });
+    symlinkSync(outside, join(root, ".jspace", "state", "locks"), "dir");
+    expect(() => enableJstack(root, BRIDGE)).toThrow(/parent must be a normal directory/);
+    expect(readdirSync(outside)).toEqual([]);
+  } finally { rmSync(outside, { recursive: true, force: true }); }
+}));
+
+test("doctor reports a symlinked parent introduced after integration was enabled", () => inWorkbench((root) => {
+  enableJstack(root, BRIDGE);
+  const outside = mkdtempSync(join(tmpdir(), "jspace-doctor-outside-"));
+  const proj = join(root, ".agents", "skills");
+  try {
+    rmSync(proj, { recursive: true, force: true });
+    symlinkSync(outside, proj, "dir");
+    expect(jstackStatus(root).parent_safe).toBe(false);
+    expect(checkJstackIntegration(root).map((d) => d.code)).toContain("integrations.jstack.parent-unsafe");
+    expect(jstackIntegrationStatus(root, BRIDGE).exitCode).toBe(1);
+  } finally { rmSync(outside, { recursive: true, force: true }); }
+}));
+
+test("missing integration config warns when an old bridge or projected entry remains", () => inWorkbench((root) => {
+  enableJstack(root, BRIDGE);
+  rmSync(state(root));
+  expect(checkJstackIntegration(root).map((d) => d.code)).toContain("integrations.jstack.untracked-residue");
+}));
+
 test("refresh upgrades unchanged bridge and preserves enabled choice", () => inWorkbench((root) => {
   enableJstack(root, BRIDGE);
   const nextBridge = BRIDGE + "\n<!-- updated bridge -->\n";
-  const result = refreshEnabledJstack(root, nextBridge);
+  const result = enableJstack(root, nextBridge);
   expect(result.exitCode).toBeUndefined();
   expect(readFileSync(skill(root), "utf8")).toBe(nextBridge);
   expect(jstackStatus(root, nextBridge).enabled).toBe(true);
   expect(jstackStatus(root, nextBridge).bundled_bridge_current).toBe(true);
 }));
 
+test("upgrade preview truthfully shows a pending bridge refresh without writing state", () => inWorkbench((root) => {
+  enableJstack(root, BRIDGE);
+  const oldState = readFileSync(state(root), "utf8");
+  const oldBridge = readFileSync(skill(root), "utf8");
+  const newer = BRIDGE + "\n<!-- next version -->\n";
+  const preview = previewEnabledJstack(root, newer);
+  expect(preview.lines.join("\n")).toContain("bridge refresh or repair is available");
+  expect(readFileSync(state(root), "utf8")).toBe(oldState);
+  expect(readFileSync(skill(root), "utf8")).toBe(oldBridge);
+  expect(previewEnabledJstack(root, BRIDGE).lines).toEqual([]);
+}));
+
 test("refresh fails closed on local modifications and does not disable the integration", () => inWorkbench((root) => {
   enableJstack(root, BRIDGE);
   writeFileSync(skill(root), BRIDGE + "\nuser-owned customization\n");
-  const result = refreshEnabledJstack(root, BRIDGE + "\n<!-- new -->\n");
-  expect(result.exitCode).toBe(1);
-  expect(result.warnings?.join("\n")).toContain("preserved");
+  const result = previewEnabledJstack(root, BRIDGE + "\n<!-- new -->\n");
+  expect(result.warnings?.join("\n")).toContain("manual attention");
   expect(jstackStatus(root).enabled).toBe(true);
   expect(readFileSync(skill(root), "utf8")).toContain("user-owned customization");
+}));
+
+test("doctor refuses symlinked integration JSON without following it", () => inWorkbench((root) => {
+  const outside = mkdtempSync(join(tmpdir(), "jspace-symlink-state-"));
+  try {
+    const config = state(root);
+    rmSync(config);
+    const source = join(outside, "outside.json");
+    writeFileSync(source, '{"schema_version":1,"integrations":{"jstack":{"enabled":false}}}');
+    symlinkSync(source, config);
+    expect(readIntegrations(root).status).toBe("invalid");
+    expect(checkJstackIntegration(root).map((d) => d.code)).toContain("integrations.file-type");
+    expect(() => enableJstack(root, BRIDGE)).toThrow(/damaged/);
+    expect(readFileSync(source, "utf8")).toContain("false");
+  } finally { rmSync(outside, { recursive: true, force: true }); }
 }));
 
 test("doctor detects malformed integration state and broken projection", () => inWorkbench((root) => {

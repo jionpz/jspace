@@ -88,6 +88,7 @@ triggers:
 
 - 进入工作台:先看 session-start 状态和 `<next-action>`,再读 `.jspace/hub.json` 获取路由。
 - 进入域:读 `workspace/<domain>/README.md` 与 `domain.json`。
+- 软件工程资源:仅在 `jspace integration status jstack` 为 enabled 且 `.jspace/skills/jspace-jstack/SKILL.md` 存在时，先读取该可选桥接技能，再进入**真实 Git 仓库**执行项目级 JStack；默认不启用，绝不把整套插件安装到 JWorkspace 根目录。
 - 收工:有持久事实 → `memory-writeback`;有文件 → `asset-ingest`;只读问题 → `memory-recall`。
 - 周期:周报、巩固和 retro 都先运行 `jspace memory period --json`,只消费其 `week_start`、窗口和 `observed_through`。
 

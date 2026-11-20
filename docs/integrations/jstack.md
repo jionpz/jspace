@@ -27,7 +27,7 @@ jspace integration disable jstack --dir ~/jworkspace --dry-run
 jspace integration disable jstack --dir ~/jworkspace
 ```
 
-启用、停用是幂等操作。普通 `workspace upgrade` 不会替用户重新开启已关闭的集成。开启的集成会在工作台升级后刷新**未经过用户修改**的桥接文件；修改后的技能或同名冲突文件被保留并明确报错，不静默覆盖。
+启用、停用是幂等操作。`workspace upgrade` 不会替用户重新开启已关闭的集成，也**不会自动更新桥接技能本体**，以确保其升级 journal/rollback 不会遗漏另一个版本变更。升级预览和完成输出会提示可用的桥接更新；由用户显式运行 `jspace integration enable jstack` 刷新未修改的桥接文件。修改过的技能或同名冲突文件会被保留并明确报告，不静默覆盖。
 
 停用**只移除工作台层受 JSpace 管理的桥接及投影**，不会修改已经安装到工程仓库的 `.jstack/`、`.agents/`、`.claude/`、项目 hooks 或 Git 版本历史。
 
