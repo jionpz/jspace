@@ -2,7 +2,7 @@
 // Owns only JSpace's integration choice + a thin skill. The actual engineering
 // workflow, hooks and version lock always belong to the target Git repository.
 import {
-  lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, rmSync,
+  lstatSync, readFileSync, readlinkSync, readdirSync, rmdirSync, rmSync, unlinkSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fail } from "../../core/shared/errors.ts";
@@ -98,13 +98,14 @@ function projectionKind(root: string, projection: string, trustedDigests: readon
   }
   return "foreign";
 }
-function ensureSafeSkillPath(root: string, trustedDigests: readonly string[]): void {
+function ensureSafeSkillPath(root: string, trustedDigests: readonly string[], allowEmpty: boolean): void {
   const dir = skillDir(root);
   if (!present(dir)) return;
   if (!lstatSync(dir).isDirectory() || lstatSync(dir).isSymbolicLink()) {
     fail(`integration skill path is not a normal directory: ${dir}; refusing to replace it`);
   }
   const entries = readdirSync(dir);
+  if (allowEmpty && entries.length === 0) return;
   if (entries.length !== 1 || entries[0] !== "SKILL.md") {
     fail(`integration skill path has unowned files: ${dir}; refusing to overwrite it`);
   }
@@ -168,6 +169,28 @@ function enabled(state: IntegrationsV1): boolean {
   return state.integrations.jstack?.enabled === true;
 }
 
+function removeBridge(root: string, trustedDigests: readonly string[]): void {
+  preflightProjections(root, trustedDigests);
+  for (const proj of skillProjections()) {
+    const kind = projectionKind(root, proj, trustedDigests);
+    if (kind === "link" || kind === "copy") {
+      rmSync(projectionPath(root, proj), { recursive: true });
+    }
+  }
+  const dir = skillDir(root);
+  if (!present(dir) || !lstatSync(dir).isDirectory()) return;
+  const entries = readdirSync(dir);
+  if (entries.length === 0) {
+    rmdirSync(dir);
+  } else if (entries.length === 1 && entries[0] === "SKILL.md") {
+    const current = readText(skillFile(root));
+    if (current !== null && trustedDigests.includes(sha256Of(current))) {
+      unlinkSync(skillFile(root));
+      rmdirSync(dir);
+    }
+  }
+}
+
 /** Enables or refreshes the bridge, preserving unrelated skill/harness content. */
 export function enableJstack(root: string, bridge: string, dryRun = false): CmdResult {
   requireWorkbench(root);
@@ -176,8 +199,9 @@ export function enableJstack(root: string, bridge: string, dryRun = false): CmdR
   const run = (): CmdResult => {
     const state = readRequiredState(root);
     const old = state.integrations.jstack;
+    const activating = old?.enabled !== true;
     const trustedDigests = [digest, ...(old?.enabled && old.bridge_sha256 ? [old.bridge_sha256] : [])];
-    ensureSafeSkillPath(root, trustedDigests);
+    ensureSafeSkillPath(root, trustedDigests, !activating);
     preflightProjections(root, trustedDigests);
     const alreadyCurrent = old?.enabled === true
       && old.bridge_sha256 === digest
@@ -188,59 +212,70 @@ export function enableJstack(root: string, bridge: string, dryRun = false): CmdR
       `jspace: (dry-run) would ${old?.enabled ? "refresh" : "enable"} JStack integration at ${root}`,
       `jspace: (dry-run) would materialize only ${SSOT_REL}/SKILL.md and project its skill links; no JStack repository is modified`,
     ] };
-    mkdirSync(skillDir(root), { recursive: true });
-    writeBytesAtomic(skillFile(root), bridge);
-    // JSpace's existing thin-link engine remains the single writer for harness
-    // projections; preflight above prevents it from converging a foreign skill.
-    const projections = applyProjectionLinks(root, {
-      skillNames: [JSTACK_SKILL_NAME],
-      projectionDirs: skillProjections(),
-      sweepResidue: false,
-    });
-    writeState(root, {
+    const nextState: IntegrationsV1 = {
       schema_version: 1,
       integrations: { ...state.integrations, jstack: { enabled: true, bridge_sha256: digest } },
-    });
-    return {
-      lines: [
-        `jspace: ok: JStack integration ${old?.enabled ? "refreshed" : "enabled"} (workbench bridge only)`,
-        `Next: jspace integration attach jstack --dir ${root} --repo <git-repo> --source <jstack-checkout> --dry-run`,
-        ...projections.lines,
-      ],
     };
+    const originalState = activating ? readText(statePath(root)) : null;
+    if (activating) writeState(root, nextState);
+    try {
+      writeBytesAtomic(skillFile(root), bridge);
+      const projections = applyProjectionLinks(root, {
+        skillNames: [JSTACK_SKILL_NAME],
+        projectionDirs: skillProjections(),
+        sweepResidue: false,
+      });
+      if (!activating) writeState(root, nextState);
+      return {
+        lines: [
+          `jspace: ok: JStack integration ${activating ? "enabled" : "refreshed"} (workbench bridge only)`,
+          `Next: jspace integration attach jstack --dir ${root} --repo <git-repo> --source <jstack-checkout> --dry-run`,
+          ...projections.lines,
+        ],
+      };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      if (!activating) {
+        fail(`JStack bridge refresh failed: ${reason}; resolve the filesystem error and retry 'jspace integration enable jstack'`);
+      }
+      try {
+        removeBridge(root, trustedDigests);
+        if (originalState === null) unlinkSync(statePath(root));
+        else writeBytesAtomic(statePath(root), originalState);
+      } catch (cleanupError) {
+        const cleanupReason = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+        fail(`JStack activation failed: ${reason}; cleanup failed: ${cleanupReason}. Resolve the filesystem error and run 'jspace integration disable jstack' or retry enable`);
+      }
+      fail(`JStack activation failed: ${reason}; partial installation was rolled back`);
+    }
   };
   return dryRun ? run() : withWorkbenchMutationLock(root, run);
 }
 
 /** Disabling the bridge cannot uninstall project-owned JStack installations. */
-export function disableJstack(root: string, dryRun = false): CmdResult {
+export function disableJstack(root: string, dryRun = false, bundledBridge?: string): CmdResult {
   requireWorkbench(root);
   ensureOwnedParentDirectories(root); // before acquiring mutation lock
   const run = (): CmdResult => {
     const state = readRequiredState(root);
     if (!enabled(state)) return { lines: ["jspace: ok: JStack integration already disabled"] };
-    const digest = state.integrations.jstack!.bridge_sha256!;
-    preflightProjections(root, [digest]); // no ambiguous cleanup of foreign links/copies
-    if (dryRun) return { lines: [
-      "jspace: (dry-run) would disable the JStack workbench bridge and its harness projections",
-      "jspace: (dry-run) project-owned .jstack installations would remain untouched",
-    ] };
-    for (const proj of skillProjections()) {
-      rmSync(projectionPath(root, proj), { recursive: true, force: true });
+    const trustedDigests = [state.integrations.jstack!.bridge_sha256!];
+    if (bundledBridge !== undefined) trustedDigests.push(sourceDigest(bundledBridge));
+    if (dryRun) {
+      preflightProjections(root, trustedDigests);
+      return { lines: [
+        "jspace: (dry-run) would disable the JStack workbench bridge and its harness projections",
+        "jspace: (dry-run) project-owned .jstack installations would remain untouched",
+      ] };
     }
-    const current = readText(skillFile(root));
-    const canRemove = current !== null && sha256Of(current) === digest
-      && present(skillDir(root))
-      && readdirSync(skillDir(root)).length === 1
-      && !lstatSync(skillFile(root)).isSymbolicLink();
-    if (canRemove) rmSync(skillDir(root), { recursive: true, force: true });
+    removeBridge(root, trustedDigests);
     writeState(root, {
       schema_version: 1,
       integrations: { ...state.integrations, jstack: { enabled: false } },
     });
     return {
       lines: ["jspace: ok: JStack integration disabled; project installations preserved"],
-      ...(!canRemove && present(skillDir(root))
+      ...(present(skillDir(root))
         ? { warnings: [`preserved locally modified/unowned skill files under ${skillDir(root)}; harness projections have been removed`] }
         : {}),
     };
@@ -279,6 +314,12 @@ export interface JStackStatus {
   parent_safe: boolean;
   projections: Record<string, ProjectionKind>;
 }
+
+export function isJstackReady(status: JStackStatus): boolean {
+  return status.enabled && status.parent_safe && status.bridge === "current"
+    && Object.values(status.projections).every((kind) => kind === "link" || kind === "copy");
+}
+
 export function jstackStatus(root: string, bridge?: string): JStackStatus {
   const state = readIntegrations(root);
   const on = state.status === "ok" && enabled(state.value);
@@ -310,8 +351,7 @@ export function jstackIntegrationStatus(root: string, bridge: string, json = fal
       data: status,
     };
   }
-  const ready = status.enabled && status.parent_safe && status.bridge === "current"
-    && Object.values(status.projections).every((k) => k === "link" || k === "copy");
+  const ready = isJstackReady(status);
   const outdated = ready && status.bundled_bridge_current === false;
   return {
     lines: json ? [] : [

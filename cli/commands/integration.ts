@@ -31,7 +31,7 @@ const disableSpec: CommandSpec = {
   summary: "disable the workbench integration without touching project installations",
   features: { dir: true, dryRun: true },
   positionals: [integrationName],
-  handler: (ctx, args) => disableJstack(ctx.root, b(args.dryRun)),
+  handler: (ctx, args) => disableJstack(ctx.root, b(args.dryRun), bundledJstackBridge()),
 };
 const statusSpec: CommandSpec = {
   name: "status",

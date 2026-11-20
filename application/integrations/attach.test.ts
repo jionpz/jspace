@@ -1,7 +1,7 @@
 // application/integrations/attach.test.ts — explicit JStack install delegation.
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, realpathSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, realpathSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initWorkbench } from "../workspace/init.ts";
@@ -186,4 +186,15 @@ test("attach refuses disabled workbench integration", () => tempFixture((root, r
     locateScript: () => "/trusted/jstack",
     runner: () => ({ exit: 0, output: "ok" }),
   })).toThrow(/not enabled/);
+}));
+
+test("attach refuses an incomplete workbench bridge before running the installer", () => tempFixture((root, repo) => {
+  register(root, repo);
+  unlinkSync(join(root, ".jspace", "skills", "jspace-jstack", "SKILL.md"));
+  let called = false;
+  expect(() => attachJstack(root, repo, "/trusted", true, {
+    locateScript: () => "/trusted/jstack",
+    runner: () => { called = true; return { exit: 0, output: "ok" }; },
+  })).toThrow(/workbench bridge is unhealthy/);
+  expect(called).toBe(false);
 }));

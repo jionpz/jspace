@@ -7,7 +7,7 @@ import { join, resolve, relative, isAbsolute } from "node:path";
 import type { CmdResult } from "../commands/command.ts";
 import { fail } from "../../core/shared/errors.ts";
 import { readWorkbenchState } from "../../adapters/fs/workbench-state.ts";
-import { readIntegrations } from "./jstack.ts";
+import { isJstackReady, jstackStatus } from "./jstack.ts";
 
 export type ExecResult = { exit: number; output: string; stdout?: string };
 export type JStackRunner = (script: string, args: string[], cwd: string) => ExecResult;
@@ -155,9 +155,12 @@ export function attachJstack(
   // Production on Windows requires WSL: only explicit injected test runners
   // can bypass this platform guard (CLI never injects a runner).
   if (process.platform === "win32" && deps.runner === undefined) fail("JStack project installer currently needs a POSIX bash environment; use WSL for project attach");
-  const state = readIntegrations(workbench);
-  if (state.status !== "ok" || state.value.integrations.jstack?.enabled !== true) {
+  const status = jstackStatus(workbench);
+  if (!status.enabled) {
     fail("JStack workbench integration is not enabled; run 'jspace integration enable jstack' first");
+  }
+  if (!isJstackReady(status)) {
+    fail("JStack workbench bridge is unhealthy; repair it with 'jspace integration enable jstack' before attaching a repository");
   }
   const repo = (deps.registeredRepo ?? registeredRepository)(workbench, repoArg);
   const script = (deps.locateScript ?? trustedScript)(sourceArg, repo);

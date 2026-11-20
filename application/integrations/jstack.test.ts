@@ -1,11 +1,11 @@
 // application/integrations/jstack.test.ts — workbench-only integration lifecycle.
 import { expect, test } from "bun:test";
 import {
-  existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, readdirSync,
-  rmSync, writeFileSync, symlinkSync, unlinkSync,
+  accessSync, chmodSync, constants, existsSync, lstatSync, mkdirSync, mkdtempSync,
+  readFileSync, readlinkSync, readdirSync, rmSync, writeFileSync, symlinkSync, unlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { initWorkbench } from "../workspace/init.ts";
 import { materializeTree, expandTilde, isCompiled, devRoot } from "../../cli/embed.ts";
 import { resolvePath } from "../../cli/paths.ts";
@@ -13,9 +13,10 @@ import { BUNDLE_MANIFEST } from "../../cli/manifest.generated.ts";
 import { ASSETS } from "../../cli/assets.generated.ts";
 import { decodeIntegrations } from "../../core/contracts/integrations.ts";
 import {
-  JSTACK_BRIDGE_ASSET, enableJstack, disableJstack, readIntegrations, jstackStatus,
+  JSTACK_BRIDGE_ASSET, JSTACK_SKILL_NAME, enableJstack, disableJstack, readIntegrations, jstackStatus,
   jstackIntegrationStatus, previewEnabledJstack, checkJstackIntegration,
 } from "./jstack.ts";
+import { skillProjections } from "../workspace/manifest.ts";
 import { workspaceUpgrade } from "../workspace/workspace.ts";
 
 const BRIDGE = ASSETS[JSTACK_BRIDGE_ASSET];
@@ -60,6 +61,73 @@ test("enable creates one authoritative skill and per-harness thin links; idempot
   expect(jstackStatus(root, BRIDGE).enabled).toBe(true);
   expect(checkJstackIntegration(root)).toEqual([]);
   expect(enableJstack(root, BRIDGE).lines.join("\n")).toContain("already enabled");
+}));
+
+test.skipIf(process.platform === "win32")("enable rolls back the bridge and projections after a late write failure", () => inWorkbench((root) => {
+  const projectionDirs = skillProjections();
+  const blockedProjection = projectionDirs.at(-1);
+  if (!blockedProjection) throw new Error("expected at least one workbench projection");
+  const blockedParent = join(root, blockedProjection);
+  const originalMode = lstatSync(blockedParent).mode & 0o7777;
+  const initialState = readFileSync(state(root), "utf8");
+  chmodSync(blockedParent, originalMode & ~0o222);
+  try {
+    try {
+      accessSync(blockedParent, constants.W_OK);
+      return;
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "EACCES")) throw error;
+    }
+
+    expect(() => enableJstack(root, BRIDGE)).toThrow();
+    expect(readFileSync(state(root), "utf8")).toBe(initialState);
+    expect(jstackStatus(root, BRIDGE).enabled).toBe(false);
+    expect(existsSync(skill(root))).toBe(false);
+    for (const dir of projectionDirs) {
+      expect(readdirSync(join(root, dir))).not.toContain(JSTACK_SKILL_NAME);
+    }
+    expect(checkJstackIntegration(root)).toEqual([]);
+  } finally {
+    chmodSync(blockedParent, originalMode);
+  }
+
+  enableJstack(root, BRIDGE);
+  expect(jstackStatus(root, BRIDGE).enabled).toBe(true);
+  expect(checkJstackIntegration(root)).toEqual([]);
+  disableJstack(root);
+  expect(jstackStatus(root, BRIDGE).enabled).toBe(false);
+  expect(checkJstackIntegration(root)).toEqual([]);
+}));
+
+test("enable repairs an interrupted activation with an empty bridge directory", () => inWorkbench((root) => {
+  enableJstack(root, BRIDGE);
+  unlinkSync(skill(root));
+  expect(readdirSync(dirname(skill(root)))).toEqual([]);
+  expect(jstackStatus(root, BRIDGE)).toMatchObject({ enabled: true, bridge: "absent" });
+  const interrupted = jstackIntegrationStatus(root, BRIDGE);
+  expect(interrupted.exitCode).toBe(1);
+  expect(interrupted.lines.join("\n")).toContain("unhealthy");
+
+  enableJstack(root, BRIDGE);
+  expect(readFileSync(skill(root), "utf8")).toBe(BRIDGE);
+  for (const dir of skillProjections()) {
+    expect(readFileSync(join(root, dir, JSTACK_SKILL_NAME, "SKILL.md"), "utf8")).toBe(BRIDGE);
+  }
+  expect(jstackStatus(root, BRIDGE)).toMatchObject({ enabled: true, bridge: "current" });
+  expect(checkJstackIntegration(root)).toEqual([]);
+}));
+
+test("disable removes the empty bridge directory and projections after interrupted activation", () => inWorkbench((root) => {
+  enableJstack(root, BRIDGE);
+  unlinkSync(skill(root));
+
+  disableJstack(root);
+  expect(readIntegrations(root)).toMatchObject({ status: "ok", value: { integrations: { jstack: { enabled: false } } } });
+  expect(existsSync(dirname(skill(root)))).toBe(false);
+  for (const dir of skillProjections()) {
+    expect(readdirSync(join(root, dir))).not.toContain(JSTACK_SKILL_NAME);
+  }
+  expect(checkJstackIntegration(root)).toEqual([]);
 }));
 
 test("dry-run enable/disable performs no writes", () => inWorkbench((root) => {
